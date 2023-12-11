@@ -158,6 +158,273 @@
                         }
                     },
                     "actions": {
+                        "Condition_to_check_if_at_least_one_indicator_to_send": {
+                            "actions": {
+                                "For_each_IncidentID_create_a_Grouping": {
+                                    "foreach": "@variables('IncidentIDLabelsForGrouping')",
+                                    "actions": {
+                                        "Condition_to_check_if_Grouping_for_IncidentID_is_already_created": {
+                                            "actions": {
+                                                "Append_to_array_TempIncidentArray": {
+                                                    "runAfter": {
+                                                        "Grouping_Object_Composition": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "TempIncidentIdArray",
+                                                        "value": "@split(items('For_each_IncidentID_create_a_Grouping'), ';')[1]"
+                                                    }
+                                                },
+                                                "For_each_combination_extract_IndicatorId_and_MarkingRefObj": {
+                                                    "foreach": "@body('Extract_Goruping_details_for_each_Indicatorids')",
+                                                    "actions": {
+                                                        "Append_to_array_GroupingIndicators": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "GroupingIndicators",
+                                                                "value": "@split(items('For_each_combination_extract_IndicatorId_and_MarkingRefObj'), ';')[0]"
+                                                            }
+                                                        },
+                                                        "Append_to_array_GroupingMarkingRefObjs": {
+                                                            "runAfter": {
+                                                                "Append_to_array_GroupingIndicators": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "GroupingMarkingRefObjs",
+                                                                "value": "@split(items('For_each_combination_extract_IndicatorId_and_MarkingRefObj'), ';')[2]"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                },
+                                                "Grouping_Object_Composition": {
+                                                    "actions": {
+                                                        "Append_GroupObj_to_Indicators_array": {
+                                                            "runAfter": {
+                                                                "Compose_Group_Object": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "Indicators",
+                                                                "value": "@outputs('Compose_Group_Object')"
+                                                            }
+                                                        },
+                                                        "Compose_Group_Object": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "confidence": 100,
+                                                                "context": "suspicious-activity",
+                                                                "created": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                                                "created_by_ref": "@variables('CreatedByRefObjId')",
+                                                                "id": "grouping--@{guid()}",
+                                                                "modified": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                                                "object_marking_refs": "@union(variables('GroupingMarkingRefObjs'), variables('GroupingMarkingRefObjs'))",
+                                                                "object_refs": "@union(variables('GroupingIndicators'), variables('GroupingIndicators'))",
+                                                                "spec_version": "2.1",
+                                                                "type": "grouping"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "For_each_combination_extract_IndicatorId_and_MarkingRefObj": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Scope"
+                                                },
+                                                "Reset_Array_GroupingIndicators": {
+                                                    "runAfter": {
+                                                        "Append_to_array_TempIncidentArray": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "GroupingIndicators",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Reset_Array_GroupingMarkingRefObjs": {
+                                                    "runAfter": {
+                                                        "Reset_Array_GroupingIndicators": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "GroupingMarkingRefObjs",
+                                                        "value": []
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Extract_Goruping_details_for_each_Indicatorids": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@contains(variables('TempIncidentIdArray'), split(items('For_each_IncidentID_create_a_Grouping'), ';')[1])",
+                                                                "@true"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Extract_Goruping_details_for_each_Indicatorids": {
+                                            "runAfter": {},
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@variables('IncidentIDLabelsForGrouping')",
+                                                "where": "@equals(split(items('For_each_IncidentID_create_a_Grouping'), ';')[1], split(item(), ';')[1])"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "For_each_filtered_indicator": {
+                                    "foreach": "@body('Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete')",
+                                    "actions": {
+                                        "HTTP_appendTags_request": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "body": {
+                                                    "threatIntelligenceTags": [
+                                                        "@{parameters('Tag for indicator export completion')}"
+                                                    ]
+                                                },
+                                                "method": "POST",
+                                                "uri": "[uriComponentToString(uri(variables('azure'), 'subscriptions/@{parameters(''SubscriptionID'')}/resourceGroups/@{parameters(''ResourceGroup'')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters(''Workspace'')}/providers/Microsoft.SecurityInsights/threatIntelligence/main/indicators/@{items(''For_each_filtered_indicator'')?[''name'']}/appendTags?api-version=2021-10-01'))]"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_POST_stix_bundle_to_TAXII_server": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "HTTP_POST_stix_bundle_to_TAXII_server": {
+                                    "runAfter": {
+                                        "Set_variable_with_STIX_bundle_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "password": "@parameters('TAXIIServerPassword')",
+                                            "type": "Basic",
+                                            "username": "@parameters('TAXIIServerUsername')"
+                                        },
+                                        "body": "@variables('StixBuldle')",
+                                        "headers": {
+                                            "Accept": "application/taxii+json;version=2.1",
+                                            "Content-type": "application/taxii+json;version=2.1"
+                                        },
+                                        "method": "POST",
+                                        "retryPolicy": {
+                                            "type": "none"
+                                        },
+                                        "uri": "@{parameters('TAXIIServerRootURL')}/collections/@{parameters('CollectionID')}/objects/"
+                                    }
+                                },
+                                "Identity_Object_Composition": {
+                                    "actions": {
+                                        "Append_IdentityObj_to_Indicators_array": {
+                                            "runAfter": {
+                                                "Compose_Identity_Object": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "Indicators",
+                                                "value": "@outputs('Compose_Identity_Object')"
+                                            }
+                                        },
+                                        "Compose_Identity_Object": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "confidence": 100,
+                                                "created": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                                "id": "@variables('CreatedByRefObjId')",
+                                                "identity_class": "organization",
+                                                "modified": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                                "name": "CTIS",
+                                                "object_marking_refs": "@union(variables('AllMarkingRefObjIds'), variables('MarkingRefsObjIds'))",
+                                                "spec_version": "2.1",
+                                                "type": "identity"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "For_each_IncidentID_create_a_Grouping": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Scope"
+                                },
+                                "Set_variable_with_STIX_bundle_JSON": {
+                                    "runAfter": {
+                                        "Identity_Object_Composition": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "StixBuldle",
+                                        "value": "{\n    \"type\": \"bundle\",\n    \"id\": \"bundle--1736e032-a96a-41e9-8302-126677d4d781\",\n    \"objects\": @{union(variables('Indicators'), variables('Indicators'))}\n}"
+                                    },
+                                    "description": "Union of Indicators to remove duplicate TLP MarkingRefObjs"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each_Indicator": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(variables('Indicators'))",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
                         "Filter_array_of_indicators_where_tags_contain_Export": {
                             "runAfter": {
                                 "Parse_JSON_queryIndicators_response": [
@@ -185,6 +452,43 @@
                         "For_each_Indicator": {
                             "foreach": "@body('Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete')",
                             "actions": {
+                                "Append_GroupObjs_to_array_IncidentIDLablesForGrouping": {
+                                    "runAfter": {
+                                        "Reset_array_MarkingRefsObjIds": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "IncidentIDLabelsForGrouping",
+                                        "value": "@join(variables('GroupingObjs'), ';')"
+                                    }
+                                },
+                                "Append_IndicatorId_to_array_GroupingObj": {
+                                    "runAfter": {
+                                        "Set_variable_IndicatorId": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "GroupingObjs",
+                                        "value": "@variables('IndicatorId')"
+                                    },
+                                    "description": "Store IndicatorID, later to be used for Grouping"
+                                },
+                                "Append_IndicatorId_to_array_IndicatorsIds": {
+                                    "runAfter": {
+                                        "Append_IndicatorId_to_array_GroupingObj": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "IndicatorIds",
+                                        "value": "@variables('IndicatorId')"
+                                    }
+                                },
                                 "Append_MarkingRefObj_to_array_Indicators": {
                                     "runAfter": {
                                         "Reset_variable_Indicator": [
@@ -210,12 +514,16 @@
                                     }
                                 },
                                 "Compose_mandatory_properties": {
-                                    "runAfter": {},
+                                    "runAfter": {
+                                        "Append_IndicatorId_to_array_IndicatorsIds": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "Compose",
                                     "inputs": {
                                         "created": "@formatDateTime(string(items('For_each_Indicator')?['properties']?['created']), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
-                                        "id": "indicator--@{guid()}",
-                                        "modified": "@formatDateTime(string(items('For_each_Indicator')?['properties']?['lastUpdatedTimeUtc']), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                        "id": "@variables('IndicatorId')",
+                                        "modified": "@addSeconds(formatDateTime(string(items('For_each_Indicator')?['properties']?['lastUpdatedTimeUtc'])), 5, 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
                                         "pattern": "@items('For_each_Indicator')?['properties']?['pattern']",
                                         "pattern_type": "@if(contains(createArray('stix', 'pcre', 'sigma', 'snort', 'suricata', 'yara'), string(items('For_each_Indicator')?['properties']?['patternType'])), string(items('For_each_Indicator')?['properties']?['patternType']), 'stix')",
                                         "spec_version": "2.1",
@@ -302,6 +610,27 @@
                                         "Condition_to_check_if_'displayName'_property_exist": [
                                             "Succeeded"
                                         ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Compose_default_'created_by_ref'_property": {
+                                                "runAfter": {},
+                                                "type": "Compose",
+                                                "inputs": "@addProperty(variables('Indicator'), 'created_by_ref', 'identity--02073f98-86a4-44c8-9fff-f92c2e0fceae')"
+                                            },
+                                            "Set_variable_indicator_with_default_'created_by_ref'_property": {
+                                                "runAfter": {
+                                                    "Compose_default_'created_by_ref'_property": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Indicator",
+                                                    "value": "@outputs('Compose_default_''created_by_ref''_property')"
+                                                }
+                                            }
+                                        }
                                     },
                                     "expression": {
                                         "and": [
@@ -775,12 +1104,25 @@
                                                             "actions": {
                                                                 "Condition_to_check_if_it_is_incident_tag": {
                                                                     "actions": {
+                                                                        "Append_IncidentTag_to_array_GroupingObjs": {
+                                                                            "runAfter": {
+                                                                                "Set_variable_IncidentTag": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "AppendToArrayVariable",
+                                                                            "inputs": {
+                                                                                "name": "GroupingObjs",
+                                                                                "value": "@variables('IncidentTag')"
+                                                                            },
+                                                                            "description": "Store IncidentID, later to be used for Grouping"
+                                                                        },
                                                                         "Set_variable_IncidentTag": {
                                                                             "runAfter": {},
                                                                             "type": "SetVariable",
                                                                             "inputs": {
                                                                                 "name": "IncidentTag",
-                                                                                "value": "@{string(items('For_each_Lable_in_Lables'))}"
+                                                                                "value": "@{items('For_each_Lable_in_Lables')}"
                                                                             }
                                                                         }
                                                                     },
@@ -803,6 +1145,19 @@
                                                         }
                                                     },
                                                     "runAfter": {},
+                                                    "else": {
+                                                        "actions": {
+                                                            "Append_'NoIncident'_to_array_GroupingObjs": {
+                                                                "runAfter": {},
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "GroupingObjs",
+                                                                    "value": "@string('NoIncident')"
+                                                                },
+                                                                "description": "Append 'NoIncident' if IncidentID is not present"
+                                                            }
+                                                        }
+                                                    },
                                                     "expression": {
                                                         "and": [
                                                             {
@@ -823,14 +1178,44 @@
                                             },
                                             "type": "Scope"
                                         },
-                                        "Compose_'labels'_property": {
+                                        "Condition_to_check_if_any_lable_exist": {
+                                            "actions": {
+                                                "Compose_'labels'_property": {
+                                                    "runAfter": {},
+                                                    "type": "Compose",
+                                                    "inputs": "@addProperty(variables('Indicator'), 'labels', variables('Lables'))"
+                                                },
+                                                "Set_variable_Indicator_with_'labels'_property": {
+                                                    "runAfter": {
+                                                        "Compose_'labels'_property": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Indicator",
+                                                        "value": "@outputs('Compose_''labels''_property')"
+                                                    }
+                                                }
+                                            },
                                             "runAfter": {
                                                 "Add_Incidet_ID_to_Description": [
                                                     "Succeeded"
                                                 ]
                                             },
-                                            "type": "Compose",
-                                            "inputs": "@addProperty(variables('Indicator'), 'labels', variables('Lables'))"
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@length(variables('Lables'))",
+                                                                0
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
                                         },
                                         "Filter_Export_tag": {
                                             "actions": {
@@ -857,18 +1242,6 @@
                                             },
                                             "runAfter": {},
                                             "type": "Scope"
-                                        },
-                                        "Set_variable_Indicator_with_'labels'_property": {
-                                            "runAfter": {
-                                                "Compose_'labels'_property": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "SetVariable",
-                                            "inputs": {
-                                                "name": "Indicator",
-                                                "value": "@outputs('Compose_''labels''_property')"
-                                            }
                                         },
                                         "TLP_tag_processing": {
                                             "actions": {
@@ -1243,6 +1616,18 @@
                                     },
                                     "type": "If"
                                 },
+                                "Reset_array_GroupObjs": {
+                                    "runAfter": {
+                                        "Append_GroupObjs_to_array_IncidentIDLablesForGrouping": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "GroupingObjs",
+                                        "value": []
+                                    }
+                                },
                                 "Reset_array_MarkingRefsObjIds": {
                                     "runAfter": {
                                         "Reset_variable_MarkingRefObject": [
@@ -1257,7 +1642,7 @@
                                 },
                                 "Reset_variable_Indicator": {
                                     "runAfter": {
-                                        "Append_to_array_Indicators": [
+                                        "Reset_variable_IndicatorId": [
                                             "Succeeded"
                                         ]
                                     },
@@ -1265,6 +1650,18 @@
                                     "inputs": {
                                         "name": "Indicator",
                                         "value": {}
+                                    }
+                                },
+                                "Reset_variable_IndicatorId": {
+                                    "runAfter": {
+                                        "Append_to_array_Indicators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "IndicatorId",
+                                        "value": "@{null}"
                                     }
                                 },
                                 "Reset_variable_MarkingRefObject": {
@@ -1277,6 +1674,14 @@
                                     "inputs": {
                                         "name": "MarkingRefObj",
                                         "value": {}
+                                    }
+                                },
+                                "Set_variable_IndicatorId": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "IndicatorId",
+                                        "value": "indicator--@{guid()}"
                                     }
                                 },
                                 "Set_variable_Indicator_with_mandatory_properties": {
@@ -1293,6 +1698,32 @@
                                 },
                                 "TLP_Marking_Ref_definition": {
                                     "actions": {
+                                        "Append_MarkingRefObjID_to_array_AllMarkingRefsObjectIds": {
+                                            "runAfter": {
+                                                "Append_MarkingRefObjID_to_array_GroupingObjs": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "AllMarkingRefObjIds",
+                                                "value": "@variables('MarkingRefObjId')"
+                                            },
+                                            "description": "This array is used in Identity Object creation."
+                                        },
+                                        "Append_MarkingRefObjID_to_array_GroupingObjs": {
+                                            "runAfter": {
+                                                "Append_MarkingRefObjID_to_array_MarkingRefsObjectIds": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "GroupingObjs",
+                                                "value": "@variables('MarkingRefObjId')"
+                                            },
+                                            "description": "Store MarkingRefObjID, later to be used for Grouping"
+                                        },
                                         "Append_MarkingRefObjID_to_array_MarkingRefsObjectIds": {
                                             "runAfter": {
                                                 "Set_variable_MarkingRefObj_with_default_TLP_Marking_definition": [
@@ -1313,7 +1744,7 @@
                                             },
                                             "type": "Compose",
                                             "inputs": {
-                                                "created": "@formatDateTime(string(items('For_each_Indicator')?['properties']?['created']), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                                "created": "@concat(formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH'), ':00:00.000000Z')",
                                                 "extensions": {
                                                     "extension-definition--60a3c5c5-0d10-413e-aab3-9e08dde9e88d": {
                                                         "extension_type": "property-extension",
@@ -1328,7 +1759,7 @@
                                         },
                                         "Reset_variable_MarkingRefObjId": {
                                             "runAfter": {
-                                                "Append_MarkingRefObjID_to_array_MarkingRefsObjectIds": [
+                                                "Append_MarkingRefObjID_to_array_AllMarkingRefsObjectIds": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -1446,59 +1877,6 @@
                                 }
                             }
                         },
-                        "For_each_filtered_indicator": {
-                            "foreach": "@body('Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete')",
-                            "actions": {
-                                "HTTP_appendTags_request": {
-                                    "runAfter": {
-                                    },
-                                    "type": "Http",
-                                    "inputs": {
-                                        "authentication": {
-                                            "type": "ManagedServiceIdentity"
-                                        },
-                                        "body": {
-                                            "threatIntelligenceTags": [
-                                                "@{parameters('Tag for indicator export completion')}"
-                                            ]
-                                        },
-                                        "method": "POST",
-                                        "uri": "https://management.azure.com/subscriptions/@{parameters('SubscriptionID')}/resourceGroups/@{parameters('ResourceGroup')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters('Workspace')}/providers/Microsoft.SecurityInsights/threatIntelligence/main/indicators/@{items('For_each_filtered_indicator')?['name']}/appendTags?api-version=2021-10-01"
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "HTTP_POST_stix_bundle_to_TAXII_server": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach"
-                        },
-                        "HTTP_POST_stix_bundle_to_TAXII_server": {
-                            "runAfter": {
-                                "Initialize_variable_for_STIX_bundle_JSON": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "authentication": {
-                                    "password": "@parameters('TAXIIServerPassword')",
-                                    "type": "Basic",
-                                    "username": "@parameters('TAXIIServerUsername')"
-                                },
-                                "body": "@variables('StixBundle')",
-                                "headers": {
-                                    "Accept": "application/taxii+json;version=2.1",
-                                    "Content-type": "application/taxii+json;version=2.1"
-                                },
-                                "method": "POST",
-                                "retryPolicy": {
-                                    "type": "none"
-                                },
-                                "uri": "@{parameters('TAXIIServerRootURL')}/collections/@{parameters('CollectionID')}/objects/"
-                            }
-                        },
                         "HTTP_queryIndicators_request": {
                             "runAfter": {
                                 "Initialize_variable_IncidentTag": [
@@ -1524,12 +1902,114 @@
                                 "retryPolicy": {
                                     "type": "none"
                                 },
-                                "uri": "[uriComponentToString(uri(variables('azure'),'subscriptions/@{parameters(''SubscriptionID'')}/resourceGroups/@{parameters(''ResourceGroup'')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters(''Workspace'')}/providers/Microsoft.SecurityInsights/threatIntelligence/main/queryIndicators?api-version=2022-06-01-preview'))]"
+                               "uri": "[uriComponentToString(uri(variables('azure'),'subscriptions/@{parameters(''SubscriptionID'')}/resourceGroups/@{parameters(''ResourceGroup'')}/providers/Microsoft.OperationalInsights/workspaces/@{parameters(''Workspace'')}/providers/Microsoft.SecurityInsights/threatIntelligence/main/queryIndicators?api-version=2022-06-01-preview'))]"
+                            }
+                        },
+                        "Initialize_array_AllMarkingRefObjIds": {
+                            "runAfter": {
+                                "Initialize_array_MarkingRefsObjIds": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AllMarkingRefObjIds",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_GroupingIndicators": {
+                            "runAfter": {
+                                "Initialize_array_TempIncidentIdArray": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GroupingIndicators",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_GroupingMarkingRefObjs": {
+                            "runAfter": {
+                                "Initialize_array_GroupingIndicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GroupingMarkingRefObjs",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_GroupingObjs": {
+                            "runAfter": {
+                                "Initialize_variable_TLPLabel": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GroupingObjs",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_IncidentIDLabelsForGrouping": {
+                            "runAfter": {
+                                "Initialize_array_GroupingObjs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IncidentIDLabelsForGrouping",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "description": "Array stores all the combinations of IndicatorId, IncidentId and MarkingRefObj as ';' concatenated string"
+                        },
+                        "Initialize_array_IndicatorIds": {
+                            "runAfter": {
+                                "Initialize_variable_IndicatorId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IndicatorIds",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
                             }
                         },
                         "Initialize_array_Indicators": {
-                            "runAfter": {
-                            },
+                            "runAfter": {},
                             "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
@@ -1568,8 +2048,7 @@
                                     {
                                         "name": "MarkingRefsObjIds",
                                         "type": "array",
-                                        "value": [
-                                        ]
+                                        "value": []
                                     }
                                 ]
                             }
@@ -1597,6 +2076,24 @@
                                 ]
                             }
                         },
+                        "Initialize_array_TempIncidentIdArray": {
+                            "runAfter": {
+                                "Initialize_array_IncidentIDLabelsForGrouping": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TempIncidentIdArray",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "description": "Array to store IncidentId which grouping is created"
+                        },
                         "Initialize_variable_Description": {
                             "runAfter": {
                                 "Initialize_variable_Indicator": [
@@ -1614,9 +2111,27 @@
                                 ]
                             }
                         },
+                        "Initialize_variable_IdentityObjId_or_CreatedByRefObjId": {
+                            "runAfter": {
+                                "Initialize_array_IndicatorIds": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "CreatedByRefObjId",
+                                        "type": "string",
+                                        "value": "identity--02073f98-86a4-44c8-9fff-f92c2e0fceae"
+                                    }
+                                ]
+                            },
+                            "description": "Default CreatedByRefObjId or IdenityObjId"
+                        },
                         "Initialize_variable_IncidentTag": {
                             "runAfter": {
-                                "Initialize_array_MarkingRefsObjIds": [
+                                "Initialize_variable_StixBundle": [
                                     "Succeeded"
                                 ]
                             },
@@ -1642,15 +2157,31 @@
                                     {
                                         "name": "Indicator",
                                         "type": "object",
-                                        "value": {
-                                        }
+                                        "value": {}
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_IndicatorId": {
+                            "runAfter": {
+                                "Initialize_array_AllMarkingRefObjIds": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IndicatorId",
+                                        "type": "string",
+                                        "value": "@{null}"
                                     }
                                 ]
                             }
                         },
                         "Initialize_variable_MarkingRefObj": {
                             "runAfter": {
-                                "Initialize_variable_TLPLabel": [
+                                "Initialize_array_GroupingMarkingRefObjs": [
                                     "Succeeded"
                                 ]
                             },
@@ -1660,8 +2191,7 @@
                                     {
                                         "name": "MarkingRefObj",
                                         "type": "object",
-                                        "value": {
-                                        }
+                                        "value": {}
                                     }
                                 ]
                             }
@@ -1682,6 +2212,22 @@
                                 ]
                             }
                         },
+                        "Initialize_variable_StixBundle": {
+                            "runAfter": {
+                                "Initialize_variable_IdentityObjId_or_CreatedByRefObjId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "StixBuldle",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
                         "Initialize_variable_TLPLabel": {
                             "runAfter": {
                                 "Initialize_array_TLPLables": [
@@ -1694,23 +2240,6 @@
                                     {
                                         "name": "TLPLabel",
                                         "type": "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "Initialize_variable_for_STIX_bundle_JSON": {
-                            "runAfter": {
-                                "For_each_Indicator": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "StixBundle",
-                                        "type": "string",
-                                        "value": "{\n    \"type\": \"bundle\",\n    \"id\": \"bundle--1736e032-a96a-41e9-8302-126677d4d781\",\n    \"objects\": @{string(variables('Indicators'))}\n}"
                                     }
                                 ]
                             }
@@ -1759,8 +2288,7 @@
                                                                 "properties": {
                                                                     "sentinel-ext": {
                                                                         "properties": {
-                                                                            "severity": {
-                                                                            }
+                                                                            "severity": {}
                                                                         },
                                                                         "type": "object"
                                                                     },
