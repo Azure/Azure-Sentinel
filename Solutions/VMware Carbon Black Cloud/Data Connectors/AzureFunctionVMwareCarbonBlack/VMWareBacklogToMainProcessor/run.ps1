@@ -62,7 +62,7 @@ try
     }
 }
 catch {
-    Write-Host $_
+  Write-Error "Failed at CreateQueue with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
 }
 
 }
@@ -305,7 +305,7 @@ try
     }
 }
 catch {
-    Write-Host $_
+  Write-Error "Failed at CreateQueuePostMsgToQueue with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
 }
 
 }
@@ -362,7 +362,7 @@ function ProcessBacklog()
       }
       catch {
         postCheckpointLastFailure($msg)
-        Write-Host "There are errors while processing Msg to Main queue" $msg
+        Write-Error "Failed at ProcessBacklog with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
       }
     }
   }

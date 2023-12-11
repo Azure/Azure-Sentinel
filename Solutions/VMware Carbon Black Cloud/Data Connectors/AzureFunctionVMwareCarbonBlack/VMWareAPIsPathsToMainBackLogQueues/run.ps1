@@ -63,7 +63,13 @@ function GenerateDate()
     
     $now = [System.DateTime]::UtcNow
     #$Duration = New-TimeSpan -Start $startTime -End $now()
-    [int]$noofmins = $($startTime-$now).Minutes
+    if($startTime -le $now)
+    {
+        [int]$noofmins = $($now-$startTime).TotalMinutes
+    }
+    else {
+        Write-Host "Start time is greater than current time,Please check the start time and correct it."
+    }
     if($noofmins -gt 5)
     {
         if($null -ne $startTime)
@@ -511,7 +517,7 @@ function GetBucketFiles($prefixFolder)
                     $key, $value = $pair -split '='
                     $s3Dict[$key] = $value
                 }
-                if("minute=$($s3Dict["minute"])"-eq "minute=$($startTime.Minute)")
+                if(("$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])") -eq $keyPrefix)
                 {
                     $paths += $path   
     
@@ -561,6 +567,7 @@ function GetBucketFiles($prefixFolder)
         catch {
             postCheckpointLastFailure($json)
             Write-Host "Execption at this message for path" $item "at start time" $startTime "at now" $now
+            Write-Error "Failed at GetBucketFiles with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
            }
     }
    
@@ -636,7 +643,7 @@ try
     }
 }
 catch {
-    Write-Host $_
+    Write-Error "Failed at CreateQueuePostMessageToQueue with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
 }
 
 }
