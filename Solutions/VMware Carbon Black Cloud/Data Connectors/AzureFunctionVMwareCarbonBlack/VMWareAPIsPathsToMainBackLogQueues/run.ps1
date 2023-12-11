@@ -63,7 +63,14 @@ function GenerateDate()
     
     $now = [System.DateTime]::UtcNow
     #$Duration = New-TimeSpan -Start $startTime -End $now()
+    if($startTime -ge $now)
+    {
     [int]$noofmins = $($startTime-$now).Minutes
+    }
+    else {
+
+    [int]$noofmins = $($now-$startTime).Minutes
+    }
     if($noofmins -gt 5)
     {
         if($null -ne $startTime)
@@ -561,6 +568,8 @@ function GetBucketFiles($prefixFolder)
         catch {
             postCheckpointLastFailure($json)
             Write-Host "Execption at this message for path" $item "at start time" $startTime "at now" $now
+            Write-Error "Failed at GetBucketFiles with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
+
            }
     }
    
@@ -636,7 +645,7 @@ try
     }
 }
 catch {
-    Write-Host $_
+    Write-Error "Failed at CreateQueuePostMessageToQueue with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
 }
 
 }

@@ -62,7 +62,7 @@ try
     }
 }
 catch {
-    Write-Host $_
+  Write-Error "Failed at CreateQueue with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
 }
 
 }

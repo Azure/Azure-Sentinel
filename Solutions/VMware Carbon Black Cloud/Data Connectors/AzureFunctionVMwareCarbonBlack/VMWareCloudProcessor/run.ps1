@@ -51,8 +51,7 @@ function ProcessBucketFiles ()
                     Write-Host "Pushed total no of events : $($totalEvents.Count)  to $($tableName) for file $($fileName)"
                 }
             catch {
-                    $string_err = $_ | Out-String
-                    Write-Host $string_err
+                    Write-Error "Failed at PushDataToSentinel with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
                 }
             Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
             Write-Host "Successfully processed the carbon black files from AWS and FA instance took $(([System.DateTime]::UtcNow - $now).Seconds) seconds to process the data"
@@ -291,7 +290,7 @@ function SplitDataAndProcess($customerId, $sharedKey, $payload, $logType) {
         return $responseCode
     }
     catch {
-        Write-Host "Error, error message: $($Error[0].Exception.Message)"
+        Write-Error "Failed with error message: $($_.Exception.Message)" -ErrorAction Stop
     }
 }   
 
@@ -340,8 +339,7 @@ function Split-EventsAndProcess($alleventobjs, $tableName, $logType) {
                 $responseCode = SplitDataAndProcess -customerId $customerId -sharedKey $sharedKey -payload $chunk -logType $tableName
             }
         } catch {
-            $err = $_.Exception.Message
-            Write-Host "Error in processing chunk. Error: $err"
+            Write-Error "Failed at Split-EventsAndProcess with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
         }
     }
 }
@@ -400,8 +398,7 @@ Function Expand-GZipFile {
     $inputfile.Close()
     }
     catch {
-        $err = $_.Exception.Message
-        Write-Host "Processing Expand-GZipFile. Error: $err"
+        Write-Error "Failed at Expand-GZipFile with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
     }
 	
 }
@@ -532,6 +529,7 @@ function  GetBucketDetails {
                     catch {
                             $err = $_.Exception.Message
                             Write-Host "Error in downloading file from Tmp Folder. S3File: $($loopItem.FullName), S3Bucket: $($s3BucketName), Error: $err"
+                            Write-Error "Failed at processing GetBucketDetails with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
                         }
                     }
                 }
