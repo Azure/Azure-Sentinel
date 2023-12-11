@@ -503,7 +503,7 @@ function GetBucketFiles($prefixFolder)
         while ($startTime -le $now) {
            try {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
-            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15
+            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=7/hour=6/minute=3"
             $paths=@()
             foreach ($items in (Get-S3Object -BucketName $s3BucketName -KeyPrefix $keyPrefix) | Select-Object Key ) 
@@ -511,16 +511,16 @@ function GetBucketFiles($prefixFolder)
            
                 if($items.Key.Contains(".gz"))
                 {       
-                    $path = split-path $items.Key -Parent 
+                    $path = split-path $items.Key -Parent
                     $keyValuePairs = $path -split '\\'
                 $s3Dict = @{}
                 foreach ($pair in $keyValuePairs) {
                     $key, $value = $pair -split '='
                     $s3Dict[$key] = $value
                 }
-                if(("minute=$($s3Dict["minute"])"-eq "minute=$($startTime.Minute)") && ("year=$($s3Dict["year"])" -eq "year=$($startTime.Year)") && ("month=$($startTime.Month)" -eq ("month=$($s3Dict["month"])")) &&("day=$($startTime.Day)" -eq ("day=$($s3Dict["day"])")) && ("hour=$($startTime.Hour)" -eq ("hour=$($s3Dict["hour"])")))
+                if(("$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])") -eq $keyPrefix)
                 {
-                    $paths += $path   
+                    $paths += $items.Key   
     
                 }
                 else {
