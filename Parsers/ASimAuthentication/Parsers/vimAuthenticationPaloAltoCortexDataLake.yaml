@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for Palo Alto Cortex Data Lake
   Version: '0.1.0'
-  LastUpdated: Sep 29 2023
+  LastUpdated: Dec 08 2023
 Product:
   Name: Palo Alto Cortex Data Lake
 Normalization:
@@ -19,18 +19,48 @@ Description: |
 ParserName: vimAuthenticationPaloAltoCortexDataLake
 EquivalentBuiltInParser: _Im_Authentication_PaloAltoCortexDataLake
 ParserParams:
-  - Name: disabled
-    Type: bool
-    Default: false
   - Name: starttime
     Type: datetime
     Default: datetime(null)
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
     Type: string
     Default: '*'
+  - Name: targetusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
   let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
   [
@@ -46,7 +76,20 @@ ParserQuery: |
       "9", "High",
       "10", "High"
   ];
-  let parser = (disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), targetusername_has: string='*') {
+  let parser = (starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      eventtype_in: dynamic=dynamic([]), 
+      eventresultdetails_in: dynamic=dynamic([]), 
+      eventresult: string='*', 
+      targetusername_has_any: dynamic=dynamic([]), 
+      targetappname_has_any: dynamic=dynamic([]), 
+      actorusername_has_any: dynamic=dynamic([]), 
+      srcipaddr_has_any_prefix: dynamic=dynamic([]), 
+      srchostname_has_any: dynamic=dynamic([]), 
+      targetipaddr_has_any_prefix: dynamic=dynamic([]), 
+      dvcipaddr_has_any_prefix: dynamic=dynamic([]), 
+      dvchostname_has_any: dynamic=dynamic([]), 
+      disabled: bool = false) {
       CommonSecurityLog
       | where not(disabled)
           and (isnull(starttime) or TimeGenerated >= starttime)
@@ -54,20 +97,70 @@ ParserQuery: |
           and DeviceVendor == "Palo Alto Networks"
           and DeviceProduct == "LF"
           and DeviceEventClassID == "AUTH"
-          and (targetusername_has == "*" or AdditionalExtensions has targetusername_has)
-      | parse-kv AdditionalExtensions as (PanOSSourceDeviceHost:string, PanOSSourceDeviceOSFamily:string, PanOSAuthenticationProtocol: string, PanOSAuthenticatedUserDomain: string, PanOSAuthenticatedUserName:string, PanOSAuthenticatedUserUUID:string, start:string) with (pair_delimiter=";", kv_delimiter="=")
-      | where targetusername_has == "*" or PanOSAuthenticatedUserName has targetusername_has
+          and array_length(eventresultdetails_in) == 0
+          and array_length(targetappname_has_any) == 0
+          and array_length(actorusername_has_any) == 0 
+          and (array_length(targetusername_has_any) == 0 or AdditionalExtensions has_any(targetusername_has_any))
+          and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix))
+          and (array_length(srchostname_has_any) == 0 or AdditionalExtensions has_any(srchostname_has_any))
+          and (array_length(targetipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DestinationIP, targetipaddr_has_any_prefix))
+          and (array_length(dvcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(Computer, dvcipaddr_has_any_prefix))
+          and (array_length(dvchostname_has_any) == 0 or DeviceName has_any(dvchostname_has_any))
+      | extend
+          EventResult = iff(Message has "Invalid Certificate", "Failure", "Success"),
+          EventType = "Logon"
+      | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
+          and (eventresult == '*' or EventResult has eventresult)
+      | parse-kv AdditionalExtensions as (PanOSSourceDeviceHost: string, PanOSSourceDeviceOSFamily: string, PanOSAuthenticationProtocol: string, PanOSAuthenticatedUserDomain: string, PanOSAuthenticatedUserName: string, PanOSAuthenticatedUserUUID: string, start: string, PanOSLogSource: string, PanOSRuleMatchedUUID: string, PanOSAuthenticationDescription: string, PanOSClientTypeName: string, PanOSConfigVersion: string, PanOSMFAVendor: string, PanOSSourceDeviceCategory: string, PanOSSourceDeviceModel: string, PanOSSourceDeviceProfile: string, PanOSSourceDeviceVendor: string, PanOSUserAgentString: string, PanOSCortexDataLakeTenantID: string, PanOSSessionID: string) with (pair_delimiter=";", kv_delimiter="=")
+      | where (array_length(targetusername_has_any) == 0 or PanOSAuthenticatedUserName has_any(targetusername_has_any))
+          and (array_length(srchostname_has_any) == 0 or PanOSSourceDeviceHost has_any(srchostname_has_any))
       | invoke _ASIM_ResolveDvcFQDN('DeviceName')
       | invoke _ASIM_ResolveSrcFQDN('PanOSSourceDeviceHost')
       | lookup EventSeverityLookup on LogSeverity
       | extend
           EventStartTime = todatetime(start),
-          SrcIpAddr = coalesce(SourceIP,DeviceCustomIPv6Address2),
-          TargetIpAddr = coalesce(DestinationIP,DeviceCustomIPv6Address3),
-          EventMessage = Message
+          SrcIpAddr = coalesce(SourceIP, DeviceCustomIPv6Address2),
+          TargetIpAddr = coalesce(DestinationIP, DeviceCustomIPv6Address3),
+          EventMessage = Message,
+          AdditionalFields = bag_pack(
+                        "FileName",
+                        FileName,
+                        "PanOSLogSource",
+                        PanOSLogSource,
+                        "PanOSRuleMatchedUUID",
+                        PanOSRuleMatchedUUID,
+                        DeviceCustomNumber1Label,
+                        FieldDeviceCustomNumber1, 
+                        DeviceCustomNumber2Label,
+                        FieldDeviceCustomNumber2, 
+                        DeviceCustomString1Label,
+                        DeviceCustomString1,
+                        DeviceCustomString3Label,
+                        DeviceCustomString3,
+                        DeviceCustomString4Label,
+                        DeviceCustomString4,
+                        DeviceCustomString5Label,
+                        DeviceCustomString5,
+                        DeviceCustomString6Label,
+                        DeviceCustomString6,
+                        "PanOSAuthenticationDescription",
+                        PanOSAuthenticationDescription,
+                        "PanOSClientTypeName",
+                        PanOSClientTypeName,
+                        "PanOSConfigVersion",
+                        PanOSConfigVersion,
+                        "PanOSMFAVendor",
+                        PanOSMFAVendor,
+                        "PanOSSourceDeviceCategory",
+                        PanOSSourceDeviceCategory,
+                        "PanOSSourceDeviceModel",
+                        PanOSSourceDeviceModel,
+                        "PanOSSourceDeviceProfile",
+                        PanOSSourceDeviceProfile,
+                        "PanOSSourceDeviceVendor",
+                        PanOSSourceDeviceVendor
+                    )
       | project-rename
-          EventProduct = DeviceProduct,
-          EventVendor = DeviceVendor,
           DvcIpAddr = Computer,
           EventUid = _ItemId,
           DvcId = DeviceExternalID,
@@ -80,28 +173,32 @@ ParserQuery: |
           SrcDvcOs = PanOSSourceDeviceOSFamily,
           TargetUsername = PanOSAuthenticatedUserName,
           TargetUserId = PanOSAuthenticatedUserUUID,
-          TargetDomain = PanOSAuthenticatedUserDomain
+          TargetDomain = PanOSAuthenticatedUserDomain,
+          EventOriginalSubType = Activity,
+          HttpUserAgent =  PanOSUserAgentString,
+          TargetDvcScopeId = PanOSCortexDataLakeTenantID,
+          TargetSessionId = PanOSSessionID
       | extend
-          Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr),
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
           EventEndTime = EventStartTime,
-          EventResult = iff(EventMessage has "Invalid Certificate", "Failure", "Success"),
           Dst = TargetIpAddr,
-          Src = coalesce(SrcHostname, SrcIpAddr),
+          Src = coalesce(SrcFQDN, SrcHostname, SrcIpAddr),
           TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
           User = TargetUsername,
           IpAddr = SrcIpAddr,
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           TargetDomainType = case(
-                            array_length(split(DestinationUserName,".")) > 1, "FQDN",
-                            array_length(split(DestinationUserName,"\\")) > 1, "Windows",
-                            ""
-                        ),
+                        array_length(split(DestinationUserName, ".")) > 1, "FQDN",
+                        array_length(split(DestinationUserName, "\\")) > 1, "Windows",
+                        ""
+                    ),
           TargetUserIdType = iff(isnotempty(TargetUserId), "UID", ""),
           TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
       | extend
           EventSchema = "Authentication",
           EventSchemaVersion = "0.1.3",
-          EventType = "Logon"
+          EventProduct = "Cortex Data Lake",
+          EventVendor = "Palo Alto Networks"
       | project-away
           Source*,
           Destination*,
@@ -112,7 +209,6 @@ ParserQuery: |
           PanOS*,
           start,
           EndTime,
-          Activity,
           FieldDevice*,
           Flex*,
           File*,
@@ -137,4 +233,19 @@ ParserQuery: |
           Indicator*,
           _ResourceId
   };
-  parser(disabled=disabled, starttime=starttime, endtime=endtime, targetusername_has=targetusername_has)
+  parser(
+      starttime=starttime, 
+      endtime=endtime, 
+      eventtype_in=eventtype_in, 
+      eventresultdetails_in=eventresultdetails_in, 
+      eventresult=eventresult, 
+      targetusername_has_any=targetusername_has_any, 
+      targetappname_has_any=targetappname_has_any, 
+      actorusername_has_any=actorusername_has_any, 
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+      srchostname_has_any=srchostname_has_any, 
+      targetipaddr_has_any_prefix=targetipaddr_has_any_prefix, 
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, 
+      dvchostname_has_any=dvchostname_has_any, 
+      disabled=disabled
+  )

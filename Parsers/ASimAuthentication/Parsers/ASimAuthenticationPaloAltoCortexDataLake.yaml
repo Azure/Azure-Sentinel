@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for Palo Alto Cortex Data Lake
   Version: '0.1.0'
-  LastUpdated: Sep 29 2023
+  LastUpdated: Dec 08 2023
 Product:
   Name: Palo Alto Cortex Data Lake
 Normalization:
@@ -42,18 +42,54 @@ ParserQuery: |
       | where not(disabled)
           and DeviceVendor == "Palo Alto Networks" and DeviceProduct == "LF"
           and DeviceEventClassID == "AUTH"
-      | parse-kv AdditionalExtensions as (PanOSSourceDeviceHost:string, PanOSSourceDeviceOSFamily:string, PanOSAuthenticationProtocol: string, PanOSAuthenticatedUserDomain: string, PanOSAuthenticatedUserName:string, PanOSAuthenticatedUserUUID:string, start:string) with (pair_delimiter=";", kv_delimiter="=")
+      | parse-kv AdditionalExtensions as (PanOSSourceDeviceHost: string, PanOSSourceDeviceOSFamily: string, PanOSAuthenticationProtocol: string, PanOSAuthenticatedUserDomain: string, PanOSAuthenticatedUserName: string, PanOSAuthenticatedUserUUID: string, start: string, PanOSLogSource: string, PanOSRuleMatchedUUID: string, PanOSAuthenticationDescription: string, PanOSClientTypeName: string, PanOSConfigVersion: string, PanOSMFAVendor: string, PanOSSourceDeviceCategory: string, PanOSSourceDeviceModel: string, PanOSSourceDeviceProfile: string, PanOSSourceDeviceVendor: string, PanOSUserAgentString: string, PanOSCortexDataLakeTenantID: string, PanOSSessionID: string) with (pair_delimiter=";", kv_delimiter="=")
       | invoke _ASIM_ResolveDvcFQDN('DeviceName')
       | invoke _ASIM_ResolveSrcFQDN('PanOSSourceDeviceHost')
       | lookup EventSeverityLookup on LogSeverity
       | extend
           EventStartTime = todatetime(start),
-          SrcIpAddr = coalesce(SourceIP,DeviceCustomIPv6Address2),
-          TargetIpAddr = coalesce(DestinationIP,DeviceCustomIPv6Address3),
-          EventMessage = Message
+          SrcIpAddr = coalesce(SourceIP, DeviceCustomIPv6Address2),
+          TargetIpAddr = coalesce(DestinationIP, DeviceCustomIPv6Address3),
+          EventMessage = Message,
+          AdditionalFields = bag_pack(
+                        "FileName",
+                        FileName,
+                        "PanOSLogSource",
+                        PanOSLogSource,
+                        "PanOSRuleMatchedUUID",
+                        PanOSRuleMatchedUUID,
+                        DeviceCustomNumber1Label,
+                        FieldDeviceCustomNumber1, 
+                        DeviceCustomNumber2Label,
+                        FieldDeviceCustomNumber2, 
+                        DeviceCustomString1Label,
+                        DeviceCustomString1,
+                        DeviceCustomString3Label,
+                        DeviceCustomString3,
+                        DeviceCustomString4Label,
+                        DeviceCustomString4,
+                        DeviceCustomString5Label,
+                        DeviceCustomString5,
+                        DeviceCustomString6Label,
+                        DeviceCustomString6,
+                        "PanOSAuthenticationDescription",
+                        PanOSAuthenticationDescription,
+                        "PanOSClientTypeName",
+                        PanOSClientTypeName,
+                        "PanOSConfigVersion",
+                        PanOSConfigVersion,
+                        "PanOSMFAVendor",
+                        PanOSMFAVendor,
+                        "PanOSSourceDeviceCategory",
+                        PanOSSourceDeviceCategory,
+                        "PanOSSourceDeviceModel",
+                        PanOSSourceDeviceModel,
+                        "PanOSSourceDeviceProfile",
+                        PanOSSourceDeviceProfile,
+                        "PanOSSourceDeviceVendor",
+                        PanOSSourceDeviceVendor
+                    )
       | project-rename
-          EventProduct = DeviceProduct,
-          EventVendor = DeviceVendor,
           DvcIpAddr = Computer,
           EventUid = _ItemId,
           DvcId = DeviceExternalID,
@@ -66,28 +102,34 @@ ParserQuery: |
           SrcDvcOs = PanOSSourceDeviceOSFamily,
           TargetUsername = PanOSAuthenticatedUserName,
           TargetUserId = PanOSAuthenticatedUserUUID,
-          TargetDomain = PanOSAuthenticatedUserDomain
+          TargetDomain = PanOSAuthenticatedUserDomain,
+          EventOriginalSubType = Activity,
+          HttpUserAgent =  PanOSUserAgentString,
+          TargetDvcScopeId = PanOSCortexDataLakeTenantID,
+          TargetSessionId = PanOSSessionID
       | extend
-          Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr),
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
           EventEndTime = EventStartTime,
           EventResult = iff(EventMessage has "Invalid Certificate", "Failure", "Success"),
           Dst = TargetIpAddr,
-          Src = coalesce(SrcHostname, SrcIpAddr),
+          Src = coalesce(SrcFQDN, SrcHostname, SrcIpAddr),
           TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
           User = TargetUsername,
           IpAddr = SrcIpAddr,
           DvcIdType = iff(isnotempty(DvcId), "Other", ""),
           TargetDomainType = case(
-                            array_length(split(DestinationUserName,".")) > 1, "FQDN",
-                            array_length(split(DestinationUserName,"\\")) > 1, "Windows",
-                            ""
-                        ),
+                        array_length(split(DestinationUserName, ".")) > 1, "FQDN",
+                        array_length(split(DestinationUserName, "\\")) > 1, "Windows",
+                        ""
+                    ),
           TargetUserIdType = iff(isnotempty(TargetUserId), "UID", ""),
           TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
       | extend
           EventSchema = "Authentication",
           EventSchemaVersion = "0.1.3",
-          EventType = "Logon"
+          EventType = "Logon",
+          EventProduct = "Cortex Data Lake",
+          EventVendor = "Palo Alto Networks"
       | project-away
           Source*,
           Destination*,
@@ -98,7 +140,6 @@ ParserQuery: |
           PanOS*,
           start,
           EndTime,
-          Activity,
           FieldDevice*,
           Flex*,
           File*,
