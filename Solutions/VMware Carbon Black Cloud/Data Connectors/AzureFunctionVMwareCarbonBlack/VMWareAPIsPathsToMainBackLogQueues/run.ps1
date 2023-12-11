@@ -518,7 +518,7 @@ function GetBucketFiles($prefixFolder)
                     $key, $value = $pair -split '='
                     $s3Dict[$key] = $value
                 }
-                if("minute=$($s3Dict["minute"])"-eq "minute=$($startTime.Minute)")
+                if(("minute=$($s3Dict["minute"])"-eq "minute=$($startTime.Minute)") && ("year=$($s3Dict["year"])" -eq "year=$($startTime.Year)") && ("month=$($startTime.Month)" -eq ("month=$($s3Dict["month"])")) &&("day=$($startTime.Day)" -eq ("day=$($s3Dict["day"])")) && ("hour=$($startTime.Hour)" -eq ("hour=$($s3Dict["hour"])")))
                 {
                     $paths += $path   
     
