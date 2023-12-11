@@ -502,7 +502,6 @@ function GetBucketFiles($prefixFolder)
         Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
         while ($startTime -le $now) {
            try {
-            throw "This is an error in Get Bucket files."
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=7/hour=6/minute=3"
