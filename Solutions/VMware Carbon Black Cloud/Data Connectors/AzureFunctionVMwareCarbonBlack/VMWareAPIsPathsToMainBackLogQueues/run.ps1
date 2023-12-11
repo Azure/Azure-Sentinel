@@ -63,18 +63,18 @@ function GenerateDate()
     
     $now = [System.DateTime]::UtcNow
     #$Duration = New-TimeSpan -Start $startTime -End $now()
-    if($startTime -ge $now)
+    if($startTime -le $now)
     {
-    [int]$noofmins = $($startTime-$now).Minutes
+        [int]$noofmins = $($now-$startTime).TotalMinutes
     }
     else {
-
-    [int]$noofmins = $($now-$startTime).Minutes
+        Write-Host "Start time is greater than current time,Please check the start time and correct it."
     }
     if($noofmins -gt 5)
     {
         if($null -ne $startTime)
         {
+            
           $now=$startTime.AddMinutes(5)
         }
         Write-Host "The no of mins b/w start and end time is greater than 5"
@@ -502,6 +502,7 @@ function GetBucketFiles($prefixFolder)
         Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
         while ($startTime -le $now) {
            try {
+            throw "This is an error in Get Bucket files."
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=7/hour=6/minute=3"
