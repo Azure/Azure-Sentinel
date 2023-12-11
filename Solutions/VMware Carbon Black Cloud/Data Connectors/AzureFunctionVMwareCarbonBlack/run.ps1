@@ -187,6 +187,7 @@ function CarbonBlackAPI()
     $AlertprefixFolder = $env:AlertPrefixFolderName
     $AWSAccessKeyId = $env:AWSAccessKeyId
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
+    $Severity=$env:Severity
 
     $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time))
     $now = [System.DateTime]::UtcNow
@@ -293,8 +294,35 @@ function CarbonBlackAPI()
         }
         elseif(-not([string]::IsNullOrWhiteSpace($SIEMapiKey)) -and -not([string]::IsNullOrWhiteSpace($SIEMapiId)))
         {
+            if(-not([string]::IsNullOrWhiteSpace($Severity)))
+            {
+                $Severity=[int]$Severity
+                if($Severity -ge 1 && $Severity -le 10)
+                {
+                    ##Do nothing
+                
+                }
+                else {
+                    
+                    throw "Severity should be between 1 and 10."
+                }
+
+            }
+            else {
+                ##Defaulted to 1
+                $Severity=1
+            }
+            $method = "POST";
+            $contentType = "application/json";
+            $headers = @{
+                "X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)";
+            };
+            $body= '{ "criteria" : { "minimum_severity": {min}}, "type": [ ], "policy_name": [ "ALL_POLICIES" ] }, "exclusions": { }, "sort": [ { "field": "severity", "order": "DESC" } ] }'
+            $body=$body.Replace('{min}',$min)
             $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
-            $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
+            $v7uri=([System.Uri]::new("$($hostName)/api/v7/orgs/$(OrgKey)/alerts/_search "))
+            
+            $notifications = Invoke-WebRequest -Body $body -Uri $v7uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
             if ($notifications.success -eq $true)
             {
                 $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
