@@ -1,0 +1,73 @@
+id: bb6a74c8-889d-4c6e-8412-7d5efe33f4ed
+name: SFTP File transfer above threshold
+description: |
+  'Identifies SFTP File Transfers above certain threshold in a 15min time period. It requires SFTP VERBOSE loglevel to be enabled.
+   Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that
+   value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,
+   if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1020
+query: |
+  let threshold = 50;
+  Syslog
+  | where ProcessName has "sftp"
+      and SyslogMessage has "close "
+      and SyslogMessage has " bytes read "
+  | parse SyslogMessage with "close \"" filepath "\" bytes read " readbytes: int " written " writtenbytes: int
+  | join kind=leftouter (
+      Syslog
+      | where ProcessName has "sftp" and SyslogMessage has "session opened for"
+      | parse SyslogMessage with "session opened for local user " username: string " from [" src_ip "]"
+      | project username, src_ip, ProcessID
+      )
+      on ProcessID
+  | project-away ProcessID1
+  | summarize count_distinct_filepath=dcount(filepath), fileslist=make_set(filepath) by Computer, username, src_ip, bin(TimeGenerated, 15m)
+  | where count_distinct_filepath >= threshold
+  | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField","_", tostring(hash(tostring(fileslist)))))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: username
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: src_ip
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileSample
+customDetails:
+  TransferCount: count_distinct_filepath
+  FilesList: fileslist
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+    - Account
+    - Host
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+alertDetailsOverride:
+version: 1.0.0
+kind: Scheduled

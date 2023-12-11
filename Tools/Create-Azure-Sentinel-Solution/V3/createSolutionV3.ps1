@@ -46,7 +46,7 @@ else {
             $solutionFolderBasePath = $path.Substring(0, $dataFolderIndex)
 
             # GET DATA FOLDER FILE NAME
-            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json")
+            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json", "testParameters.json")
             $dataFileName = Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\" -recurse -exclude $excluded | ForEach-Object -Process { [System.IO.Path]::GetFileName($_) }
 
             if ($dataFileName.Length -le 0) {
@@ -67,8 +67,11 @@ Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName"
 
 $isPipelineRun = $false
 
-. "$repositoryBasePath/Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1" # load common functions
-. "$repositoryBasePath.script/package-automation/catelogAPI.ps1"
+$commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
+$catelogAPIFilePath = $repositoryBasePath + ".script/package-automation/catelogAPI.ps1"
+
+. $commonFunctionsFilePath # load common functions
+. $catelogAPIFilePath
 
 try {
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
@@ -126,7 +129,7 @@ try {
         $metadataAuthor = $contentToImport.Author.Split(" - ");
 
         $global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $global:solutionId
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
         
         # VERIFY IF IT IS A CONTENTSPEC OR CONTENTPACKAGE RESOURCE TYPE BY VERIFYING VERSION FROM  DATA FILE
@@ -250,6 +253,9 @@ try {
 
         GeneratePackage -solutionName $solutionName -contentToImport $contentToImport -calculatedBuildPipelinePackageVersion $contentToImport.Version;
         RunArmTtkOnPackage -solutionName $solutionName -isPipelineRun $false;
+
+        # check if mainTemplate and createUiDefinition json files are valid or not
+        CheckJsonIsValid($solutionFolderBasePath)
     }
 }
 catch {
