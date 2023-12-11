@@ -362,7 +362,7 @@ function ProcessBacklog()
       }
       catch {
         postCheckpointLastFailure($msg)
-        Write-Host "There are errors while processing Msg to Main queue" $msg
+        Write-Error "Failed at ProcessBacklog with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
       }
     }
   }
