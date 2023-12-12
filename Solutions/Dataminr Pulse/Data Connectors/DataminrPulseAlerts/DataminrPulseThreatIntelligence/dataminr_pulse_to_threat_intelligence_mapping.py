@@ -181,4 +181,4 @@ def map_indicator_fields(indicator):
                 error,
             )
         )
-        raise DataminrPulseException()
+        raise DataminrPulseException(error)

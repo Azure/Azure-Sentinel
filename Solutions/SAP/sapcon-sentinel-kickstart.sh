@@ -91,6 +91,7 @@ CONNECTIONMODE="abap"
 CONFIGPATH="/opt"
 TRUSTEDCA=()
 CLOUD='public'
+UPDATEPOLICY='{ "auto_update" : true }'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -118,7 +119,7 @@ while [[ $# -gt 0 ]]; do
 		SID="$2"
 		shift 2
 		;;
-    	--hostnetwork)
+    --hostnetwork)
 		HOSTNETWORK=1
 		shift 1
 		;;
@@ -436,6 +437,7 @@ pause '[Press enter to agree and proceed as we guide you through the installatio
 #Globals
 containername=sapcon
 sysconf=systemconfig.json
+settingsjson=settings.json
 
 os=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="ID" {print $2}')
 ver_id=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="VERSION_ID" {print $2}' | awk '{print substr($0, 2, length($0) - 2) }')
@@ -793,7 +795,7 @@ cmdparams=" --label Cloud=$CLOUD"
 cmdparams+=" -e SENTINEL_AGENT_GUID=$(uuidgen) "
 
 if [ $HOSTNETWORK ]; then
-	cmdparams+=" --network host"
+	cmdparams+=" --network host "
 fi
 
 if [ "$MODE" == "kvmi" ]; then
@@ -881,6 +883,9 @@ fi
 jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 ### end of json config creation
+
+# #populate settings.json
+echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
 
 echo 'System information and credentials Has been Updated'
 

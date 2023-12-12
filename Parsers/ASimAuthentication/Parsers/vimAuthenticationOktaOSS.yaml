@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for Okta
-  Version: '0.2'
-  LastUpdated: Dec 11, 2022
+  Version: '0.2.1'
+  LastUpdated: Sept 18, 2023
 Product:
   Name: Okta
 Normalization:
@@ -13,8 +13,9 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports filtering and normalizing Okta sign in logs, stored in the  Okta_CL table, to the ASIM Authentication schema.
+  This ASIM parser supports normalizing Okta sign in logs, stored in the  Okta_CL table and in OktaV2_CL table, to the ASIM Authentication schema.
 ParserName: vimAuthenticationOktaSSO
+EquivalentBuiltInParser: _Im_Authentication_OktaSSO
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -29,57 +30,113 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let OktaSignin=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
+  let OktaSignin = (starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false)
+  {
     let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
-    let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED','DENY']);
+    let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED', 'DENY']);
     let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
+    let emptyTable = datatable(TimeGenerated:datetime)[];
     // https://developer.okta.com/docs/reference/api/event-types/#catalog
-    Okta_CL | where not(disabled)
-    // ************************************************************************* 
-    //       <Prefilterring>
-    // *************************************************************************
-    | where 
-      (isnull(starttime)   or TimeGenerated >= starttime) 
-      and (isnull(endtime)     or TimeGenerated <= endtime)
-      and (targetusername_has=='*' or (actor_alternateId_s has targetusername_has))
-    // ************************************************************************* 
-    //       </Prefilterring>
-    // ************************************************************************* 
-    | where eventType_s in (OktaSigninEvents)
-    | extend 
-        EventProduct='Okta'
-        , EventVendor='Okta'
-        , EventCount=int(1)
-        , EventSchemaVersion='0.1.0'
-        , EventResult = case (outcome_result_s in (OktaSuccessfulOutcome), 'Success',outcome_result_s in (OktaFailedOutcome),'Failure', 'Partial')
-        , EventStartTime=TimeGenerated
-        , EventEndTime=TimeGenerated
-        , EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff')
-        , EventSubType=legacyEventType_s
-        , TargetUserIdType='OktaId'
-        , TargetUsernameType='UPN'
-        , SrcGeoLatitude=toreal(client_geographicalContext_geolocation_lat_d)
-        , SrcGeoLongitude=toreal(client_geographicalContext_geolocation_lon_d)
-        , ActingAppType = "Browser"
-    | project-rename 
-        EventMessage=displayMessage_s
-        ,EventOriginalResultDetails=outcome_reason_s
-        , LogonMethod = authenticationContext_credentialType_s
-        , TargetSessionId=authenticationContext_externalSessionId_s
-        , TargetUserId= actor_id_s
-        , TargetUsername=actor_alternateId_s
-        , TargetUserType=actor_type_s
-        , SrcDvcOs=client_userAgent_os_s
-        , HttpUserAgent=client_userAgent_rawUserAgent_s
-        , ActingAppName = client_userAgent_browser_s
-        , SrcIsp=securityContext_isp_s
-        , SrcGeoCity=client_geographicalContext_city_s
-        , SrcGeoCountry=client_geographicalContext_country_s
-        , EventOriginalUid = uuid_g
+    let OktaV1 = union isfuzzy=true emptyTable, Okta_CL 
+        | where not(disabled)
+        // ************************************************************************* 
+        //       <Prefiltering>
+        // *************************************************************************
+        | extend 
+            outcome_result_s=column_ifexists('outcome_result_s', ""),
+            eventType_s=column_ifexists('eventType_s', ""),
+            legacyEventType_s=column_ifexists('legacyEventType_s', ""),
+            client_geographicalContext_geolocation_lat_d = column_ifexists('client_geographicalContext_geolocation_lat_d', ""),
+            client_geographicalContext_geolocation_lon_d = column_ifexists('client_geographicalContext_geolocation_lon_d', ""),
+            actor_alternateId_s = column_ifexists('actor_alternateId_s', "")    
+        | where 
+            (isnull(starttime) or TimeGenerated >= starttime) 
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and (targetusername_has == '*' or (actor_alternateId_s has targetusername_has))
+        // ************************************************************************* 
+        //       </Prefiltering>
+        // ************************************************************************* 
+        | where eventType_s in (OktaSigninEvents)
+        | extend 
+            EventProduct='Okta'
+            , EventVendor='Okta'
+            , EventSchema = 'Authentication'
+            , EventCount=int(1)
+            , EventSchemaVersion='0.1.0'
+            , EventResult = case (outcome_result_s in (OktaSuccessfulOutcome), 'Success', outcome_result_s in (OktaFailedOutcome), 'Failure', 'Partial')
+            , EventStartTime=TimeGenerated
+            , EventEndTime=TimeGenerated
+            , EventType=iff(eventType_s hassuffix 'start', 'Logon', 'Logoff')
+            , EventSubType=legacyEventType_s
+            , EventMessage=column_ifexists('displayMessage_s', "")
+            , EventOriginalResultDetails=column_ifexists('outcome_reason_s', "")
+            , EventOriginalUid = column_ifexists('uuid_g', "")
+            , TargetUserIdType='OktaId'
+            , TargetUsernameType='UPN'
+            , TargetSessionId=column_ifexists('authenticationContext_externalSessionId_s', "")
+            , TargetUserId=column_ifexists('actor_id_s', "")
+            , TargetUsername=column_ifexists('actor_alternateId_s', "")
+            , TargetUserType=column_ifexists('actor_type_s', "")
+            , SrcGeoLatitude=toreal(client_geographicalContext_geolocation_lat_d)
+            , SrcGeoLongitude=toreal(client_geographicalContext_geolocation_lon_d)
+            , SrcDvcOs=column_ifexists('client_userAgent_os_s', "")
+            , SrcIsp=column_ifexists('securityContext_isp_s', "")
+            , SrcGeoCity=column_ifexists('client_geographicalContext_city_s', "")
+            , SrcGeoCountry=column_ifexists('client_geographicalContext_country_s', "")
+            , SrcIpAddr = column_ifexists('client_ipAddress_s', "")
+            , ActingAppName=column_ifexists('client_userAgent_browser_s', "")
+            , ActingAppType="Browser"
+            , LogonMethod=column_ifexists('authenticationContext_credentialType_s', "")
+            , HttpUserAgent=column_ifexists('client_userAgent_rawUserAgent_s', "")
         // ** Aliases
         | extend 
-          User=TargetUsername
-          , Dvc=EventVendor
-        | project-away *_s, *_d, *_b, *_g, *_t
-    };
+            User=TargetUsername
+            , Dvc=EventVendor
+            , IpAddr=SrcIpAddr
+        | project-away *_s,*_d,*_b,*_g,*_t;
+    let OktaV2 = union isfuzzy=true emptyTable, OktaV2_CL
+        | extend EventOriginalType=column_ifexists('EventOriginalType', "") 
+            , OriginalActorAlternateId = column_ifexists('OriginalActorAlternateId', "")
+        | where 
+            (isnull(starttime) or TimeGenerated >= starttime) 
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and (targetusername_has == '*' or (OriginalActorAlternateId has targetusername_has))
+        // ************************************************************************* 
+        //       </Prefiltering>
+        // ************************************************************************* 
+        | where EventOriginalType in (OktaSigninEvents)
+        | extend 
+            EventProduct='Okta'
+            , EventSchema = 'Authentication'
+            , EventVendor='Okta'
+            , EventCount=int(1)
+            , EventSchemaVersion='0.1.0'
+            , EventStartTime=TimeGenerated
+            , EventEndTime=TimeGenerated
+            , EventType=iff(EventOriginalType hassuffix 'start', 'Logon', 'Logoff')       
+            , TargetSessionId=column_ifexists('ActorSessionId', "")
+            , TargetUserId= column_ifexists('ActorUserId', "")
+            , TargetUsername=column_ifexists('ActorUsername', "")
+            , TargetUserType=column_ifexists('ActorUserType', "")
+            , TargetUserIdType=column_ifexists('ActorUserIdType', "")
+            , TargetUsernameType=column_ifexists('ActorUsernameType', "")
+            , SrcIpAddr = column_ifexists('SrcIpAddr', "")
+            //** extend non-normalized fields to be projected-away 
+            , ActorDetailEntry, ActorDisplayName, AuthenticationContextAuthenticationProvider, AuthenticationContextAuthenticationStep
+            , AuthenticationContextCredentialProvider, AuthenticationContextInterface, AuthenticationContextIssuerId, AuthenticationContextIssuerType
+            , DebugData, DvcAction, OriginalActorAlternateId, OriginalClientDevice, OriginalOutcomeResult, OriginalSeverity, OriginalTarget
+            , OriginalUserId, OriginalUserType, Request, SecurityContextAsNumber, SecurityContextAsOrg, SecurityContextDomain, SecurityContextIsProxy
+            , TransactionDetail, TransactionId, TransactionType
+        // ** Aliases
+        | extend 
+            User=TargetUsername
+            , Dvc=EventVendor
+            , IpAddr=SrcIpAddr
+        | project-away ActorDetailEntry, ActorDisplayName, AuthenticationContextAuthenticationProvider, AuthenticationContextAuthenticationStep
+            , AuthenticationContextCredentialProvider, AuthenticationContextInterface, AuthenticationContextIssuerId, AuthenticationContextIssuerType
+            , DebugData, DvcAction, OriginalActorAlternateId, OriginalClientDevice, OriginalOutcomeResult, OriginalSeverity, OriginalTarget
+            , OriginalUserId, OriginalUserType, Request, SecurityContextAsNumber, SecurityContextAsOrg, SecurityContextDomain, SecurityContextIsProxy
+            , TransactionDetail, TransactionId, TransactionType;
+    union isfuzzy=true OktaV1, OktaV2
+  };
   OktaSignin(starttime, endtime, targetusername_has, disabled)
