@@ -57,10 +57,9 @@ function GenerateDate()
         Write-Host "The last start time in file share is" $startTime
     }
     else {
-        
         $startTime = [System.DateTime]::UtcNow.AddMinutes(-$(5))
     }
-    
+
     $now = [System.DateTime]::UtcNow
     #$Duration = New-TimeSpan -Start $startTime -End $now()
     if($startTime -le $now)
@@ -108,125 +107,11 @@ if((Get-AzStorageContainer -Context $Context).Name -contains "lastlog"){
 }
 
 }
-<#
-.SYNOPSIS
-#
-
-.DESCRIPTION
-Long description
-
-.EXAMPLE
-An example
-
-.NOTES
-General notes
-#>
-function postCheckpointLastFailure($message)
+function CarbonBlackS3Messages()
 {
-    $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
-    $Context = New-AzStorageContext -ConnectionString $azstoragestring
-    if((Get-AzStorageContainer -Context $Context).Name -contains "lastfailurelog"){
-        #Set Container
-        $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastfailurelog" -Context $Context).Name -Blob "lastfailurelog.log"
-        $lastfailuremessage = $blob.ICloudBlob.DownloadText()
-        $lastmessage = $lastfailuremessage
-        $message | Out-File "$env:TEMP\lastfailurelog.log"
-        Set-AzStorageBlobContent -file "$env:TEMP\lastfailurelog.log" -Container (Get-AzStorageContainer -Name "lastfailurelog" -Context $Context).Name -Context $Context -Force
-    }
-    else {
-        
-    $azStorageContainer = New-AzStorageContainer -Name "lastfailurelog" -Context $Context
-    $message | Out-File "$env:TEMP\lastfailurelog.log"
-    Set-AzStorageBlobContent -file "$env:TEMP\lastfailurelog.log" -Container $azStorageContainer.name -Context $Context -Force
-    }
-    
-   
-}
-<#
-.SYNOPSIS
-#
-
-.DESCRIPTION
-Long description
-
-.EXAMPLE
-An example
-
-.NOTES
-General notes
-#>
-function CarbonBlackNotifications()
-{
-            $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
-            $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
-            if ($notifications.success -eq $true)
-            {
-                $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
-                if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
-                {
-                    $responseObj = (ConvertFrom-Json $NotifLogJson)
-                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
-                    Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-                }
-                else
-                {
-                        Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
-                }
-            }
-            else
-            {
-                Write-Host "Notifications API status failed , Please check."
-            }
-}
-<#
-.SYNOPSIS
-#
-
-.DESCRIPTION
-Long description
-
-.EXAMPLE
-An example
-
-.NOTES
-General notes
-#>
-function CarbobBlackAuditLogs()
-{
-    $auditLogsResult = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/auditlogs"))
-
-    if ($auditLogsResult.success -eq $true)
-    {
-        $AuditLogsJSON = $auditLogsResult.notifications | ConvertTo-Json -Depth 5
-        if (-not([string]::IsNullOrWhiteSpace($AuditLogsJSON)))
-        {
-            $responseObj = (ConvertFrom-Json $AuditLogsJSON)
-            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($AuditLogsJSON)) -logType $AuditLogTable;
-            Write-Host("$($responseObj.count) new Carbon Black Audit Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-        }
-        else
-        {
-            Write-Host "No new Carbon Black Audit Events as of $([DateTime]::UtcNow)"
-        }
-    }
-    else
-    {
-        Write-Host "AuditLogsResult API status failed , Please check."
-    }
-}
-# The function will call the Carbon Black API and retrieve the Audit, Event, and Notifications Logs
-function CarbonBlackAPI()
-{
-    $workspaceId = $env:workspaceId
-    $workspaceSharedKey = $env:workspaceKey
-    $hostName = $env:uri
-    $apiSecretKey = $env:apiKey
     $logType = $env:CarbonBlackLogTypes
     $apiId = $env:apiId
-    $SIEMapiKey = $env:SIEMapiKey
-    $SIEMapiId = $env:SIEMapiId
     $time = $env:timeInterval
-    $AuditLogTable = "CarbonBlackAuditLogs"
     $EventLogTable = "CarbonBlackEvents"
     $NotificationTable  = "CarbonBlackNotifications"
     $OrgKey = $env:CarbonBlackOrgKey
@@ -235,32 +120,6 @@ function CarbonBlackAPI()
     $AlertprefixFolder = $env:AlertPrefixFolderName
     $AWSAccessKeyId = $env:AWSAccessKeyId
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
-    $queueName=$env:queueName
-    $backlogQueue=$env:backlogQueue
-    $carbonBlackStorage=$env:AzureWebJobsStorage
-
-    #$startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time))
-    #$now = [System.DateTime]::UtcNow
- 
-
-    # Remove if addition slash or space added in hostName
-    $hostName = $hostName.Trim() -replace "[.*/]$",""
-
-    if ([string]::IsNullOrEmpty($logAnalyticsUri))
-    {
-        $logAnalyticsUri = "https://" + $workspaceId + ".ods.opinsights.azure.com"
-    }
-
-    # Returning if the Log Analytics Uri is in incorrect format.
-    # Sample format supported: https://" + $customerId + ".ods.opinsights.azure.com
-    if($logAnalyticsUri -notmatch 'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$')
-    {
-        throw "VMware Carbon Black: Invalid Log Analytics Uri."
-    }
-
-    $authHeaders = @{
-        "X-Auth-Token" = "$($apiSecretKey)/$($apiId)"
-    }
 
     #Converting LogType to array
     if([string]::IsNullOrWhiteSpace($logType))
@@ -280,41 +139,25 @@ function CarbonBlackAPI()
         $logType = $logType -replace """",""
         $LogTypeArr = $logType -split ','
     }
-    
+    ProcessMessagesToQueue
+}
 
-    if(-not([string]::IsNullOrWhiteSpace($apiId)) -and -not([string]::IsNullOrWhiteSpace($apiSecretKey)) -and -not([string]::IsNullOrWhiteSpace($hostName)))
-    {
-        if($LogTypeArr -contains "audit")
-        {
-          CarbobBlackAuditLogs
-        }
-        else
-        {
-            Write-Warning "'Audit' was not selected as a LogType, therefore audit logs will not be ingested to the workspace."
-        }
-    }
-    else
-    {
-        Write-Warning "API credentials were not defined, therefore audit logs will not be ingested to workspace."
-    }
-
+function ProcessMessagesToQueue()
+{
     if(-not([string]::IsNullOrWhiteSpace($s3BucketName)) -and -not([string]::IsNullOrWhiteSpace($AWSAccessKeyId)) -and -not([string]::IsNullOrWhiteSpace($AWSSecretAccessKey)) -and -not([string]::IsNullOrWhiteSpace($OrgKey)))
     {
         if($LogTypeArr -contains "event")
         {
+            # get queue count ---> if less than < 200 call below fn, if no, wait for 10sec and check again queue count size
             GetBucketFiles($EventprefixFolder)
-           
-            
         }
         else{
             Write-Warning "'Event' was not selected as a LogType, therefore event logs will not be ingested to the workspace."
         }
     }
-    else
-    {
-        Write-Warning "S3Bucket credentials were not defined, therefore event logs will not be ingested to workspace."
+    else {
+        Write-Host "Input parameters are empty for event logs"
     }
-
 
     if($LogTypeArr -contains "alertSIEMAPI" -or $LogTypeArr -contains "alertAWSS3")
     {
@@ -323,59 +166,14 @@ function CarbonBlackAPI()
             if(-not([string]::IsNullOrWhiteSpace($s3BucketName)) -and -not([string]::IsNullOrWhiteSpace($AWSAccessKeyId)) -and -not([string]::IsNullOrWhiteSpace($AWSSecretAccessKey)) -and -not([string]::IsNullOrWhiteSpace($OrgKey)))
             {
                 GetBucketFiles($AlertprefixFolder)
-                
             }
         }
-        elseif(-not([string]::IsNullOrWhiteSpace($SIEMapiKey)) -and -not([string]::IsNullOrWhiteSpace($SIEMapiId)))
-        {
-            CarbonBlackNotifications
-        }
-        else
-        {
-            Write-Warning "No SIEM API ID and/or Key or S3Bucket value was defined, therefore alert logs will not to ingested to workspace."
-        }
     }
-    else{
-        Write-Warning "'Alert' was not selected as a LogType, therefore alert logs will not be ingested to the workspace."
-    } 
-}
+    else {
+        Write-Host "Input parameters are empty for alert logs"
+    }
 
-# Create the function to create the authorization signature
-function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
-{
-    $xHeaders = "x-ms-date:" + $date;
-    $stringToHash = $method + "`n" + $contentLength + "`n" + $contentType + "`n" + $xHeaders + "`n" + $resource;
-    $bytesToHash = [Text.Encoding]::UTF8.GetBytes($stringToHash);
-    $keyBytes = [Convert]::FromBase64String($sharedKey);
-    $sha256 = New-Object System.Security.Cryptography.HMACSHA256;
-    $sha256.Key = $keyBytes;
-    $calculatedHash = $sha256.ComputeHash($bytesToHash);
-    $encodedHash = [Convert]::ToBase64String($calculatedHash);
-    $authorization = 'SharedKey {0}:{1}' -f $customerId,$encodedHash;
-    return $authorization;
 }
-
-# Create the function to create and post the request
-function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
-{
-    $TimeStampField = "eventTime"
-    $method = "POST";
-    $contentType = "application/json";
-    $resource = "/api/logs";
-    $rfc1123date = [DateTime]::UtcNow.ToString("r");
-    $contentLength = $body.Length;
-    $signature = Build-Signature -customerId $customerId -sharedKey $sharedKey -date $rfc1123date -contentLength $contentLength -method $method -contentType $contentType -resource $resource;
-    $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
-    $headers = @{
-        "Authorization" = $signature;
-        "Log-Type" = $logType;
-        "x-ms-date" = $rfc1123date;
-        "time-generated-field" = $TimeStampField;
-    };
-    $response = Invoke-WebRequest -Body $body -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
-    return $response.StatusCode
-}
-
 
 <#
 .SYNOPSIS
@@ -500,17 +298,15 @@ function GetBucketFiles($prefixFolder)
     IF ($Null -ne $s3BucketName) {
         Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
         while ($startTime -le $now) {
-           try {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=7/hour=6/minute=3"
             $paths=@()
             foreach ($items in (Get-S3Object -BucketName $s3BucketName -KeyPrefix $keyPrefix) | Select-Object Key ) 
-            { 
-           
+            {
                 if($items.Key.Contains(".gz"))
-                {       
-                    $path = split-path $items.Key -Parent 
+                {
+                    $path = split-path $items.Key -Parent
                     $keyValuePairs = $path -split '\\'
                 $s3Dict = @{}
                 foreach ($pair in $keyValuePairs) {
@@ -519,21 +315,18 @@ function GetBucketFiles($prefixFolder)
                 }
                 if(("$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])") -eq $keyPrefix)
                 {
-                    $paths += $path   
-    
+                    $paths += $path
                 }
                 else {
-                Write-Host "Paths doesn't have gz files" $items.Key
+                    Write-Host "Paths doesn't have gz files" $items.Key
                 }  
                 }
            }
-            $paths = $paths | sort -Unique
-            Write-Host $paths
-
+        $paths = $paths | sort -Unique
+        Write-Host $paths
         foreach($item in $paths)
         {
           [int]$i=0
-          $item=$item.Replace($OrgKey,"")
           Write-Host "Number of files paths is: " $paths "Count: " $paths.Count
           Write-Host "Paths from s3" $item "at start time" $startTime "now time" $now
           if($item.Contains($EventprefixFolder))
@@ -542,17 +335,11 @@ function GetBucketFiles($prefixFolder)
            }
            if($item.Contains($AlertprefixFolder))
             {
-              $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"      
+              $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"
             }
-            if((GetQueueCount) -gt $maxMainQueuemessages)
-            {
-                Write-Host "Backlog queue message has been posted" $json
-                CreateQueuePostMessageToQueue -message $json -queueN $backlogQueue -i $i
-            }
-            else {
-                Write-Host "Main queue message has been posted" $json
-                CreateQueuePostMessageToQueue -message $json -queueN $queueName -i $i
-            }
+    
+            Write-Host "Main queue message has been posted" $json
+            CreateQueuePostMessageToQueue -message $json -queueN $queueName -i $i
             if((check_if_script_runs_too_long -percentage 0.8 -script_start_time $script_start_time))
             {
                 Write-Host "Script is running long"
@@ -562,15 +349,7 @@ function GetBucketFiles($prefixFolder)
         }
             $startTime = $startTime.AddMinutes(1)
             Write-Host "Start time incremented by 1" $startTime
-       
-        }
-        catch {
-            postCheckpointLastFailure($json)
-            Write-Host "Execption at this message for path" $item "at start time" $startTime "at now" $now
-            Write-Error "Failed at GetBucketFiles with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
-           }
     }
-   
 
     }
 }
@@ -648,29 +427,45 @@ catch {
 
 }
 
-    $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
-    $Context = New-AzStorageContext -ConnectionString $azstoragestring
-    $startTime,$now=GenerateDate
-    
+$azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
+$queueName=$env:queueName
+$carbonBlackStorage=$env:AzureWebJobsStorage
+$Context = New-AzStorageContext -ConnectionString $azstoragestring
+$startTime,$now=GenerateDate
 $startTime
-$now    
+$now
 #postCheckpoint
 # Execute the Function to Pull CarbonBlack data and Post to the Log Analytics Workspace
-CarbonBlackAPI
-if((Get-AzStorageContainer -Context $Context).Name -contains "lastlog"){
-    #Set Container
-    $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Blob "lastlog.log"
-    $lastlogTime = $blob.ICloudBlob.DownloadText()
-    $startTime = $lastlogTime | Get-Date -Format yyyy-MM-ddTHH:mm:ss
-    $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastlog.log"
-    Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Context $Context -Force
+$sleepTime = 15
+Do
+{
+    $queueCount = GetQueueCount
+    if($queueCount -lt $maxMainQueuemessages)
+    {
+        try {
+            CarbonBlackS3Messages
+            if((Get-AzStorageContainer -Context $Context).Name -contains "lastlog"){
+                #Set Container
+                $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastlog.log"
+                Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Context $Context -Force
+            }
+            else {
+            $azStorageContainer = New-AzStorageContainer -Name "lastlog" -Context $Context
+            $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastlog.log"
+            Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container $azStorageContainer.name -Context $Context -Force
+            }
+            break
+        }
+        catch {
+            Write-Error "Failed at GetBucketFiles with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
+        }
+    }
+    Start-Sleep -s 15
+    $sleepTime = $sleepTime + 15
 }
-else {
-    
-$azStorageContainer = New-AzStorageContainer -Name "lastlog" -Context $Context
-$now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastlog.log"
-Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container $azStorageContainer.name -Context $Context -Force
+while ($sleepTime -lt 271) {
 }
+
 #This method posts the message to queue
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"

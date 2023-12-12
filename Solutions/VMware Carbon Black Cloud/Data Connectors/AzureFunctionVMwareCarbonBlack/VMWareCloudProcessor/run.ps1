@@ -451,16 +451,17 @@ function  GetBucketDetails {
         If ($Null -ne $s3BucketName) {
             Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
             if($startTime -le $now) {
-                $keyValuePairs = $prefixFolder -split '\\'
-                $s3Dict = @{}
-                foreach ($pair in $keyValuePairs) {
-                    $key, $value = $pair -split '='
-                    $s3Dict[$key] = $value
-                }
-                $keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
+                # $keyValuePairs = $prefixFolder -split '\\'
+                # $s3Dict = @{}
+                # foreach ($pair in $keyValuePairs) {
+                #     $key, $value = $pair -split '='
+                #     $s3Dict[$key] = $value
+                # }
+                #$keyPrefix = $prefixFolder
+                #"$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
                 #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=5/hour=11/minute=55/second=01"
                 #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=6/hour=15/minute=19/second=2"
-                $obj = Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix
+                $obj = Get-S3Object -BucketName $s3BucketName -Key $prefixFolder
                 $obj | % {
                     if ($_.Size -gt 0)
                     {
