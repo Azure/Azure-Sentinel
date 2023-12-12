@@ -108,14 +108,15 @@ Change the Risk List to download and modify the description in the ```RecordedFu
 Its possible to adjust the cadence of Risk List download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
 
 The first step of all IndicatorImport Playbooks is a recurrence step, it is possible to adjust the cadence by modifying the interval and frequency parameters.\
-<img src="Images/2023-04-18-14-52-32.png" width="500">
+<img src="Images/2023-12-12-10-00-53.png" width="500">
 
 If you do so however, it is critical that you also adjust the expirationDateTime parameter in the final block of that logic app to be synchronized with the recurrence timing. Failure to do so can result in either:
 * Duplication of indicators.
 * Having no active Recorded Future indicators the majority of the time. 
 
 If you are unsure of how to do this, please consult Recorded Future Professional Services.
-![](Images/2023-06-26-10-59-49.png)
+
+![](Images/2023-12-12-10-02-11.png)
 
 ## Automate Incident Enrichment
 After one of the enrichment playbooks is installed and all connections are configured. Create an automation rule to automate the enrichment process. This will automate enrichment of Recorded Future intelligence to known entities in all incidents. 

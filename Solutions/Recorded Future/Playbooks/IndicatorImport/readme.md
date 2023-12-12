@@ -2,6 +2,8 @@
 
 More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../readme.md).
 
+All **IndicatorImport** playbooks have the RecordedFuture-ThreatIntelligenceImport as a prerequisite. So always setup the RecordedFuture-ThreatIntelligenceImport first as part och the solution installation or as a single playbook installation below.  
+
 ## RecordedFuture-ThreatIntelligenceImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
