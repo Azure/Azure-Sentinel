@@ -46,6 +46,8 @@ General notes
 #>
 function GenerateDate()
 {
+    
+    $time= [int]$Env:timeInterval
     $startTime=getCheckpoint
     if($null -ne $startTime)
     {
@@ -57,11 +59,12 @@ function GenerateDate()
         Write-Host "The last start time in file share is" $startTime
     }
     else {
-        $startTime = [System.DateTime]::UtcNow.AddMinutes(-$(5))
+        $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time))
     }
 
     $now = [System.DateTime]::UtcNow
     #$Duration = New-TimeSpan -Start $startTime -End $now()
+
     if($startTime -le $now)
     {
         [int]$noofmins = $($now-$startTime).TotalMinutes
@@ -69,11 +72,11 @@ function GenerateDate()
     else {
         Write-Host "Start time is greater than current time,Please check the start time and correct it."
     }
-    if($noofmins -gt 5)
+    if($noofmins -gt $time)
     {
         if($null -ne $startTime)
         {
-          $now=$startTime.AddMinutes(5)
+          $now=$startTime.AddMinutes($time)
         }
         Write-Host "The no of mins b/w start and end time is greater than 5"
     }
@@ -126,10 +129,10 @@ function CarbonBlackS3Messages()
     {
         if ($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
         {
-            $LogTypeArr = @("event")
+            $LogTypeArr = @("event","audit")
         }
         else{
-            $LogTypeArr = @("event","alertSIEMAPI")
+            $LogTypeArr = @("event","audit","alertSIEMAPI")
         }
     }else {
         if($logType -like "``[*``]")
@@ -148,8 +151,11 @@ function ProcessMessagesToQueue()
     {
         if($LogTypeArr -contains "event")
         {
+        
+            $time=[System.DateTime]::UtcNow
             # get queue count ---> if less than < 200 call below fn, if no, wait for 10sec and check again queue count size
             GetBucketFiles($EventprefixFolder)
+            Write-Host "Events are processsed in $(([System.DateTime]::UtcNow - $time).Seconds) Seconds"
         }
         else{
             Write-Warning "'Event' was not selected as a LogType, therefore event logs will not be ingested to the workspace."
@@ -165,7 +171,9 @@ function ProcessMessagesToQueue()
         {
             if(-not([string]::IsNullOrWhiteSpace($s3BucketName)) -and -not([string]::IsNullOrWhiteSpace($AWSAccessKeyId)) -and -not([string]::IsNullOrWhiteSpace($AWSSecretAccessKey)) -and -not([string]::IsNullOrWhiteSpace($OrgKey)))
             {
+                $time=[System.DateTime]::UtcNow
                 GetBucketFiles($AlertprefixFolder)
+                Write-Host "Alerts are processsed in $(([System.DateTime]::UtcNow - $time).Seconds) Seconds"
             }
         }
     }
@@ -280,6 +288,59 @@ function check_if_script_runs_too_long($percentage, $script_start_time)
  [double]$maxduration= $temp * 0.8
  return $duration -gt $maxduration
 }
+
+<#
+.SYNOPSIS
+This method used for posting to queue
+.DESCRIPTION
+Long description
+
+.PARAMETER message
+$message from convert json from object
+
+.EXAMPLE
+An example
+
+.NOTES
+General methods
+#>
+function CreateQueue($queueNameParameter)
+{
+   
+try
+{
+    if(-not([string]::IsNullOrWhiteSpace($carbonBlackStorage)) -and -not([string]::IsNullOrWhiteSpace($queueNameParameter)))
+    {
+        $ctx = New-AzStorageContext -ConnectionString $carbonBlackStorage
+        if ($null -ne $ctx)
+        {
+            
+            $queue = Get-AzStorageQueue –Name $queueNameParameter –Context $ctx
+            if(-not $queue)
+            {
+               #Creating the queue
+               $queue = New-AzStorageQueue –Name $queueNameParameter -Context $ctx  
+            }
+            else {
+                
+                #Queue already present
+            }         
+        }
+        else
+        {
+          Write-Host "Storage context not available"
+        }
+    }
+    else
+    {
+        Write-Host "Input parameters are empty"
+    }
+}
+catch {
+  Write-Error "Failed at CreateQueue with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
+}
+
+}
 <#
 .SYNOPSIS
 #
@@ -297,11 +358,14 @@ function GetBucketFiles($prefixFolder)
 {
     IF ($Null -ne $s3BucketName) {
         Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
+        $totalTime
+        $started=[System.DateTime]::UtcNow 
         while ($startTime -le $now) {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=7/hour=6/minute=3"
             $paths=@()
+            $msgs=@()
             foreach ($items in (Get-S3Object -BucketName $s3BucketName -KeyPrefix $keyPrefix) | Select-Object Key ) 
             {
                 if($items.Key.Contains(".gz"))
@@ -315,7 +379,16 @@ function GetBucketFiles($prefixFolder)
                 }
                 if(("$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])") -eq $keyPrefix)
                 {
-                    $paths += $path
+                    $paths += $items.Key
+                    if($items.Key.Contains($EventprefixFolder))
+                    {
+                        $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $items.Key -tableName $EventLogTable -logtype "event"
+                    }
+                    if($items.Key.Contains($AlertprefixFolder))
+                    {
+                        $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"
+                    }
+                    $msgs+=$json
                 }
                 else {
                     Write-Host "Paths doesn't have gz files" $items.Key
@@ -323,6 +396,17 @@ function GetBucketFiles($prefixFolder)
                 }
            }
         $paths = $paths | sort -Unique
+        $startQueue=[System.DateTime]::UtcNow 
+        try {
+            $queueCount = GetQueueCount
+            Write-Host "Queue Count in main queue is $($queueCount)" 
+            Push-OutputBinding -Name Msg -Value $msgs
+            Write-Host "Total time to process messages to queue under 1 min in seconds $(([System.DateTime]::UtcNow-$startQueue).seconds)" 
+        }
+        catch {
+            "Failed at Pushoutpubinding with error message: $($_.Exception.Message)"
+        }
+       <## Write-Host "End of s3 bucket and starting of paths $(([System.DateTime]::UtcNow))" 
         Write-Host $paths
         foreach($item in $paths)
         {
@@ -331,7 +415,9 @@ function GetBucketFiles($prefixFolder)
           Write-Host "Paths from s3" $item "at start time" $startTime "now time" $now
           if($item.Contains($EventprefixFolder))
            {
+            Write-Host "Starting of json $(([System.DateTime]::UtcNow))" 
             $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $EventLogTable -logtype "event"
+            Write-Host "Ending of json $(([System.DateTime]::UtcNow))" 
            }
            if($item.Contains($AlertprefixFolder))
             {
@@ -346,11 +432,13 @@ function GetBucketFiles($prefixFolder)
                 return
             }
 
-        }
+        }#>
+            $totalTime+=$(([System.DateTime]::UtcNow-$started).seconds)
+            Write-Host "Total time to process files under 1 min in seconds $(([System.DateTime]::UtcNow-$started).seconds)" 
             $startTime = $startTime.AddMinutes(1)
             Write-Host "Start time incremented by 1" $startTime
     }
-
+    Write-Host "Total time to process files under 5 mins in seconds ($totalTime)" 
     }
 }
 <#
@@ -429,8 +517,10 @@ catch {
 
 $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
 $queueName=$env:queueName
+$maxMainQueuemessages=$env:maxMainQueuemessages
 $carbonBlackStorage=$env:AzureWebJobsStorage
 $Context = New-AzStorageContext -ConnectionString $azstoragestring
+CreateQueue($queueName)
 $startTime,$now=GenerateDate
 $startTime
 $now
@@ -439,6 +529,7 @@ $now
 $sleepTime = 15
 Do
 {
+    
     $queueCount = GetQueueCount
     if($queueCount -lt $maxMainQueuemessages)
     {
