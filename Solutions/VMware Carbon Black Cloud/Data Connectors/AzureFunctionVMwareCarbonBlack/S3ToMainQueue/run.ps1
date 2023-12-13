@@ -359,6 +359,7 @@ function GetBucketFiles($prefixFolder)
     IF ($Null -ne $s3BucketName) {
         Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
         $totalTime
+        [int]$totalQueueCount=0
         $started=[System.DateTime]::UtcNow 
         while ($startTime -le $now) {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
@@ -396,12 +397,13 @@ function GetBucketFiles($prefixFolder)
                 }
            }
         $paths = $paths | sort -Unique
+        $totalQueueCount+=$msgs.Count
         $startQueue=[System.DateTime]::UtcNow 
         try {
             $queueCount = GetQueueCount
             Write-Host "Queue Count in main queue is $($queueCount)" 
             Push-OutputBinding -Name Msg -Value $msgs
-            Write-Host "Total time to process messages to queue under 1 min in seconds $(([System.DateTime]::UtcNow-$startQueue).seconds)" 
+            Write-Host "Total time to process messages to queue under 1 min for $prefixFolder in seconds $(([System.DateTime]::UtcNow-$startQueue).seconds)" 
         }
         catch {
             "Failed at Pushoutpubinding with error message: $($_.Exception.Message)"
@@ -433,12 +435,13 @@ function GetBucketFiles($prefixFolder)
             }
 
         }#>
-            $totalTime+=$(([System.DateTime]::UtcNow-$started).seconds)
-            Write-Host "Total time to process files under 1 min in seconds $(([System.DateTime]::UtcNow-$started).seconds)" 
+            #$totalTime+=$(([System.DateTime]::UtcNow-$started).seconds)
+            Write-Host "Total time to process files under 1 min  for $prefixFolder in seconds $(([System.DateTime]::UtcNow-$started).seconds)" 
             $startTime = $startTime.AddMinutes(1)
             Write-Host "Start time incremented by 1" $startTime
     }
-    Write-Host "Total time to process files under 5 mins in seconds ($totalTime)" 
+    #Write-Host "Total time to process files under 5 mins in seconds ($totalTime)" 
+    Write-Host "Total Messages pushed to queue under 5 mins: $totalQueueCount" 
     }
 }
 <#
