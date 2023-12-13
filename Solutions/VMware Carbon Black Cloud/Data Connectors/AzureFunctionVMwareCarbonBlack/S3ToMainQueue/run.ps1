@@ -167,15 +167,14 @@ function ProcessMessagesToQueue()
 
     if($LogTypeArr -contains "alertSIEMAPI" -or $LogTypeArr -contains "alertAWSS3")
     {
-        if($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
-        {
+        
             if(-not([string]::IsNullOrWhiteSpace($s3BucketName)) -and -not([string]::IsNullOrWhiteSpace($AWSAccessKeyId)) -and -not([string]::IsNullOrWhiteSpace($AWSSecretAccessKey)) -and -not([string]::IsNullOrWhiteSpace($OrgKey)))
             {
                 $time=[System.DateTime]::UtcNow
                 GetBucketFiles($AlertprefixFolder)
                 Write-Host "Alerts are processsed in $(([System.DateTime]::UtcNow - $time).Seconds) Seconds"
             }
-        }
+        
     }
     else {
         Write-Host "Input parameters are empty for alert logs"
