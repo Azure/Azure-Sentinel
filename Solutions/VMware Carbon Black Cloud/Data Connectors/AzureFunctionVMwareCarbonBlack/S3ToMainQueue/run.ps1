@@ -126,10 +126,10 @@ function CarbonBlackS3Messages()
     {
         if ($SIEMapiKey -eq '<Optional>' -or  $SIEMapiId -eq '<Optional>'  -or [string]::IsNullOrWhitespace($SIEMapiKey) -or  [string]::IsNullOrWhitespace($SIEMapiId))
         {
-            $LogTypeArr = @("event","audit")
+            $LogTypeArr = @("event")
         }
         else{
-            $LogTypeArr = @("event","audit","alertSIEMAPI")
+            $LogTypeArr = @("event","alertSIEMAPI")
         }
     }else {
         if($logType -like "``[*``]")

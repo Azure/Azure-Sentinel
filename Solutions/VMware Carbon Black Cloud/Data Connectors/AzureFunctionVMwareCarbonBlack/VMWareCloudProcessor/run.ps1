@@ -400,7 +400,6 @@ Function Expand-GZipFile {
     catch {
         Write-Error "Failed at Expand-GZipFile with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
     }
-	
 }
 
 <#
@@ -449,6 +448,7 @@ function  GetBucketDetails {
         $logtype
     )
         If ($Null -ne $s3BucketName) {
+            $keyPrefix = Split-Path $prefixFolder
             Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
             if($startTime -le $now) {
                 # $keyValuePairs = $prefixFolder -split '\\'
@@ -461,6 +461,7 @@ function  GetBucketDetails {
                 #"$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
                 #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=5/hour=11/minute=55/second=01"
                 #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=6/hour=15/minute=19/second=2"
+                #$obj = Get-S3Object -BucketName $s3BucketName -Key $prefixFolder
                 $obj = Get-S3Object -BucketName $s3BucketName -Key $prefixFolder
                 $obj | % {
                     if ($_.Size -gt 0)
@@ -490,13 +491,9 @@ function  GetBucketDetails {
                             $filename =  $filename -replace ($_.Extension, '')
                             $filename = $filename.Trim()
                             try {
-                              #$streamReader = [System.IO.File]::ReadAllText($filename)
                               $FileContent =[System.IO.File]::ReadAllLines($filename)
-                               #while ($streamReader.Length -ge 0)
-                                #$x=[System.IO.File]::Ge($filename)
                                 foreach ($logEvent in $FileContent)
                                 {
-                                    #$logEvent = $streamReader.ReadLine()
                                     $logs = $logEvent | ConvertFrom-Json
                                     $hash = @{}
                                     $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
@@ -518,13 +515,9 @@ function  GetBucketDetails {
                                 Write-Host "Error in reading file from tmp folder. S3File: $($loopItem.FullName), Error: $err"
                             }
                             finally {
-                                #if ($streamReader) {
-                                 #   $streamReader.Close()
-                                 #   $streamReader.Dispose()
-                                    Remove-Item -LiteralPath $filename -Force -Recurse
+                                    #Remove-Item -LiteralPath $filename -Force -Recurse
                                     PushDataToSentinel -totalEvents $fileEvents -logtype $logtype -tableName $tableName -fileName $filename
-                                #}
-                            }
+                                }
                             #Write-Host "Data has been Pushed to Sentinel completed.  S3File: $($filename), S3Bucket: $($_.BucketName), No of Events Sent: $($fileEvents.Count), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
                         }
                     catch {
@@ -537,9 +530,8 @@ function  GetBucketDetails {
                 }
             }
             }
+            Remove-Item  -LiteralPath "/tmp/$keyPrefix" -Recurse -Force
         }
-    #$keyPrefix = $keyPrefix -split '/'
-    Remove-Item  -LiteralPath "/tmp/$keyPrefix" -Recurse -Force
 }
 
 ProcessBucketFiles
