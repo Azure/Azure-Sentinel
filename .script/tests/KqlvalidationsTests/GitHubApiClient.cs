@@ -54,10 +54,6 @@ namespace Kqlvalidations.Tests
                         var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
                         if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
                         {
-                            Console.WriteLine($"GitHub App ID: {appId}");
-                            Console.WriteLine($"Installation ID: {installationId}");
-                            Console.WriteLine($"Private Key: {privateKey}");
-
                             throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
                         }
 
@@ -164,8 +160,8 @@ namespace Kqlvalidations.Tests
                 {
                 new Claim("iat", now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer),
                 new Claim("exp", expiration.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer),
-                new Claim("iss", appId),
-            };
+                new Claim("iss", appId)
+                };
 
                 var token = new JwtSecurityToken(claims: claims, signingCredentials: signingCredentials);
                 var handler = new JwtSecurityTokenHandler();
