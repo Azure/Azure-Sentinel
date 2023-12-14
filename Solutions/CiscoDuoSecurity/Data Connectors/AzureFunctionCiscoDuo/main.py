@@ -21,7 +21,7 @@ SHARED_KEY = os.environ['SHARED_KEY']
 FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 LOG_TYPE = 'CiscoDuo'
 MAX_SYNC_WINDOW_PER_RUN_MINUTES = os.getenv('MAX_SYNC_WINDOW_PER_RUN_MINUTES', "60")
-
+MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -36,6 +36,7 @@ if not match:
 
 def main(mytimer: func.TimerRequest) -> None:
     logging.info('Starting script')
+    start_ts = int(time.time())
     admin_api = duo_client.Admin(
         ikey=CISCO_DUO_INTEGRATION_KEY,
         skey=CISCO_DUO_SECRET_KEY,
@@ -54,22 +55,34 @@ def main(mytimer: func.TimerRequest) -> None:
     if 'trust_monitor' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_trust_monitor_logs_last_ts.txt')
         process_trust_monitor_events(admin_api, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
 
     if 'authentication' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_auth_logs_last_ts.txt')
-        process_auth_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
-
+        process_auth_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+    
     if 'administrator' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_admin_logs_last_ts.txt')
-        process_admin_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
-
+        process_admin_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+    
     if 'telephony' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_tele_logs_last_ts.txt')
-        process_tele_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
-
+        process_tele_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+    
     if 'offline_enrollment' in log_types:
         state_manager = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_duo_offline_enrollment_logs_last_ts.txt')
-        process_offline_enrollment_logs(admin_api, state_manager=state_manager, sentinel=sentinel)
+        process_offline_enrollment_logs(admin_api, start_ts, state_manager=state_manager, sentinel=sentinel)
 
     logging.info('Script finished. Sent events: {}'.format(sentinel.successfull_sent_events_number))
 
@@ -109,7 +122,8 @@ def process_trust_monitor_events(admin_api: duo_client.Admin, state_manager: Sta
     state_manager.post(str(maxtime))
 
 
-def process_auth_logs(admin_api: duo_client.Admin, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+def process_auth_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+    limit = 1000
     logging.info('Start processing authentication logs')
 
     logging.info('Getting last timestamp')
@@ -128,16 +142,52 @@ def process_auth_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
         maxtime = mintime + maxwindow
         logging.warn('Ingestion is lagging for authentication logs, limiting synchronization window to {}'.format(maxwindow))
 
-    for event in get_auth_logs(admin_api, mintime, maxtime):
+    events, next_offset = get_auth_logs(admin_api, mintime, maxtime)
+
+    for event in events:
         sentinel.send(event)
 
     sentinel.flush()
     
     logging.info('Saving auth logs last timestamp {}'.format(maxtime))
     state_manager.post(str(maxtime))
-    
 
-def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> Iterable[dict]:
+    while len(events) == limit:
+        if next_offset and next_offset is not None:
+            next_offset = ','.join(next_offset)
+        else:
+            break
+        logging.info('Making authentication logs request: next_offset={}'.format(next_offset))
+            
+        try:
+            response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
+            logging.info('Response recieved {}'.format(response))
+        except Exception as ex:
+            logging.info('Error in while loop while getting authentication logs- {}'.format(ex))
+            if ex.status == 429:
+                logging.info('429 exception occurred, trying retry after 60 seconds')
+                time.sleep(60)
+                response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
+            
+        if(response is not None): 
+            events = response['authlogs']
+            logging.info('Obtained {} auth events'.format(len(events)))
+        else:
+            logging.info('returned response as Null')
+
+        for event in events:
+            sentinel.send(event)
+        sentinel.flush()
+    
+        logging.info('Saving auth logs last timestamp {}'.format(maxtime))
+        state_manager.post(str(maxtime))
+
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+
+
+def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int):
     limit = 1000
     logging.info('Making authentication logs request: mintime={}, maxtime={}'.format(mintime, maxtime))
     try:
@@ -151,42 +201,17 @@ def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int) -> It
     
     if(res is not None):
         events = res['authlogs']
+        next_offset = res['metadata']['next_offset']
         logging.info('Obtained {} auth events'.format(len(events)))
-        
-        for event in events:
-            yield event
-
-        while len(events) == limit:
-            next_offset = res['metadata']['next_offset']
-            if next_offset:
-                next_offset = ','.join(next_offset)
-            else:
-                break
-            logging.info('Making authentication logs request: next_offset={}'.format(next_offset))
-            
-            try:
-                response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
-                logging.info('Response recieved {}'.format(response))
-            except Exception as ex:
-                logging.info('Error in while loop while getting authentication logs- {}'.format(ex))
-                if ex.status == 429:
-                    logging.info('429 exception occurred, trying retry after 60 seconds')
-                    time.sleep(60)
-                    response = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc', next_offset=next_offset)
-            
-            if(response is not None): 
-                events = response['authlogs']
-                logging.info('Obtained {} auth events'.format(len(events)))
-
-                for event in events:
-                    yield event
-            else:
-                logging.info('returned response as Null')
     else:
-        logging.info('Error while getting authentication logs')    
+        logging.info('Error while getting authentication logs')   
+        events = None
+        next_offset = None 
+    return events, next_offset
 
 
-def process_admin_logs(admin_api: duo_client.Admin, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+def process_admin_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+    limit = 1000
     logging.info('Start processing administrator logs')
 
     logging.info('Getting last timestamp')
@@ -199,8 +224,9 @@ def process_admin_logs(admin_api: duo_client.Admin, state_manager: StateManager,
         mintime = int(time.time() - 86400)
 
     last_ts = None
+    events = get_admin_logs(admin_api, mintime)
 
-    for event in get_admin_logs(admin_api, mintime):
+    for event in events:
         last_ts = event['timestamp']
         sentinel.send(event)
 
@@ -209,7 +235,40 @@ def process_admin_logs(admin_api: duo_client.Admin, state_manager: StateManager,
     if last_ts:
         logging.info('Saving admin logs last timestamp {}'.format(last_ts))
         state_manager.post(str(last_ts))
+
+    while len(events) == limit:
+        mintime = last_ts
+        mintime += 1
+        logging.info('Making administrator logs request: mintime={}'.format(mintime))
+        try:
+            events = admin_api.get_administrator_log(mintime)
+        except Exception as ex:
+            logging.info('Error while getting administrator logs- {}'.format(ex))
+            if ex.status == 429:
+                logging.info('429 exception occurred, trying retry after 60 seconds')
+                time.sleep(60)
+                events = admin_api.get_administrator_log(mintime)
+            
+        if(events is not None):
+            logging.info('Obtained {} admin events'.format(len(events)))
+                
+        else:
+            logging.info('Events returned as null in administrator logs')
+
+        for event in events:
+            last_ts = event['timestamp']
+            sentinel.send(event)
+
+        sentinel.flush()
     
+        if last_ts:
+            logging.info('Saving admin logs last timestamp {}'.format(last_ts))
+            state_manager.post(str(last_ts))
+
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+   
 
 def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
@@ -225,33 +284,14 @@ def get_admin_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
 
     if(events is not None):
         logging.info('Obtained {} admin events'.format(len(events)))
-        for event in events:
-            mintime = event['timestamp']
-            yield event
 
-        while len(events) == limit:
-            mintime += 1
-            logging.info('Making administrator logs request: mintime={}'.format(mintime))
-            try:
-                events = admin_api.get_administrator_log(mintime)
-            except Exception as ex:
-                logging.info('Error while getting administrator logs- {}'.format(ex))
-                if ex.status == 429:
-                    logging.info('429 exception occurred, trying retry after 60 seconds')
-                    time.sleep(60)
-                    events = admin_api.get_administrator_log(mintime)
-            
-            if(events is not None):
-                logging.info('Obtained {} admin events'.format(len(events)))
-                for event in events:
-                    mintime = event['timestamp']
-                    yield event
-            else:
-                logging.info('Events returned as null in administrator logs')
     else:
-        logging.info('Error while getting administrator logs')    
+        logging.info('Error while getting administrator logs')
+        events = None    
+    return events
     
-def process_tele_logs(admin_api: duo_client.Admin, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+def process_tele_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+    limit = 1000
     logging.info('Start processing telephony logs')
 
     logging.info('Getting last timestamp')
@@ -265,7 +305,9 @@ def process_tele_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
     
     last_ts = None
 
-    for event in get_tele_logs(admin_api, mintime):
+    events = get_tele_logs(admin_api, mintime)
+
+    for event in events:
         last_ts = event['timestamp']
         sentinel.send(event)
     
@@ -274,8 +316,41 @@ def process_tele_logs(admin_api: duo_client.Admin, state_manager: StateManager, 
     if last_ts:
         logging.info('Saving telephony logs last timestamp {}'.format(last_ts))
         state_manager.post(str(last_ts))
-    
 
+    while len(events) == limit:
+        mintime = last_ts
+        mintime += 1
+        logging.info('Making telephony logs request: mintime={}'.format(mintime))
+        try:
+            events = admin_api.get_telephony_log(mintime)
+        except Exception as ex:                
+            logging.info('Error while getting telephony logs - {}'.format(ex))
+            if ex.status == 429:
+                logging.info('429 exception occurred, trying retry after 60 seconds')
+                time.sleep(60)
+                events = admin_api.get_telephony_log(mintime)
+        
+        if(events is not None):
+            logging.info('Obtained {} tele events'.format(len(events)))
+    
+        else:
+            logging.info('Events returned as null in telephony logs')
+
+        for event in events:
+            last_ts = event['timestamp']
+            sentinel.send(event)
+    
+        sentinel.flush()
+
+        if last_ts:
+            logging.info('Saving telephony logs last timestamp {}'.format(last_ts))
+            state_manager.post(str(last_ts))
+
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+
+        
 def get_tele_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
     logging.info('Making telephony logs request: mintime={}'.format(mintime))
@@ -290,34 +365,14 @@ def get_tele_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     
     if(events is not None):
         logging.info('Obtained {} tele events'.format(len(events)))
-        for event in events:
-            mintime = event['timestamp']
-            yield event
-
-        while len(events) == limit:
-            mintime += 1
-            logging.info('Making telephony logs request: mintime={}'.format(mintime))
-            try:
-                events = admin_api.get_telephony_log(mintime)
-            except Exception as ex:                
-                logging.info('Error while getting telephony logs - {}'.format(ex))
-                if ex.status == 429:
-                    logging.info('429 exception occurred, trying retry after 60 seconds')
-                    time.sleep(60)
-                    events = admin_api.get_telephony_log(mintime)
-        
-            if(events is not None):
-                logging.info('Obtained {} tele events'.format(len(events)))
-                for event in events:
-                    mintime = event['timestamp']
-                    yield event
-            else:
-                logging.info('Events returned as null in telephony logs')
     else:
-        logging.info('Error while getting telephony logs')    
+        logging.info('Error while getting telephony logs')  
+        events = None
+    return events  
 
 
-def process_offline_enrollment_logs(admin_api: duo_client.Admin, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+def process_offline_enrollment_logs(admin_api: duo_client.Admin, start_ts, state_manager: StateManager, sentinel: AzureSentinelConnector) -> None:
+    limit = 1000
     logging.info('Start processing offline_enrollment logs')
 
     logging.info('Getting last timestamp')
@@ -331,7 +386,9 @@ def process_offline_enrollment_logs(admin_api: duo_client.Admin, state_manager: 
 
     last_ts = None
 
-    for event in get_offline_enrollment_logs(admin_api, mintime):
+    events = get_offline_enrollment_logs(admin_api, mintime)
+
+    for event in events:
         last_ts = event['timestamp']
         sentinel.send(event)
 
@@ -340,8 +397,41 @@ def process_offline_enrollment_logs(admin_api: duo_client.Admin, state_manager: 
     if last_ts:
         logging.info('Saving offline_enrollment logs last timestamp {}'.format(last_ts))
         state_manager.post(str(last_ts))
-    
 
+    while len(events) == limit:
+        mintime = last_ts
+        mintime += 1
+        logging.info('Making offline_enrollment logs request: mintime={}'.format(mintime))
+        try:
+            events = make_offline_enrollment_logs_request(admin_api, mintime)
+        except Exception as ex:
+            logging.info('Error while getting offline_enrollment logs - {}'.format(ex))
+            if ex.status == 429:
+                logging.info('429 exception occurred, trying retry after 60 seconds')
+                time.sleep(60)
+                events = make_offline_enrollment_logs_request(admin_api, mintime)
+        
+        if(events is not None):
+            logging.info('Obtained {} offline_enrollment events'.format(len(events)))
+        
+        else:
+            logging.info('Events returned as null in offline_enrollment logs')
+
+        for event in events:
+            last_ts = event['timestamp']
+            sentinel.send(event)
+
+        sentinel.flush()
+    
+        if last_ts:
+            logging.info('Saving offline_enrollment logs last timestamp {}'.format(last_ts))
+            state_manager.post(str(last_ts))
+
+        if check_if_script_runs_too_long(start_ts):
+            logging.info('Script is running too long. Saving progress and exit.')
+            return
+
+        
 def get_offline_enrollment_logs(admin_api: duo_client.Admin, mintime: int) -> Iterable[dict]:
     limit = 1000
     logging.info('Making offline_enrollment logs request: mintime={}'.format(mintime))
@@ -356,31 +446,11 @@ def get_offline_enrollment_logs(admin_api: duo_client.Admin, mintime: int) -> It
     
     if(events is not None):
         logging.info('Obtained {} offline_enrollment events'.format(len(events)))
-        for event in events:
-            mintime = event['timestamp']
-            yield event
-
-        while len(events) == limit:
-            mintime += 1
-            logging.info('Making offline_enrollment logs request: mintime={}'.format(mintime))
-            try:
-                events = make_offline_enrollment_logs_request(admin_api, mintime)
-            except Exception as ex:
-                logging.info('Error while getting offline_enrollment logs - {}'.format(ex))
-                if ex.status == 429:
-                    logging.info('429 exception occurred, trying retry after 60 seconds')
-                    time.sleep(60)
-                    events = make_offline_enrollment_logs_request(admin_api, mintime)
         
-            if(events is not None):
-                logging.info('Obtained {} offline_enrollment events'.format(len(events)))
-                for event in events:
-                    mintime = event['timestamp']
-                    yield event
-            else:
-                logging.info('Events returned as null in offline_enrollment logs')
     else:
-        logging.info('Error while getting offline_enrollment logs')    
+        logging.info('Error while getting offline_enrollment logs')   
+        events = None
+    return events 
 
 def make_offline_enrollment_logs_request(admin_api: duo_client.Admin, mintime) -> List[dict]:
     mintime = str(int(mintime))
@@ -393,3 +463,10 @@ def make_offline_enrollment_logs_request(admin_api: duo_client.Admin, mintime) -
         params,
     )
     return response
+
+def check_if_script_runs_too_long(start_ts):
+    now = int(time.time())
+    duration = now - start_ts
+    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
+    return duration > max_duration
+

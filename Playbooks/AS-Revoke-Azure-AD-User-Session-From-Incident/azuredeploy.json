@@ -1,0 +1,340 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Revoke-Azure-AD-User-Session-From-Incident", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will look up Azure AD users associated with the incident account entities and revoke their sessions. A comment noting the affected users will be added to the Incident.",
+        "prerequisites": "1. An App Registration with User.ReadWrite.All permissions granted on Microsoft Graph API. 2. A client secret for the App Registration must be generated. 3. An Azure Key Vault Secret to hold the client secret. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Revoke-Azure-AD-User-Session-From-Incident",
+        "postDeployment": ["Access to the Azure Key Vault must be granted to the playbook","The Microsoft Sentinel Contributor role must be applied to the playbook"],
+        "lastUpdateTime": "2023-10-24T3:17:47Z",
+        "entities": ["Account"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Azure AD", "Revoke User Sessions"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Revoke-Azure-AD-User-Session-From-Incident",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App resource to be created"
+            }
+        },
+        "ClientID": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the Application (client) ID of your App Registration"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Key Vault that stores the App Registration client secret"
+            }
+        },
+        "KeyVaultSecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault Secret that contains the App Registration client secret"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Any_successful_session_revocations": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><strong>Revoked the following Azure AD user sessions:<br>\n</strong>@{variables('Affected Azure AD Users')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('Affected Azure AD Users'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Condition_-_User_session_successfully_revoked": {
+                                    "actions": {
+                                        "Append_to_string_variable_-_Affected_Azure_AD_Users": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Affected Azure AD Users",
+                                                "value": "@{items('For_each')?['Name']} [@{items('For_each')?['AadUserId']}]\n"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_-_Revoke_user_sign_in_sessions": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP_-_Revoke_user_sign_in_sessions')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP_-_Revoke_user_sign_in_sessions": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Parse_JSON_-_Access_token')?['access_token']}",
+                                            "Host": "graph.microsoft.com"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_each')?['AadUserId']}/revokeSignInSessions"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_Access_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Client_Secret": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeyVaultSecretName'), ''')}/value')]"
+                            }
+                        },
+                        "HTTP_-_Authenticate": {
+                            "runAfter": {
+                                "Initialize_variable_-_Affected_Azure_AD_Users": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": "[concat('grant_type=client_credentials&client_id=', parameters('ClientID'),'&client_secret=@{body(''Get_Client_Secret'')?[''value'']}&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default')]",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded",
+                                    "Host": "login.microsoftonline.com"
+                                },
+                                "method": "POST",
+                                "uri": "[concat('https://login.microsoftonline.com/', subscription().tenantId, '/oauth2/v2.0/token')]"
+                            }
+                        },
+                        "Initialize_variable_-_Affected_Azure_AD_Users": {
+                            "runAfter": {
+                                "Get_Client_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Affected Azure AD Users",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_Access_token": {
+                            "runAfter": {
+                                "HTTP_-_Authenticate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_Authenticate')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "ext_expires_in": {
+                                            "type": "integer"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
