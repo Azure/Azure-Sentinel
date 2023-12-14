@@ -363,8 +363,6 @@ function GetBucketFiles($prefixFolder)
         $time=[int]$Env:timeInterval
         while ($startTime -le $now) {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
-            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15
-            #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=7/hour=6/minute=3"
             $paths=@()
             $msgs=@()
             foreach ($items in (Get-S3Object -BucketName $s3BucketName -KeyPrefix $keyPrefix) | Select-Object Key ) 
@@ -408,39 +406,9 @@ function GetBucketFiles($prefixFolder)
         catch {
             "Failed at Pushoutpubinding with error message: $($_.Exception.Message)"
         }
-       <## Write-Host "End of s3 bucket and starting of paths $(([System.DateTime]::UtcNow))" 
-        Write-Host $paths
-        foreach($item in $paths)
-        {
-          [int]$i=0
-          Write-Host "Number of files paths is: " $paths "Count: " $paths.Count
-          Write-Host "Paths from s3" $item "at start time" $startTime "now time" $now
-          if($item.Contains($EventprefixFolder))
-           {
-            Write-Host "Starting of json $(([System.DateTime]::UtcNow))" 
-            $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $EventLogTable -logtype "event"
-            Write-Host "Ending of json $(([System.DateTime]::UtcNow))" 
-           }
-           if($item.Contains($AlertprefixFolder))
-            {
-              $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"
-            }
-    
-            Write-Host "Main queue message has been posted" $json
-            CreateQueuePostMessageToQueue -message $json -queueN $queueName -i $i
-            if((check_if_script_runs_too_long -percentage 0.8 -script_start_time $script_start_time))
-            {
-                Write-Host "Script is running long"
-                return
-            }
-
-        }#>
-            #$totalTime+=$(([System.DateTime]::UtcNow-$started).seconds)
-            Write-Host "Total time to process files under 1 min  for $prefixFolder in seconds $(([System.DateTime]::UtcNow-$started).seconds)" 
             $startTime = $startTime.AddMinutes(1)
-            Write-Host "Start time incremented by 1" $startTime
+            
     }
-    #Write-Host "Total time to process files under 5 mins in seconds ($totalTime)" 
     Write-Host "Total Messages pushed to queue under $time mins for $prefixFolder : $totalQueueCount" 
     }
 }
