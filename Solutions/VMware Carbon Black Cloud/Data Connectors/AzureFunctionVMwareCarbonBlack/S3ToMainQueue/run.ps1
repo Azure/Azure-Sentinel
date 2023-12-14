@@ -385,7 +385,7 @@ function GetBucketFiles($prefixFolder)
                     }
                     if($items.Key.Contains($AlertprefixFolder))
                     {
-                        $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $item -tableName $NotificationTable -logtype "alert"
+                        $json = Convert-ToJSON -s3BucketName $s3BucketName -keyPrefix $items.Key -tableName $NotificationTable -logtype "alert"
                     }
                     $msgs+=$json
                 }
