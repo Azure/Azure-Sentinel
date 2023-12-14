@@ -1,0 +1,67 @@
+id: b2df4979-d34a-48b3-a7d9-f473a4bf8058
+name: TI Map IP Entity to DeviceNetworkEvents
+description: |
+  'Identifies a match in DeviceNetworkEvents Event data from any IP Indicator from TI.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let DeviceNetworkEvents_ = DeviceNetworkEvents
+  | where isnotempty(RemoteIP)
+  | where TimeGenerated > ago(dt_lookBack)
+  | where ActionType !has "ConnectionFailed"
+  | extend isPrivate = ipv4_is_private(RemoteIP)
+  | where isPrivate != true;
+  let IPs = DeviceNetworkEvents_ | distinct RemoteIP | summarize make_list(RemoteIP);
+  ThreatIntelligenceIndicator
+  | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | extend TI_ipEntity = coalesce(NetworkIP, EmailSourceIpAddress, NetworkDestinationIP, NetworkSourceIP)
+  | where TI_ipEntity in (IPs)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | join kind=innerunique (DeviceNetworkEvents_) on $left.TI_ipEntity == $right.RemoteIP
+  | summarize TimeGenerated = arg_max(TimeGenerated, *) by IndicatorId, TI_ipEntity, DeviceName
+  // DeviceName, TI_ipEntity, RemoteUrl, InitiatingProcessAccountUpn
+  | extend timestamp = TimeGenerated, Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: TI_ipEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RemoteUrl
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+version: 1.0.0
+kind: Scheduled
