@@ -1,4 +1,4 @@
-# Ingest-DynatraceSentinelSecurityAlerts
+# Ingest-DynatraceMSSentinelSecurityAlerts
 author: Dynatrace
 
 This playbook will Report all Microsoft Sentinel Security Alerts to Dynatrace. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/platform/application-security/) enabled, you will also need to install the relevant Microsoft Sentinel Connectors which would generated security alerts consumed by this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
