@@ -328,7 +328,7 @@ function Split-EventsAndProcess($alleventobjs, $tableName, $logType) {
         try {
             $jsonPayload = $chunk | ConvertTo-Json -Depth 3
             $mbytes = [System.Text.Encoding]::UTF8.GetBytes($jsonPayload).Count / 1024 / 1024
-            Write-Host "total '$mbytes' MB under chunk '$chunk'"
+            Write-Host "total '$mbytes' MB for table name'$tableName' and log type '$logType'"
             if ($mbytes -le 30) {
                 $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tableName
                 Write-Host "SUCCESS: $($chunk.Count) total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
