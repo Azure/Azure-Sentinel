@@ -25,24 +25,16 @@ query: |
       | extend URI = parse_json(Grant).Grantee.URI, type = parse_json(Grant).Grantee.["xsi:type"], xamzacl = parse_json(cannedacl).["x-amz-acl"]
       | where (type == "Group" and (URI endswith "AllUsers" or URI endswith "AuthenticatedUsers"))
         or xamzacl in ("authenticated-read","public-read","public-read-write")
-      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
-      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
-      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
-      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
-        AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
-      | extend timestamp = TimeGenerated
+      | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+      | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: AccountName
-      - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
-      - identifier: CloudAppAccountId
-        columnName: RecipientAccountId
+      - identifier: FullName
+        columnName: AccountCustomEntity
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceIpAddress
-version: 1.0.1
+        columnName: IPCustomEntity
+version: 1.0.0
 kind: Scheduled

@@ -38,8 +38,6 @@ RESTARTPOLICY="--restart unless-stopped"
 NETWORKSTRING=""
 CLOUD="public"
 UI_AGENT=""
-UPDATEPOLICY='{ "auto_update" : true }'
-
 while [[ $# -gt 0 ]]; do
 	case $1 in
 	--keymode)
@@ -445,8 +443,9 @@ if [ ! $? -eq 0 ]; then
 	exit 1
 fi
 
+# Commenting out the following lines as they are not required for now
 # #populate settings.json
-echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
+# echo $UPDATEPOLICY> "$sysfileloc/$settingsjson"
 
 log 'System information Has been Updated'
 

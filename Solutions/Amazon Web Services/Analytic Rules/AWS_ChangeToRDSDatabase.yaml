@@ -27,25 +27,16 @@ query: |
   let EventNameList = dynamic(["AuthorizeDBSecurityGroupIngress","CreateDBSecurityGroup","DeleteDBSecurityGroup","RevokeDBSecurityGroupIngress"]);
   AWSCloudTrail
   | where EventName in~ (EventNameList)
-  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
-  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
-  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
-  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
-    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
-  | extend timestamp = StartTimeUtc
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource, AdditionalEventData, ResponseElements
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserIdentityUserName, IPCustomEntity = SourceIpAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: AccountName
-      - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
-      - identifier: CloudAppAccountId
-        columnName: RecipientAccountId
+      - identifier: FullName
+        columnName: AccountCustomEntity
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceIpAddress
-version: 1.0.2
+        columnName: IPCustomEntity
+version: 1.0.1
 kind: Scheduled

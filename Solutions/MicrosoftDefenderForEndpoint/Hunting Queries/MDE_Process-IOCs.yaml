@@ -7,6 +7,10 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
 tactics:
   - Execution
   - Persistence
@@ -14,6 +18,7 @@ tags:
   - Solorigate
   - NOBELIUM
 query:  |
+
   let excludeProcs = dynamic([@"\SolarWinds\Orion\APM\APMServiceControl.exe", @"\SolarWinds\Orion\ExportToPDFCmd.Exe", @"\SolarWinds.Credentials\SolarWinds.Credentials.Orion.WebApi.exe", @"\SolarWinds\Orion\Topology\SolarWinds.Orion.Topology.Calculator.exe", @"\SolarWinds\Orion\Database-Maint.exe", @"\SolarWinds.Orion.ApiPoller.Service\SolarWinds.Orion.ApiPoller.Service.exe", @"\Windows\SysWOW64\WerFault.exe"]);
   DeviceProcessEvents
   | where InitiatingProcessFileName =~ "solarwinds.businesslayerhost.exe"
@@ -21,32 +26,22 @@ query:  |
   | extend
       timestamp = TimeGenerated,
       AccountCustomEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),
-      HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.')),
-      AlgorithmCustomEntity = "MD5",FileHashCustomEntity = MD5
-  |extend Name = tostring(split(AccountCustomEntity, '@', 0)[0]), UPNSuffix = tostring(split(AccountCustomEntity, '@', 1)[0])    
-  | extend Account_0_Name = Name
-  | extend Account_0_UPNSuffix = UPNSuffix
-  | extend Host_0_HostName = HostName
-  | extend Host_0_DnsDomain = DnsDomain 
-  | extend FileHash_0_Algorithm = AlgorithmCustomEntity
-  | extend FileHash_0_Value = FileHashCustomEntity 
+      HostCustomEntity = DeviceName,
+      FileHashCustomEntity = MD5
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: Name
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
+      - identifier: FullName
+        columnName: AccountCustomEntity
   - entityType: Host
     fieldMappings:
-      - identifier: HostName
-        columnName: HostName
-      - identifier: DnsDomain
-        columnName: DnsDomain
+      - identifier: FullName
+        columnName: HostCustomEntity
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: AlgorithmCustomEntity
+        columnName: MD5
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.1
+version: 1.0.0
+kind: Scheduled

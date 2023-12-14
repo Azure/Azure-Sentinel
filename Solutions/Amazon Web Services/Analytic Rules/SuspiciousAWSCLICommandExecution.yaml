@@ -31,11 +31,6 @@ query: |
   | extend command = tostring(split(UserAgent, "off command/", 1)[0])  
   // Filter events based on predefined suspicious command list
   | where command has_any (SuspiciousCommands)  
-  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
-  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
-  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
-  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
-    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
   // Summarize relevant information for further analysis
   | summarize 
       CommadCount = dcount(command), 
@@ -44,24 +39,19 @@ query: |
       Events = make_list(EventName) 
       by 
       bin(TimeGenerated, 1min), 
-      RecipientAccountId, AccountName, AccountUPNSuffix, 
       UserIdentityUserName, 
       SourceIpAddress, 
       SessionMfaAuthenticated 
   // Filter out results with a sufficient count of unique suspicious commands in 1 min time window
   | where CommadCount >= 8
 entityMappings:
-  - entityType: Account
+  - entityType: IP
     fieldMappings:
-      - identifier: Name
-        columnName: AccountName
-      - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
-      - identifier: CloudAppAccountId
-        columnName: RecipientAccountId
+      - identifier: Address
+        columnName: SourceIpAddress
 customDetails:
    SuspiciousCommand: commands
    AWSUser: UserIdentityUserName
    AWSUserIp: SourceIpAddress
 kind: Scheduled
-version: 1.0.1
+version: 1.0.0

@@ -35,6 +35,7 @@ requiredDataConnectors:
   - connectorId: CiscoUmbrellaDataConnector
     dataTypes: 
       - Cisco_Umbrella_dns_CL
+
   - connectorId: Corelight
     dataTypes: 
       - Corelight_CL
@@ -54,11 +55,11 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let DomainTIs= ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
     // Picking up only IOC's that contain the entities we want
     | where isnotempty(DomainName)
-    | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true and ExpirationDateTime > now();
+    | where Active == true
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId;
   let Domains = DomainTIs | where isnotempty(DomainName) |summarize NDomains=dcount(DomainName), DomainsList=make_set(DomainName) 
     | project DomainList = iff(NDomains > HAS_ANY_MAX, dynamic([]), DomainsList) ;
   DomainTIs
@@ -69,6 +70,7 @@ query: |
   | where DNS_TimeGenerated < ExpirationDateTime
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, DnsQuery, DnsQueryType
   | extend timestamp = DNS_TimeGenerated, HostCustomEntity = Dvc, IPCustomEntity = SrcIpAddr, URLCustomEntity = Url
+
 entityMappings:
   - entityType: Host
     fieldMappings:
@@ -94,5 +96,5 @@ customDetails:
   SourceIPAddress: SrcIpAddr
   DnsQuery: DnsQuery
   QueryType: DnsQueryType
-version: 1.1.5
+version: 1.1.4
 kind: Scheduled

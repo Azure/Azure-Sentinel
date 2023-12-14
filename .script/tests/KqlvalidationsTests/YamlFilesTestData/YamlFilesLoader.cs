@@ -16,7 +16,7 @@ namespace Kqlvalidations.Tests
 
         public List<string> GetFilesNames(bool loadAllFiles = false)
         {
-            var gitHubApiClient = GitHubApiClient.Create();
+            var gitHubApiClient = GitHubApiClient.Instance;
 
             if (loadAllFiles)
             {

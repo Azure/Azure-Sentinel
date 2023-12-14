@@ -1,7 +1,7 @@
 # this is only for build pipeline not for local use
 param ($pipelineBasePath, $pipelineSolutionName, $pipelineDataFileRawContent, $dataFileName, $dataConnectorFolderName, $dataFolderActualName, $instrumentationKey, $pullRequestNumber, $runId, $calculatedPackageVersion, $defaultPackageVersion, $isWatchListInsideOfWorkbooksFolder = $false)
 . ./Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1 # load common functions
-. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load app insights functions
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load common functions
 
 try 
 {
@@ -23,7 +23,7 @@ try
 		$baseMetadata = $pipelineDataFileRawContent
 		$metadataCounter = 0
 		$global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
+		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $global:solutionId
 		$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
 		
 		$metadataAuthor = $contentToImport.Author.Split(" - ");
@@ -99,7 +99,6 @@ try
 					foreach ($file in $filesList) 
 					{
 						Write-Host "Current file is $file"
-						$fileExtension = $file -split '\.' | Select-Object -Last 1
 
 						if ($objectProperties.Name.ToLower() -eq "parsers") {
 							$finalPath = "" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName + "/Parsers/" + $file.Replace("Parsers/", "")
@@ -141,28 +140,12 @@ try
 
 						try {
 							Write-Host "Downloading $finalPath"
-							$isFilePathPresent = Test-Path -Path "$finalPath"
-							Write-Host "Is $finalPath file path present $isFilePathPresent"
-							if ($isFilePathPresent) {
-								$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
-							}
-							else {
-								if ($fileExtension -eq "json" -or $fileExtension -eq "JSON") {
-									Write-Host "FinalPath $finalPath not found!"
-									if ($fileExtension -eq "json") {
-										$finalPath = $finalPath.Replace(".json", ".JSON")
-									} else {
-										$finalPath = $finalPath.Replace(".JSON", ".json")
-									}
-									Write-Host "Updated FinalPath is $finalPath"
-									$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
-								}
-							}
+							$rawData = (New-Object System.Net.WebClient).DownloadString($finalPath)
 						}
 						catch {
 							Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
 							Send-AppInsightsExceptionTelemetry -InstrumentationKey $instrumentationKey -Exception $_.Exception -CustomProperties @{ 'RunId'="$runId"; 'PullRequestNumber'= "$pullRequestNumber"; 'ErrorDetails'="CreateSolutionV4 : Error occured in catch block: $_"; 'EventName'="CreateSolutionV4" }
-							exit 1;
+							break;
 						}
 
 						try {
