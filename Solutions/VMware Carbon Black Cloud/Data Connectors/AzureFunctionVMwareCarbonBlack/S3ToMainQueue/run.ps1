@@ -531,7 +531,7 @@ Do
     Start-Sleep -s 15
     $sleepTime = $sleepTime + 15
 }
-while ($sleepTime -lt 165) {
+while ($sleepTime -lt 168) {
 }
 
 #This method posts the message to queue
