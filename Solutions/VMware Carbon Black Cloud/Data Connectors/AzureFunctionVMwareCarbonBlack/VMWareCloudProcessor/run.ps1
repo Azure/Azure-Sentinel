@@ -47,13 +47,11 @@ function ProcessBucketFiles ()
         {
             try {
                     Split-EventsAndProcess -alleventobjs $totalEvents -tableName $tableName -logType $logtype
-                    #ProcessData -alleventobjs $totalEvents -tableName $tableName -logtype $logtype -endTime $([DateTime]::UtcNow)
                     Write-Host "Pushed total no of events : $($totalEvents.Count)  to $($tableName) for file $($fileName)"
                 }
             catch {
                 Write-Error "Failed at PushDataToSentinel with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
                 }
-            Write-Host("$($responseObj.count) new Carbon Black Events as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
             Write-Host "Successfully processed the carbon black files from AWS and FA instance took $(([System.DateTime]::UtcNow - $now).Seconds) seconds to process the data"
         }
         else {
@@ -330,7 +328,7 @@ function Split-EventsAndProcess($alleventobjs, $tableName, $logType) {
         try {
             $jsonPayload = $chunk | ConvertTo-Json -Depth 3
             $mbytes = [System.Text.Encoding]::UTF8.GetBytes($jsonPayload).Count / 1024 / 1024
-
+            Write-Host "total '$mbytes' MB for table name'$tableName' and log type '$logType'"
             if ($mbytes -le 30) {
                 $responseCode = Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($jsonPayload)) -logType $tableName
                 Write-Host "SUCCESS: $($chunk.Count) total '$logType' events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
@@ -400,7 +398,6 @@ Function Expand-GZipFile {
     catch {
         Write-Error "Failed at Expand-GZipFile with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
     }
-	
 }
 
 <#
@@ -449,18 +446,10 @@ function  GetBucketDetails {
         $logtype
     )
         If ($Null -ne $s3BucketName) {
+            $keyPrefix = Split-Path $prefixFolder
             Set-AWSCredentials -AccessKey $AWSAccessKeyId -SecretKey $AWSSecretAccessKey
             if($startTime -le $now) {
-                $keyValuePairs = $prefixFolder -split '\\'
-                $s3Dict = @{}
-                foreach ($pair in $keyValuePairs) {
-                    $key, $value = $pair -split '='
-                    $s3Dict[$key] = $value
-                }
-                $keyPrefix = "$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])/second=$($s3Dict["second"])"
-                #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=5/hour=11/minute=55/second=01"
-                #$keyPrefix = "carbon-black-events/org_key=$OrgKey/year=2023/month=12/day=6/hour=15/minute=19/second=2"
-                $obj = Get-S3Object -BucketName $s3BucketName -keyPrefix $keyPrefix
+                $obj = Get-S3Object -BucketName $s3BucketName -Key $prefixFolder
                 $obj | % {
                     if ($_.Size -gt 0)
                     {
@@ -489,13 +478,9 @@ function  GetBucketDetails {
                             $filename =  $filename -replace ($_.Extension, '')
                             $filename = $filename.Trim()
                             try {
-                              #$streamReader = [System.IO.File]::ReadAllText($filename)
                               $FileContent =[System.IO.File]::ReadAllLines($filename)
-                               #while ($streamReader.Length -ge 0)
-                                #$x=[System.IO.File]::Ge($filename)
                                 foreach ($logEvent in $FileContent)
                                 {
-                                    #$logEvent = $streamReader.ReadLine()
                                     $logs = $logEvent | ConvertFrom-Json
                                     $hash = @{}
                                     $logs.psobject.properties | foreach{$hash[$_.Name]= $_.Value}
@@ -517,15 +502,9 @@ function  GetBucketDetails {
                                 Write-Host "Error in reading file from tmp folder. S3File: $($loopItem.FullName), Error: $err"
                             }
                             finally {
-                                #if ($streamReader) {
-                                 #   $streamReader.Close()
-                                 #   $streamReader.Dispose()
-                                    Remove-Item -LiteralPath $filename -Force -Recurse
                                     PushDataToSentinel -totalEvents $fileEvents -logtype $logtype -tableName $tableName -fileName $filename
-                                #}
+                                }
                             }
-                            #Write-Host "Data has been Pushed to Sentinel completed.  S3File: $($filename), S3Bucket: $($_.BucketName), No of Events Sent: $($fileEvents.Count), from AWS S3 successfully time in Seconds: $(([System.DateTime]::UtcNow - $time).Seconds)"
-                        }
                     catch {
                             $err = $_.Exception.Message
                             Write-Host "Error in downloading file from Tmp Folder. S3File: $($loopItem.FullName), S3Bucket: $($s3BucketName), Error: $err"
@@ -536,9 +515,8 @@ function  GetBucketDetails {
                 }
             }
             }
+            Remove-Item  -LiteralPath "/tmp/$keyPrefix" -Recurse -Force
         }
-    #$keyPrefix = $keyPrefix -split '/'
-    Remove-Item  -LiteralPath "/tmp/$keyPrefix" -Recurse -Force
 }
 
 ProcessBucketFiles
