@@ -46,7 +46,7 @@ else {
             $solutionFolderBasePath = $path.Substring(0, $dataFolderIndex)
 
             # GET DATA FOLDER FILE NAME
-            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json")
+            $excluded = @("parameters.json", "parameter.json", "system_generated_metadata.json", "testParameters.json")
             $dataFileName = Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\" -recurse -exclude $excluded | ForEach-Object -Process { [System.IO.Path]::GetFileName($_) }
 
             if ($dataFileName.Length -le 0) {
@@ -129,7 +129,7 @@ try {
         $metadataAuthor = $contentToImport.Author.Split(" - ");
 
         $global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue $global:solutionId
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
         
         # VERIFY IF IT IS A CONTENTSPEC OR CONTENTPACKAGE RESOURCE TYPE BY VERIFYING VERSION FROM  DATA FILE
