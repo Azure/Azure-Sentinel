@@ -78,7 +78,7 @@ function GenerateDate()
         {
           $now=$startTime.AddMinutes($time)
         }
-        Write-Host "The no of mins b/w start and end time is greater than 5"
+        Write-Host "The no of mins b/w start and end time is greater than $time"
     }
     Write-Host "The now time is" $now
 
@@ -360,6 +360,7 @@ function GetBucketFiles($prefixFolder)
         $totalTime
         [int]$totalQueueCount=0
         $started=[System.DateTime]::UtcNow 
+        $time=[int]$Env:timeInterval
         while ($startTime -le $now) {
             $keyPrefix = "$prefixFolder/org_key=$OrgKey/year=$($startTime.Year)/month=$($startTime.Month)/day=$($startTime.Day)/hour=$($startTime.Hour)/minute=$($startTime.Minute)"
             #$keyPrefix="carbon-black-events/org_key=7DESJ9GN/year=2023/month=12/day=6/hour=15/minute=15
@@ -440,7 +441,7 @@ function GetBucketFiles($prefixFolder)
             Write-Host "Start time incremented by 1" $startTime
     }
     #Write-Host "Total time to process files under 5 mins in seconds ($totalTime)" 
-    Write-Host "Total Messages pushed to queue under 5 mins: $totalQueueCount" 
+    Write-Host "Total Messages pushed to queue under $time mins for $prefixFolder : $totalQueueCount" 
     }
 }
 <#
@@ -533,6 +534,7 @@ Do
 {
     
     $queueCount = GetQueueCount
+    Write-Host "The queue count before do while is $queueCount"
     if($queueCount -lt $maxMainQueuemessages)
     {
         try {
@@ -543,9 +545,13 @@ Do
                 Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container (Get-AzStorageContainer -Name "lastlog" -Context $Context).Name -Context $Context -Force
             }
             else {
+            $blob=(Get-AzStorageContainer -Context $Context).Name -contains "lastlog"
+            if(-not $blob)
+            {
             $azStorageContainer = New-AzStorageContainer -Name "lastlog" -Context $Context
             $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastlog.log"
             Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container $azStorageContainer.name -Context $Context -Force
+            }
             }
             Write-Host "The now time in file share is" $now
             break
@@ -557,7 +563,7 @@ Do
     Start-Sleep -s 15
     $sleepTime = $sleepTime + 15
 }
-while ($sleepTime -lt 271) {
+while ($sleepTime -lt 165) {
 }
 
 #This method posts the message to queue
