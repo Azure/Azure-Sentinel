@@ -261,6 +261,7 @@ try
 		Write-Host "Package Generated Successfully!!"
 
 		# check if mainTemplate and createUiDefinition json files are valid or not
+		$solutionFolderBasePath = ($pipelineBasePath + "/" + "Solutions/" + $pipelineSolutionName).Replace("//", "/")
 		CheckJsonIsValid($solutionFolderBasePath)
 	}
 }
