@@ -222,7 +222,7 @@ namespace Kqlvalidations.Tests
                 int.TryParse(Environment.GetEnvironmentVariable("PRNUM"), out int prNumber);
                 _prNumber = prNumber;
                 // Uncomment below for debugging with a PR
-                _prNumber = 9476;
+                //_prNumber = 9476;
             }
             return _prNumber.GetValueOrDefault();
         }
