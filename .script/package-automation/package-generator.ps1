@@ -49,11 +49,11 @@ try {
             $zipFileExist = $item -match ([regex]::Escape(".zip"))
             $pythonFileExist = $item -match ([regex]::Escape(".py"))
             $jsonFile = $item -match ([regex]::Escape(".json"))
-
+            $capsJsonFile = $item -match ([regex]::Escape(".JSON"))
             if ($hostFileExist -or $proxiesFileExist -or $azureDeployFileExist -or $functionFileExist -or $textFileExist -or $zipFileExist -or $pythonFileExist) 
             { }
             else { 
-                if ($jsonFile) {
+                if ($jsonFile -or $capsJsonFile) {
                     $newDataConnectorFilesWithoutExcludedFiles += $item
                 }
             }
@@ -88,9 +88,8 @@ try {
         foreach ($item in $datafolderFiles) {
             $paramterFileExist = $item -match ([regex]::Escape("parameters.json"))
             $paramtersFileExist = $item -match ([regex]::Escape("parameter.json"))
-            $systemGeneratedFileExist = $item -match ([regex]::Escape("system_generated_metadata.json"))
-            $testParametersFileExist = $item -match ([regex]::Escape("testParameters.json"))
-            if ($paramterFileExist -or $paramtersFileExist -or $systemGeneratedFileExist -or $testParametersFileExist) 
+            $paramtersFileExist = $item -match ([regex]::Escape("system_generated_metadata.json"))
+            if ($paramterFileExist -or $paramtersFileExist) 
             { } 
             else { 
                 $newDataFolderFilesWithoutExcludedFiles += $item 
@@ -172,7 +171,7 @@ try {
 
     $solutionFolderPath = 'Solutions/' + $solutionName + "/"
     $filesList = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
-    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
+    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
     if ($dataFolderFiles.Count -gt 0) {
         $selectFirstdataFolderFile = $dataFolderFiles | Select-Object -first 1
         $filteredString = $selectFirstdataFolderFile.Replace("$solutionFolderPath", '', 'OrdinalIgnoreCase')

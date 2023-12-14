@@ -23,9 +23,8 @@ Microsoft Sentinel provides Logstash output plugin to Log analytics workspace us
 Install the microsoft-sentinel-log-analytics-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
-- 7.0 - 7.17.13
-- 8.0 - 8.9
-- 8.11
+- Logstash 7 Between 7.0 and 7.17.13
+- Logstash 8 Between 8.0 and 8.9.2
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
@@ -42,8 +41,8 @@ output {
 }
 ```
 Note: make sure that the path exists before creating the sample file.
-2) Start Logstash. The plugin will collect up to 10 records to a sample.
-3) The file named "sampleFile<epoch seconds>.json" in the configured path will be created once there are 10 events to sample or when the Logstash process exited gracefully. (for example: "c:\temp\sampleFile1648453501.json").
+2) Start Logstash. The plugin will write up to 10 records to a sample file named "sampleFile<epoch seconds>.json" in the configured path  
+(for example: "c:\temp\sampleFile1648453501.json")
 
 
 ### Configurations:

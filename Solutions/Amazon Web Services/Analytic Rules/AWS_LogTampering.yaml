@@ -22,26 +22,17 @@ query: |
       let EventNameList = dynamic(["UpdateTrail","DeleteTrail","StopLogging","DeleteFlowLogs","DeleteEventBus","DeleteLogGroup"]);
       AWSCloudTrail
       | where (EventName in~ (EventNameList) or (EventName == "UpdateTrail" and (parse_json(RequestParameters).enableLogFileValidation) == false) or (EventName == "UpdateTrail" and (parse_json(RequestParameters).isMultiRegionTrail) == false)) and isempty(ErrorMessage) and isempty(ErrorCode)
-      | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
-      | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
-      | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
-      | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
-       AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
-      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by EventName, EventTypeName, UserIdentityAccountId, UserIdentityPrincipalid, UserAgent, 
       UserIdentityUserName, SessionMfaAuthenticated, SourceIpAddress, AWSRegion, EventSource
-      | extend timestamp = StartTimeUtc
+      | extend timestamp = StartTimeUtc, AccountCustomEntity = UserIdentityUserName, IPCustomEntity = SourceIpAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: Name
-        columnName: AccountName
-      - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
-      - identifier: CloudAppAccountId
-        columnName: RecipientAccountId
+      - identifier: FullName
+        columnName: AccountCustomEntity
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceIpAddress
-version: 1.0.1
+        columnName: IPCustomEntity
+version: 1.0.0
 kind: Scheduled
