@@ -77,7 +77,7 @@ def main(mytimer: func.TimerRequest) -> None:
         'dns': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10),
         'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
         'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
-        'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
+        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -88,8 +88,8 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel = sentinel_dict['proxy']
             elif 'iplogs' in key.lower():
                 sentinel = sentinel_dict['ip']
-            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
-                sentinel = sentinel_dict['cloudfirewall']
+            elif 'firewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
+                sentinel = sentinel_dict['firewall']
             else:
                 # skip files of unknown types
                 continue
@@ -212,7 +212,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs', 'firewalllogs', 'cdfwlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -442,7 +442,7 @@ class UmbrellaClient:
                     }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
-                event['EventType'] = 'cloudfirewalllogs'
+                event['EventType'] = 'firewalllogs'
                 yield event
 
 
@@ -461,7 +461,7 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_proxy
             elif 'iplogs' in key.lower():
                 parser_func = self.parse_csv_ip
-            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
+            elif 'firewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
 
             if parser_func:
