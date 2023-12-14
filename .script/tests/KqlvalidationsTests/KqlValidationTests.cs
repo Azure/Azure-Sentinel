@@ -97,6 +97,7 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForBestPractices(queryStr, fileName);
             ValidateKqlForLatestTIData(id, queryStr);
         }
 
@@ -121,8 +122,33 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForBestPractices(queryStr,fileName);
             ValidateKqlForLatestTIData(id, queryStr);
         }
+
+        /// <summary>
+        /// Validates the KQL for the best practices
+        /// </summary>
+        /// <param name="queryStr">Query string</param>
+        /// <param name="filename">KQL file name</param>
+        private void ValidateKqlForBestPractices(string queryStr, string filename)
+        {
+            try
+            {
+                var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr, filename);
+                if (!string.IsNullOrEmpty(suggestions))
+                {
+                    var gitHubApiClient = GitHubApiClient.Create();
+                    gitHubApiClient.AddPRComment(suggestions);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log the exception or handle it appropriately
+                Console.WriteLine($"Error occurred while validating KQL for best practices. Error message: {ex.Message}. Stack trace: {ex.StackTrace}");
+            }
+        }
+
 
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -202,6 +228,7 @@ namespace Kqlvalidations.Tests
 
             var queryStr = (string)res["query"];
             ValidateKql(id, queryStr);
+            ValidateKqlForBestPractices(queryStr, fileName);
         }
 
         [Theory]
@@ -249,6 +276,7 @@ namespace Kqlvalidations.Tests
             var queryStr = queryParamsAsLetStatements + (string)yaml["ParserQuery"];
             var parserName = (string)yaml["ParserName"];
             ValidateKql(parserName, queryStr, false);
+            ValidateKqlForBestPractices(queryStr, fileName);
         }
 
         // We pass File name to test because in the result file we want to show an informative name for the test
@@ -274,6 +302,7 @@ namespace Kqlvalidations.Tests
             var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
             var parserName = (string)yaml["EquivalentBuiltInFunction"];
             ValidateKql(parserName, queryStr, false);
+            ValidateKqlForBestPractices(queryStr, fileName);
         }
 
 
@@ -299,6 +328,7 @@ namespace Kqlvalidations.Tests
             var queryStr = queryParamsAsLetStatements + (string)yaml["FunctionQuery"];
             var parserName = (string)yaml["FunctionName"];
             ValidateKql(id.ToString(), queryStr, false);
+            ValidateKqlForBestPractices(queryStr, fileName);
         }
 
         //Will enable this test case once all txt files removed from the parsers folders
@@ -320,7 +350,7 @@ namespace Kqlvalidations.Tests
         [Fact]
         public void Validate_AllSolutionParsersFoldersContainsYamlsORMarkdowns()
         {
-            var gitHubApiClient = GitHubApiClient.Instance;
+            var gitHubApiClient = GitHubApiClient.Create();
 
             IReadOnlyList<PullRequestFile> prFiles = gitHubApiClient.GetPullRequestFiles();
 
