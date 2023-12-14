@@ -29,28 +29,30 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let URLRegex = "((https?|ftp|ldap|wss?|file):\\/\\/(([\\:\\%\\w\\_\\-]+(\\.|@))*((xn--)?[a-zA-Z0-9\\-]+\\.)+(xn--[a-z0-9]+|[A-Za-z]+)|\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{0,3})[.,:\\w@?^=%&\\/~+#-]*[\\w@?^=%&\\/~+#-])";
+  let SecurityEvents = materialize(SecurityAlert
+    | where TimeGenerated >= ago(dt_lookBack)
+    | extend MSTI = case(AlertName has "TI map" and VendorName == "Microsoft" and ProductName == 'Azure Sentinel', true, false)
+    | where MSTI == false
+    // Extract URL from JSON data
+    | mv-expand parse_json(Entities)
+    | where isnotempty(Entities.Url) or isnotempty(Entities.Urls)
+    | extend Url = coalesce(Entities.Url, Entities.Urls)
+    | mv-expand Url
+    | extend Url = tolower(Url)
+    // Extract hostname from JSON data for entity mapping
+    | extend Compromised_Host = tostring(parse_json(ExtendedProperties).["Compromised Host"])
+    | extend Alert_TimeGenerated = TimeGenerated);
+  let EventUrls = materialize(SecurityEvents | distinct Url | summarize make_list(Url));
   ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where isnotempty(Url)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | extend Url = tolower(Url)
+  | where tolower(Url) in (EventUrls)
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
-  // Picking up only IOC's that contain the entities we want
-  | where isnotempty(Url)
+  | where Active == true and ExpirationDateTime > now()
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;" 
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-  SecurityAlert
-  | where TimeGenerated >= ago(dt_lookBack)
-  | extend MSTI = case(AlertName has "TI map" and VendorName == "Microsoft" and ProductName == 'Azure Sentinel', true, false)
-  | where MSTI == false
-  // Extract URL from JSON data
-  | extend Url = todynamic(dynamic_to_json(extract_all(URLRegex, dynamic([1]), Entities)))  
-  | mv-expand Url
-  | extend Url = tostring(Url[0])
-  // We only want alerts that actually contain URL data
-  | where isnotempty(Url)
-  // Extract hostname from JSON data for entity mapping
-  | extend Compromised_Host = tostring(parse_json(ExtendedProperties).["Compromised Host"])
-  | extend Alert_TimeGenerated = TimeGenerated
-  ) on Url
+  | join kind=innerunique (SecurityEvents) on Url
   | where Alert_TimeGenerated < ExpirationDateTime
   | summarize Alert_TimeGenerated = arg_max(Alert_TimeGenerated, *) by IndicatorId, AlertName
   | project timestamp = Alert_TimeGenerated, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, AlertName, AlertSeverity, Description, Url, Compromised_Host
@@ -63,5 +65,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.2.6
+version: 1.2.7
 kind: Scheduled
