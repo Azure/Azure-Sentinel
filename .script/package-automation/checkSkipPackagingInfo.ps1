@@ -71,7 +71,7 @@ try
                     # WE NEED PACKAGING
                     $customProperties['isPackagingRequired'] = $true
                     Write-Output "isPackagingRequired=$true" >> $env:GITHUB_OUTPUT
-
+                    Write-Host "isPackagingRequired $isPackagingRequired"
                     if ($instrumentationKey -ne '')
                     {
                         Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CheckPackagingSkipStatus started, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties

@@ -31,7 +31,8 @@ try {
   # Check SkipPackagingInfo i.e check if we need to skip packaging process or not
   . $PSScriptRoot/checkSkipPackagingInfo.ps1 $solutionName $pullRequestNumber $runId $baseFolderPath $instrumentationKey
   # outputs: $isPackagingRequired either true or null
-
+  Write-Host "isPackagingRequired $isPackagingRequired"
+  
   if ($null -eq $isPackagingRequired -or $isPackagingRequired -eq $false)
   {
     exit 0
