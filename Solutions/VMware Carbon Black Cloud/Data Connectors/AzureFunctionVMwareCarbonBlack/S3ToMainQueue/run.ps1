@@ -547,6 +547,7 @@ Do
             $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastlog.log"
             Set-AzStorageBlobContent -file "$env:TEMP\lastlog.log" -Container $azStorageContainer.name -Context $Context -Force
             }
+            Write-Host "The now time in file share is" $now
             break
         }
         catch {
