@@ -91,6 +91,7 @@ CONNECTIONMODE=""
 CONFIGPATH="/opt"
 TRUSTEDCA=()
 CLOUD='public'
+UPDATEPOLICY='{ "auto_update" : true }'
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -358,6 +359,7 @@ pause '[Press enter to agree and proceed as we guide you through the installatio
 #Globals
 containername=sapcon
 sysconf=systemconfig.json
+settingsjson=settings.json
 
 os=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="ID" {print $2}')
 ver_id=$(awk </etc/os-release 'BEGIN { FS="=" } $1=="VERSION_ID" {print $2}' | awk '{print substr($0, 2, length($0) - 2) }')
@@ -680,6 +682,9 @@ fi
 jq -s --arg GUID "$GUID" '.[0] | {($GUID): .}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
 ### end of json config creation
+
+# #populate settings.json
+echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
 
 echo 'System information and credentials Has been Updated'
 
