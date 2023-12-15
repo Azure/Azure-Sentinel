@@ -1,0 +1,363 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2021-09-09/uiFormDefinition.schema.json",
+	"view": {
+		"kind": "Form",
+		"properties": {
+			"title": "Microsoft Sentinel: Power Platform Inventory Connector",
+			"steps": [
+				{
+					"name": "basics",
+					"label": "Basics",
+					"elements": [
+						{
+							"name": "resourceScope",
+							"type": "Microsoft.Common.ResourceScope"
+						},
+						{
+							"name": "getLAWorkspace",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01",
+								"body": {
+									"query": "[concat('resources | where type =~ \"microsoft.operationalinsights/workspaces\" and subscriptionId == \"', steps('basics').resourceScope.subscription.subscriptionId, '\" | project label = name, description = location, value = pack(\"name\", name, \"location\", location, \"resourceGroup\", resourceGroup, \"id\", id) | order by label asc')]"
+								}
+							}
+						},
+						{
+							"name": "getInventoryStorageAccounts",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01",
+								"body": {
+									"query": "resources | where type =~ 'microsoft.storage/storageaccounts' and properties.isHnsEnabled == true | project label = name, description = location, value = pack('url', properties.primaryEndpoints.blob, 'resourceId', id, 'subscriptionId', subscriptionId, 'resourceGroup', resourceGroup) | order by label asc"
+								}
+							}
+						},
+						{
+							"name": "sentinelWorkspace",
+							"type": "Microsoft.Common.DropDown",
+							"label": "Sentinel workspace",
+							"defaultValue": "[parse('[]')]",
+							"toolTip": "",
+							"multiselect": false,
+							"selectAll": true,
+							"filter": true,
+							"filterPlaceholder": "Filter items ...",
+							"multiLine": true,
+							"visible": true,
+							"constraints": {
+								"allowedValues": "[steps('basics').getLAWorkspace.data]",
+								"required": true
+							}
+						}
+					]
+				},
+				{
+					"name": "function",
+					"label": "Function App",
+					"elements": [
+						{
+							"name": "announcement",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "Configure the Function App used to collect Power Platform Inventory data. As part of the deployment, the Function App and Storage Account resources will be created in the target resource group. Function App health logs and metrics will be sent to selected App Insights workspace."
+							}
+						},
+						{
+							"name": "appServiceNameApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Web/checknameavailability?api-version=2022-03-01')]",
+								"body": {
+									"name": "[steps('function').newFunctionAppName]",
+									"type": "Microsoft.Web/sites"
+								}
+							}
+						},
+						{
+							"name": "storageNameApi",
+							"type": "Microsoft.Solutions.ArmApiControl",
+							"request": {
+								"method": "POST",
+								"path": "[concat(steps('basics').resourceScope.subscription.id, '/providers/Microsoft.Storage/checkNameAvailability?api-version=2023-01-01')]",
+								"body": {
+									"name": "[steps('function').newStorageAccountName]",
+									"type": "Microsoft.Storage/storageAccounts"
+								}
+							}
+						},
+						{
+							"name": "newFunctionAppName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Function App name",
+							"defaultValue": "[toLower(concat('PPInventory', first(split(steps('basics').resourceScope.subscription.subscriptionId, '-'))))]",
+							"toolTip": "Name of the Function App",
+							"constraints": {
+								"required": true,
+								"validations": [
+									{
+										"isValid": "[steps('function').appServiceNameApi.nameAvailable]",
+										"message": "[steps('function').appServiceNameApi.message]"
+									}
+								]
+							}
+						},
+						{
+							"name": "newStorageAccountName",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Function App storage account name",
+							"visible": true,
+							"defaultValue": "[toLower(concat('PPInventory', first(split(steps('basics').resourceScope.subscription.subscriptionId, '-')), 'sa'))]",
+							"toolTip": "Name of the storage account used by the Function App (this is NOT the ADLSv2 account)",
+							"constraints": {
+								"required": true,
+								"validations": [
+									{
+										"isValid": "[steps('function').storageNameApi.nameAvailable]",
+										"message": "[steps('function').storageNameApi.message]"
+									}
+								]
+							}
+						},
+						{
+							"name": "appInsightsWorkspace",
+							"type": "Microsoft.Common.DropDown",
+							"label": "App Insights workspace",
+							"defaultValue": "[steps('basics').sentinelWorkspace.name]",
+							"toolTip": "Select the workspace used to send Function App health logs and metrics. You can use the Sentinel workspace.",
+							"multiselect": false,
+							"selectAll": true,
+							"filter": true,
+							"filterPlaceholder": "Filter items ...",
+							"multiLine": true,
+							"visible": true,
+							"constraints": {
+								"allowedValues": "[steps('basics').getLAWorkspace.data]",
+								"required": true
+							}
+						},
+						{
+							"name": "dcrRoleAssignment",
+							"type": "Microsoft.Common.Section",
+							"label": "DCR Role Assignment",
+							"elements": [
+								{
+									"name": "dcrOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "As part of the deployment, Data Collection Rule (DCR) and Data Collection Endpoint (DCE) resources will be created. To ingest data, the Function App managed identity must be assigned the Monitoring Metrics Publisher role on the DCR.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview"
+										}
+									}
+								},
+								{
+									"name": "dcrInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"text": "Role assignment to the DCR typically requires Owner or User Access Administrator privileges on the target resource group.",
+										"uri": "https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "hasPermissions",
+									"type": "Microsoft.Common.OptionsGroup",
+									"label": "Role assignment",
+									"defaultValue": "none",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes (I have sufficient privileges for role assignment)",
+												"value": true
+											},
+											{
+												"label": "No (I will assign roles after deployment)",
+												"value": false
+											}
+										],
+										"required": true
+									},
+									"visible": true
+								},
+								{
+									"name": "noDcrPermissions",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[equals(steps('function').dcrRoleAssignment.hasPermissions, false)]",
+									"options": {
+										"text": "To complete the deployment, you will need to assign the Monitoring Metrics Publisher role to the Function App managed identity on the Microsoft-Sentinel-PPInventory-DCR resource created during deployment. For more information, see the deployment guide.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications/deploy-power-platform-solution",
+										"style": "Info"
+									}
+								}
+							],
+							"visible": true
+						}
+					]
+				},
+				{
+					"name": "inventory",
+					"label": "Power Platform",
+					"elements": [
+						{
+							"name": "announcement",
+							"type": "Microsoft.Common.TextBlock",
+							"visible": true,
+							"options": {
+								"text": "The Power Platform Inventory connector collects data from the Azure Data Lake Storage V2 (ADLSv2) storage account used by the Self-Service Analytics Feature of Power Platform. For more information and pre-requisites, click the link below.",
+								"link": {
+									"label": "Learn more",
+									"uri": "https://learn.microsoft.com/power-platform/admin/self-service-analytics"
+								}
+							}
+						},
+						{
+							"name": "existingInventoryStorageAccount",
+							"type": "Microsoft.Common.DropDown",
+							"label": "ADLSv2 storage account",
+							"defaultValue": "[parse('[]')]",
+							"toolTip": "",
+							"multiselect": false,
+							"selectAll": true,
+							"filter": true,
+							"filterPlaceholder": "Filter items ...",
+							"multiLine": true,
+							"visible": "[equals(steps('inventory').noADSLv2Found, false)]",
+							"constraints": {
+								"allowedValues": "[steps('basics').getInventoryStorageAccounts.data]",
+								"required": true
+							}
+						},
+						{
+							"name": "noADSLv2Found",
+							"type": "Microsoft.Common.CheckBox",
+							"label": "I cannot see my ADLSv2 account listed.",
+							"constraints": {
+								"required": false
+							}
+						},
+						{
+							"name": "existingADSLv2textbox",
+							"type": "Microsoft.Common.TextBox",
+							"label": "Blob service endpoint URL",
+							"placeholder": "https://contoso.blob.core.windows.net/",
+							"toolTip": "Blob service endpoint URL",
+							"constraints": {
+								"required": true,
+								"regex": "^https:\/\/[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+								"validationMessage": "Please enter a valid URL starting with https://."
+							},
+							"visible": "[steps('inventory').noADSLv2Found]"
+						},
+						{
+							"name": "inventoryStorageRoleAssignment",
+							"type": "Microsoft.Common.Section",
+							"label": "Storage account role assignment",
+							"visible": true,
+							"elements": [
+								{
+									"name": "storageOverview",
+									"type": "Microsoft.Common.TextBlock",
+									"visible": true,
+									"options": {
+										"text": "To collect data from the ADLSv2 account used by Power Platform Self-Service Analytics, the Function App managed identity must be assigned the Storage Blob Data Reader role.",
+										"link": {
+											"label": "Learn more",
+											"uri": "https://learn.microsoft.com/azure/storage/blobs/assign-azure-role-data-access"
+										}
+									}
+								},
+								{
+									"name": "storageInfo",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": true,
+									"options": {
+										"text": "Role assignment to the ADLSv2 account typically requires Owner or User Access Administrator privileges on the target resource.",
+										"uri": "https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal",
+										"style": "Info"
+									}
+								},
+								{
+									"name": "hasPermissions",
+									"type": "Microsoft.Common.OptionsGroup",
+									"visible": "[equals(steps('inventory').noADSLv2Found, false)]",
+									"defaultValue": "none",
+									"label": "Storage Blob Data Reader role assignment",
+									"toolTip": "",
+									"constraints": {
+										"allowedValues": [
+											{
+												"label": "Yes (I have sufficient privileges for role assignment)",
+												"value": true
+											},
+											{
+												"label": "No (I will assign roles after deployment)",
+												"value": false
+											}
+										],
+										"required": true
+									}
+								},
+								{
+									"name": "noStoragePermissions",
+									"type": "Microsoft.Common.InfoBox",
+									"visible": "[or(equals(steps('inventory').noADSLv2Found, true), equals(steps('inventory').inventoryStorageRoleAssignment.hasPermissions, false))]",
+									"options": {
+										"text": "To complete the deployment, you will need to assign the Storage Blob Data Reader role to the Function App managed identity on the ADLSv2 account used by Power Platform Self-Service Analytics feature. For more information, see the deployment guide.",
+										"uri": "https://learn.microsoft.com/azure/sentinel/business-applications/deploy-power-platform-solution",
+										"style": "Info"
+									}
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "tags",
+					"label": "Tags",
+					"elements": [
+						{
+							"name": "tagsByResource",
+							"type": "Microsoft.Common.TagsByResource",
+							"resources": [
+								"Microsoft.Resources/deployments",
+								"Microsoft.Insights/components",
+								"Microsoft.Web/serverfarms",
+								"Microsoft.Storage/storageAccounts",
+								"Microsoft.Web/sites",
+								"Microsoft.Insights/dataCollectionRules",
+								"Microsoft.Insights/dataCollectionEndpoints",
+								"Microsoft.Authorization/roleAssignments",
+								"Microsoft.OperationalInsights/workspaces/tables"
+							]
+						}
+					]
+				}
+			]
+		},
+		"outputs": {
+			"kind": "ResourceGroup",
+			"location": "[steps('basics').resourceScope.location.name]",
+			"resourceGroupId": "[steps('basics').resourceScope.resourceGroup.id]",
+			"parameters": {
+				"functionAppName": "[steps('function').newFunctionAppName]",
+				"storageAccountName": "[steps('function').newStorageAccountName]",
+				"appInsightsWorkspaceResourceId": "[steps('function').appInsightsWorkspace.id]",
+				"roleAssignmentDcr": "[steps('function').dcrRoleAssignment.hasPermissions]",
+				"roleAssignmentADLSv2": "[if(steps('inventory').noADSLv2Found, false, steps('inventory').inventoryStorageRoleAssignment.hasPermissions)]",
+				"storageAccountUrl": "[if(steps('inventory').noADSLv2Found, steps('inventory').existingADSLv2textbox, steps('inventory').existingInventoryStorageAccount.url)]",
+				"sentinelWorkspace": "[steps('basics').sentinelWorkspace]",
+				"inventoryStorageAccount": "[steps('inventory').existingInventoryStorageAccount]",
+				"tagsByResource": "[steps('tags').tagsByResource]"
+			}
+		}
+	}
+}
