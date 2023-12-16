@@ -192,18 +192,29 @@ query:  |
   | where Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes) 
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, FileHashCustomEntity = tostring(Hashes[1]), AlgorithmCustomEntity = tostring(Hashes[0])
+  | extend timestamp = TimeGenerated, FileHashCustomEntity = tostring(Hashes[1]), AlgorithmCustomEntity = tostring(Hashes[0])
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(UserName, "@")[0]), AccountUPNSuffix = tostring(split(UserName, "@")[1])
   )
   )
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -214,13 +225,13 @@ entityMappings:
         columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.1.0
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
