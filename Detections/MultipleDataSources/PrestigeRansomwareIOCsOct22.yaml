@@ -50,22 +50,22 @@ query: |
   | where Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes)  
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = tostring(Hashes[1])
+  | extend timestamp = TimeGenerated, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = tostring(Hashes[1])
   ),
   (DeviceEvents
   | where InitiatingProcessSHA256 has_any (sha256Hashes) or SHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend timestamp = TimeGenerated, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
   ),
   (DeviceFileEvents
   | where SHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend timestamp = TimeGenerated, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
   ),
   (DeviceImageLoadEvents
   | where SHA256 has_any (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName , AccountCustomEntity = InitiatingProcessAccountName, ProcessCustomEntity = InitiatingProcessFileName, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend timestamp = TimeGenerated, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
   ),
   (SecurityAlert
   | where ProductName == "Microsoft Defender Advanced Threat Protection"
@@ -73,7 +73,9 @@ query: |
   | where isnotempty(ThreatName)
   | where ThreatName has_any (signames)
   | extend Computer = tostring(parse_json(Entities)[0].HostName)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer
+  | extend timestamp = TimeGenerated
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
   )
   )
 entityMappings:
@@ -92,14 +94,18 @@ entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: HostCustomEntity
-version: 1.0.2
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+version: 1.0.3
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ashwin Patil
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
