@@ -2924,18 +2924,22 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     # this function is to check if maintemplate and createUi files in package folder is valid or not
     function CheckJsonIsValid($solutionFolderBasePath)
     {
-        [array]$packageFolderFiles=Get-ChildItem "$solutionFolderBasePath\Package\*.json" -Recurse| select -expand fullname
-        Write-Host "************Validating if Package Json files are valid or not***************"
-        foreach ($filePath in $packageFolderFiles)
-        {
-            $isValid = Get-Content $filePath -Raw | Test-Json -ErrorAction SilentlyContinue
-            if ($isValid)
+        $packageFolderPath = "$solutionFolderBasePath\Package\*.json"
+        if ((Test-Path -Path "$packageFolderPath")) {
+            [array]$packageFolderFiles = Get-ChildItem "packageFolderPath" -Recurse| select -expand fullname
+            Write-Host "************Validating if Package Json files are valid or not***************"
+
+            foreach ($filePath in $packageFolderFiles)
             {
-                Write-Host "File $filePath is a valid Json file!"
-            }
-            else
-            {
-                Write-Host "File $filePath is Not a valid Json file!"
+                $isValid = Get-Content "$filePath" -Raw | Test-Json -ErrorAction SilentlyContinue
+                if ($isValid)
+                {
+                    Write-Host "File $filePath is a valid Json file!"
+                }
+                else
+                {
+                    Write-Host "File $filePath is Not a valid Json file!"
+                }
             }
         }
     }

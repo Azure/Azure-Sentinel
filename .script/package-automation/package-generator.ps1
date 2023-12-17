@@ -8,7 +8,7 @@ function ErrorOutput {
     Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
     Write-Output "packageCreationPath=''" >> $env:GITHUB_OUTPUT
     Write-Output "blobName=''" >> $env:GITHUB_OUTPUT
-    #exit 1
+    exit 1
 }
 
 try {
@@ -939,8 +939,14 @@ try {
     ./Tools/Create-Azure-Sentinel-Solution/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
-    $allFilesInCreatedPackage = Get-ChildItem $packageCreationPath 
-    $allFilesInCreatedPackageCount = $allFilesInCreatedPackage.Count
+    Write-Host "packageCreationPath $packageCreationPath"
+    if (Test-Path -Path "$packageCreationPath") {
+        $allFilesInCreatedPackage = Get-ChildItem "$packageCreationPath" 
+        $allFilesInCreatedPackageCount = $allFilesInCreatedPackage.Count
+    } else {
+        $allFilesInCreatedPackageCount = 0
+    }
+
     $blobName = "" + $solutionName + "_" + $pullRequestNumber + "_" + $packageVersion
     Write-Host "Blob name is $blobName"
     Write-Host "Package Files List are : $allFilesInCreatedPackage"
