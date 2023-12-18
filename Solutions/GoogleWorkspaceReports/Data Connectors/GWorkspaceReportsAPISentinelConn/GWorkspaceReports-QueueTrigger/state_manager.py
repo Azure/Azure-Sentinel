@@ -84,3 +84,23 @@ class AzureStorageQueueHelper:
         properties = self.__queue.get_queue_properties()
         logging.getLogger().setLevel(logging.INFO)
         return properties.approximate_message_count
+    
+    
+    # This method updates the queue message content
+    def update_queue_message(self, messageId, popReceipt, message, encoded):
+        logging.getLogger().setLevel(logging.WARNING)
+        try:
+            if encoded:
+                self.__queue.update_message(message=messageId, pop_receipt= popReceipt , content=self.base64Encoded(message))
+            else:
+                self.__queue.update_message(message=messageId, pop_receipt= popReceipt , content=message)
+        except Exception as e:
+            logging.getLogger().setLevel(logging.INFO)
+            return e
+        logging.getLogger().setLevel(logging.INFO)
+        return True
+        
+    # This method reads message from the queue
+    def read_queue_message(self):
+        logging.getLogger().setLevel(logging.WARNING)
+        return self.__queue.receive_message()

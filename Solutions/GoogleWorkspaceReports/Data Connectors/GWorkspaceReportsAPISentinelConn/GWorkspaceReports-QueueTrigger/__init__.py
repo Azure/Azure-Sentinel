@@ -308,8 +308,8 @@ def main(queueItem: func.QueueMessage):
                 if check_if_script_runs_too_long(script_start_time):
                     logging.info(f'Script is running too long. Stop processing new events and updating state before finishing the script.')
                     # update the message from the queue (old status message with the new status)
-                    logging.info('Update the queue item with the latest timestamp {}'.format(queue_body))  
-                    queueItem.set(json.dumps(queue_body))
+                    queue_update_status =  mainQueueHelper.update_queue_message(queueItem.id, queueItem.pop_receipt, json.dumps(queue_body), True)
+                    logging.info('Update the queue item with the latest status {} update status: '.format(queue_body, queue_update_status))
                     return
         else:
             logging.info("No events for {} activity with {} start time and {} end time".format(activity,start_time,end_time))
@@ -318,7 +318,7 @@ def main(queueItem: func.QueueMessage):
         logging.error("Something wrong. Exception error text: {}".format(err))
         logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
         # update the message from the queue (old status message with the new status)
-        logging.info('Update the queue item with the latest timestamp {}'.format(queue_body))
-        queueItem.set(json.dumps(queue_body))
+        queue_update_status = mainQueueHelper.update_queue_message(queueItem.id, queueItem.pop_receipt, json.dumps(queue_body), True)
+        logging.info('Update the queue item with the latest status {} update status: '.format(queue_body, queue_update_status))
         raise
     logging.info(f'Finish script. at {time.ctime(int(time.time()))}')
