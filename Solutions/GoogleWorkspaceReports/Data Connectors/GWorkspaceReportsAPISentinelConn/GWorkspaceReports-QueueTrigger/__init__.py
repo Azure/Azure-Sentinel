@@ -118,6 +118,7 @@ def get_result(activity,start_time, end_time):
             logging.info("Activity - {}, processing {} events".format(activity, len(result_activities)))
     except Exception as err:
         logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
+        raise err
     return result_activities, next_page_token
     
 def get_nextpage_results(activity,start_time, end_time, next_page_token):
@@ -218,7 +219,6 @@ def gen_chunks_with_latesttime(data,log_type):
                 latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
                 latest_timestamp = latest_timestamp[:-3] + 'Z'
                 logging.info("Chunk Timestamp {}".format(latest_timestamp))
-                logging.info("successfully send data to LA of size {} MB".format(len(body)/1024/1024))
             else:
                 logging.warn("There is an issue with Posting data to LA - Response code: {}".format(statuscode))
         except Exception as err:
@@ -233,7 +233,7 @@ def process_result(result_obj, start_time, activity):
     if result_obj is not None:
         result_obj = expand_data(result_obj)
         logging.info("Activity - {}, Expanded Events {} ".format(activity, len(result_obj)))
-        sorted_data = sorted(result_obj, key=lambda x: x["id"]["time"],reverse=False)
+        sorted_data = sorted(result_obj, key=lambda x: x["id"]["time"],reverse=True)
         json_string = json.dumps(result_obj)
         byte_ = json_string.encode("utf-8")
         byteLength = len(byte_)
@@ -271,6 +271,7 @@ def main(queueItem: func.QueueMessage):
     logging.getLogger().setLevel(logging.INFO)
     script_start_time = int(time.time())
     message_body = json.loads(queueItem.get_body().decode('ascii').replace("'",'"'))
+    # enable below for testing
     #message_body = {'start_time': '2023-12-03T14:01:00.000000Z', 'end_time': '2023-12-03T15:01:00.000Z', 'activity': 'access_transparency'}
     start_time = message_body.get('start_time')
     end_time = message_body.get('end_time')
@@ -279,29 +280,45 @@ def main(queueItem: func.QueueMessage):
     creds = get_credentials()
     latest_timestamp = ""
     mainQueueHelper = AzureStorageQueueHelper(connection_string,"gworkspace-main-queue")
+    # Initialize the queue body with the same values as the message body
+    queue_body = {}
+    queue_body["start_time"] = start_time
+    queue_body["end_time"] = end_time
+    queue_body["activity"] = activity
+
     logging.info('Starting GWorkspaceReport-QueueTrigger program at {}'.format(time.ctime(int(time.time()))) )
     logging.info('Queue message received with body {}'.format(message_body) )
     try:
         result_obj, next_page_token = get_result(activity,start_time,end_time)
         if (result_obj is not None) and (len(result_obj) > 0):
             latest_timestamp = process_result(result_obj, latest_timestamp, activity)
-            
+            # Since the results are in descending order, get the end_time updated with the latest timestamp, no change in start_time
+            # udpate the queue body with the latest timestamp
+            queue_body["start_time"] = start_time 
+            queue_body["end_time"] = latest_timestamp 
+            queue_body["activity"] = activity
             while next_page_token is not None and len(next_page_token) > 0:
                 result_obj, next_page_token  = get_nextpage_results(activity,start_time,end_time,next_page_token)
                 if (result_obj is not None) and (len(result_obj) > 0):
                     latest_timestamp = process_result(result_obj, latest_timestamp, activity)
+                    #update the queue body with the latest timestamp
+                    queue_body["start_time"] = start_time 
+                    queue_body["end_time"] = latest_timestamp 
+                    queue_body["activity"] = activity
                 if check_if_script_runs_too_long(script_start_time):
                     logging.info(f'Script is running too long. Stop processing new events and updating state before finishing the script.')
-                    queue_body = {}
-                    queue_body["start_time"] = latest_timestamp
-                    queue_body["end_time"] = end_time
-                    queue_body["activity"] = activity
-                    mainQueueHelper.send_to_queue(queue_body,True)
+                    # update the message from the queue (old status message with the new status)
+                    logging.info('Update the queue item with the latest timestamp {}'.format(queue_body))  
+                    queueItem.set(json.dumps(queue_body))
                     return
         else:
             logging.info("No events for {} activity with {} start time and {} end time".format(activity,start_time,end_time))
     
     except Exception as err:
-        logging.error("Something went wrong and this will be processed again. No need to worry about the transient issues like API reachability, network errros. Exception error text: {}".format(err))
+        logging.error("Something wrong. Exception error text: {}".format(err))
+        logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
+        # update the message from the queue (old status message with the new status)
+        logging.info('Update the queue item with the latest timestamp {}'.format(queue_body))
+        queueItem.set(json.dumps(queue_body))
         raise
     logging.info(f'Finish script. at {time.ctime(int(time.time()))}')

@@ -1,5 +1,13 @@
 from __future__ import print_function
+import pickle
+from googleapiclient.discovery import build
 import json
+import base64
+import hashlib
+import hmac
+import requests
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 import azure.functions as func
 import logging
 import os
@@ -64,18 +72,19 @@ if(not match):
     raise Exception("Google Workspace Reports: Invalid Log Analytics Uri.")
 
 
+
 def GetEndTime(logType):
     end_time = datetime.utcnow().replace(second=0, microsecond=0)
     if logType == "calendar":
         end_time = (end_time - timedelta(hours=int(calendarFetchDelay)))
         logging.info("End time for activity {} after fetch delay {} hour(s) applied - {}".format(logType,int(calendarFetchDelay),end_time))
-    if logType == "chat":
+    elif logType == "chat":
         end_time = (end_time - timedelta(days=int(chatFetchDelay)))
         logging.info("End time for activity {} after fetch delay {} day(s) applied - {}".format(logType,int(chatFetchDelay),end_time))
-    if logType == "user_accounts":
+    elif logType == "user_accounts":
         end_time = (end_time - timedelta(hours=int(userAccountsFetchDelay)))
         logging.info("End time for activity {} after fetch delay {} hour(s) applied - {}".format(logType,int(userAccountsFetchDelay),end_time))
-    if logType == "login":
+    elif logType == "login":
         end_time = (end_time - timedelta(hours=int(loginFetchDelay)))
         logging.info("End time for activity {} after fetch delay {} hour(s) applied - {}".format(logType,int(loginFetchDelay),end_time))
     else:
@@ -141,6 +150,7 @@ def GetDates(logType):
         activity_list = json.dumps(activity_list)
     end_time = end_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     end_time = end_time[:-4] + 'Z'
+    
     return json.loads(activity_list) if (isBlank(logType)) else (json.loads(activity_list)[logType],end_time)
 
 def check_if_script_runs_too_long(script_start_time):
@@ -189,6 +199,13 @@ def main(mytimer: func.TimerRequest):
                 start_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                 end_time = end_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             logging.info("Start time: {} and End time: {} for activity {}".format(start_time,end_time,line))
+
+            # Check if start_time  is less than current UTC time minus 180 days. If yes, then set end_time to current UTC time minus 179 days
+            # Google Workspace Reports API only supports 180 days of data
+            if (datetime.utcnow() - timedelta(days=180)) > datetime.strptime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ"):
+                logging.info("End time older than 180 days. Setting start time to current UTC time minus 179 days as Google Workspace Reports API only supports 180 days of data.")
+                start_time = (datetime.utcnow() - timedelta(days=179)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                start_time = start_time[:-4] + 'Z'
             
             state = StateManager(connection_string)
             
@@ -224,3 +241,4 @@ def main(mytimer: func.TimerRequest):
             logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
             raise
     logging.info('Ending GWorkspaceReport-TimeTrigger program at {}'.format(time.ctime(int(time.time()))) )
+
