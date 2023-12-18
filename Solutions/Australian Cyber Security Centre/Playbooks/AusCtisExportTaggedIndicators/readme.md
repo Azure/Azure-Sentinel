@@ -24,6 +24,7 @@ This playbook gets triggered every day and perform the following actions:
     * TAXII Server Username
     * TAXII Server Password
     * Sentinel Workspace
+    * Default TLP Label
     * Tag for indicators to be exported
     * Tag for indicators after export completion
 
