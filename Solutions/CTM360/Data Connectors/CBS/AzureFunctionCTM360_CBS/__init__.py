@@ -116,18 +116,19 @@ def post_data_to_sentinel(body):
 
     try:
         response = requests.post(uri, data=body, headers=headers)
-        print(uri, headers, "hghg")
+        print(uri, headers)
+        if (response.status_code >= 200 and response.status_code <= 299):
+            logging.info(
+                "CBS event successfully processed to the Azure Sentinel.")
+            return response.status_code
+        else:
+            logging.error("Event is not processed into Azure. Response code: {}".format(
+                response.status_code))
+            return None
     except Exception:
         print(traceback.format_exc())
 
-    if (response.status_code >= 200 and response.status_code <= 299):
-        logging.info(
-            "CBS event successfully processed to the Azure Sentinel.")
-        return response.status_code
-    else:
-        logging.error("Event is not processed into Azure. Response code: {}".format(
-            response.status_code))
-        return None
+
 
 
 def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  func.Out[str]) -> None:
