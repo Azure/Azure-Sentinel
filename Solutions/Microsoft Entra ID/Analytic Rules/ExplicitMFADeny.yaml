@@ -10,6 +10,9 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AADNonInteractiveUserSignInLogs
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceInfo
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -20,16 +23,22 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-  let aadFunc = (tableName:string){
-  table(tableName)
-  | where ResultType == 500121
-  | where Status has "MFA Denied; user declined the authentication" or Status has "MFA denied; Phone App Reported Fraud"
-  | extend Type = Type
-  | extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
-  };
-  let aadSignin = aadFunc("SigninLogs");
-  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-  union isfuzzy=true aadSignin, aadNonInt
+  let aadFunc = (tableName:string){ 
+  table(tableName) 
+  | where ResultType == 500121 
+  | where Status has "MFA Denied; user declined the authentication" or Status has "MFA denied; Phone App Reported Fraud" 
+  | extend Type = Type 
+  | extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0]) 
+  }; 
+  let aadSignin = aadFunc("SigninLogs"); 
+  let dvcInfo = DeviceInfo
+  | extend SensorHealthState = column_ifexists("SensorHealthState", "")
+  | where OnboardingStatus == "Onboarded" and SensorHealthState == "Active" 
+  | project PublicIP, AadDeviceId; 
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs"); 
+  union isfuzzy=true aadSignin, aadNonInt 
+  | project-rename PublicIP = IPAddress   
+  | join kind=leftouter dvcInfo on PublicIP  
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -41,9 +50,13 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceID
+        columnName: ResourceID
   - entityType: URL
     fieldMappings:
       - identifier: Url
         columnName: ClientAppUsed
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled
