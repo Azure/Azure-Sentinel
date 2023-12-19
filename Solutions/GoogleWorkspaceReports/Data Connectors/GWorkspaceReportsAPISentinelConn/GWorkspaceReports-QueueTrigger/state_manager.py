@@ -69,16 +69,15 @@ class AzureStorageQueueHelper:
         try:
             if encoded:
                 return_message =  self.__queue.send_message(self.base64Encoded(message))
-                logging.info("Message sent to queue with encoding with Base64. Message Id: {} Message Content: {} Queue Name: {}".format(return_message.id, message, self.__queue.queue_name))
+                #logging.info("Message sent to queue with encoding with Base64. Message Id: {} Message Content: {} Queue Name: {}".format(return_message.id, message, self.__queue.queue_name))
             else:
                 return_message = self.__queue.send_message(message)
-                logging.info("Message sent to queue without encoding. Message Id: {} Message Content: {} Queue Name: {}".format(return_message.id, message, self.__queue.queue_name))
+                #logging.info("Message sent to queue without encoding. Message Id: {} Message Content: {} Queue Name: {}".format(return_message.id, message, self.__queue.queue_name))
         except Exception as error:
             logging.error("Error while sending message to queue. Error: {}".format(error))
-            return_message = None
-            raise error
+            return_message = error
         logging.getLogger().setLevel(logging.INFO)
-        #return return_message
+        return return_message
     
     # This method deletes the message based on messageId
     def delete_queue_message(self, messageId, popReceipt):

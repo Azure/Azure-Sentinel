@@ -79,7 +79,7 @@ def get_result(activity,start_time, end_time):
         result_activities = []
         service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False, num_retries=3, static_discovery=True)
         results = service.activities().list(userKey='all', applicationName=activity,
-                                                maxResults=10, startTime=start_time, endTime=end_time).execute()
+                                                maxResults=1000, startTime=start_time, endTime=end_time).execute()
         next_page_token = results.get('nextPageToken', None)
         result = results.get('items', [])
         result_activities.extend(result)
@@ -97,7 +97,7 @@ def get_nextpage_results(activity,start_time, end_time, next_page_token):
         result_activities = []
         service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False, num_retries=3, static_discovery=True)
         results = service.activities().list(userKey='all', applicationName=activity,
-                                                maxResults=10, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
+                                                maxResults=1000, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
         next_page_token = results.get('nextPageToken', None)
         result = results.get('items', [])
         result_activities.extend(result)
@@ -249,6 +249,7 @@ def format_message_for_queue_and_add(start_time, end_time, activity, mainQueueHe
 def main(queueItem: func.QueueMessage ):
     logging.getLogger().setLevel(logging.INFO)
     script_start_time = int(time.time())
+    queue_name = "gworkspace-main-queue"
     message_body = json.loads(queueItem.get_body().decode('ascii').replace("'",'"'))
     # enable below for testing
     #message_body = {'start_time': '2023-12-03T14:01:00.000000Z', 'end_time': '2023-12-07T15:01:00.000Z', 'activity': 'admin'}
@@ -258,7 +259,7 @@ def main(queueItem: func.QueueMessage ):
     global creds
     creds = get_credentials()
     latest_timestamp = ""
-    mainQueueHelper = AzureStorageQueueHelper(connection_string,"gworkspace-main-queue")
+    mainQueueHelper = AzureStorageQueueHelper(connection_string,queue_name)
     # Initialize the queue body with the same values as the message body
     queue_body = {}
     queue_body["start_time"] = start_time
@@ -287,7 +288,12 @@ def main(queueItem: func.QueueMessage ):
                     
                 if check_if_script_runs_too_long(script_start_time):
                     logging.info(f'Script is running too long. Stop processing new events and updating state before finishing the script.')
-                    mainQueueHelper.send_to_queue(queue_body,True)
+                    return_message = mainQueueHelper.send_to_queue(queue_body,True)
+                    if return_message is not None and return_message.id is not None:
+                        logging.info("Message sent to queue with encoding with Base64. Message Id: {} Message Content: {} Queue Name: {}".format(return_message.id, queue_body, queue_name))
+                    else:
+                        logging.error("Message not sent to queue. Message Content: {} Queue Name: {}".format(queue_body, queue_name))
+                    logging.info(f'Finish script. at {time.ctime(int(time.time()))}')
                     return
         else:
             logging.info("No events for {} activity with {} start time and {} end time".format(activity,start_time,end_time))
@@ -295,6 +301,11 @@ def main(queueItem: func.QueueMessage ):
     except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
         logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
-        mainQueueHelper.send_to_queue(queue_body,True)
+        return_message = mainQueueHelper.send_to_queue(queue_body,True)
+        if return_message is not None and return_message.id is not None:
+            logging.info("Message sent to queue with encoding with Base64. Message Id: {} Message Content: {} Queue Name: {}".format(return_message.id, queue_body, queue_name))       
+        else:
+            logging.error("Message not sent to queue. Message Content: {} Queue Name: {}".format(queue_body, queue_name))
+        logging.info(f'Finish script. at {time.ctime(int(time.time()))}')
         raise
     logging.info(f'Finish script. at {time.ctime(int(time.time()))}')
