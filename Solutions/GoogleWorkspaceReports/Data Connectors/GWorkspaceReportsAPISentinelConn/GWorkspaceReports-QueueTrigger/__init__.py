@@ -33,35 +33,6 @@ logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
-activities = [
-            "user_accounts",
-            "access_transparency", 
-            "admin",
-            "calendar",
-            "chat",
-            "drive",
-            "gcp",
-            "gplus",
-            "groups",
-            "groups_enterprise",
-            "jamboard", 
-            "login", 
-            "meet", 
-            "mobile", 
-            "rules", 
-            "saml", 
-            "token", 
-            "context_aware_access", 
-            "chrome", 
-            "data_studio"
-            ]
-
-# Remove excluded activities
-excluded_activities = os.environ.get('ExcludedActivities')
-if excluded_activities:
-    excluded_activities = excluded_activities.replace(" ", "").split(",")
-    activities = [activ for activ in activities if activ not in excluded_activities]
-
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -108,7 +79,7 @@ def get_result(activity,start_time, end_time):
         result_activities = []
         service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False, num_retries=3, static_discovery=True)
         results = service.activities().list(userKey='all', applicationName=activity,
-                                                maxResults=1000, startTime=start_time, endTime=end_time).execute()
+                                                maxResults=10, startTime=start_time, endTime=end_time).execute()
         next_page_token = results.get('nextPageToken', None)
         result = results.get('items', [])
         result_activities.extend(result)
@@ -126,7 +97,7 @@ def get_nextpage_results(activity,start_time, end_time, next_page_token):
         result_activities = []
         service = build('admin', 'reports_v1', credentials=creds, cache_discovery=False, num_retries=3, static_discovery=True)
         results = service.activities().list(userKey='all', applicationName=activity,
-                                                maxResults=1000, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
+                                                maxResults=10, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
         next_page_token = results.get('nextPageToken', None)
         result = results.get('items', [])
         result_activities.extend(result)
@@ -166,7 +137,7 @@ def post_data(customer_id, shared_key, body, log_type,chunk_count):
     response = requests.post(uri,data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
         logging.info("Logs with {} activity was processed into Azure".format(log_type))
-        logging.info("Chunk was processed{} events".format(chunk_count))
+        logging.info("Chunk was processed {} events".format(chunk_count))
     else:
         logging.warn("Response code: {}".format(response.status_code))
     return response.status_code
@@ -245,7 +216,7 @@ def process_result(result_obj, start_time, activity):
             if (statuscode >= 200 and statuscode <= 299):
                 latest_timestamp = sorted_data[-1]["id"]["time"]
                 dt = datetime.strptime(latest_timestamp, '%Y-%m-%dT%H:%M:%S.%fZ')
-                dt += timedelta(milliseconds=1)
+                dt += timedelta(milliseconds=-1)
                 latest_timestamp = dt.strftime('%Y-%m-%dT%H:%M:%S.%f')
                 latest_timestamp = latest_timestamp[:-3] + 'Z'
                 logging.info("Successfully send data to LA of size {} MB".format(mbLength))
@@ -267,12 +238,20 @@ def check_if_script_runs_too_long(script_start_time):
     max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.9)
     return duration > max_duration            
 
-def main(queueItem: func.QueueMessage):
+def format_message_for_queue_and_add(start_time, end_time, activity, mainQueueHelper):
+    queue_body = {}
+    queue_body["start_time"] = start_time
+    queue_body["end_time"] = end_time
+    queue_body["activity"] = activity
+    mainQueueHelper.send_to_queue(queue_body,True)
+    logging.info("Added to queue: {}".format(queue_body))
+
+def main(queueItem: func.QueueMessage ):
     logging.getLogger().setLevel(logging.INFO)
     script_start_time = int(time.time())
     message_body = json.loads(queueItem.get_body().decode('ascii').replace("'",'"'))
     # enable below for testing
-    #message_body = {'start_time': '2023-12-03T14:01:00.000000Z', 'end_time': '2023-12-03T15:01:00.000Z', 'activity': 'access_transparency'}
+    #message_body = {'start_time': '2023-12-03T14:01:00.000000Z', 'end_time': '2023-12-07T15:01:00.000Z', 'activity': 'admin'}
     start_time = message_body.get('start_time')
     end_time = message_body.get('end_time')
     activity = message_body.get('activity')
@@ -305,11 +284,10 @@ def main(queueItem: func.QueueMessage):
                     queue_body["start_time"] = start_time 
                     queue_body["end_time"] = latest_timestamp 
                     queue_body["activity"] = activity
+                    
                 if check_if_script_runs_too_long(script_start_time):
                     logging.info(f'Script is running too long. Stop processing new events and updating state before finishing the script.')
-                    # update the message from the queue (old status message with the new status)
-                    queue_update_status =  mainQueueHelper.update_queue_message(queueItem.id, queueItem.pop_receipt, json.dumps(queue_body), True)
-                    logging.info('Update the queue item with the latest status {} update status: '.format(queue_body, queue_update_status))
+                    mainQueueHelper.send_to_queue(queue_body,True)
                     return
         else:
             logging.info("No events for {} activity with {} start time and {} end time".format(activity,start_time,end_time))
@@ -317,8 +295,6 @@ def main(queueItem: func.QueueMessage):
     except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
         logging.error( "Error: Google Workspace Reports data connector execution failed with an internal server error.")
-        # update the message from the queue (old status message with the new status)
-        queue_update_status = mainQueueHelper.update_queue_message(queueItem.id, queueItem.pop_receipt, json.dumps(queue_body), True)
-        logging.info('Update the queue item with the latest status {} update status: '.format(queue_body, queue_update_status))
+        mainQueueHelper.send_to_queue(queue_body,True)
         raise
     logging.info(f'Finish script. at {time.ctime(int(time.time()))}')

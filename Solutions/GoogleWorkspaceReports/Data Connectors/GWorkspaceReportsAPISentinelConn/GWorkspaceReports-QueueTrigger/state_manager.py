@@ -66,11 +66,19 @@ class AzureStorageQueueHelper:
     # This method send data into the queue
     def send_to_queue(self, message, encoded):
         logging.getLogger().setLevel(logging.WARNING)
-        if encoded:
-            self.__queue.send_message(self.base64Encoded(message))
-        else:
-            self.__queue.send_message(message)
+        try:
+            if encoded:
+                return_message =  self.__queue.send_message(self.base64Encoded(message))
+                logging.info("Message sent to queue with encoding with Base64. Message Id: {} Message Content: {} Queue Name: {}".format(return_message.id, message, self.__queue.queue_name))
+            else:
+                return_message = self.__queue.send_message(message)
+                logging.info("Message sent to queue without encoding. Message Id: {} Message Content: {} Queue Name: {}".format(return_message.id, message, self.__queue.queue_name))
+        except Exception as error:
+            logging.error("Error while sending message to queue. Error: {}".format(error))
+            return_message = None
+            raise error
         logging.getLogger().setLevel(logging.INFO)
+        #return return_message
     
     # This method deletes the message based on messageId
     def delete_queue_message(self, messageId, popReceipt):
@@ -91,16 +99,31 @@ class AzureStorageQueueHelper:
         logging.getLogger().setLevel(logging.WARNING)
         try:
             if encoded:
-                self.__queue.update_message(message=messageId, pop_receipt= popReceipt , content=self.base64Encoded(message))
+                self.__queue.update_message(messageId, popReceipt , content=self.base64Encoded(message))
             else:
-                self.__queue.update_message(message=messageId, pop_receipt= popReceipt , content=message)
+                self.__queue.update_message(messageId, popReceipt , content=message)
         except Exception as e:
             logging.getLogger().setLevel(logging.INFO)
             return e
         logging.getLogger().setLevel(logging.INFO)
         return True
         
-    # This method reads message from the queue
-    def read_queue_message(self):
+    # This method reads message from the queue without popping it 
+    def peek_queue_message(self):
         logging.getLogger().setLevel(logging.WARNING)
-        return self.__queue.receive_message()
+        message = self.__queue.peek_messages()
+        logging.getLogger().setLevel(logging.INFO)
+        return message
+    
+    # this method resets visibility timeout of the message
+    def renew_queue_message(self, messageId, popReceipt, visibilityTimeout):
+        logging.getLogger().setLevel(logging.WARNING)
+        try:
+            self.__queue.update_message(messageId, popReceipt, visibility_timeout=visibilityTimeout)
+        except Exception as e:
+            logging.getLogger().setLevel(logging.INFO)
+            return e
+        logging.getLogger().setLevel(logging.INFO)
+        return True
+
+    
