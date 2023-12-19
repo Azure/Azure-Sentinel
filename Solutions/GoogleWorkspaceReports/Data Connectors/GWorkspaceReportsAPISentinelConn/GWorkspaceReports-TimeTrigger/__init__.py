@@ -34,7 +34,7 @@ MAX_QUEUE_MESSAGES_MAIN_QUEUE = 1000
 MAX_SCRIPT_EXEC_TIME_MINUTES = 3
 TIME_WINDOW_To_POLL_API = 60 * int(max_time_window_per_api_call_mins)    # in seconds
 SCOPES = ['https://www.googleapis.com/auth/admin.reports.audit.readonly']
-'''
+
 activities = [
             "user_accounts",
             "access_transparency", 
@@ -57,8 +57,7 @@ activities = [
             "chrome", 
             "data_studio"
             ]
-'''
-activities = ["admin"]
+
 # Remove excluded activities
 excluded_activities = os.environ.get('ExcludedActivities')
 if excluded_activities:
