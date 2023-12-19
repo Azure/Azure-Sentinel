@@ -6,7 +6,7 @@ import argparse
 import sys
 from distutils.version import StrictVersion
 
-SCRIPT_VERSION = 2.4
+SCRIPT_VERSION = 2.5
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
