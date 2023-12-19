@@ -267,7 +267,7 @@ def main(queueItem: func.QueueMessage ):
     queue_body["activity"] = activity
 
     logging.info('Starting GWorkspaceReport-QueueTrigger program at {}'.format(time.ctime(int(time.time()))) )
-    logging.info('Queue message received with body {}'.format(message_body) )
+    logging.info('Queue message received with queue Id: {} body: {}'.format(queueItem.id,message_body) )
     try:
         result_obj, next_page_token = get_result(activity,start_time,end_time)
         if (result_obj is not None) and (len(result_obj) > 0):
