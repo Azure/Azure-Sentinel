@@ -1,0 +1,108 @@
+Parser:
+  Title: ASIM Authentication parser for Google Workspace
+  Version: '0.1.0'
+  LastUpdated: Dec 18, 2023
+Product:
+  Name: Google Workspace
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Google Workspace documentation
+  Link: https://developers.google.com/admin-sdk/reports/v1/appendix/activity/login#login
+Description: |
+  This ASIM parser supports normalizing the Google Workspace sign-in logs(type=login) ingested in 'GWorkspace_ReportsAPI_login_CL' table to the ASIM Authentication normalized schema.
+ParserName: ASimAuthenticationGoogleWorkspace
+EquivalentBuiltInParser: _ASim_Authentication_GoogleWorkspace
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    disabled: bool = false
+    ) {
+    let EventFieldsLookup = datatable (
+    EventOriginalSubType: string,
+    EventType: string,
+    EventResult: string
+  )
+          [
+      "login_Success", "Logon", "Success",
+      "login_Failure", "Logon", "Failure",
+      "login_challenge", "Logon", "",
+      "login_verification", "Logon", "",
+      "risky_Sensitive_action_blocked", "Logon", "Failure",
+      "riskay_sensitive_action_allowed", "Logon", "Success",
+      "Logout", "Logoff", "Success",
+      "suspicious_login", "Logon", "Failure",
+      "suspicious_login_less_secure_app", "Logon", "Failure",
+      "suspicious_programmatic_login", "Logon", "Failure",
+      "user_signed_out_due_to_suspicious_session_cookie", "Logoff", "Success"
+  ];
+      let ThreatEventTypes = dynamic(['suspicious_login', 'suspicious_login_less_secure_app', 'suspicious_programmatic_login', 'user_signed_out_due_to_suspicious_session_cookie']);
+      let SupportedEventNames = EventFieldsLookup
+          | project EventOriginalSubType;
+      GWorkspace_ReportsAPI_login_CL
+      | where not(disabled)
+      | where event_name_s in (SupportedEventNames)
+      | lookup EventFieldsLookup on $left.event_name_s == $right.EventOriginalSubType
+      | project-rename
+          TargetUsername = actor_email_s,
+          TargetUserId = actor_profileId_s,
+          SrcIpAddr = IPAddress,
+          LogonMethod = login_challenge_method_s, // validate this. I think we could use login_type_s also in some cases
+          TargetSessionId = id_applicationName_s,
+          EventOriginalType = event_type_s
+      | extend
+          TargetUsername = iif(event_name_s in (ThreatEventTypes), affected_email_address_s, TargetUsername)
+      | extend 
+          AdditionalFields = bag_pack(
+                        "Is_Suspicious",
+                        is_suspicious_b,
+                        "Is_Second_Factor_b",
+                        is_second_factor_b,
+                        "Logon_Type",
+                        login_type_s,
+                        "Sensitive_Action_Name",
+                        sensitive_action_name_s
+                    ),
+          EventResult = case(
+                    event_name_s in ('login_challenge', 'login_verification') and login_challenge_status_s == "passed",
+                    "Success",
+                    event_name_s in ('login_challenge', 'login_verification') and login_challenge_status_s == "incorrect_answer_entered",
+                    "Failure",
+                    EventResult
+                ),
+          RuleName = case(
+                event_name_s == 'suspicious_login',
+                "Google has detected a suspicious login for TargetUSerName",
+                event_name_s == 'suspicious_login_less_secure_app',
+                "Google has detected a suspicious login for TargetUSerName from a less secure app",
+                event_name_s == 'suspicious_programmatic_login',
+                "Google has detected a suspicious programmatic login for TargetUserName",
+                event_name_s == 'user_signed_out_due_to_suspicious_session_cookie',
+                "Suspicious session cookie detected for user TargetUserName",
+                ""
+            ),
+          ThreatField = iif(event_name_s in (ThreatEventTypes), "TargetUserName", ""),
+          ThreatFirstReportedTime = iif(event_name_s in (ThreatEventTypes), TimeGenerated, datetime(null)),
+          ThreatLastReportedTime = iif(event_name_s in (ThreatEventTypes), TimeGenerated, datetime(null))
+      | extend
+          TargetAppName = "Google Workspace",
+          TargetAppType = "SaaS application",
+          EventCount = int(1),
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          EventProduct = "Workspace",
+          EventVendor = "Google",
+          Dvc="Workspace",
+          EventSchema = 'Authentication',
+          EventSchemaVersion = '0.1.3',
+          EventOriginalUid = _ItemId
+  };
+  parser (disabled = false)
