@@ -42,8 +42,8 @@ output {
 }
 ```
 Note: make sure that the path exists before creating the sample file.
-2) Start Logstash. The plugin will write up to 10 records to a sample file named "sampleFile<epoch seconds>.json" in the configured path  
-(for example: "c:\temp\sampleFile1648453501.json")
+2) Start Logstash. The plugin will collect up to 10 records to a sample.
+3) The file named "sampleFile<epoch seconds>.json" in the configured path will be created once there are 10 events to sample or when the Logstash process exited gracefully. (for example: "c:\temp\sampleFile1648453501.json").
 
 
 ### Configurations:
