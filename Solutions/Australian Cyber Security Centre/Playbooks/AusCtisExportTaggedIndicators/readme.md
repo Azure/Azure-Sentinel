@@ -5,8 +5,10 @@
 This playbook gets triggered every day and perform the following actions:
 
 1. Get all the threat intelligence indicators from Microsoft Sentinel Workspace with given tag.
-2. Filter all the indicators whose export in not completed. 
-3. Export the indicators to provided TAXII server. 
+2. Filter all the indicators whose export in not completed.
+3. Verify/Add TLP labels to indicators.
+4. Add Grouping and Identity Objects to indicators.
+5. Export the bundle to provided TAXII server.
 
 <img src="./images/Playbook_AusCtisExportTaggedIndicators_light.jpg" width="50%"/><br>
 
