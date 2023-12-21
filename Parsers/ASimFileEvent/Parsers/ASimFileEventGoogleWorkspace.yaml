@@ -26,10 +26,47 @@ ParserQuery: |
   let parser = (
     disabled: bool = false
     ) {
-    let EventFieldsLookup = datatable (
-    EventOriginalSubType: string,
-    EventType: string,
-    EventSubtype: string
+    let GoogleWorkspaceSchema = datatable (
+    event_name_s: string,
+    event_type_s: string,
+    id_uniqueQualifier_s: string,
+    actor_email_s: string,
+    actor_profileId_s: string,
+    IPAddress: string,
+    doc_type_s: string,
+    doc_title_s: string,
+    originating_app_id_s: string,
+    id_applicationName_s: string,
+    old_value_s: string,
+    new_value_s: string,
+    destination_folder_title_s: string,
+    source_folder_title_s: string,
+    copy_type_s: string,
+    target_user_s: string,
+    doc_id_s: string,
+    primary_event_b: bool,
+    billable_b: bool,
+    owner_s: string,
+    owner_is_shared_drive_b: bool,
+    is_encrypted_b: bool,
+    visibility_s: string,
+    shared_drive_id_s: string,
+    destination_folder_id_s: string,
+    source_folder_id_s: string,
+    TimeGenerated: datetime,
+    _ResourceId: string,
+    Computer: string,
+    MG: string,
+    ManagementGroupName: string,
+    RawData: string,
+    SourceSystem: string,
+    TenantId: string,
+    _ItemId: string
+  )[];
+      let EventFieldsLookup = datatable (
+      EventOriginalSubType: string,
+      EventType: string,
+      EventSubType: string
   )
           [
       "download", "FileAccessed", "Download",
@@ -70,7 +107,7 @@ ParserQuery: |
   ];
       let SupportedEventNames = EventFieldsLookup
           | project EventOriginalSubType;
-      GWorkspace_ReportsAPI_drive_CL
+      union isfuzzy=true GoogleWorkspaceSchema, GWorkspace_ReportsAPI_drive_CL
       | where not(disabled)
       | where event_name_s in (SupportedEventNames)
       | lookup EventFieldsLookup on $left.event_name_s == $right.EventOriginalSubType
@@ -81,13 +118,16 @@ ParserQuery: |
           SrcIpAddr = IPAddress,
           TargetFileMimeType = doc_type_s,
           TargetFilePath = doc_title_s,
-          ActingProcessId = originating_app_id_s
+          ActingAppId = originating_app_id_s,
+          EventOriginalType=event_type_s
       | extend
           TargetAppName = iif(id_applicationName_s == 'drive', "Google Workspace - Drive", ""),
+          TargetAppType = iif(id_applicationName_s == 'drive', "SaaS application", ""),
+          ActorUserIdType = iif(isnotempty(ActorUserId), "Google Workspace Profile ID", ""),
           SrcFilePath = iif(event_name_s has_any ('rename', 'copy', 'source_copy'), old_value_s, ""),
           TargetFilePath = iif(event_name_s has ('source_copy'), new_value_s, ""),
           TargetFileDirectory = iif(event_name_s has_any ('move'), destination_folder_title_s, ""),
-          SrcFileDirectory = iif(event_name_s has_any ('move'), "source_folder_title_s", ""), // remove quotes from here
+          SrcFileDirectory = iif(event_name_s has_any ('move'), source_folder_title_s, ""),
           EventType = case(
                   TargetFileMimeType == "folder" and event_name_s == "create",
                   "FolderCreated",
@@ -103,14 +143,14 @@ ParserQuery: |
                   "FolderCreated",
                   EventType
               ),
-          EventSubtype = case(
+          EventSubType = case(
                     TargetFileMimeType == "folder" and event_name_s == "create",
                     "",
                     TargetFileMimeType == "folder" and event_name_s == "trash",
                     "",
                     TargetFileMimeType == "folder" and event_name_s == "untrash",
                     "",
-                    EventSubtype
+                    EventSubType
                 ),
           EventMessage = case(
                     event_name_s == 'download',
@@ -134,7 +174,7 @@ ParserQuery: |
                     event_name_s == 'trash',
                     strcat(ActorUsername, " trashed an item"),
                     event_name_s == 'move',
-                    strcat(ActorUsername, " moved an item from ", "source_folder_title_s", " to ", destination_folder_title_s), // remove quotes,
+                    strcat(ActorUsername, " moved an item from ", source_folder_title_s, " to ", destination_folder_title_s),
                     event_name_s == 'untrash',
                     strcat(ActorUsername, " restored an item"),
                     event_name_s == 'source_copy',
@@ -180,7 +220,7 @@ ParserQuery: |
                     event_name_s == 'print',
                     strcat(ActorUsername, " printed an item"),
                     event_name_s == 'remove_from_folder',
-                    strcat(ActorUsername, " removed an item from from ", "source_folder_title_s"), // remove quotes
+                    strcat(ActorUsername, " removed an item from from ", source_folder_title_s),
                     event_name_s == 'remove_lock',
                     strcat(ActorUsername, " unlocked an item"),
                     ""
@@ -203,21 +243,45 @@ ParserQuery: |
                         "Copy_Type",
                         copy_type_s,
                         "Shared_Drive_Id",
-                        "shared_drive_id_s", // uncomment quotes
+                        shared_drive_id_s,
                         "Destination_Folder_Id",
                         destination_folder_id_s,
                         "Source_Folder_Id",
-                        "source_folder_id_s"// uncomment quotes
+                        source_folder_id_s
                     )
       | extend
+          EventOriginalSubType = event_name_s,
           Application = TargetAppName,
-          ActorUsernameType = "User", // Validate this
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
           IpAddr = SrcIpAddr,
           Src = SrcIpAddr,
-          EventOriginalType = "access",
           TargetFileName=TargetFilePath,
+          FilePath = TargetFilePath,
+          TargetFilePathType = iif(isnotempty(TargetFilePath), "FilenameOnly", ""),
+          SrcFilePathType = iif(isnotempty(SrcFilePath), "FilenameOnly", ""),
           FileName = TargetFilePath,
-          SrcFileName = SrcFilePath
+          SrcFileName = SrcFilePath,
+          User = ActorUsername,
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated,
+          EventProduct = "Workspace",
+          EventVendor = "Google",
+          EventResult = "Success",
+          EventSchemaVersion = "0.2.1",
+          EventSchema = "FileEvent",
+          EventUid = _ItemId,
+          Dvc = "Workspace"
+      | project-away 
+          *_s,
+          *_b,
+          *_g,
+          _ResourceId,
+          Computer,
+          MG,
+          ManagementGroupName,
+          RawData,
+          SourceSystem,
+          TenantId
   };
-  parser (disabled = false)
+  parser (disabled = disabled)
 
