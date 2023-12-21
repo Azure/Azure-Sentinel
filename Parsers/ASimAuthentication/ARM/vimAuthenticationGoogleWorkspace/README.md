@@ -1,8 +1,8 @@
-# <product name> ASIM Authentication Normalization Parser
+# Google Workspace ASIM Authentication Normalization Parser
 
-ARM template for ASIM Authentication schema parser for <product name>.
+ARM template for ASIM Authentication schema parser for Google Workspace.
 
-This ASIM filtering parser supports filtering and normalizing the <product name> logs to the ASIM authentication normalized schema.
+This ASIM parser supports normalizing the Google Workspace sign-in logs(type=login) ingested in 'GWorkspace_ReportsAPI_login_CL' table to the ASIM Authentication normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
