@@ -1,8 +1,8 @@
-# <product name> ASIM FileEvent Normalization Parser
+# Google Workspace ASIM FileEvent Normalization Parser
 
-ARM template for ASIM FileEvent schema parser for <product name>.
+ARM template for ASIM FileEvent schema parser for Google Workspace.
 
-This ASIM filtering parser supports normalizing the <product name> logs to the ASIM file activity normalized schema.
+This ASIM parser supports normalizing the Google Workspace (Drive) logs ingested in GWorkspace_ReportsAPI_drive_CL table to the ASIM file activity normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
