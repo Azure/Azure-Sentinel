@@ -66,7 +66,7 @@ def lambda_handler(event, context):
             # Find the index of the closing square bracket
             closing_bracket_index = fileName.find(']')
             # Extract the substring after the closing square bracket
-            output_File_Name = fileName[closing_bracket_index + 1:]
+            output_File_Name = fileName[closing_bracket_index + 1]
 
             # Convert events to json object
             json_string = json.dumps(response)
@@ -74,22 +74,24 @@ def lambda_handler(event, context):
             
             df = pd.DataFrame(json_object['events'])
             if df.empty:
-                print('No events for specified time')
-                return None
+                print('No events for specified time')                
             
             # Convert unix time to zulu time for example from 1671086934783 to 2022-12-15T06:48:54.783Z
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%dT%H:%M:%S.%f').str[:-3]+'Z'
             
-            # Remove unnecessary column
-            fileToS3 = df.drop(columns=["ingestionTime"])
+            try:
+                # Remove unnecessary column
+                fileToS3 = df.drop(columns=["ingestionTime"])
 
-            # Export data to temporary file in the right format, which will be deleted as soon as the session ends
-            fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
+                # Export data to temporary file in the right format, which will be deleted as soon as the session ends
+                fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
             
-            # Upload data to desired folder in bucket
-            s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')
+                # Upload data to desired folder in bucket
+                s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')
+            except Exception as e:                
+                print(f"An error occurred at Upload data to desired folder in bucket: {e}") 
     except Exception as e:
-        print("    Error exporting %s: %s" % (log_Group_Name, getattr(e, 'message', repr(e))))
+        print("Error exporting %s: %s" % (log_Group_Name, getattr(e, 'message', repr(e))))
 
 
