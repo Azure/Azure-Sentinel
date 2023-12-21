@@ -20,9 +20,10 @@ This playbook gets triggered every day and perform the following actions:
 2. Fill in the required parameters:
     * Playbook Name
     * TAXII Server Url
-    * Collection ID
     * TAXII Server Username
     * TAXII Server Password
+    * Collection ID
+    * Orgnization UUID
     * Microsoft Sentinel Workspace
     * Tag for indicators to be exported
     * Tag for indicators after export completion
