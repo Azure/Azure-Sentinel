@@ -27,17 +27,17 @@ query: |
   let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
   // Fetch threat intelligence indicators related to IP addresses
   let IP_Indicators = ThreatIntelligenceIndicator
-    | where TimeGenerated >= ago(ioc_lookBack)
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true and ExpirationDateTime > now()
     // Filter out indicators without relevant IP address fields
     | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+    | where TimeGenerated >= ago(ioc_lookBack)
     // Select the IP entity based on availability of different IP fields
     | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
     | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
     | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
     // Exclude local addresses using the ipv4_is_private operator and filtering out specific address prefixes
-    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127.";
+    | where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith "fe80" and TI_ipEntity !startswith "::" and TI_ipEntity !startswith "127."
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now();
   // Perform a join between IP indicators and AzureActivity logs to identify potential malicious activity
   IP_Indicators
   // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
@@ -76,5 +76,5 @@ entityMappings:
     fieldMappings:
       - identifier: ResourceId
         columnName: ResourceId
-version: 1.4.0
+version: 1.4.1
 kind: Scheduled
