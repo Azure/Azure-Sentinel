@@ -4,26 +4,7 @@
 # ----------------------------------------------------------------------------
 # This script is used to install the AMA on a linux machine and configure the
 # Syslog daemon on the linux machine for a data forwarding connector scenario.
-# Supported OS:
-#   64-bit
-#       CentOS 7 and 8
-#       Amazon Linux 2017.09
-#       Oracle Linux 7
-#       Red Hat Enterprise Linux Server 7 and 8
-#       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS, 16.04 LTS, 18.04 LTS and 20.04 LTS
-#       SUSE Linux Enterprise Server 12, 15
-#   32-bit
-#       CentOS 7 and 8
-#       Oracle Linux 7
-#       Red Hat Enterprise Linux Server 7 and 8
-#       Debian GNU/Linux 8 and 9
-#       Ubuntu Linux 14.04 LTS and 16.04 LTS
 # For more information please check the Azure Monitoring Agent documentation.
-#
-# Daemon versions:
-#   Syslog-ng: 2.1 - 3.22.1
-#   Rsyslog: v8
 import subprocess
 import time
 

@@ -25,6 +25,7 @@ query: |
     | where Category =~ "ApplicationManagement"
     | where Result =~ "success"
     | where OperationName =~ 'Update Application'
+    | where TargetResources has "AppAddress"
     | mv-expand TargetResources
     | mv-expand TargetResources.modifiedProperties
     | where TargetResources_modifiedProperties.displayName =~ "AppAddress"
@@ -38,13 +39,15 @@ query: |
     | extend AddedUrls = set_difference(NewUrls, OldUrls)
     | where array_length(AddedUrls) > 0
     | extend UserAgent = iif(tostring(AdditionalDetails[0].key) == "User-Agent", tostring(AdditionalDetails[0].value), "")
-    | extend AddingUser = iif(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) , tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), "")
-    | extend AddingApp = iif(isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)) , tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName), "")
-    | extend AddedBy = iif(isnotempty(AddingUser), AddingUser, AddingApp)
-    | project-away AddingApp, AddingUser
-    | extend AppDisplayName = tostring(TargetResources.displayName)
-    | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
-    | project-reorder TimeGenerated, AppDisplayName, AddedUrls, AddedBy, UserAgent, ipAddress
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend AddedBy = iif(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName)
+    | extend TargetAppName = tostring(TargetResources.displayName)
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, TargetAppName, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, AddedUrls, AddedBy, UserAgent
 entityMappings:
   - entityType: URL
     fieldMappings:
@@ -53,18 +56,30 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AddedBy
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ipAddress
-version: 1.0.1
+        columnName: InitiatingIPAddress
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
