@@ -1,7 +1,7 @@
-# Ingest-DynatraceMSDefenderXDR
+# Ingest-DynatraceMSSentinelSecurityAlerts
 author: Dynatrace
 
-This playbook will ingest Microsoft Defender XDR insights to Dynatrace. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/platform/application-security/) enabled, you will also need to install the [Microsoft Defender XDR](https://learn.microsoft.com/en-us/azure/sentinel/connect-microsoft-365-defender) Sentinel connector to make use of this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
+This playbook will Report all Microsoft Sentinel Security Alerts to Dynatrace. You need a valid Dynatrace tenant with [Application Security](https://www.dynatrace.com/platform/application-security/) enabled, you will also need to install the relevant Microsoft Sentinel Connectors which would generated security alerts consumed by this playbook. To learn more about the Dynatrace platform [Start your free trial](https://www.dynatrace.com/trial)
 
 ** Prerequisites ** 
 - Follow [these instructions](https://docs.dynatrace.com/docs/shortlink/token#create-api-token) to generate a Dynatrace access token, the token should have Ingest logs (logs.ingest) scope.
@@ -22,11 +22,11 @@ A Microsoft Sentinel playbook is utilized by automation rules, therefore to auto
 Basic steps for setup of the playbook and automation rule are as follows :
 
 1. Go to the Automation blade in Microsoft Sentinel.
-2. Create a new playbook from the 'Ingest Microsoft Defender XDR insights into Dynatrace' [playbook template](https://learn.microsoft.com/en-us/azure/sentinel/use-playbook-templates)
+2. Create a new playbook from the 'Ingest Microsoft Sentinel Security Alerts into Dynatrace' [playbook template](https://learn.microsoft.com/en-us/azure/sentinel/use-playbook-templates)
 - KeyvaultName: The name of the keyvault created as pre-requisite
 - DynatraceTenant: xyz.dynatrace.com
 3. Create a new [automation rule](https://learn.microsoft.com/en-us/azure/sentinel/create-manage-use-automation-rules)
-- Name : Ingest Microsoft Defender XDR insights into Dynatrace
+- Name : Ingest Microsoft Sentinel Security Alerts into Dynatrace
 - Trigger : When alert is created
 - Conditions : If Analytic rule name contains 'Dynatrace Application Security - Attack detection'
-- Actions : Run playbook IngestDynatraceMSDefender365
+- Actions : Run playbook IngestDynatraceSentinelSecurityAlerts
