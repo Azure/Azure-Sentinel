@@ -1,0 +1,57 @@
+id: 3f6f0d1a-f2f9-4e01-881a-c55a4a71905b
+name: RecordedFuture Threat Hunting Url All Actors
+description: |
+  'Recorded Future Threat Hunting Url correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+customDetails: 
+  ActorInformation: RecordedFuturePortalLink
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Description}}'
+  alertDescriptionFormat: '*{{Description}}**\n\nCorrelation found on {{Url}} from the {{Type}} table.\n'
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: RecordedFuturePortalLink
+query: |
+  let ioc_lookBack = 1d;
+  // The source table (imWebSession) can be replaced by any infrastructure table containing Url data.
+  // The following workbook: Recorded Future - Url Correlation will help researching available data and selecting tables and columns  
+  imWebSession
+  | where isnotempty(Url)
+  | extend lowerUrl=tolower(Url)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(Url)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators  
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | extend lowerUrl=tolower(Url)
+  ) on lowerUrl
+  // select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Url
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
+  | project Url, Description, Type, TimeGenerated, RecordedFuturePortalLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.2
+kind: Scheduled
