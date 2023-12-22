@@ -35,6 +35,8 @@ aws_access_key_id = os.environ.get('AWSAccessKeyId')
 aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
+retry = 3 ## To do : need to move function app configuration
+error_statuses = [429, 500, 502, 503, 504]
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
@@ -56,9 +58,15 @@ def main(mytimer: func.TimerRequest) -> None:
     
     ts_from = state_manager_cu.get()
     ts_from = parse_date_from(ts_from)
-    ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+    
+    ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1) 
     ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
-        
+    no_days=(ts_to-ts_from)
+    if(no_days.days>7):
+        ts_to= (ts_from +datetime.timedelta(days=7))
+        logging.info("The current time point is: {}".format(ts_to))
+      
+    
     cli = UmbrellaClient(aws_access_key_id, aws_secret_acces_key, aws_s3_bucket)
     
     logging.info('Searching files last modified from {} to {}'.format(ts_from, ts_to))
@@ -77,7 +85,7 @@ def main(mytimer: func.TimerRequest) -> None:
         'dns': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10),
         'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
         'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
-        'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
+        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -88,7 +96,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel = sentinel_dict['proxy']
             elif 'iplogs' in key.lower():
                 sentinel = sentinel_dict['ip']
-            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
+            elif 'firewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 sentinel = sentinel_dict['cloudfirewall']
             else:
                 # skip files of unknown types
@@ -137,6 +145,14 @@ def convert_list_to_csv_line(ls):
 
 
 def check_if_script_runs_too_long(script_start_time: int) -> bool:
+        """This method is used to check whether script is too long
+
+        Args:
+         script_start_time (int): _description_
+
+        Returns:
+          bool: _description_
+        """        
         now = int(time.time())
         duration = now - script_start_time
         max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
@@ -144,6 +160,14 @@ def check_if_script_runs_too_long(script_start_time: int) -> bool:
 
 
 def parse_date_from(date_from: str) -> datetime.datetime:
+    """This is used to parse the from date
+
+    Args:
+        date_from (str): _description_
+
+    Returns:
+        datetime.datetime: _description_
+    """    
     try:
         date_from = parse_datetime(date_from)+ datetime.timedelta(milliseconds=1)
     except:
@@ -154,7 +178,8 @@ def parse_date_from(date_from: str) -> datetime.datetime:
 
     
 class UmbrellaClient:
-
+    """This class is used for cisco umbrella client getting data from s3
+    """    
     def __init__(self, aws_access_key_id, aws_secret_acces_key, aws_s3_bucket):
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_acces_key = aws_secret_acces_key
@@ -171,12 +196,28 @@ class UmbrellaClient:
         )
 
     def _get_s3_bucket_name(self, aws_s3_bucket):
+        """This method is used to get the s3 bucket name
+
+        Args:
+            aws_s3_bucket (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         aws_s3_bucket = self._normalize_aws_s3_bucket_string(aws_s3_bucket)
         tokens = aws_s3_bucket.split('/')
         aws_s3_bucket = tokens[0]
         return aws_s3_bucket
 
     def _get_s3_prefix(self, aws_s3_bucket):
+        """This method is used to get s3 prefix
+
+        Args:
+            aws_s3_bucket (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         aws_s3_bucket = self._normalize_aws_s3_bucket_string(aws_s3_bucket)
         tokens = aws_s3_bucket.split('/')
         if len(tokens) > 1:
@@ -186,6 +227,14 @@ class UmbrellaClient:
         return prefix
 
     def _normalize_aws_s3_bucket_string(self, aws_s3_bucket):
+        """This method is used to normalize the s3 bucket string
+
+        Args:
+            aws_s3_bucket (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         aws_s3_bucket = aws_s3_bucket.strip()
         aws_s3_bucket = aws_s3_bucket.replace('s3://', '')
         if aws_s3_bucket.startswith('/'):
@@ -211,8 +260,17 @@ class UmbrellaClient:
             raise Exception
 
     def get_files_list(self, ts_from, ts_to):
+        """This method get files list based on from and to date
+
+        Args:
+            ts_from (_type_): _description_
+            ts_to (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs', 'firewalllogs', 'cdfwlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -234,6 +292,10 @@ class UmbrellaClient:
         return files
 
     def download_obj(self, key):
+        """This method is used to download obj from s3
+        Returns:
+            _type_: _description_
+        """        
         logging.info('Started downloading {}'.format(key))
         res = self.s3.get_object(Bucket=self.aws_s3_bucket, Key=key)
         try:
@@ -250,6 +312,15 @@ class UmbrellaClient:
             logging.error('Error while getting object {} - {}'.format(key, err))
 
     def unpack_file(self, downloaded_obj, key):
+        """This method is used to unpack the GZ file
+
+        Args:
+            downloaded_obj (_type_): _description_
+            key (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         try:
             file_obj = io.BytesIO(downloaded_obj)
             csv_file = gzip.GzipFile(fileobj=file_obj).read().decode()
@@ -260,6 +331,14 @@ class UmbrellaClient:
 
     @staticmethod
     def convert_empty_string_to_null_values(d: dict):
+        """This method is used to convert empty string to null values
+
+        Args:
+            d (dict): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         for k, v in d.items():
             if v == '' or (isinstance(v, list) and len(v) == 1 and v[0] == ''):
                 d[k] = None
@@ -267,6 +346,16 @@ class UmbrellaClient:
 
     @staticmethod
     def format_date(date_string, input_format, output_format):
+        """This method is used to format the date
+
+        Args:
+            date_string (_type_): _description_
+            input_format (_type_): _description_
+            output_format (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         try:
             date = datetime.datetime.strptime(date_string, input_format)
             date_string = date.strftime(output_format)
@@ -275,6 +364,14 @@ class UmbrellaClient:
         return date_string
 
     def parse_csv_ip(self, csv_file):
+        """This method is used to parse csv file
+
+        Args:
+            csv_file (_type_): _description_
+
+        Yields:
+            _type_: _description_
+        """        
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
@@ -295,6 +392,14 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_proxy(self, csv_file):
+        """This method is used to parse csv proxy
+
+        Args:
+            csv_file (_type_): _description_
+
+        Yields:
+            _type_: _description_
+        """        
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
@@ -385,6 +490,14 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_dns(self, csv_file):
+        """This method is used to parse csv dns files
+
+        Args:
+            csv_file (_type_): _description_
+
+        Yields:
+            _type_: _description_
+        """        
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
@@ -420,6 +533,14 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_cdfw(self, csv_file):
+        """This method is used to parse csv cdfw
+
+        Args:
+            csv_file (_type_): _description_
+
+        Yields:
+            _type_: _description_
+        """        
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
@@ -442,11 +563,17 @@ class UmbrellaClient:
                     }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
-                event['EventType'] = 'cloudfirewalllogs'
+                event['EventType'] = 'firewalllogs'
                 yield event
 
 
     def process_file(self, obj, dest):
+        """This method is used to process the files from s3
+
+        Args:
+            obj (_type_): _description_
+            dest (_type_): _description_
+        """        
         t0 = time.time()
         key = obj['Key']
         if 'csv.gz' in key.lower():
@@ -461,7 +588,7 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_proxy
             elif 'iplogs' in key.lower():
                 parser_func = self.parse_csv_ip
-            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
+            elif 'firewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
 
             if parser_func:
@@ -476,6 +603,8 @@ class UmbrellaClient:
 
 
 class AzureSentinelConnector:
+    """This class used to push the data to azure sentinel
+    """    
     def __init__(self, log_analytics_uri, customer_id, shared_key, log_type, queue_size=200, bulks_number=10, queue_size_bytes=25 * (2**20)):
         self.log_analytics_uri = log_analytics_uri
         self.customer_id = customer_id
@@ -490,6 +619,11 @@ class AzureSentinelConnector:
         self.failed_sent_events_number = 0
 
     def send(self, event):
+        """This method is used append event to quque
+
+        Args:
+            event (_type_): _description_
+        """        
         self._queue.append(event)
         if len(self._queue) >= self.queue_size:
             self.flush(force=False)
@@ -505,6 +639,8 @@ class AzureSentinelConnector:
         self._queue = []
 
     def _flush_bulks(self):
+        """This method is used to flush in bulks
+        """        
         jobs = []
         for queue in self._bulks_list:
             if queue:
@@ -521,12 +657,35 @@ class AzureSentinelConnector:
         self._bulks_list = []
 
     def __enter__(self):
+        """This method is used to pass
+        """        
         pass
 
     def __exit__(self, type, value, traceback):
+        """This method is used to flush
+
+        Args:
+            type (_type_): _description_
+            value (_type_): _description_
+            traceback (_type_): _description_
+        """        
         self.flush()
 
     def _build_signature(self, customer_id, shared_key, date, content_length, method, content_type, resource):
+        """This method is used to build signature for log analytics push
+
+        Args:
+            customer_id (_type_): _description_
+            shared_key (_type_): _description_
+            date (_type_): _description_
+            content_length (_type_): _description_
+            method (_type_): _description_
+            content_type (_type_): _description_
+            resource (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         x_headers = 'x-ms-date:' + date
         string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
@@ -536,6 +695,14 @@ class AzureSentinelConnector:
         return authorization
 
     def _post_data(self, customer_id, shared_key, body, log_type):
+        """This method is used to post the data to azure sentinel
+
+        Args:
+            customer_id (_type_): _description_
+            shared_key (_type_): _description_
+            body (_type_): _description_
+            log_type (_type_): _description_
+        """        
         events_number = len(body)
         body = json.dumps(body)
         method = 'POST'
@@ -552,20 +719,43 @@ class AzureSentinelConnector:
             'Log-Type': log_type,
             'x-ms-date': rfc1123date
         }
-
-        response = requests.post(uri, data=body, headers=headers)
-        if (response.status_code >= 200 and response.status_code <= 299):
+        error=False    
+        for _ in range(retry):
+         try:
+          response = requests.post(uri, data=body, headers=headers)
+          if (response.status_code in error_statuses) or (error==True):
+                    error=False
+                    continue ## To Do: Need to add delay 
+          if (response.status_code >= 200 and response.status_code <= 299):
             logging.info('{} events have been successfully sent to Microsoft Sentinel'.format(events_number))
             self.successfull_sent_events_number += events_number
-        else:
+          else:
             logging.error("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status_code))
             self.failed_sent_events_number += events_number
+         except Exception  as err:
+                error=True
+                logging.error("Something wrong. Exception error text: {}".format(err))   
 
     def _check_size(self, queue):
+        """This is used to check the size
+
+        Args:
+            queue (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         data_bytes_len = len(json.dumps(queue).encode())
         return data_bytes_len < self.queue_size_bytes
 
     def _split_big_request(self, queue):
+        """This is used to split the big request
+        Args:
+            queue (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """        
         if self._check_size(queue):
             return [queue]
         else:
