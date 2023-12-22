@@ -1,0 +1,203 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+     "metadata": {
+        "title": "RecordedFuture-Playbook-Alert-Importer",
+        "description": "This playbook imports alerts from Recorded Future and stores them in a custom log in the log analytics workspace.",
+        "prerequisites": [
+            "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the [documentation](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials)"
+        ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2023-11-02T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Alert" ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "RecordedFuture-Playbook-Alert-Importer",
+                "notes": [ "Initial version" ]
+            },
+            {
+                "version": "1.1",
+                "title": "RecordedFuture-Playbook-Alert-Importer",
+                "notes": [ "Changed default search parameters for playbook alert serach." ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-Playbook-Alert-Importer",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "RecordedFutureConnectionName": "recordedfuture-connectorv2"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Search_Playbook_Alerts')",
+                            "actions": {
+                                "Get_Playbook_Alert_by_ID": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['recordedfuturev2']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/playbook-alert/@{encodeURIComponent(items('For_each')?['playbook_alert_id'])}"
+                                    }
+                                },
+                                "Send_Data": {
+                                    "runAfter": {
+                                        "Get_Playbook_Alert_by_ID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "{\n\"title\": \"@{body('Get_Playbook_Alert_by_ID')?['title']}\",\n\"id\": \"@{body('Get_Playbook_Alert_by_ID')?['id']}\",\n\"category\":\"@{body('Get_Playbook_Alert_by_ID')?['category']}\",\n\"rule_label\":\"@{body('Get_Playbook_Alert_by_ID')?['rule_label']}\",\n\"status\": \"@{body('Get_Playbook_Alert_by_ID')?['status']}\", \n\"priority\": \"@{body('Get_Playbook_Alert_by_ID')?['priority']}\",\n\"created_date\": \"@{body('Get_Playbook_Alert_by_ID')?['created_date']}\",\n\"updated_date\": \"@{body('Get_Playbook_Alert_by_ID')?['updated_date']}\",\n\"targets\":\"@{body('Get_Playbook_Alert_by_ID')?['targets']}\",\n\"evidence_summary\": \"@{body('Get_Playbook_Alert_by_ID')?['evidence_summary']}\",\n\"link\": \"@{body('Get_Playbook_Alert_by_ID')?['link']}\"\n}",
+                                        "headers": {
+                                            "Log-Type": "RecordedFuturePlaybookAlerts"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Search_Playbook_Alerts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Search_Playbook_Alerts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "updated_from_relative": "-1",
+                                    "categories": [
+                                        "domain_abuse",
+                                        "cyber_vulnerability",
+                                        "code_repo_leakage"
+                                    ]
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['recordedfuturev2']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/playbook-alert/search"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            },
+                            "recordedfuturev2": {
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/recordedfuturev2')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedFutureConnectionName'))]",
+                                "connectionName": "[variables('RecordedFutureConnectionName')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "PlaybookAlert-Import",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('RecordedFutureConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('RecordedFutureConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/recordedfuturev2')]"
+                }
+            }
+        }
+    ]
+}
