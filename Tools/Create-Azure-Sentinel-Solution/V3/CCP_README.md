@@ -9,8 +9,6 @@ Every CCP connector will have 4 building blocks and should be specified in seque
 3. Data Collection Rule - Specify, what data should be collected, how to transform that data, and where to send it.
 4. Tables (Optional) - Stores your data logs.
 
-#### Note: Each of this files depend on mapping with other files which is specified in "How to Use ?" section of this document. Eg: Data definition file should have a mapping with Data poller file. Data poller file should have a mapping with DCR file. DCR file should have a mapping with Tables file. Tables file is optional and so, if there is no mapping from DCR with table then remove the "outputStream" property from "DCR" file.
-
 ## How to Use ?
 1. In Data input file under Azure-Sentinel/Solutions, open the solution you want to add a CCP connector.
 2. Open data input file and under "Data Connectors" array object add a path to new dataConnectorDefinition file.
@@ -26,8 +24,21 @@ Every CCP connector will have 4 building blocks and should be specified in seque
     ![Alt text](dataInputDataConnectorsArray.png)
 
 8. Mapping between dataConnectorDefinition and Poller file should present. Poller file mapping with DCR should be present. If mapping is not present and if present but mapping values are not correct then packaging will fail.
+
+    #### *<span style="color:blue">Note 1:</span> <span style="color:green">Each of this files depend on mapping with other files which is specified in "How to Use ?" section of this document. Eg: Data definition file should have a mapping with Data poller file. Data poller file should have a mapping with DCR file. DCR file should have a mapping with Tables file. Tables file is optional and so, if there is no mapping from DCR with table then remove the "outputStream" property from "DCR" file. You can skip removing property "outputStream" from DCR file, if it is a Standard table eg: "outputStream"="Microsoft-ASimNetworkSessionLogs" in DCR is a Standard table and there is no need to add table file.</span>*
+
+    #### *<span style="color:blue">Note 2:</span> <span style="color:green"> If you have only 1 data definition file and multiple poller, DCR files then create only 1 data definition file. Keep the single data definition file at the root of the "Data Connectors" folder i.e. keep data definition file inside of "Data Connectors" folder and keep each of the poller, DCR and/or table files in a separate folders as shown in below screenshot.</span>*
+
+      <h4><span style="color:purple"> Folder and file structure for Single data definition file with multiple folders containing poller and DCR: </span> </h4>
+
+      ![Alt text](singleDefinitionMultiplePollerDCR.png)
+
+      <h4><span style="color:purple">  Single data definition file with multiple folders containing poller and DCR: Contents in each of the below given folders files are different but has same single data definition file. </span></h4> 
+
+      ![Single data definition file with multiple folders containing poller and DCR](multiplePollerDCR.png)
+
 9. Details for each of the file information is specified below:</br>
-  a. Data Connector Definition File:
+  **a. Data Connector Definition File:**
     - The "type" property value should be "Microsoft.SecurityInsights/dataConnectorDefinitions".
 
       ![Alt text](dataConnectorDefinitionType.png)
@@ -111,7 +122,7 @@ Every CCP connector will have 4 building blocks and should be specified in seque
 }
 ```
 
-  b. Data Poller File:
+  **b. Data Poller File:**
   - The "type" property value should be "Microsoft.SecurityInsights/dataConnectors".
   - If a file contains "connectorUiConfig" and a "pollerConfig" sections in a json file then its a clv1 type of CCP connector and is a legacy connector. It is recommended to switch to clv2 type of CCP connectors.
   - Here "properties --> connectorDefinitionName" value should be same as that of this data definition file "id" property.
@@ -181,7 +192,7 @@ Every CCP connector will have 4 building blocks and should be specified in seque
 }]
 ```
 
-  c. Data Collection Rules(DCR):
+  **c. Data Collection Rules(DCR):**
   - The "type" property value should be "Microsoft.Insights/dataCollectionRules".
   - DCR, "name" property should be very short and without space. Total length of "name" field is 65 which on deployment adds  "Microsoft-Sentinel-{DCR-file-name-property-value}-{workspaceName}-{random-unique-value}". Here, "Microsoft-Sentinel" suffix is attached to the name property from DCR file and then attached with workspace name on which it is deployed along with a random number. When total length of this value exceeds then DCR will not get created and will fail in deployment.
 
@@ -242,7 +253,7 @@ Every CCP connector will have 4 building blocks and should be specified in seque
   }
 }]
 ```
-  d. Tables:
+  **d. Tables:**
   - The "type" property of the file should be "Microsoft.OperationalInsights/workspaces/tables".
   - The "name" and "properties-->schema-->name" properties values should be same.
   - This "name" property value should be same as that in DCR file "outputStream" and should contain "Custom-<tableName>" in DCR File.

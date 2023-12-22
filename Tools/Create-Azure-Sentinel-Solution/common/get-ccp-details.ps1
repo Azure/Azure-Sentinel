@@ -27,20 +27,49 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
             if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectorDefinitions") {
                 Write-Host "CCP DataConnectorDefinition File Found, FileName is $file"
                 if ($ccpDict.Count -le 0) {
-                    $ccpDict = [PSCustomObject]@{
-                        title = $fileContent.Properties.connectorUiConfig.title;
-                        DCDefinitionFullPath = $currentFileDCPath
-                        DCDefinitionFilePath = $file;
-                        DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
-                        DCPollerFilePath = "";
-                        DCPollerStreamName = "";
-                        DCRFilePath = "";
-                        DCROutputStream = "";
-                        TableFilePath = "";
-                        TableOutputStream = "";
-                        PollerDataCollectionEndpoint = "";
-                        PollerDataCollectionRuleImmutableId = "";
-                        PollerKind = "";
+                    # if single data connector definition has "id" property with multiple poller file names separated by comma
+                    $hasIdProperty = $fileContent.properties.connectorUiConfig.psobject.properties.match('id').Count
+                    if (!$hasIdProperty) {
+                        Write-Host "File $currentFileDCPath doesnt have id property in connectorUiConfig!"
+                        exit 1;
+                    }
+
+                    if ($ccpDict.Count -eq 0) {
+                        $ccpDict = [PSCustomObject]@{
+                            title = $fileContent.Properties.connectorUiConfig.title;
+                            DCDefinitionFullPath = $currentFileDCPath
+                            DCDefinitionFilePath = $file;
+                            DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
+                            DCPollerFilePath = "";
+                            DCPollerStreamName = "";
+                            DCRFilePath = "";
+                            DCROutputStream = "";
+                            TableFilePath = "";
+                            TableOutputStream = "";
+                            PollerDataCollectionEndpoint = "";
+                            PollerDataCollectionRuleImmutableId = "";
+                            PollerKind = "";
+                            PollerConnectorDefinitionName = $pollerName
+                            IsProcessed = $false
+                        }
+                    } else {
+                        [array]$ccpDict += [PSCustomObject]@{
+                            Title = $fileContent.Properties.connectorUiConfig.title;
+                            DCDefinitionFullPath = $currentFileDCPath
+                            DCDefinitionFilePath = $file;
+                            DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
+                            DCPollerFilePath = "";
+                            DCPollerStreamName = "";
+                            DCRFilePath = "";
+                            DCROutputStream = "";
+                            TableFilePath = "";
+                            TableOutputStream = "";
+                            PollerDataCollectionEndpoint = "";
+                            PollerDataCollectionRuleImmutableId = "";
+                            PollerKind = "";
+                            PollerConnectorDefinitionName = $pollerName
+                            IsProcessed = $false
+                        }
                     }
                 } else {
                     [array]$ccpDict += [PSCustomObject]@{
@@ -57,6 +86,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                         PollerDataCollectionEndpoint = "";
                         PollerDataCollectionRuleImmutableId = "";
                         PollerKind = "";
+                        PollerConnectorDefinitionName = ""
+                        IsProcessed = $false
                     }
                 }
             }
@@ -85,23 +116,75 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                             exit 1;
                         }
 
-                        if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
-                            if ($fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId) {
-                                $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
-                                $ccpDefinitionFile.DCPollerStreamName = $fileContent.properties.dcrConfig.streamName
-                                $ccpDefinitionFile.PollerKind = $fileContent.kind;
-                                if ($null -eq $fileContent.properties.dcrConfig.dataCollectionEndpoint) {
-                                    $ccpDefinitionFile.PollerDataCollectionEndpoint = "data collection endpoint";
-                                } else {
-                                    $dataCollectionEndpoint = $fileContent.properties.dcrConfig.dataCollectionEndpoint;
-                                    $ccpDefinitionFile.PollerDataCollectionEndpoint = "$dataCollectionEndpoint";
+                        if ($fileContent -is [System.Object[]]) {
+                            $counter = 0;
+                            foreach ($pollerArrayItem in $fileContent) {
+                                if($pollerArrayItem.type -eq "Microsoft.SecurityInsights/dataConnectors") {
+                                    if ($pollerArrayItem.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId -or
+                                    $pollerArrayItem.properties.connectorDefinitionName -eq $ccpDefinitionFile.PollerConnectorDefinitionName
+                                    ) {
+                                        if ($counter -eq 0) {
+                                            # update details for this record only.
+                                            $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
+                                            $ccpDefinitionFile.DCPollerStreamName = $pollerArrayItem.properties.dcrConfig.streamName
+                                            $ccpDefinitionFile.PollerKind = $pollerArrayItem.kind;
+                                            if ($null -eq $pollerArrayItem.properties.dcrConfig.dataCollectionEndpoint) {
+                                                $ccpDefinitionFile.PollerDataCollectionEndpoint = "data collection endpoint";
+                                            } else {
+                                                $dataCollectionEndpoint = $pollerArrayItem.properties.dcrConfig.dataCollectionEndpoint;
+                                                $ccpDefinitionFile.PollerDataCollectionEndpoint = "$dataCollectionEndpoint";
+                                            }
+                                            
+                                            if ($null -eq $pollerArrayItem.properties.dcrConfig.dataCollectionRuleImmutableId) {
+                                                $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "data collection rule immutableId";
+                                            } else {
+                                                $dataCollectionRuleImmutableId = $pollerArrayItem.properties.dcrConfig.dataCollectionRuleImmutableId;
+                                                $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "$dataCollectionRuleImmutableId";
+                                            }
+                                        } else {
+                                            # we have to add new record in ccpDict as it is an array
+                                            [array]$ccpDict += [PSCustomObject]@{
+                                                Title = $fileContent.Properties.connectorUiConfig.title;
+                                                DCDefinitionFullPath = $currentFileDCPath
+                                                DCDefinitionFilePath = $file;
+                                                DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
+                                                DCPollerFilePath = "";
+                                                DCPollerStreamName = "";
+                                                DCRFilePath = "";
+                                                DCROutputStream = "";
+                                                TableFilePath = "";
+                                                TableOutputStream = "";
+                                                PollerDataCollectionEndpoint = "";
+                                                PollerDataCollectionRuleImmutableId = "";
+                                                PollerKind = "";
+                                                PollerConnectorDefinitionName = ""
+                                                IsProcessed = $false
+                                            }
+                                        }
+                                    }
                                 }
-
-                                if ($null -eq $fileContent.properties.dcrConfig.dataCollectionRuleImmutableId) {
-                                    $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "data collection rule immutableId";
-                                } else {
-                                    $dataCollectionRuleImmutableId = $fileContent.properties.dcrConfig.dataCollectionRuleImmutableId;
-                                    $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "$dataCollectionRuleImmutableId";
+                            }
+                        } else {
+                            if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
+                                if ($fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.DCDefinitionId -or
+                                $fileContent.properties.connectorDefinitionName -eq $ccpDefinitionFile.PollerConnectorDefinitionName
+                                ) {
+                                    $ccpDefinitionFile.DCPollerFilePath = $inputFile.FullName
+                                    $ccpDefinitionFile.DCPollerStreamName = $fileContent.properties.dcrConfig.streamName
+                                    $ccpDefinitionFile.PollerKind = $fileContent.kind;
+                                    if ($null -eq $fileContent.properties.dcrConfig.dataCollectionEndpoint) {
+                                        $ccpDefinitionFile.PollerDataCollectionEndpoint = "data collection endpoint";
+                                    } else {
+                                        $dataCollectionEndpoint = $fileContent.properties.dcrConfig.dataCollectionEndpoint;
+                                        $ccpDefinitionFile.PollerDataCollectionEndpoint = "$dataCollectionEndpoint";
+                                    }
+    
+                                    if ($null -eq $fileContent.properties.dcrConfig.dataCollectionRuleImmutableId) {
+                                        $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "data collection rule immutableId";
+                                    } else {
+                                        $dataCollectionRuleImmutableId = $fileContent.properties.dcrConfig.dataCollectionRuleImmutableId;
+                                        $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "$dataCollectionRuleImmutableId";
+                                    }
                                 }
                             }
                         }
@@ -129,11 +212,26 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     }
 
                     try {
-                        if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
-                            if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
-                                $ccpPollerFile.DCRFilePath = $inputFile.FullName
-                                $ccpPollerFile.TableOutputStream = $fileContent.properties.dataFlows[0].outputStream.Replace('Custom-', '')
-                                $ccpPollerFile.DCROutputStream = $fileContent.properties.dataFlows[0].outputStream
+                        if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules" -and $fileContent.properties.dataFlows.streams -is [System.Object[]]) {
+                            $dataFlowStreams = $fileContent.properties.dataFlows;
+                            foreach ($dcrDataFlowStream in $dataFlowStreams) {
+                                if ($dcrDataFlowStream.streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
+                                    $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                    if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
+                                        $ccpPollerFile.TableOutputStream = $dcrDataFlowStream.outputStream.Replace('Custom-', '')
+                                        $ccpPollerFile.DCROutputStream = $dcrDataFlowStream.outputStream
+                                    }
+                                }
+                            }
+                        } else {
+                            if($fileContent.type -eq "Microsoft.Insights/dataCollectionRules") {
+                                if ($fileContent.properties.dataFlows[0].streams[0] -eq $ccpPollerFile.DCPollerStreamName) {
+                                    $ccpPollerFile.DCRFilePath = $inputFile.FullName
+                                    if ($fileContent.properties.dataFlows[0].outputStream.contains('Custom-')) {
+                                        $ccpPollerFile.TableOutputStream = $fileContent.properties.dataFlows[0].outputStream.Replace('Custom-', '')
+                                        $ccpPollerFile.DCROutputStream = $fileContent.properties.dataFlows[0].outputStream
+                                    }
+                                }
                             }
                         }
                     }
@@ -160,9 +258,19 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                     }
 
                     try {
-                        if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
-                            if ($fileContent.name -eq $ccpTable.TableOutputStream) {
-                                $ccpTable.TableFilePath = $inputFile.FullName
+                        if ($fileContent -is [System.Object[]]) {
+                            foreach ($tableArrayItem in $fileContent) {
+                                if($tableArrayItem.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
+                                    if ($tableArrayItem.name -eq $ccpTable.TableOutputStream) {
+                                        $ccpTable.TableFilePath = $inputFile.FullName
+                                    }
+                                }
+                            }
+                        } else {
+                            if($fileContent.type -eq "Microsoft.OperationalInsights/workspaces/tables") {
+                                if ($fileContent.name -eq $ccpTable.TableOutputStream) {
+                                    $ccpTable.TableFilePath = $inputFile.FullName
+                                }
                             }
                         }
                     }

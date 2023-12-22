@@ -2926,7 +2926,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     {
         $packageFolderPath = "$solutionFolderBasePath\Package\*.json"
         if ((Test-Path -Path "$packageFolderPath")) {
-            [array]$packageFolderFiles = Get-ChildItem "packageFolderPath" -Recurse| select -expand fullname
+            [array]$packageFolderFiles = Get-ChildItem "$packageFolderPath" -Recurse| select -expand fullname
             Write-Host "************Validating if Package Json files are valid or not***************"
 
             foreach ($filePath in $packageFolderFiles)
