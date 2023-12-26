@@ -1,4 +1,3 @@
-import typing
 from typing import Dict, List
 
 import azure.functions as func
@@ -35,7 +34,7 @@ def _build_oat_file_queue_message(
 
 def main(
     oatTaskMsg: func.QueueMessage,
-    oatFileMsg: func.Out[typing.List[str]],
+    oatFileMsg: func.Out[List[str]],
 ) -> None:
 
     taskMessage = OATTaskMessage.parse_obj(oatTaskMsg.get_json())

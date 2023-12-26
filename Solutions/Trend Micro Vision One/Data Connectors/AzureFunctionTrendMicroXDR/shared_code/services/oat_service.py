@@ -262,7 +262,6 @@ def oat_file_handler(clp_id: str, file_id: str, file: BytesIO) -> None:
     if rows:
         oat_logs = [transform_oat_log(clp_id, log) for log in rows]
         _send_logs_to_log_analytics(oat_logs)
-        rows = []
         if row_idx >= OAT_ROWS_BULK_COUNT:
             delete_oat_file_processed_lines(table_client, clp_id, file_id)
 
