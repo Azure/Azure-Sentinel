@@ -16,7 +16,7 @@ tactics:
 relevantTechniques:
   - T1578
 query: |
-  let tokens = dynamic(["416","208","192","128","120","96","80","72","64","48","44","40","g5","gs5","g4","gs4","nc12","nc24","nv24"]);
+  let tokens = dynamic(["416","208","192","128","120","96","80","72","64","48","44","40","nc12","nc24","nv24"]);
   let operationList = dynamic(["microsoft.compute/virtualmachines/write", "microsoft.resources/deployments/write"]);
   AzureActivity
   | where OperationNameValue in~ (operationList)
@@ -24,7 +24,7 @@ query: |
   | where Properties has 'vmSize'
   | extend parsed_property= parse_json(tostring((parse_json(Properties).responseBody))).properties
   | extend vmSize = tostring((parsed_property.hardwareProfile).vmSize)
-  | where vmSize has_any (tokens)
+  | mv-apply token=tokens to typeof(string) on (where vmSize contains token)
   | extend ComputerName = tostring((parsed_property.osProfile).computerName)
   | project TimeGenerated, OperationNameValue, ActivityStatusValue, Caller, CallerIpAddress, ComputerName, vmSize
   | extend Name = tostring(split(Caller,'@',0)[0]), UPNSuffix = tostring(split(Caller,'@',1)[0])
@@ -35,9 +35,13 @@ entityMappings:
         columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: ComputerName  
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: CallerIpAddress
-version: 2.0.1
+version: 2.0.2
 kind: NRT
