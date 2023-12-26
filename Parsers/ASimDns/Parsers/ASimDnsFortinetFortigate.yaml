@@ -1,7 +1,7 @@
 Parser:
   Title: DNS activity ASIM parser for Fortinet FortiGate
   Version: '0.1.0'
-  LastUpdated: Nov 09 2023
+  LastUpdated: Dec 24th, 2023
 Product:
   Name: Fortinet FortiGate
 Normalization:
@@ -15,7 +15,7 @@ References:
 - Title: Fortinet FortiGate DNS log message reference
   Link: https://docs.fortinet.com/document/fortigate/7.4.1/fortios-log-message-reference/229/dns
 Description: |
-  This ASIM parser supports normalizing Fortinet FortiGate logs to the ASIM DNS normalized schema.
+  This ASIM parser supports normalizing Fortinet FortiGate logs ingested in 'CommonSecurityLogs' table produced by the Microsoft Sentinel Fortinet connector to the ASIM DNS normalized schema.
 ParserName: ASimDnsFortinetFortiGate
 EquivalentBuiltInParser: _ASim_Dns_FortinetFortiGate
 ParserParams:
@@ -24,19 +24,19 @@ ParserParams:
     Default: false
 ParserQuery: |
   let Parser = (disabled:bool=false) {
-      let DeviceEventClassIDLookup = datatable(EventOriginalSubType:string,EventSubType:string, EventSeverity:string, DvcAction:string)[
-          "54000", "request", "Informational", "",
-          "54200", "response", "Low", "",
-          "54400", "response", "Low", "Blocked",
-          "54401", "response", "Informational", "",
-          "54600", "response", "Low", "Blocked",
-          "54601", "response", "Low", "Blocked",
-          "54800", "response", "Low", "",
-          "54801", "response", "Low", "",
-          "54802", "response", "Informational", "",
-          "54803", "response", "Low", "Blocked",
-          "54804", "response", "Informational", "",
-          "54805", "response", "Informational", ""
+      let DeviceEventClassIDLookup = datatable(EventOriginalSubType:string,EventSubType:string, EventSeverity:string, DvcAction:string, ThreatCategory:string, ThreatField:string)[
+          "54000", "request", "Informational", "", "", "",
+          "54200", "response", "Low", "", "", "",
+          "54400", "response", "Low", "Blocked", "", "",
+          "54401", "response", "Informational", "", "", "",
+          "54600", "response", "Low", "Blocked", "Botnet", "DstIpAddr",
+          "54601", "response", "Low", "Blocked", "Botnet", "Domain",
+          "54800", "response", "Low", "", "", "",
+          "54801", "response", "Low", "", "", "",
+          "54802", "response", "Informational", "", "", "",
+          "54803", "response", "Low", "Blocked", "", "",
+          "54804", "response", "Informational", "", "", "",
+          "54805", "response", "Informational", "", "", "",
       ];
       let EventOriginalResultDetailsLookup = datatable(EventOriginalResultDetails:string, EventResultDetails:string, EventResult:string)[
           "", "NOERROR", "Success",
@@ -158,9 +158,9 @@ ParserQuery: |
       | where DeviceVendor    == "Fortinet" and 
           DeviceProduct       == "Fortigate"
       | where DeviceEventClassID in(54000,54200,54400,54401,54600,54601,54800,54801,54802,54803,54804,54805)
-      | project TimeGenerated, EventOriginalSubType = DeviceEventClassID, AdditionalExtensions, EventUid = _ItemId, EventOriginalSeverity = LogSeverity, EventProductVersion = DeviceVersion ,Computer, Type, SrcIpAddr = SourceIP, SrcPortNumber = SourcePort, DstIpAddr = DestinationIP, DstPortNumber = DestinationPort, EventMessage = Message, NetworkProtocolNumber = Protocol
+      | project TimeGenerated, EventOriginalSubType = DeviceEventClassID, AdditionalExtensions, EventUid = _ItemId, EventOriginalSeverity = LogSeverity, EventProductVersion = DeviceVersion ,Computer, Type, SrcIpAddr = SourceIP, SrcPortNumber = SourcePort, DstIpAddr = DestinationIP, DstPortNumber = DestinationPort, EventMessage = Message, NetworkProtocolNumber = Protocol, DvcId = DeviceExternalID
       | lookup DeviceEventClassIDLookup on EventOriginalSubType
-      | parse-kv  AdditionalExtensions as (FTNTFGTlogid:string, FTNTFGTsubtype:string, FTNTFGTsrccountry:string, FTNTFGTdstcountry:string,FTNTFGTsrcintfrole:string, FTNTFGTrcode:string, FTNTFGTqname:string, FTNTFGTqtype:string, FTNTFGTxid:string, FTNTFGTqtypeval:int, FTNTFGTqclass:string, FTNTFGTcatdesc:string, FTNTFGTipaddr:string, FTNTFGTunauthuser:string, FTNTFGTuser:string) with (pair_delimiter=";", kv_delimiter="=")
+      | parse-kv  AdditionalExtensions as (FTNTFGTlogid:string, FTNTFGTsubtype:string, FTNTFGTsrccountry:string, FTNTFGTdstcountry:string,FTNTFGTsrcintfrole:string, FTNTFGTrcode:string, FTNTFGTqname:string, FTNTFGTqtype:string, FTNTFGTxid:string, FTNTFGTqtypeval:int, FTNTFGTqclass:string, FTNTFGTcatdesc:string, FTNTFGTipaddr:string, FTNTFGTunauthuser:string, FTNTFGTuser:string, FTNTFGTbotnetip:string, sessionid:int) with (pair_delimiter=";", kv_delimiter="=")
       | project-rename 
           EventOriginalResultDetails  = FTNTFGTrcode,
           EventOriginalUid            = FTNTFGTlogid,
@@ -174,7 +174,9 @@ ParserQuery: |
           DnsQueryClass               = FTNTFGTqtypeval,
           DnsQueryClassName           = FTNTFGTqclass,
           UrlCategory                 = FTNTFGTcatdesc,
-          DnsResponseName             = FTNTFGTipaddr
+          DnsResponseName             = FTNTFGTipaddr,
+          ThreatIpAddr                = FTNTFGTbotnetip,
+          DnsSessionId                = sessionid
       | extend 
           DnsQueryTypeName = case(
               DnsQueryTypeName == "Unknown","",
@@ -199,9 +201,9 @@ ParserQuery: |
           EventStartTime      = TimeGenerated,
           EventVendor         = "Fortinet",
           EventProduct        = "FortiGate",
-          DvcOs               = "FortiOS",
           Domain              = DnsQuery,
-          DomainCategory      = UrlCategory
+          DomainCategory      = UrlCategory,
+          SessionId           = DnsSessionId
       | extend 
           User            = SrcUsername,
           SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
