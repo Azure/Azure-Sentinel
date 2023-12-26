@@ -2939,6 +2939,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
         try {
             $baseMainTemplate | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $mainTemplateOutputPath -Encoding utf8
+
+            # create testParameters json file which will be used for test case automation
+            $testParametersOutputPath = "$solutionFolder/testParameters.json"
+            $baseMainTemplate.parameters | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $testParametersOutputPath -Encoding utf8
         }
         catch {
             Write-Host "Failed to write output file $mainTemplateOutputPath" -ForegroundColor Red
