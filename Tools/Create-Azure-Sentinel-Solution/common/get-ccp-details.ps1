@@ -50,7 +50,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                             PollerDataCollectionRuleImmutableId = "";
                             PollerKind = "";
                             PollerConnectorDefinitionName = $pollerName
-                            IsProcessed = $false
+                            IsProcessed = $false;
+                            DCPollerName = "";
                         }
                     } else {
                         [array]$ccpDict += [PSCustomObject]@{
@@ -68,7 +69,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                             PollerDataCollectionRuleImmutableId = "";
                             PollerKind = "";
                             PollerConnectorDefinitionName = $pollerName
-                            IsProcessed = $false
+                            IsProcessed = $false;
+                            DCPollerName = "";
                         }
                     }
                 } else {
@@ -87,7 +89,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                         PollerDataCollectionRuleImmutableId = "";
                         PollerKind = "";
                         PollerConnectorDefinitionName = ""
-                        IsProcessed = $false
+                        IsProcessed = $false;
+                        DCPollerName = "";
                     }
                 }
             }
@@ -141,13 +144,15 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                                 $dataCollectionRuleImmutableId = $pollerArrayItem.properties.dcrConfig.dataCollectionRuleImmutableId;
                                                 $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "$dataCollectionRuleImmutableId";
                                             }
+
+                                            $ccpDefinitionFile.DCPollerName = ($null -eq $pollerArrayItem.name -or $pollerArrayItem.name -eq '') ? $pollerArrayItem.properties.connectorUiConfig.id : $pollerArrayItem.name;
                                         } else {
                                             # we have to add new record in ccpDict as it is an array
                                             [array]$ccpDict += [PSCustomObject]@{
-                                                Title = $fileContent.Properties.connectorUiConfig.title;
+                                                Title = $pollerArrayItem.Properties.connectorUiConfig.title;
                                                 DCDefinitionFullPath = $currentFileDCPath
                                                 DCDefinitionFilePath = $file;
-                                                DCDefinitionId = $fileContent.properties.connectorUiConfig.id;
+                                                DCDefinitionId = $pollerArrayItem.properties.connectorUiConfig.id;
                                                 DCPollerFilePath = "";
                                                 DCPollerStreamName = "";
                                                 DCRFilePath = "";
@@ -158,7 +163,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                                 PollerDataCollectionRuleImmutableId = "";
                                                 PollerKind = "";
                                                 PollerConnectorDefinitionName = ""
-                                                IsProcessed = $false
+                                                IsProcessed = $false;
+                                                DCPollerName = ($null -eq $pollerArrayItem.name -or $pollerArrayItem.name -eq '') ? $pollerArrayItem.properties.connectorUiConfig.id : $pollerArrayItem.name;
                                             }
                                         }
                                     }
@@ -185,6 +191,8 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
                                         $dataCollectionRuleImmutableId = $fileContent.properties.dcrConfig.dataCollectionRuleImmutableId;
                                         $ccpDefinitionFile.PollerDataCollectionRuleImmutableId = "$dataCollectionRuleImmutableId";
                                     }
+
+                                    $ccpDefinitionFile.DCPollerName = ($null -eq $fileContent.name -or $fileContent.name -eq '') ? $fileContent.properties.connectorUiConfig.id : $fileContent.name;
                                 }
                             }
                         }

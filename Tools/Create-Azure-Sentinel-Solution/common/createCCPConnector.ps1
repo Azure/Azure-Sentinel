@@ -335,28 +335,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     }
 
     try {
-        [array]$differentDataDefinition = @()
         foreach ($ccpItem in $ccpDict) {
             $activeResource =  @()
             $tableCounter = 1;
-            $templateName = '' #$ccpItem.DCDefinitionId;
-            
-            $dataDefinitionAlreadyExist = $false;
-            if ($ccpItem.DCDefinitionId.contains(',')) {
-                [array]$splitPollerNames = $ccpItem.DCDefinitionId.split(',');
-                foreach ($name in $splitPollerNames) {
-                    if ($differentDataDefinition.contains($name)) {
-                        $dataDefinitionAlreadyExist = $true;
-                    } else {
-                        $dataDefinitionAlreadyExist = $false;
-                        $differentDataDefinition += $name;
-                    }
-                }
-
-                $templateName = $ccpItem.PollerConnectorDefinitionName;
-            } else {
-                $templateName = $ccpItem.DCDefinitionId;
-            }
+            $templateName = $ccpItem.DCDefinitionId;
 
             For ($TemplateCounter = 1; $TemplateCounter -lt 3; $TemplateCounter++) {
                 if (!$global:baseMainTemplate.variables."_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)") {
@@ -369,7 +351,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 
                 $templateContent = Get-ContentTemplateResource $contentResourceDetails $TemplateCounter $ccpItem; 
 
-                if ($TemplateCounter -eq 1 -and $dataDefinitionAlreadyExist -eq $false) {
+                if ($TemplateCounter -eq 1) {
                     #========start:dc definition resource===========
                     $dcDefinitionFilteredPath = $ccpItem.DCDefinitionFilePath.Replace($solutionName + "/", "").Replace($dcFolderName + "/", "")
                     $ccpDataDefinitionFilePath = $solutionBasePath + "/" + $solutionName + "/" + $dcFolderName + "/" + $dcDefinitionFilteredPath
@@ -446,7 +428,9 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 if($fileContent.type -eq "Microsoft.SecurityInsights/dataConnectors") {
                     
                     Write-Host "Processing for CCP Poller file path: $ccpPollerFilePath"
-                    $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$templateName')]"
+                    $dataConnectorPollerName = $null -eq $fileContent.Name -or $fileContent.Name -eq '' ? $fileContent.properties.connectorDefinitionName : $fileContent.Name; 
+                    $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$dataConnectorPollerName')]"
+                    #$resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$templateName')]"
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
