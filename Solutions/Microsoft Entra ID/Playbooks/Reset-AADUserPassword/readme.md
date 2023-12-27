@@ -25,8 +25,8 @@ After deployment, you can run this playbook manually on an alert or attach it to
 
 After deployment, you can run this playbook manually from an entity context in the incident.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FReset-AADUserPassword%2Fentity-trigger%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FReset-AADUserPassword%2Fentity-trigger%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fhttps://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Microsoft%20Entra%20ID/Playbooks/Reset-AADUserPassword/entity-trigger/azuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fhttps://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Microsoft%20Entra%20ID/Playbooks/Reset-AADUserPassword/entity-trigger/azuredeploy.json)
 
 
 ## Prerequisites
