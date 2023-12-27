@@ -1,0 +1,564 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "RecordedFuture-Alert-Importer",
+        "description": "This playbook imports alerts from Recorded Future and stores them in a custom log in the log analytics workspace. It can create alerts dependant on the parameter: create_incident. ",
+        "prerequisites": [
+            "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the [documentation](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials)"
+        ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "lastUpdateTime": "2023-11-02T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Alert" ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "RecordedFuture-Alert-Importer",
+                "notes": [ "Initial version" ]
+            },
+             {
+                "version": "1.1",
+                "title": "RecordedFuture-Alert-Importer",
+                "notes": [ "Fixed ARM encoding" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-AlertImporter",
+            "type": "string"
+        },
+        "create_incident": {
+            "type": "string",
+            "metadata": {
+                "description": "Create Microsoft Sentinel incidents (possible values true/false)"
+            }
+        },
+        "workspace_name": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description" : "Microsoft Sentinel Workspace name"
+            }
+        }
+    },
+    "variables": {
+        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "Recordedfuturev2ConnectionName": "[concat('Recordedfuturev2-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "create_incident": {
+                            "type": "string",
+                            "defaultValue": "[parameters('create_incident')]"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each_triggered_alert": {
+                            "foreach": "@body('Search_Triggered_Alerts')?['data']",
+                            "actions": {
+                                "Create_incident_if_parameter_is_set": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Parse_JSON_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Create_incident')?['id']",
+                                                    "message": "<p>@{items('For_each_triggered_alert')?['title']}<br>\nAlert ID: @{items('For_each_triggered_alert')?['id']}<br>\nTriggered: @{items('For_each_triggered_alert')?['log']?['triggered']}<br>\n[Open Recorded Future portal](@{items('For_each_triggered_alert')?['url']?['portal']})<br>\nAI Summary: @{items('For_each_triggered_alert')?['ai_insights']?['text']}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Create_incident": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "description": "**Recorded Future Alert**\n@{items('For_each_triggered_alert')?['title']}\nAlert ID: @{items('For_each_triggered_alert')?['id']}\nTriggered: @{items('For_each_triggered_alert')?['log']?['triggered']}\n[Open Recorded Future portal](@{items('For_each_triggered_alert')?['url']?['portal']})\nAI summary: @{items('For_each_triggered_alert')?['ai_insights']?['text']}",
+                                                    "severity": "Medium",
+                                                    "status": "New",
+                                                    "tagsToAdd": {
+                                                        "TagsToAdd": [
+                                                            {
+                                                                "Tag": "Recorded Future Alert"
+                                                            }
+                                                        ]
+                                                    },
+                                                    "title": "@items('For_each_triggered_alert')?['title']"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "[concat('/Incidents/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/workspaces/',parameters('workspace_name') ) ]"
+                                            }
+                                        },
+                                        "Parse_JSON_2": {
+                                            "runAfter": {
+                                                "Create_incident": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('For_each_triggered_alert')?['hits']",
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "analyst_note": {},
+                                                            "document": {
+                                                                "properties": {
+                                                                    "authors": {
+                                                                        "type": "array"
+                                                                    },
+                                                                    "source": {
+                                                                        "properties": {
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "title": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "url": {}
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "entities": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "id",
+                                                                        "name",
+                                                                        "type"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "fragment": {
+                                                                "type": "string"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "language": {
+                                                                "type": "string"
+                                                            },
+                                                            "primary_entity": {}
+                                                        },
+                                                        "required": [
+                                                            "entities",
+                                                            "document",
+                                                            "fragment",
+                                                            "id",
+                                                            "language",
+                                                            "primary_entity",
+                                                            "analyst_note"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "For_each_hit": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@parameters('create_incident')",
+                                                    "true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "For_each_hit": {
+                                    "foreach": "@items('For_each_triggered_alert')['hits']",
+                                    "actions": {
+                                        "Parse_JSON": {
+                                            "runAfter": {},
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@items('For_each_hit')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "analyst_note": {},
+                                                        "document": {
+                                                            "properties": {
+                                                                "authors": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "id",
+                                                                            "name",
+                                                                            "type"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "source": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "title": {
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
+                                                                },
+                                                                "url": {}
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "entities": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "id": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "id",
+                                                                    "name",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "fragment": {
+                                                            "type": "string"
+                                                        },
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "language": {
+                                                            "type": "string"
+                                                        },
+                                                        "primary_entity": {}
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Send_Data_2": {
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "{\n\"RuleName\": \"@{items('For_each_triggered_alert')?['rule']?['name']}\",\n\"Triggered\": \"@{items('For_each_triggered_alert')?['log']?['triggered']}\",\n\"AlertName\": \"@{items('For_each_triggered_alert')?['title']}\",\n\"AlertID\": \"@{items('For_each_triggered_alert')?['id']}\", \n\"Entity\": @{items('For_each_hit')?['entities']},\n\"Documents\": @{items('For_each_hit')?['document']},\n\"URL\": \"@{items('For_each_triggered_alert')?['rule']?['url']?['portal']}\",\n\"Document_url\": \"@{items('For_each_hit')?['document']?['url']}\",\n\"AISummary\": \"@{items('For_each_triggered_alert')?['ai_insights']?['text']}\",\n\"Fragment\": \"@{replace(replace(body('Parse_JSON')?['fragment'], '\\', '\\\\'), '\"', '\\\"')}\"}",
+                                                "headers": {
+                                                    "Log-Type": "RecordedFuturePortalAlerts"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Search_Triggered_Alerts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "latest_event_date",
+                                        "type": "string",
+                                        "value": "@{addHours(utcNow(), -24)}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_list_results": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "RecordedFuturePortalAlerts_CL\n| summarize LatestEvent=max(Triggered_t)",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs_1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "[resourceGroup().name]",
+                                    "resourcename": "[parameters('workspace_name')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "[subscription().subscriptionId]",
+                                    "timerange": "Last 7 days"
+                                }
+                            }
+                        },
+                        "Search_Triggered_Alerts": {
+                            "runAfter": {
+                                "Set_variable": [
+                                    "Succeeded",
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['recordedfuturev2']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/alerts",
+                                "queries": {
+                                    "triggered": "[[@{addSeconds(variables('latest_event_date'),1)},@{utcNow()}]"
+                                }
+                            }
+                        },
+                        "Set_variable": {
+                            "runAfter": {
+                                "Run_query_and_list_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "latest_event_date",
+                                "value": "@string(body('Run_query_and_list_results')?['value'][0]['LatestEvent'])"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            },
+                            "azuremonitorlogs_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "recordedfuturev2": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Recordedfuturev2ConnectionName'))]",
+                                "connectionName": "[variables('Recordedfuturev2ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturev2')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RecordedFuture-AlertImporter",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Recordedfuturev2ConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzuremonitorlogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Recordedfuturev2ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Recordedfuturev2ConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturev2')]"
+                }
+            }
+        }
+    ]
+}
