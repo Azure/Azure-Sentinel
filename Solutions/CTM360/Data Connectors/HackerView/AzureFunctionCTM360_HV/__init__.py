@@ -10,6 +10,8 @@ import requests
 import datetime
 import traceback
 import time
+from .state_manager import StateManager
+
 from time import time, localtime, strftime, gmtime
 HV_api_key = os.environ.get('api_key')
 customer_id = os.environ.get('WorkspaceID')
@@ -19,6 +21,7 @@ olddate_from = os.environ.get('date_from')
 olddate_to = os.environ.get('date_to')
 backupflag = os.environ.get('backupflag')
 log_type = 'HackerViewLog_Azure_1_CL'
+connection_string = os.environ['AzureWebJobsStorage']
 MAX_RETRIES = 3
 RETRY_INTERVAL_SECONDS = 60
 
@@ -130,8 +133,7 @@ def post_data_to_sentinel(body):
         print(traceback.format_exc())
 
 
-
-def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  func.Out[str]) -> None:
+def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.warn('The timer is past due!')
 
@@ -143,44 +145,44 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
     five_minutes_ago_str = format_iso8601(five_minutes_ago_bahrain)
 
     if backupflag == "true":
-        if inputblob is not None:
-            input1 = str(inputblob.read(), "utf-8")
-            print(input1)
-            if input1 == "false":
-                date_from = olddate_from
-                
-                url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
-                headers = {
-                    "accept": "application/json",
-                    "api-key": HV_api_key
-                }
-                response = requests.get(url, headers=headers)
-                message1 = response.json()
-                print(message1)
-                if perform_request(url, headers):
-                    outputblob.set("true")
-            else:
-                date_from = five_minutes_ago_str
-                
-                url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
-                print(url)
-                headers = {
-                    "accept": "application/json",
-                    "api-key": HV_api_key
-                }
-
-                response = requests.get(url, headers=headers)
-                print(response.json())
-                message1 = response.json()
-                print(message1)
-                perform_request(url, headers)
-
+        state = StateManager(connection_string)
+        statsusss= state.get()
+        # if statsusss is not None:
+        if statsusss in [None, "", "false"]:
+            date_from = olddate_from
+            date_to = olddate_to
+            url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
+            headers = {
+                "accept": "application/json",
+                "api-key": HV_api_key
+            }
+            response = requests.get(url, headers=headers)
+            logging.warn(url)
+            message1 = response.json()
+            
+            
+            if perform_request(url, headers):
+                statsusss= state.post("true")
         else:
-            logging.error("no such file inide the blob")
-            exit()
+            
+            date_from = five_minutes_ago_str
+            date_to = current_time_str
+            url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
+            
+            headers = {
+                "accept": "application/json",
+                "api-key": HV_api_key
+            }
+
+            response = requests.get(url, headers=headers)
+            logging.warn(url)
+            message1 = response.json()
+            
+            perform_request(url, headers)
+
     else:
         date_from = five_minutes_ago_str
-        
+        date_to = current_time_str
         url = f"https://hackerview.ctm360.com/api/v2/issues?first_seen={date_from}"
         headers = {
             "accept": "application/json",
@@ -188,7 +190,9 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
         }
 
         response = requests.get(url, headers=headers)
-        print(response.json())
+        logging.warn(url)
+
         message1 = response.json()
-        print(message1)
+        
         perform_request(url, headers)
+        

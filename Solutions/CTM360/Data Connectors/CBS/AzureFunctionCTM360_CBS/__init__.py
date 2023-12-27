@@ -10,6 +10,7 @@ import requests
 import datetime
 import traceback
 import time
+from .state_manager import StateManager
 from time import time, localtime, strftime, gmtime
 cbs_api_key = os.environ.get('api_key')
 customer_id = os.environ.get('WorkspaceID')
@@ -21,6 +22,8 @@ backupflag = os.environ.get('backupflag')
 log_type = 'CBSLog_Azure_1_CL'
 MAX_RETRIES = 3
 RETRY_INTERVAL_SECONDS = 60
+
+connection_string = os.environ['AzureWebJobsStorage']
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -56,6 +59,7 @@ def perform_request(url, headers):
         try:
             # Set a timeout for the request
             response = requests.get(url, headers=headers, timeout=(5, 10))
+            
             response.raise_for_status()  # Raises HTTPError for bad responses
 
             if response.status_code == 429:
@@ -66,6 +70,8 @@ def perform_request(url, headers):
             else:
                 message1 = response.json()
                 
+
+
                 post_data_to_sentinel(json.dumps(message1["incident_list"]))
                 return True  # Request successful, break out of the loop
 
@@ -116,7 +122,7 @@ def post_data_to_sentinel(body):
 
     try:
         response = requests.post(uri, data=body, headers=headers)
-        print(uri, headers)
+
         if (response.status_code >= 200 and response.status_code <= 299):
             logging.info(
                 "CBS event successfully processed to the Azure Sentinel.")
@@ -131,7 +137,7 @@ def post_data_to_sentinel(body):
 
 
 
-def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  func.Out[str]) -> None:
+def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.warn('The timer is past due!')
 
@@ -143,42 +149,41 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
     five_minutes_ago_str = format_iso8601(five_minutes_ago_bahrain)
 
     if backupflag == "true":
-        if inputblob is not None:
-            input1 = str(inputblob.read(), "utf-8")
-            print(input1)
-            if input1 == "false":
-                date_from = olddate_from
-                date_to = olddate_to
-                url = f"https://cbs.ctm360.com/api/v2/incidents?date_from={date_from}&date_to={date_to}"
-                headers = {
-                    "accept": "application/json",
-                    "api-key": cbs_api_key
-                }
-                response = requests.get(url, headers=headers)
-                logging.warn(url)
-                message1 = response.json()
-                print(message1)
-                if perform_request(url, headers):
-                    outputblob.set("true")
-            else:
-                date_from = five_minutes_ago_str
-                date_to = current_time_str
-                url = f"https://cbs.ctm360.com/api/v2/incidents?date_from={date_from}&date_to={date_to}"
-                print(url)
-                headers = {
-                    "accept": "application/json",
-                    "api-key": cbs_api_key
-                }
-
-                response = requests.get(url, headers=headers)
-                logging.warn(url)
-                message1 = response.json()
-                print(message1)
-                perform_request(url, headers)
-
+        state = StateManager(connection_string)
+        statsusss= state.get()
+        # if statsusss is not None:
+        if statsusss in [None, "", "false"]:
+            date_from = olddate_from
+            date_to = olddate_to
+            url = f"https://cbs.ctm360.com/api/v2/incidents?date_from={date_from}&date_to={date_to}"
+            headers = {
+                "accept": "application/json",
+                "api-key": cbs_api_key
+            }
+            response = requests.get(url, headers=headers)
+            logging.warn(url)
+            message1 = response.json()
+            
+            
+            if perform_request(url, headers):
+                statsusss= state.post("true")
         else:
-            logging.error("no such file inide the blob")
-            exit()
+            
+            date_from = five_minutes_ago_str
+            date_to = current_time_str
+            url = f"https://cbs.ctm360.com/api/v2/incidents?date_from={date_from}&date_to={date_to}"
+            
+            headers = {
+                "accept": "application/json",
+                "api-key": cbs_api_key
+            }
+
+            response = requests.get(url, headers=headers)
+            logging.warn(url)
+            message1 = response.json()
+            
+            perform_request(url, headers)
+
     else:
         date_from = five_minutes_ago_str
         date_to = current_time_str
@@ -192,6 +197,6 @@ def main(mytimer: func.TimerRequest, inputblob: func.InputStream, outputblob:  f
         logging.warn(url)
 
         message1 = response.json()
-        print(message1)
+        
         perform_request(url, headers)
-
+        
