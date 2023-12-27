@@ -48,13 +48,27 @@ namespace Kqlvalidations.Tests
         /// <exception cref="InvalidOperationException">Throws an exception if there is an issue with app id, installation id, private key.</exception>
         public static GitHubApiClient Create()
         {
+
             if (_instance == null)
             {
                 lock (_lock)
                 {
                     if (_instance == null)
                     {
-                        //var appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
+                        string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
+                        if (string.IsNullOrEmpty(appId))
+                        {
+                            Console.WriteLine("app id is null or empty");
+                        }
+                        else if(appId=="674398")
+                        {
+                            Console.WriteLine("app id is same");
+                        }
+                        else
+                        {
+                            Console.WriteLine("app id is different");
+                            Console.WriteLine("app id is " + appId);
+                        }
                         //var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
                         //var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
                         //if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
