@@ -67,6 +67,7 @@ namespace Kqlvalidations.Tests
                         else
                         {
                             Console.WriteLine("app id is different");
+                            Console.WriteLine("app id is " + appId);
                         }
                         //var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
                         //var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
