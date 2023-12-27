@@ -13,29 +13,47 @@ Every CCP connector will have 4 building blocks and should be specified in seque
 1. In Data input file under Azure-Sentinel/Solutions, open the solution you want to add a CCP connector.
 2. Open data input file and under "Data Connectors" array object add a path to new dataConnectorDefinition file.
 3. File name to dataConnectorDefinition should be meaningful and recommended to have a suffix "Definition" attached to the name at the end e.g. dataConnectorDefinition.json.
-4. Navigate to your "Solutions/<yourSolutionName>/Data Connectors" folder and create a new folder for ccp suffix at the end e.g: DataConnectorDefinitionName_ccp".
+4. Navigate to your "Solutions/*yourSolutionName*/Data Connectors" folder and create a new folder for ccp suffix at the end e.g: DataConnectorDefinitionName_ccp".
 5. Once a folder for CCP is created then add/create 4 files dataConnectorDefinition.json, dataPoller.json, DCR.json and table.json. Here table.json file is optional. Also, you can specific a different naming to the files but having a suffix of "Definition", "Poller", "DCR", "Table" in the file name at the end will be easy to correlate. Below is an example folder file structure for CCP.
 
     ![Alt text](ccp-folder-structure.png)
 
-6. There can be only 1 data definition file per CCP connector. If you have multiple CCP connectors then create multiple data connector definition files and specify the file paths in the data folder input file under "Data Connectors" array. There is no need to specify other file paths for poller, dcr or tables. 
+6. There can be only 1 data definition file per CCP connector. If you have multiple CCP connectors then create multiple data connector definition files and specify the file paths in the data folder input file under "Data Connectors" array. There is no need to specify other file paths for poller, dcr or tables in data input file. 
 7. dataConnectorDefinition file is the starting point for any CCP connector and this file path should only be specified in data folder input file under "Data Connectors" array.
 
     ![Alt text](dataInputDataConnectorsArray.png)
 
 8. Mapping between dataConnectorDefinition and Poller file should present. Poller file mapping with DCR should be present. If mapping is not present and if present but mapping values are not correct then packaging will fail.
 
-    #### *<span style="color:blue">Note 1:</span> <span style="color:green">Each of this files depend on mapping with other files which is specified in "How to Use ?" section of this document. Eg: Data definition file should have a mapping with Data poller file. Data poller file should have a mapping with DCR file. DCR file should have a mapping with Tables file. Tables file is optional and so, if there is no mapping from DCR with table then remove the "outputStream" property from "DCR" file. You can skip removing property "outputStream" from DCR file, if it is a Standard table eg: "outputStream"="Microsoft-ASimNetworkSessionLogs" in DCR is a Standard table and there is no need to add table file.</span>*
+    #### *<span style="color:blue">Note:</span> <span style="color:green">Each of this files depend on mapping with other files which is specified in "How to Use ?" section of this document. Eg: Data definition file should have a mapping with Data poller file. Data poller file should have a mapping with DCR file. DCR file should have a mapping with Tables file. Tables file is optional and so, if there is no mapping from DCR with table then remove the "outputStream" property from "DCR" file. You can skip removing property "outputStream" from DCR file, if it is a Standard table eg: "outputStream"="Microsoft-ASimNetworkSessionLogs" in DCR is a Standard table and there is no need to add table file.</span>*
 
-    #### *<span style="color:blue">Note 2:</span> <span style="color:green"> If you have only 1 data definition file and multiple poller, DCR files then create only 1 data definition file. Keep the single data definition file at the root of the "Data Connectors" folder i.e. keep data definition file inside of "Data Connectors" folder and keep each of the poller, DCR and/or table files in a separate folders as shown in below screenshot.</span>*
+    ### Working with Single Data Definition having multiple Data Connector Poller in single file and multiple DCR in single file:
+
+    If you have only 1 data definition file and want to use it with multiple data connector pollers, DCR's files then create only 1 data definition file. Keep the single data definition file at the root of the "Data Connectors" folder i.e. keep data definition file inside of "Data Connectors" folder and keep each of the poller, DCR and/or table files in a separate folders as shown in below screenshot.
 
       <h4><span style="color:purple"> Folder and file structure for Single data definition file with multiple folders containing poller and DCR: </span> </h4>
 
       ![Alt text](singleDefinitionMultiplePollerDCR.png)
 
-      <h4><span style="color:purple">  Single data definition file with multiple folders containing poller and DCR: Contents in each of the below given folders files are different but has same single data definition file. </span></h4> 
 
-      ![Single data definition file with multiple folders containing poller and DCR](multiplePollerDCR.png)
+      <h4><span style="color:purple"> Below is the single data definition file which is similar to that of normal CCP connector which contains only one data definition file, data connector poller file, dcr file and/or table file. </span></h4> 
+
+      ![Alt text](singleDefinitionForMultiplePoller.png)
+
+      <h4><span style="color:purple"> This data connector poller file differs with normal CCP connector by having multiple JSON object in an array as shown below i.e. multiple data connector pollers are specified in a single file. </span></h4> 
+
+      ![Alt text](multiplePollerStructure.png)
+
+      <h4><span style="color:purple"> Below is the content for multiple data connector poller object specified in a single file inside of an array. For single data definition having multiple data connector poller, green color highlighted property value should be unique i.e "name" property should be unique and should not match this name value with other data connector poller name property in this file i.e. "name" = "CiscoMerakiAPIRequest" should be unique. But "connectorDefinitionName" value for all of the data connector poller files should be SAME as shown below as we are using only 1 data definition file.</span></h4> 
+
+      ![Alt text](multiplePollerInSingleFile.png)
+
+
+      <h4><span style="color:purple">  Each of the data connector poller files in previous step should have a corresponding DCR file object as shown below. In data connector poller file, "streamName" property value should match with that of DCR file object "streams" property under "dataFlows" array as shown below. Under "dataFlows" specify different objects for your streams. </span></h4> 
+
+      ![Alt text](multiplePollerDCRStructure.png)
+
+</br>
 
 9. Details for each of the file information is specified below:</br>
   **a. Data Connector Definition File:**
