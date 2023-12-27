@@ -14,20 +14,7 @@ import azure.functions as func
 from azure.storage.fileshare import ShareDirectoryClient
 from azure.storage.fileshare import ShareFileClient
 
-# Script state --> Contains state information from previous script runs
-global g_state
-g_state = {}
-g_state = {
-                "services": {
-                    "efs": {
-                        "delay_value": 0,
-                        "delay_unit": "msec",
-                        "update_timestamp": "",
-                        # This is to keep track of the last IDPS events collected by the script
-                        "idps_events": []
-                    }
-                }            
-}
+
 
 def veco_fwlog_delayadjust():
     logging.info("FUNCTION-EFSDELAY: Starting Search API delay measurement.")
@@ -228,14 +215,31 @@ def initialize(event_type=""):
     frequency = os.environ["app_frequency_mins"]
     frequency_sec = int(frequency) * 60
     frequency_msec = frequency_sec * 1000
+ 
+    # Check for pre-existing state conditions
+    # Script state --> Contains state information from previous script runs
+    global g_state
+    g_state = {}
+    g_state = {
+                    "services": {
+                        "efs": {
+                            "delay_value": 0,
+                            "delay_unit": "msec",
+                            "update_timestamp": "",
+                            # This is to keep track of the last IDPS events collected by the script
+                            "idps_events": []
+                        }
+                    }            
+    }
+
     # Storage Account connectivity
     # Extra steps for EFS:
     # FW logs have delays beyond 5-10 mins, and if this happens, we need to deal with it to avoid event loss.
     # 1. Check if the state config exists in the storage account
     # 2a. If not, and type is efs, add JSON entry that sets the delay to 0
     # 2b. If file exists, read delay entry so that we can adjust queries
+
     efs_delay = 0
-    j_efs_events = []
     if event_type == "efs":
         logging.warning("FUNCTION-INIT: Verifying state library presence...")
         statedir = ShareDirectoryClient.from_connection_string(conn_str=os.environ["azsa_share_connectionstring"], share_name=os.environ["azsa_share_name"], directory_path="function_state")
@@ -350,145 +354,17 @@ def EventCompiler(j_rawevent, event_type, metadata={}):
     # event_type is a new variable so that we can do two things:
     # 1. the def knows how to process data
     # 2. it keeps the changes required for a new event type relatively compact
-    # metadata is a new variable that can be anything in JSON format. Combined with the event type this can be used to pass additional data
-    now = datetime.datetime.now()
-    if event_type == "cws_health":
-        # CWS Health data: no pagination, JSON list of subcomponents.
-        # Enumerate solution components
-        j_list_cwscomponents= [ "vni:responseTime", "database:connection", "database:responseTime", "cwsManager:responseTime"]
-        # Go through each checks and create a standalone event
-        j_array_processing = []
-        events = 0
-        for component in j_list_cwscomponents:
-            out_component = component.replace(":", "_")
-            j_health_event = {
-                "cws_component": out_component,
-                "healthtest_timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-                "healthtest_status": j_rawevent["checks"][component]["status"],
-                "healthtest_observed_unit": j_rawevent["checks"][component]["observedUnit"],
-                "healthtest_observed_value": j_rawevent["checks"][component]["observedValue"]
-            }
-            j_array_processing.append(j_health_event)
-            events = events + 1
-        logging.info("FUNCTION-EVENTCOMPILER: Extracted " + str(events) + " events, sending them to the Log Analytics API for processing")
-        j_processed_events=callLogAnalyticsAPI(j_array_processing, j_config_list["logingestion_api"]["dce"], j_config_list["logingestion_api"]["streams"]["cws_health_imi"], j_config_list["logingestion_api"]["streams"]["cws_health"])
-        return j_processed_events
-    
-    if event_type == "cws_weblog":
-        # CWS Access logs - pagination, JSON array of events
-
-        # This var is just for the feedback loop, we send events to the tables page by page
-        j_multipage_processed = []
-
-        # Do while loop intro
-        while True:
-            # This is the array that will contain the final formatting
-            j_array_processing = []
-            # Event counter for statistics
-            events = 0
-            for log_item in j_rawevent["data"]:
-                j_log_event = {
-                    #Date is reserved, need new key
-                    "cws_timestamp": log_item["date"],
-                    # Leave rest as-is, for future changes
-                    "userId": log_item["userId"],
-                    "url": log_item["url"],
-                    "domain": log_item["domain"],
-                    "categories": log_item["categories"],
-                    "threatTypes": log_item["threatTypes"],
-                    "webRiskScore": log_item["webRiskScore"],
-                    "action": log_item["action"],
-                    "userAgent": log_item["userAgent"],
-                    "browserType": log_item["browserType"],
-                    "browserVersion": log_item["browserVersion"],
-                    "requestType": log_item["requestType"],
-                    "requestMethod": log_item["requestMethod"],
-                    "egressIp": log_item["egressIp"],
-                    "destinationIp": log_item["destinationIp"],
-                    "dnsResponse": log_item["dnsResponse"],
-                    "sourceIp": log_item["sourceIp"],
-                    "contentType": log_item["contentType"],
-                    "accessMode": log_item["accessMode"],
-                    "responseCode": log_item["responseCode"],
-                    "protocol": log_item["protocol"],
-                    "region": log_item["region"],
-                    "ruleMatched": log_item["ruleMatched"],
-                    "policyHeaders": log_item["policyHeaders"],
-                    "fileHash": log_item["fileHash"],
-                    "fileHashScore": log_item["fileHashScore"],
-                    "fileSize": log_item["fileSize"],
-                    "fileType": log_item["fileType"],
-                    "fileName": log_item["fileName"],
-                    "mimeType": log_item["mimeType"],
-                    "fileScanResult": log_item["fileScanResult"],
-                    "virusList": log_item["virusList"],
-                    "sandboxInspectionResult": log_item["sandboxInspectionResult"],
-                    "sandboxScore": log_item["sandboxScore"],
-                    "sandboxMaliciousActivitiesFound": log_item["sandboxMaliciousActivitiesFound"],
-                    "casbAppName": log_item["casbAppName"],
-                    "casbCatName": log_item["casbCatName"],
-                    "casbFunName": log_item["casbFunName"],
-                    "casbOrgName": log_item["casbOrgName"],
-                    "casbRiskScore": log_item["casbRiskScore"],
-                    "userGroups": log_item["userGroups"],
-                    "userGroupsMatched": log_item["userGroupsMatched"],
-                    "risks": log_item["risks"],
-                    "srcCountry": log_item["srcCountry"],
-                    "dstCountry": log_item["dstCountry"],
-                    "saasEgressHeaders": log_item["saasEgressHeaders"],
-                    "policyName": log_item["policyName"]
-                }
-                # Update the array object-by-object
-                j_array_processing.append(j_log_event)
-                events = events + 1
-            logging.info("FUNCTION-EVENTCOMPILER: Extracted " + str(events) + " events, sending it over for processing")
-            j_processed_events=callLogAnalyticsAPI(j_array_processing, j_config_list["logingestion_api"]["dce"], j_config_list["logingestion_api"]["streams"]["cws_weblog_imi"], j_config_list["logingestion_api"]["streams"]["cws_weblog"])
-            # Current page is fully processed here, need to think about next page
-            logging.info("FUNCTION-EVENTCOMPILER: Searching for multi-page response...")
-            multi_page_result=False
-            if j_rawevent["metaData"]["nextPageLink"] != "":
-                # Multi-page response found
-                # Run a new API call, and...
-                logging.info("FUNCTION-EVENTCOMPILER: API Metadata provided with nextpage token, processing")
-                nextpage_params = "/logs?nextPageLink=" + j_rawevent["metaData"]["nextPageLink"]
-                header = {
-                    "Authorization": j_config_list["token"]
-                }
-                query = craftAPIurl(j_config_list["host"], "/api/cws/v1/enterprises/", j_config_list["token"], True, nextpage_params)
-                logging.info("FUNCTION-EVENTCOMPILER: API call to: " + query)
-                nextpage_response = requests.get(url=query, headers=header)
-                if nextpage_response.status_code != 200:
-                    # If the API call fails, skip next steps
-                    logging.error("FUNCTION-EVENTCOMPILER: Unexpected error when sending API call")
-                    break
-                else:
-                    # If the API call succeeds, do two things:
-                    # 1. Add events we have sent to the event processing from this page to a larger reporting array
-                    j_multipage_processed.append(j_processed_events)
-                    # 2. Reset input event list to new page, start processing again
-                    logging.info("FUNCTION-EVENTCOMPILER: Next page of the results loaded, starting processing...")
-                    multi_page_result = True
-                    j_rawevent = nextpage_response.json()
-            else:
-                # This clause is single paged, update main def and quit
-                if multi_page_result == False:
-                    logging.info("FUNCTION-EVENTCOMPILER: Single-page response, processing complete.")
-                else:
-                    logging.info("FUNCTION-EVENTCOMPILER: Last page reached, stopping the recursive processing.")
-                    j_multipage_processed.append(j_processed_events)
-                    j_processed_events = j_multipage_processed
-                break
-        return j_processed_events
+    # metadata is a dynamic variable that can be anything in JSON format. Combined with the event type this can be used to pass additional data
     
     # EFS logs
-    # So this is what we will do:
+    # This is what we will do:
     # 1. Process response - skip upload for empty responses
     # 2. Deal with pagination, chances are that we will not have 100+ IOC events in a 10 min interval, but you never know.
     # 3. Gauge current delay:
     #               - Search back to past 4 hours, or first 2000 events.
     #               - Calculate delay (min, max, avg) in msecs
     #               - Write delay into storage account
-    # Return data to main loop
+    j_processed_events =[]
     if event_type == "efs_fwlog":
         j_multipage_processed = []
         if j_rawevent["count"] == 0:
@@ -554,7 +430,7 @@ def EventCompiler(j_rawevent, event_type, metadata={}):
                         "sessionDurationSecs": log_item["_source"]["sessionDurationSecs"],
                         "sourceIp": log_item["_source"]["sourceIp"]
                     }
-                    # FIXME: Deal with duplicate events
+                    # Deal with duplicate events
                     # An event should be considered duplicate of an event in the array if:
                     # 1. The session ID is matching
                     # AND
@@ -637,7 +513,9 @@ def EventCompiler(j_rawevent, event_type, metadata={}):
             statefile.upload_file(data=json.dumps(g_state))
             statefile.close()
             j_delay = veco_fwlog_delayadjust()
-            return j_processed_events
+            if j_delay["metadata"]["veco_searchapi_result"] == "000":
+                logging.warning("FUNCTION-EVENTCOMPILER: Delay measurement failed.")
+    return j_processed_events
 
 
 
@@ -747,9 +625,7 @@ def callVECOAPIendpoint(method, query, token, metadata={}):
 def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = datetime.datetime.utcnow().replace(
         tzinfo=datetime.timezone.utc).isoformat()
-    if g_state["services"]["efs"]["idps_events"] == []:
-        logging.warning("State variable empty before script initialization.")
-        logging.warning(json.dumps(g_state["services"]["efs"]))
+
     logging.info("FUNCTION-CORE: Script initializing...")
     j_parameters = initialize("efs")
     if "error" in j_parameters:

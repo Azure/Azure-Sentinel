@@ -15,7 +15,6 @@ def initialize():
     # This script is to pull in relevant settings and verify if everything is given to run the API calls.
  
     # Pull in environmental variables
-
     # VECO settings
     host = os.environ["api_veco_fqdn"]
     token = os.environ["api_veco_authorization"]
@@ -25,13 +24,15 @@ def initialize():
     dcr_cwsweblog_immutableid = os.environ["dcr_cwsweblog_immutableid"]
     cwshealth_stream = os.environ["stream_cwshealth"]
     weblog_stream = os.environ["stream_cwsweblog"]
-    #Function App frequency in mins
+    #Function App frequency in mins and convert them to seconds and milliseconds for multiple epoch format handling
     frequency = os.environ["app_frequency_mins"]
     frequency_sec = int(frequency) * 60
     frequency_msec = frequency_sec * 1000
-    #validate that none of the settings are empty and add them to a JSON list
+
+    #validate that none of the settings are empty and add them to a JSON list, so we can reuse it as needed
+    global j_config_list
+    j_config_list = {}
     if not [x for x in (host, token, dce, dcr_cwshealth_immutableid, dcr_cwsweblog_immutableid, weblog_stream, cwshealth_stream) if x is None]:
-        global j_config_list
         j_config_list = {
             "host": host,
             "token": token,
@@ -70,7 +71,9 @@ def EventCompiler(j_rawevent, event_type):
     # event_type is a new variable so that we can do two things:
     # 1. the def knows how to process data
     # 2. it keeps the changes required for a new event type relatively compact
-    now = datetime.datetime.now()
+
+    # Create JSON object for returning details on processed events for diagnostics and troubleshooting:
+    j_processed_events = []
     if event_type == "cws_health":
         # CWS Health data: no pagination, JSON list of subcomponents.
         # Enumerate solution components
@@ -100,7 +103,6 @@ def callLogAnalyticsAPI(j_array_events, dce_endpoint, immutableid, stream_name):
     # To have further info on the Log Analytics API implementation, please check: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-code?tabs=python
 
     # Resources for API call
-    post_body = json.dumps(j_array_events)
     api_credentials = DefaultAzureCredential()
     j_processed_events = []
 

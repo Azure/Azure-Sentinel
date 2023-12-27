@@ -22,16 +22,14 @@ def initialize():
     token = os.environ["api_veco_authorization"]
     # Log Analytics settings for writing data
     dce = os.environ["dce_endpoint"]
-    dcr_cwshealth_immutableid = os.environ["dcr_cwshealth_immutableid"]
     dcr_cwsweblog_immutableid = os.environ["dcr_cwsweblog_immutableid"]
-    cwshealth_stream = os.environ["stream_cwshealth"]
-    weblog_stream = os.environ["stream_cwsweblog"]
+    cws_weblog_stream = os.environ["stream_cwsweblog"]
     #Function App frequency in mins
     frequency = os.environ["app_frequency_mins"]
     frequency_sec = int(frequency) * 60
     frequency_msec = frequency_sec * 1000
     #validate that none of the settings are empty and add them to a JSON list
-    if not [x for x in (host, token, dce, dcr_cwshealth_immutableid, dcr_cwsweblog_immutableid, weblog_stream, cwshealth_stream) if x is None]:
+    if not [x for x in (host, token, dce, dcr_cwsweblog_immutableid, cws_weblog_stream) if x is None]:
         global j_config_list
         j_config_list = {
             "host": host,
@@ -39,9 +37,7 @@ def initialize():
             "logingestion_api": {
                 "dce": dce,
                 "streams": {
-                    "cws_health": cwshealth_stream,
-                    "cws_health_imi": dcr_cwshealth_immutableid,
-                    "cws_weblog": weblog_stream,
+                    "cws_weblog": cws_weblog_stream,
                     "cws_weblog_imi": dcr_cwsweblog_immutableid
                     }
                 },
@@ -71,29 +67,10 @@ def EventCompiler(j_rawevent, event_type):
     # event_type is a new variable so that we can do two things:
     # 1. the def knows how to process data
     # 2. it keeps the changes required for a new event type relatively compact
-    now = datetime.datetime.now()
-    if event_type == "cws_health":
-        # CWS Health data: no pagination, JSON list of subcomponents.
-        # Enumerate solution components
-        j_list_cwscomponents= [ "vni:responseTime", "database:connection", "database:responseTime", "cwsManager:responseTime"]
-        # Go through each checks and create a standalone event
-        j_array_processing = []
-        events = 0
-        for component in j_list_cwscomponents:
-            out_component = component.replace(":", "_")
-            j_health_event = {
-                "cws_component": out_component,
-                "healthtest_timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-                "healthtest_status": j_rawevent["checks"][component]["status"],
-                "healthtest_observed_unit": j_rawevent["checks"][component]["observedUnit"],
-                "healthtest_observed_value": j_rawevent["checks"][component]["observedValue"]
-            }
-            j_array_processing.append(j_health_event)
-            events = events + 1
-        logging.info("Extracted " + str(events) + " events, sending them to the Log Analytics API for processing")
-        j_processed_events=callLogAnalyticsAPI(j_array_processing, j_config_list["logingestion_api"]["dce"], j_config_list["logingestion_api"]["streams"]["cws_health_imi"], j_config_list["logingestion_api"]["streams"]["cws_health"])
-        return j_processed_events
-    
+
+    # Create JSON array that we will use for processed event signaling
+    j_processed_events = []
+
     if event_type == "cws_weblog":
         # CWS Access logs - pagination, JSON array of events
 
@@ -198,7 +175,7 @@ def EventCompiler(j_rawevent, event_type):
                     j_multipage_processed.append(j_processed_events)
                     j_processed_events = j_multipage_processed
                 break
-        return j_processed_events
+    return j_processed_events
     # Return data to main loop
 
 
@@ -207,8 +184,9 @@ def callLogAnalyticsAPI(j_array_events, dce_endpoint, immutableid, stream_name):
     # To have further info on the Log Analytics API implementation, please check: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-code?tabs=python
 
     # Resources for API call
-    post_body = json.dumps(j_array_events)
     api_credentials = DefaultAzureCredential()
+    
+    # Create JSON Array for thelist of processed events
     j_processed_events = []
 
     logging.info("Calling Log Ingestion API ...")
