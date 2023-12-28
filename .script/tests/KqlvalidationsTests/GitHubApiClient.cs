@@ -48,7 +48,6 @@ namespace Kqlvalidations.Tests
         /// <exception cref="InvalidOperationException">Throws an exception if there is an issue with app id, installation id, private key.</exception>
         public static GitHubApiClient Create()
         {
-
             if (_instance == null)
             {
                 lock (_lock)
@@ -56,37 +55,23 @@ namespace Kqlvalidations.Tests
                     if (_instance == null)
                     {
                         string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
-                        if (string.IsNullOrEmpty(appId))
+                        var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
+                        var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
+                        if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
                         {
-                            Console.WriteLine("app id is null or empty");
+                            throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
                         }
-                        else if(appId=="674398")
-                        {
-                            Console.WriteLine("app id is same");
-                        }
-                        else
-                        {
-                            Console.WriteLine("app id is different");
-                            Console.WriteLine("app id is " + appId);
-                        }
-                        //var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
-                        //var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
-                        //if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
-                        //{
-                        //    throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
-                        //}
 
-                        //try
-                        //{
-                        //    var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
-                        //    var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
-                        //    _instance = new GitHubApiClient(accessToken);
-                        //}
-                        //catch (Exception ex)
-                        //{
-                        //    throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
-                        //}
-                        _instance = new GitHubApiClient();
+                        try
+                        {
+                            var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
+                            var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
+                            _instance = new GitHubApiClient(accessToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
+                        }
                     }
                 }
             }
