@@ -88,7 +88,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel = sentinel_dict['proxy']
             elif 'iplogs' in key.lower():
                 sentinel = sentinel_dict['ip']
-            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
+            elif 'firewalllogs' in key.lower() or 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 sentinel = sentinel_dict['cloudfirewall']
             else:
                 # skip files of unknown types
@@ -212,7 +212,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -461,7 +461,7 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_proxy
             elif 'iplogs' in key.lower():
                 parser_func = self.parse_csv_ip
-            elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
+            elif 'firewalllogs' in key.lower() or 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
 
             if parser_func:
