@@ -54,24 +54,25 @@ namespace Kqlvalidations.Tests
                 {
                     if (_instance == null)
                     {
-                        string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
-                        var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
-                        var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
-                        if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
-                        {
-                            throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
-                        }
+                        //string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
+                        //var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
+                        //var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
+                        //if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
+                        //{
+                        //    throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
+                        //}
 
-                        try
-                        {
-                            var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
-                            var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
-                            _instance = new GitHubApiClient(accessToken);
-                        }
-                        catch (Exception ex)
-                        {
-                            throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
-                        }
+                        //try
+                        //{
+                        //    var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
+                        //    var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
+                        //    _instance = new GitHubApiClient(accessToken);
+                        //}
+                        //catch (Exception ex)
+                        //{
+                        //    throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
+                        //}
+                        _instance =new GitHubApiClient();
                     }
                 }
             }
