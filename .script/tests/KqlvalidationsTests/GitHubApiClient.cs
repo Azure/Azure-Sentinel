@@ -54,7 +54,7 @@ namespace Kqlvalidations.Tests
                 {
                     if (_instance == null)
                     {
-                        //var appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
+                        //string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
                         //var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
                         //var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
                         //if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
@@ -72,7 +72,7 @@ namespace Kqlvalidations.Tests
                         //{
                         //    throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
                         //}
-                        _instance = new GitHubApiClient();
+                        _instance =new GitHubApiClient();
                     }
                 }
             }
