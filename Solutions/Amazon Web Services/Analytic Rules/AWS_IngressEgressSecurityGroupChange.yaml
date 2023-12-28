@@ -25,19 +25,27 @@ query: |
   let EventNameList = dynamic([ "AuthorizeSecurityGroupEgress", "AuthorizeSecurityGroupIngress", "RevokeSecurityGroupEgress", "RevokeSecurityGroupIngress"]);
   AWSCloudTrail
   | where EventName in~ (EventNameList)
-  | extend User = iif(isnotempty(UserIdentityUserName), UserIdentityUserName, SessionIssuerUserName)
+  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
   | summarize EventCount=count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated)
-  by EventSource, EventName, UserIdentityType, User, SourceIpAddress, UserAgent, SessionMfaAuthenticated, AWSRegion,
+  by EventSource, EventName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, SourceIpAddress, UserAgent, SessionMfaAuthenticated, AWSRegion,
   AdditionalEventData, UserIdentityAccountId, UserIdentityPrincipalid, ResponseElements
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = User , IPCustomEntity = SourceIpAddress
+  | extend timestamp = StartTimeUtc
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.1
+        columnName: SourceIpAddress
+version: 1.0.2
 kind: Scheduled
