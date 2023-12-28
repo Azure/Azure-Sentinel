@@ -1,0 +1,36 @@
+id: 35846296-4052-4de2-8098-beb6bb5f2203
+name: User Session Impersonation(Okta)
+description: |
+    'A user has started a session impersonation, gaining access with the impersonated user’s permissions. This typically signifies Okta admin access and should only happen if anticipated and requested.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+  - connectorId: OktaSSOv2
+    dataTypes:
+      - OktaSSO
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - TA0006
+query: |
+  Okta_CL // This is the table in Log Analytics where Okta logs are stored.
+  | where eventType_s == "user.session.impersonation.initiate" and outcome_result_s =~ 'SUCCESS' // This filters the events where the event type is "user.session.impersonation.initiate" and the outcome is successful.
+  | mv-expand parsed_json = parse_json(target_s) // This expands the JSON object in the 'target_s' field into a dynamic object named 'parsed_json'.
+  | extend TargetUser_id = tostring(parsed_json.id), TargetUser_type = tostring(parsed_json.type), TargetUser_alternateId = tostring(parsed_json.alternateId), TargetUser_displayName = tostring(parsed_json.displayName), Target_detailEntry = tostring(parsed_json.detailEntry) // This creates new columns for the id, type, alternateId, displayName, and detailEntry of the target user.
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by actor_alternateId_s, actor_displayName_s, TargetUser_alternateId, TargetUser_displayName, TargetUser_type, TargetUser_id, eventType_s, outcome_result_s // This groups the data by the actor's alternateId and displayName, the target user's alternateId, displayName, type, and id, the event type, and the outcome. It also calculates the minimum and maximum time each group of events occurred.
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+version: 1.0.0
+kind: Scheduled
