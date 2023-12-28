@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.1.0       |  26-10-2023                    | Added Recorded Future Threat Actor Map workbook<br/> Recorded Future Actor Threat Hunt playbooks.<br/> Recorded Future Threat Hunt Analytic rules. |
+| 3.1.0       |  01-12-2023                    | Added Recorded Future Threat Actor Map workbook<br/> Added RecordedFuture-ThreatMap-Importer playbook.<br/> Added RecordedFuture-ActorThreatHunt-IndicatorImport playbook.<br/> Added 4 analytic rules to be used for Recorded Future Threat Hunt. <br/> Documentation update.<br/> Removed 6 deprecated playbooks from Solution package. |
 | 3.0.2       | 02-11-2023                     | Encoding Fix to the RecordedFuture-Alert-Importer playbook<br/> Changed defaults in RecordedFuture-Playbook-Alert-Importer |
 | 3.0.1       | 26-10-2023                     | Fix to the RecordedFuture-ThreatIntelligenceImport playbook  |
 | 3.0.0       | 20-09-2023                     | Added workbooks for correlating Recorded Future and logs containing IoC of type IP, DNS, URL and Hash <br/> Generate Markdown/HTML response for enrichment comments.<br/> Recorded Future Playbook Alerts playbook and  workbook for visualization.<br/> Recorded Future Classic Alerts playbook and workbook for visualization.<br/> Leveraging new API for importing threat indicators and deprecating old playbooks. | 
