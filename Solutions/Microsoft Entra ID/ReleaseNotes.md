@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                            |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 3.0.10       | 28-11-2023                     | 1 **Analytic Rule** Modified by adding "GroupMembership" instead of "Admin" condition for better extraction of admin accounts from the identity infotable.|
 | 3.0.9       | 28-11-2023                     | 2 **Analytic Rules** Modified by Adding Entity Mapping to (GuestAccountsAddedinAADGroupsOtherThanTheOnesSpecified.yaml) and Changed timerange of (SigninPasswordSpray.yaml) from 3d to 1d. |
 | 3.0.8       | 21-11-2023                     | 1 **Analytic Rules** Fixed issue that was causing multiple triggers for the same event.                                                                       |                                                      
 | 3.0.7       | 06-11-2023                     | Changes for rebranding from Azure Active Directory to Microsoft Entra ID.                                                                                     |
