@@ -1,0 +1,71 @@
+id: 6ddbd892-a9be-47be-bab7-521241695bd6
+name: TI Map URL Entity to AuditLogs
+description: |
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in DeviceNetworkEvents.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let DeviceNetworkEvents_ = DeviceNetworkEvents
+    | where isnotempty(RemoteUrl)
+    | where TimeGenerated >= ago(dt_lookBack)
+    | where ActionType !has "ConnectionFailed"
+    | extend RemoteUrl = tolower(RemoteUrl)
+    | project-rename DeviceNetworkEvents_TimeGenerated = TimeGenerated;
+  let DeviceNetworkEventUrls = DeviceNetworkEvents_
+    | distinct Url = RemoteUrl
+    | summarize make_list(Url);
+  ThreatIntelligenceIndicator
+  | where isnotempty(Url)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | extend Url = tolower(Url)
+  | where Url in (DeviceNetworkEventUrls)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | join kind=innerunique (DeviceNetworkEvents_) on $left.Url == $right.RemoteUrl
+  | where DeviceNetworkEvents_TimeGenerated < ExpirationDateTime
+  | summarize DeviceNetworkEvents_TimeGenerated = arg_max(DeviceNetworkEvents_TimeGenerated, *) by IndicatorId, Url
+  | project DeviceNetworkEvents_TimeGenerated, IndicatorId, Url, ConfidenceScore, Description, ThreatType, Tags, TrafficLightProtocolLevel, ActionType, DeviceId, DeviceName, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, RemoteIP, RemotePort
+  | extend Name = tostring(split(InitiatingProcessAccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountUpn, '@', 1)[0])
+  | extend timestamp = DeviceNetworkEvents_TimeGenerated, UserPrincipalName = InitiatingProcessAccountUpn
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+version: 1.0.0
+kind: Scheduled

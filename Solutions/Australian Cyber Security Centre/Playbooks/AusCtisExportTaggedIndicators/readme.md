@@ -4,7 +4,7 @@
 
 This playbook gets triggered every day and perform the following actions:
 
-1. Get all the threat intelligence indicators from Sentinel Workspace with given tag.
+1. Get all the threat intelligence indicators from Microsoft Sentinel Workspace with given tag.
 2. Filter all the indicators whose export in not completed. 
 3. Export the indicators to provided TAXII server. 
 
@@ -23,9 +23,10 @@ This playbook gets triggered every day and perform the following actions:
     * Collection ID
     * TAXII Server Username
     * TAXII Server Password
-    * Sentinel Workspace
+    * Microsoft Sentinel Workspace
     * Tag for indicators to be exported
     * Tag for indicators after export completion
+    * Default TLP Label
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVMPlaybooks%2FQualysVM-GetAssetDetails%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FQualysVM%2FPlaybooks%2FQualysVMPlaybooks%2FQualysVM-GetAssetDetails%2Fazuredeploy.json)
 
