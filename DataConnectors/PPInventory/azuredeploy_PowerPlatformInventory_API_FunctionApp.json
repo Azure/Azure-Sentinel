@@ -15,9 +15,6 @@
 		"sentinelWorkspace": {
 			"type": "object"
 		},
-		"appInsightsWorkspaceResourceId": {
-			"type": "string"
-		},
 		"roleAssignmentDcr": {
 			"type": "bool",
 			"defaultValue": false
@@ -41,7 +38,6 @@
 	"variables": {
 		"storageSuffix": "[environment().suffixes.storage]",
 		"serverFarmName": "[concat('serverfarm_', parameters('functionAppName'))]",
-		"appInsightsLogName": "[concat(parameters('functionAppName'),'Logs')]",
 		"clv2TableNamePowerApps": "PowerApps_CL",
 		"clv2TableNameEnvironments": "PowerPlatformEnvironments_CL",
 		"clv2TableNameConnections": "PowerAppsConnections_CL",
@@ -473,20 +469,41 @@
 			}
 		},
 		{
-			"type": "Microsoft.Insights/components",
-			"apiVersion": "2020-02-02",
-			"name": "[variables('appInsightsLogName')]",
-			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/components'), parameters('tagsByResource')['Microsoft.Insights/components'], json('{}')) ]",
-			"location": "[parameters('location')]",
-			"kind": "web",
-			"properties": {
-				"Application_Type": "web",
-				"ApplicationId": "[parameters('functionAppName')]",
-				"Flow_Type": "Bluefield",
-				"Request_Source": "rest",
-				"WorkspaceResourceId": "[parameters('appInsightsWorkspaceResourceId')]"
-			}
-		},
+            "type": "Microsoft.Insights/diagnosticSettings",
+            "apiVersion": "2021-05-01-preview",
+            "name": "[parameters('functionAppName')]",
+			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/diagnosticSettings'), parameters('tagsByResource')['Microsoft.Insights/diagnosticSettings'], json('{}')) ]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+            ],
+            "properties": {
+                "logs": [
+                    {
+                        "category": "FunctionAppLogs",
+                        "categoryGroup": null,
+                        "enabled": true,
+                        "retentionPolicy": {
+                            "days": 0,
+                            "enabled": false
+                        }
+                    }
+                ],
+                "metrics": [
+                    {
+                        "timeGrain": null,
+                        "enabled": true,
+                        "retentionPolicy": {
+                            "days": 0,
+                            "enabled": false
+                        },
+                        "category": "AllMetrics"
+                    }
+                ],
+                "workspaceId": "[parameters('sentinelWorkspace').id]",
+                "logAnalyticsDestinationType": null
+            },
+            "scope": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+        },
 		{
 			"type": "Microsoft.Web/serverfarms",
 			"apiVersion": "2022-03-01",
@@ -537,7 +554,6 @@
 			"dependsOn": [
 				"[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
 				"[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
-				"[resourceId('Microsoft.Insights/components', variables('appInsightsLogName'))]",
 				"[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
 			],
 			"identity": {
@@ -579,14 +595,6 @@
 						{
 							"name": "FUNCTIONS_EXTENSION_VERSION",
 							"value": "~4"
-						},
-						{
-							"name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-							"value": "[reference(resourceId('Microsoft.insights/components', variables('appInsightsLogName'))).InstrumentationKey]"
-						},
-						{
-							"name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
-							"value": "[reference(resourceId('microsoft.insights/components', variables('appInsightsLogName'))).ConnectionString]"
 						},
 						{
 							"name": "FUNCTIONS_WORKER_RUNTIME",
