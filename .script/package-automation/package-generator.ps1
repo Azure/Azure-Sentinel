@@ -1,7 +1,6 @@
 param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $defaultPackageVersion, $solutionOfferId, $inputBaseFolderPath, $isNewSolution)
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 . ./.script/package-automation/catelogAPI.ps1
-. ./Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1 # load ccp functions
 
 function ErrorOutput {
     Write-Host "Package creation process failed!"
