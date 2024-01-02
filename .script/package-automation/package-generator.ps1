@@ -466,10 +466,6 @@ try {
         }
     }
 
-    # =============start: ccp connector code===============
-
-    # =============end: ccp connector code===============
-
     if ($parserFolderResultLength -gt 0) {
         $parserFolderResultArray = $parserFolderResult | ConvertTo-Json -AsArray
         $parsersArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("Parsers")))
