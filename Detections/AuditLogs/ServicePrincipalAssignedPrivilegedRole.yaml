@@ -26,40 +26,57 @@ query: |
     | extend type_ = tostring(TargetResources[0].type)
     | where type_ =~ "ServicePrincipal"
     | where isnotempty(TargetResources)
-    | extend ServicePrincipal = tostring(TargetResources[0].displayName)
-    | extend SPID = tostring(TargetResources[0].id)
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend InitiatedBy = tostring(iff(isnotempty(InitiatingUserPrincipalName),InitiatingUserPrincipalName, InitiatingAppName))
+    | extend ServicePrincipalName = tostring(TargetResources[0].displayName)
+    | extend ServicePrincipalId = tostring(TargetResources[0].id)
     | mv-expand TargetResources[0].modifiedProperties
     | extend TargetResources_0_modifiedProperties = columnifexists("TargetResources_0_modifiedProperties", '')
     | where isnotempty(TargetResources_0_modifiedProperties)
-    | where TargetResources_0_modifiedProperties.displayName =~ "Role.DisplayName"
-    | extend TargetRole = parse_json(tostring(TargetResources_0_modifiedProperties.newValue))
-    | where TargetRole contains "admin"
-    | extend AddedByApp = iif(
-    isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)),
-    tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName),
-    tostring(parse_json(tostring(InitiatedBy.app)).displayName)
-    )
-    | extend AddedByUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend AddedBy = iif(isnotempty(AddedByApp), AddedByApp, AddedByUser)
-    | extend IpAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
-    | project-reorder TimeGenerated, ServicePrincipal, SPID, TargetRole, AddedBy, IpAddress
-    | project-away AddedByApp, AddedByUser
+    | extend displayName = tostring(TargetResources_0_modifiedProperties.displayName), newValue = tostring(parse_json(tostring(TargetResources_0_modifiedProperties.newValue)))
+    | where displayName == "Role.DisplayName" and newValue contains "admin"
+    | extend TargetRole = newValue
+    | project-reorder TimeGenerated, ServicePrincipalName, ServicePrincipalId, InitiatedBy, TargetRole, InitiatingIPAddress
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAppName
       - identifier: AadUserId
-        columnName: SPID
+        columnName: InitiatingAppServicePrincipalId
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AddedBy
-version: 1.0.1
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: ServicePrincipalName
+      - identifier: AadUserId
+        columnName: ServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
