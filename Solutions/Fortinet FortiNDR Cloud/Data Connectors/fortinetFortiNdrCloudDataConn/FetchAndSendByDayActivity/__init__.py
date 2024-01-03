@@ -13,18 +13,22 @@ ACCOUNT_CODE = os.environ.get("FncAccountCode")
 def main(args: dict) -> str:
     events = args.get('events', [])
     day: int = args.get('day')
-    for event_type in events:
-        ctx = Context()
-        start_day = datetime.now(tz=timezone.utc) - timedelta(days=day)
-        logging.info(f'FetchAndSendByDayActivity: event: {event_type} day: {start_day.date()}')
+    try:
+        for event_type in events:
+            ctx = Context()
+            start_day = datetime.now(tz=timezone.utc) - timedelta(days=day)
+            logging.info(f'FetchAndSendByDayActivity: event: {event_type} day: {start_day.date()}')
 
-        if event_type == 'detections':
-            fetch_and_send_detections(ctx, event_type, start_day.date())
-        else:
-            fetch_and_send_events(ctx, event_type, start_day)
+            if event_type == 'detections':
+                fetch_and_send_detections(ctx, event_type, start_day.date())
+            else:
+                fetch_and_send_events(ctx, event_type, start_day)
 
-    # it's required to return something that is json serializable
-    return 'success'
+        # it's required to return something that is json serializable
+        return 'success'
+    except Exception as ex:
+        logging.error(f'Failure: FetchAndSendByDayActivity: event: {event_type} day: {start_day.date()} error: {ex}')
+        raise Exception(f"Failure: FetchAndSendByDayActivity falied. Event: {event_type} error: {ex}")
 
 
 def fetch_and_send_events(ctx: Context, event_type: str, start_day: datetime):

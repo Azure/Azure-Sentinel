@@ -16,8 +16,14 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
 
     if days_to_collect > 0:
         events = list(checkpoints.keys())
-        yield context.call_activity('FetchAndSendByDayActivity', {'day': days_to_collect, 'events': events})
-        args['days_to_collect'] = days_to_collect-1
+    
+        try:
+            yield context.call_activity('FetchAndSendByDayActivity', {'day': days_to_collect, 'events': events})
+            args['days_to_collect'] = days_to_collect-1
+        except Exception as ex:
+            logging.error(f'Failure: SingletonEternalOrchestrator: fetch_and_send_by_day error: {ex}')
+            args['days_to_collect'] = days_to_collect
+                
         # Run the orchastrator new for each day to help avoid timeouts.
         context.continue_as_new(args)
         return

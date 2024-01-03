@@ -38,6 +38,7 @@ def post_data(events: list[dict], log_type_suffix: str):
         logging.info(f'SentinelClient: posted {len(events)} events to {log_type}')
     else:
         logging.error(f"SentinelClient: failed to post events to Sentinel. Response code: {response.status_code}")
+        raise requests.exceptions.HTTPError(f"SentinelClient: failed to post events to Sentinel. Response code: {response.status_code}")
 
 def _build_signature(date, content_length, method, content_type, resource):
     '''Build the API signature'''

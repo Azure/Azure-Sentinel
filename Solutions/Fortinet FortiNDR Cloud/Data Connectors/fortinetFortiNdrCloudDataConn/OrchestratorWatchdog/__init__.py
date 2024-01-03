@@ -26,13 +26,11 @@ DETECTIONS = (os.environ.get("FncDetections") or "true").strip().lower() == 'tru
 TERMINATE_APP = os.environ.get("FncTerminateApp").strip().lower() == 'true'
 
 try:
-    # DAYS_TO_COLLECT = int(os.getenv("FncDaysToCollect", 0))
-    DAYS_TO_COLLECT = int(os.environ.get("FncDaysToCollect") or 0)
+    DAYS_TO_COLLECT = int(os.environ.get("FncDaysToCollect") or 7)
 except ValueError:
     DAYS_TO_COLLECT = None
 
 try:
-    # INTERVAL = int(os.getenv("FncIntervalMinutes", "5"))
     INTERVAL = int(os.environ.get("FncIntervalMinutes") or "5")
 except ValueError:
     INTERVAL = None
