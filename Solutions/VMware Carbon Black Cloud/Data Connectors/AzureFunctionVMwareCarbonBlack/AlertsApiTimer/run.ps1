@@ -12,6 +12,85 @@ if ($Timer.IsPastDue) {
 
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
+<#
+.SYNOPSIS
+#
+
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function getCheckpoint()
+{
+$azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
+$Context = New-AzStorageContext -ConnectionString $azstoragestring
+if((Get-AzStorageContainer -Context $Context).Name -contains "lastalertlog"){
+    #Set Container
+    $Blob = Get-AzStorageBlob -Context $Context -Container (Get-AzStorageContainer -Name "lastalertlog" -Context $Context).Name -Blob "lastalertlog.log"
+    $lastlogTime = $blob.ICloudBlob.DownloadText()
+    $startTime = $lastlogTime | Get-Date -Format yyyy-MM-ddTHH:mm:ss
+    return $startTime
+}
+
+}
+<#
+.SYNOPSIS
+Short description
+
+.DESCRIPTION
+Long description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function GenerateDate()
+{
+    
+    $time= [int]$Env:timeInterval
+    $startTime=getCheckpoint
+    if($null -ne $startTime)
+    {
+       $startTime = Get-Date -Date $startTime
+    }
+
+    if($null -ne $startTime)
+    {
+        Write-Host "The last start time in file share is" $startTime
+    }
+    else {
+        $startTime = [System.DateTime]::UtcNow.AddMinutes(-$($time))
+    }
+
+    $now = [System.DateTime]::UtcNow
+    #$Duration = New-TimeSpan -Start $startTime -End $now()
+
+    if($startTime -le $now)
+    {
+        [int]$noofmins = $($now-$startTime).TotalMinutes
+    }
+    else {
+        Write-Host "Start time is greater than current time,Please check the start time and correct it."
+    }
+    if($noofmins -gt $time)
+    {
+        if($null -ne $startTime)
+        {
+          $now=$startTime.AddMinutes($time)
+        }
+        Write-Host "The no of mins b/w start and end time is greater than $time"
+    }
+    Write-Host "The now time is" $now
+
+    return $startTime, $now
+}
 function CarbonBlackAPI() {
     $workspaceId = $env:workspaceId
     $workspaceSharedKey = $env:workspaceKey
@@ -33,8 +112,6 @@ function CarbonBlackAPI() {
     $AWSSecretAccessKey = $env:AWSSecretAccessKey
     $Severity = $env:Severity
 
-    $startTime = [System.DateTime]::UtcNow.AddMinutes( - $($time))
-    $now = [System.DateTime]::UtcNow
 
     # Remove if addition slash or space added in hostName
     $hostName = $hostName.Trim() -replace "[.*/]$", ""
@@ -152,8 +229,13 @@ function CarbonBlackAlertsAPI() {
     $headers = @{
         "X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)";
     };
-    $body = '{ "criteria" : { "minimum_severity": {min}}, "type": [ ], "policy_name": [ "ALL_POLICIES" ] }, "exclusions": { }, "sort": [ { "field": "severity", "order": "DESC" } ] }'
+    $body = '{ "time_range": {
+                  "start": "{starttime}",
+                  "end": "{endtime}"
+      }, "criteria" : { "minimum_severity": {min}, "type": [ ], "policy_name": [ "ALL_POLICIES" ] }, "exclusions": { }, "sort": [ { "field": "severity", "order": "DESC" } ] }'
     $body = $body.Replace('{min}', $Severity)
+    $body= $body.Replace('{starttime}', $startTime)
+    $body=$body.Replace('{endtime}',$now)
     $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)" }
     $v7uri = ([System.Uri]::new("$($hostName)/api/alerts/v7/orgs/$($OrgKey)/alerts/_search"))
             
@@ -174,7 +256,27 @@ function CarbonBlackAlertsAPI() {
     }
 }
 try {
+
+    $azstoragestring = $Env:WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
+    $Context = New-AzStorageContext -ConnectionString $azstoragestring
+    $startTime,$now=GenerateDate
+    $startTime=$startTime | Get-Date -Format yyyy-MM-ddTHH:mm:ss.000K
+    $now= $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss.000K
     CarbonBlackAPI
+    if((Get-AzStorageContainer -Context $Context).Name -contains "lastalertlog"){
+        #Set Container
+        $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastalertlog.log"
+        Set-AzStorageBlobContent -file "$env:TEMP\lastalertlog.log" -Container (Get-AzStorageContainer -Name "lastalertlog" -Context $Context).Name -Context $Context -Force
+    }
+    else {
+    $blob=(Get-AzStorageContainer -Context $Context).Name -contains "lastalertlog"
+    if(-not $blob)
+    {
+    $azStorageContainer = New-AzStorageContainer -Name "lastalertlog" -Context $Context
+    $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss.000K | Out-File "$env:TEMP\lastalertlog.log"
+    Set-AzStorageBlobContent -file "$env:TEMP\lastalertlog.log" -Container $azStorageContainer.name -Context $Context -Force
+    }
+    }
 }
 catch {
     Write-Error "Failed at CarbonBlackAlertsAPI with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
