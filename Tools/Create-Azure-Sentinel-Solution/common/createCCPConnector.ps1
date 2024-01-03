@@ -9,82 +9,6 @@
     2 = "ResourcesDataConnector";
 }
 
-# read first folder and create the first template
-# create 2 real active property on the side - outside
-# create second template for second folder
-# add solution metadata
-# add variables
-# Formats JSON in a nicer format than the built-in ConvertTo-Json does.
-function Format-Json {
-    <#
-    .SYNOPSIS
-        Prettifies JSON output.
-    .DESCRIPTION
-        Reformats a JSON string so the output looks better than what ConvertTo-Json outputs.
-    .PARAMETER Json
-        Required: [string] The JSON text to prettify.
-    .PARAMETER Minify
-        Optional: Returns the json string compressed.
-    .PARAMETER Indentation
-        Optional: The number of spaces (1..1024) to use for indentation. Defaults to 4.
-    .PARAMETER AsArray
-        Optional: If set, the output will be in the form of a string array, otherwise a single string is output.
-    .EXAMPLE
-        $json | ConvertTo-Json  | Format-Json -Indentation 2
-    #>
-    [CmdletBinding(DefaultParameterSetName = 'Prettify')]
-    Param(
-        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
-        [string]$Json,
-
-        [Parameter(ParameterSetName = 'Minify')]
-        [switch]$Minify,
-
-        [Parameter(ParameterSetName = 'Prettify')]
-        [ValidateRange(1, 1024)]
-        [int]$Indentation = 4,
-
-        [Parameter(ParameterSetName = 'Prettify')]
-        [switch]$AsArray
-    )
-
-    if ($PSCmdlet.ParameterSetName -eq 'Minify') {
-        return ($Json | ConvertFrom-Json) | ConvertTo-Json -Depth 100 -Compress
-    }
-
-    # If the input JSON text has been created with ConvertTo-Json -Compress
-    # then we first need to reconvert it without compression
-    if ($Json -notmatch '\r?\n') {
-        $Json = ($Json | ConvertFrom-Json) | ConvertTo-Json -Depth 100
-    }
-
-    $indent = 0
-    $regexUnlessQuoted = '(?=([^"]*"[^"]*")*[^"]*$)'
-
-    $result = $Json -split '\r?\n' |
-        ForEach-Object {
-            # If the line contains a ] or } character, 
-            # we need to decrement the indentation level unless it is inside quotes.
-            if ($_ -match "[}\]]$regexUnlessQuoted") {
-                $indent = [Math]::Max($indent - $Indentation, 0)
-            }
-
-            # Replace all colon-space combinations by ": " unless it is inside quotes.
-            $line = (' ' * $indent) + ($_.TrimStart() -replace ":\s+$regexUnlessQuoted", ': ')
-
-            # If the line contains a [ or { character, 
-            # we need to increment the indentation level unless it is inside quotes.
-            if ($_ -match "[\{\[]$regexUnlessQuoted") {
-                $indent += $Indentation
-            }
-
-            $line
-        }
-
-    if ($AsArray) { return $result }
-    return $result -Join [Environment]::NewLine
-}
-
 #build the connection template parameters, according to the connector definition instructions
 function Get-ConnectionsTemplateParameters($activeResource, $ccpItem){
     # this is for data connector definition only
@@ -127,10 +51,18 @@ function New-ParametersForConnectorInstuctions($instructions)
     foreach ($instruction in $instructions){
         if($instruction.type -eq "Textbox")
         {
-            $newParameter = [PSCustomObject]@{
-                defaultValue = $instruction.parameters.name;
-                type = "string";
-                minLength = 1;
+            if ($instruction.parameters.name.ToLower().contains("secure") -or $instruction.parameters.name.ToLower().contains("password")) {
+                $newParameter = [PSCustomObject]@{
+                    defaultValue = $instruction.parameters.name;
+                    type = "securestring";
+                    minLength = 1;
+                }
+            } else {
+                $newParameter = [PSCustomObject]@{
+                    defaultValue = $instruction.parameters.name;
+                    type = "string";
+                    minLength = 1;
+                }
             }
             $templateParameter | Add-Member -MemberType NoteProperty -Name $instruction.parameters.name -Value $newParameter
         }
@@ -157,6 +89,11 @@ function New-ParametersForConnectorInstuctions($instructions)
         elseif($instruction.type -eq "ContextPane")
         {
             New-ParametersForConnectorInstuctions $instruction.parameters.instructionSteps.instructions    
+        }
+        else
+        {
+            $instructionType = $instruction.type;
+            Write-Host "Specified Instruction type '$instructionType' is not from the instruction type list like Textbox, OAuthForm and ContextPane!"
         }
     }
 }
@@ -205,7 +142,7 @@ function Get-MetaDataResource($TemplateCounter, $dataFileMetadata, $solutionFile
     $parentId = "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), $parentIdResourceName, variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)'))]"
     $metaDataResourceName = "concat('DataConnector-', variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)'))"
     $metaDataContentId = "[variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')]"
-    $metaDatsContentVersion  = "[variables('dataConnectorVersion$($templateKindByCounter[$TemplateCounter])')]"
+    $metaDatsContentVersion  = "[variables('dataConnectorCCPVersion')]"
     $metaDataResource =  Get-MetaDataBaseResource $metaDataResourceName $parentId $metaDataContentId $templateContentTypeByCounter[$TemplateCounter] $metaDatsContentVersion $dataFileMetadata $solutionFileMetadata
     
     if($templateContentTypeByCounter[$TemplateCounter] -eq "DataConnector")
@@ -213,7 +150,7 @@ function Get-MetaDataResource($TemplateCounter, $dataFileMetadata, $solutionFile
         $dependencies = [PSCustomObject]@{
                 "criteria" =  @(
                     [PSCustomObject]@{
-                        "version" = "[variables('dataConnectorVersion$($templateKindByCounter[2])')]";
+                        "version" = "[variables('dataConnectorCCPVersion')]";
                         "contentId" = "[variables('_dataConnectorContentId$($templateKindByCounter[2])$($global:connectorCounter)')]";
                         "kind" = "ResourcesDataConnector"
                     }
@@ -227,7 +164,7 @@ function Get-MetaDataResource($TemplateCounter, $dataFileMetadata, $solutionFile
 }
 
 function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, $ccpItem){
-    $contentVersion = "variables('dataConnectorVersion$($templateKindByCounter[$TemplateCounter])')";
+    $contentVersion = "variables('dataConnectorCCPVersion')";
     $contentTemplateName = "variables('dataConnectorTemplateName$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')";
     $contentId = "variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')";
     $resoureKind = $templateContentTypeByCounter[$TemplateCounter];
@@ -241,12 +178,12 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
 
     $title = $ccpItem.title;
     $displayName = $title;
-    $randomNumber = Get-Random
+    #$randomNumber = Get-Random
     return [PSCustomObject]@{
         type       = "Microsoft.OperationalInsights/workspaces/providers/contentTemplates";
         apiVersion = $contentResourceDetails.metadataApiVersion; # "2023-04-01-preview";
-        name        = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', $contentTemplateName, $randomNumber)]";
-        location   = "[parameters('workspace-location')]";
+        name        = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', $contentTemplateName, $contentVersion)]";
+        #location   = "[parameters('workspace-location')]";
         dependsOn  = @(
             "$($contentResourceDetails.dependsOn)"
         );
@@ -275,17 +212,17 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
 
 function Get-ArmResource($name, $type, $kind, $properties){
     [hashtable]$apiVersion = @{
-        "Microsoft.SecurityInsights/dataConnectors" = "2022-12-01-preview";
+        "Microsoft.SecurityInsights/dataConnectors" = "2023-02-01-preview";
         "Microsoft.SecurityInsights/dataConnectorDefinitions" = "2022-09-01-preview";
-        "Microsoft.OperationalInsights/workspaces/tables" = "2021-03-01-privatepreview";
-        "Microsoft.Insights/dataCollectionRules" = "2021-09-01-preview";
+        "Microsoft.OperationalInsights/workspaces/tables" = "2022-10-01";
+        "Microsoft.Insights/dataCollectionRules" = "2022-06-01";
     }
 
     return [PSCustomObject]@{
         name       = $name;
         apiVersion = $apiVersion[$type]
         type       = $type;
-        location   = "[parameters('workspace-location')]";
+        #location   = "[parameters('workspace-location')]";
         kind       = $kind;
         properties = $properties;
     }
@@ -326,12 +263,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "$solutionId"
     }
 
-    if (!$global:baseMainTemplate.variables."dataConnectorVersion$($templateKindByCounter[1])") { 
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$($templateKindByCounter[1])" -NotePropertyValue "1.0.0"
-    }
-
-    if (!$global:baseMainTemplate.variables."dataConnectorVersion$($templateKindByCounter[2])") { 
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorVersion$($templateKindByCounter[2])" -NotePropertyValue "1.0.0"
+    if (!$global:baseMainTemplate.variables.dataConnectorCCPVersion) {
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "dataConnectorCCPVersion" -NotePropertyValue "1.0.0"
     }
 
     try {
@@ -388,7 +321,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $templateContentConnectorDefinition.properties.mainTemplate.resources += $armResource
 
                         $activeResource += $armResource
-                        $activeResource += Get-MetaDataResource 1 $dataFileMetadata $solutionFileMetadata
+                        $activeResource += Get-MetaDataResource $TemplateCounter $dataFileMetadata $solutionFileMetadata
                     }
 
                     #========end:dc definition resource===========
@@ -404,7 +337,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     $global:DependencyCriteria += [PSCustomObject]@{
                         kind      = "DataConnector";
                         contentId = "[variables('_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)')]";
-                        version   = if ($dataFileMetadata.TemplateSpec){"[variables('dataConnectorVersion$($templateKindByCounter[$TemplateCounter])')]"}else{$dataFileMetadata.Version};
+                        version   = if ($dataFileMetadata.TemplateSpec){"[variables('dataConnectorCCPVersion')]"}else{$dataFileMetadata.Version};
                     };
                 }
                 else
@@ -442,7 +375,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $placeHoldersMatched = $dataCollectionEndpointProperty | Select-String $placeHolderPatternMatches -AllMatches
     
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                            $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.dcrConfig.dataCollectionEndpoint = "[[parameters('dcrConfig').dataCollectionEndpoint]"
                         }
                     } else {
@@ -457,7 +389,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                         $placeHoldersMatched = $dataCollectionRuleImmutableIdProperty | Select-String $placeHolderPatternMatches -AllMatches
     
                         if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                            $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                             $armResource.properties.dcrConfig.dataCollectionRuleImmutableId = "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
                         }
                     } else {
@@ -474,7 +405,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $placeHoldersMatched = $clientIdProperty | Select-String $placeHolderPatternMatches -AllMatches
     
                             if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                 $armResource.properties.auth.ClientId = "[[parameters('ClientId')]"
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'ClientId' -isSecret $true
                             }
@@ -487,7 +417,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $placeHoldersMatched = $clientSecretIdProperty | Select-String $placeHolderPatternMatches -AllMatches
     
                             if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                 $armResource.properties.auth.ClientSecret = "[[parameters('ClientSecret')]"
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'ClientSecret' -isSecret $true
                             }
@@ -501,7 +430,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                                 $placeHoldersMatched = $authorizationCodeProperty | Select-String $placeHolderPatternMatches -AllMatches
     
                                 if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                    $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                     $armResource.properties.auth.AuthorizationCode = "[[parameters('AuthorizationCode')]"
                                     $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'AuthorizationCode' -isSecret $true
                                 }
@@ -513,7 +441,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $authorizationEndpointValue = $armResource.properties.auth.AuthorizationEndpoint
                             $placeHoldersMatched = $authorizationEndpointValue | Select-String $placeHolderPatternMatches -AllMatches
                             if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                 $armResource.properties.request.AuthorizationEndpoint = "[[parameters('AuthorizationEndpoint')]"
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'AuthorizationEndpoint' -isSecret $false
                             }
@@ -524,7 +451,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $tokenEndpointValue = $armResource.properties.auth.TokenEndpoint
                             $placeHoldersMatched = $tokenEndpointValue | Select-String $placeHolderPatternMatches -AllMatches
                             if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                 $armResource.properties.auth.TokenEndpoint = "[[parameters('TokenEndpoint')]"
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'TokenEndpoint' -isSecret $false
                             }
@@ -538,7 +464,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $placeHoldersMatched = $usernameProperty | Select-String $placeHolderPatternMatches -AllMatches
     
                             if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                 $armResource.properties.auth.username = "[[parameters('username')]"
     
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'username' -isSecret $false
@@ -552,7 +477,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $placeHoldersMatched = $passwordProperty | Select-String $placeHolderPatternMatches -AllMatches
     
                             if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                 $armResource.properties.auth.password = "[[parameters('password')]"
     
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'password' -isSecret $true
@@ -567,7 +491,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $placeHoldersMatched = $apiKeyProperty | Select-String $placeHolderPatternMatches -AllMatches
     
                             if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
                                 $armResource.properties.auth.ApiKey = "[[parameters('apikey')]"
     
                                 $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName 'apikey' -isSecret $true
@@ -598,7 +521,11 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                                             $finalizedEndpointUrl += ", parameters('" + $placeHolderName + "')"
                                         }
                                         
-                                        $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $false
+                                        if ($placeHolderName.Contains("secret") -or $placeHolderName.Contains("password")) {
+                                            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $true
+                                        } else {
+                                            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $false
+                                        }
                                     } else {
                                         if ($commaCount -eq 0) {
                                             $finalizedEndpointUrl += "'"+ $splitItem + "'"
@@ -613,30 +540,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
                         }
                     }
-    
-                    # retry count placeholders
-                    if ($null -ne $armResource.properties.request.retryCount -and ($armResource.properties.request.retryCount -is [System.String] -and $armResource.properties.request.retryCount.contains("{{"))) {
-                        $retryCountValue = $armResource.properties.request.retryCount
-                        $placeHoldersMatched = $retryCountValue | Select-String $placeHolderPatternMatches -AllMatches
-                        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                            $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                            $armResource.properties.request.retryCount = "[[parameters('" + $placeHolderName + "')]"
-                            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $false
-                        }
-                    }
-                    
-                    # rateLimitQPS placeholders
-                    if ($null -ne $armResource.properties.request.rateLimitQPS -and ($armResource.properties.request.rateLimitQPS -is [System.String] -and $armResource.properties.request.rateLimitQPS.contains("{{"))) {
-                        $rateLimitQPSValue = $armResource.properties.request.rateLimitQPS
-                        $placeHoldersMatched = $rateLimitQPSValue | Select-String $placeHolderPatternMatches -AllMatches
-                        if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                            $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                            $armResource.properties.request.rateLimitQPS = "[[parameters('" + $placeHolderName + "')]"
-    
-                            $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $false
-                        }
-                    }
-    
                     $templateContentConnections.properties.mainTemplate.resources += $armResource
                 }
             }

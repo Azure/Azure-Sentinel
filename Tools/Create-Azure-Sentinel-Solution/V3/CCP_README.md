@@ -147,12 +147,11 @@ Every CCP connector will have 4 building blocks and should be specified in seque
   
     ![Alt text](dataPollerFields.png)
 
-  - In below json file, "streamName" should contain a suffix at the start "Custom-<namevalue>" 
+  - In below json file, "streamName" should contain a suffix at the start "Custom-<namevalue>".
 
     ![Alt text](dcrStreamName.png)
 
   - Property dataCollectionEndpoint and dataCollectionRuleImmutableId are optional parameters in dcrConfic object. If specified then it will use the value as is unless placeholder "{{value}}" is used for this properties dataCollectionEndpoint and dataCollectionRuleImmutableId.
-  - The property "rateLimitQps", "retryCount" can made dynamic by adding a placeholder like "{{rateLimitQps}}". Doing this it will create a parameter in mainTemplate and in mainTemplate.json file this placeholder will get replaced by ARM template parameter reference.
   - Keep rest all properties of the file as is.
   - Below is a sample data poller file and is used to pole details from the API.
 
@@ -217,6 +216,7 @@ Every CCP connector will have 4 building blocks and should be specified in seque
     ![Alt text](dcrFields.png)
 
   - Once deployment is done it is recommended to verify if DCR is created in Azure portal, global search by searching for "Data Collection Rules" and then in "Data Collection Rules" search with the name that you specified in the source file on DCR "name" property. If search result shows a record in deployed resource group. If you don't see a result for the "name" property value specified in DCR file then its possibly a problem in DCR source file which failed in DCR creation. The first possible thing to verify if the length of DCR name exceed 65 characters.
+  - In "dataFlows" array, if you have a custom table as a file then specify the "outputSteam" property. If you are using standard table then there is no need to specify the "outputSteam" property in DCR file i.e. "outputSteam" property is optional here, if you are not having any table file and/or using standard table eg: Microsoft-ASimAuditEventLogs is a standard table and is suffixed with "Microsoft-".
   - To verify length of DCR name, when we open data connector and click on "Connect" button, make sure to open browser "Developer tools" or right click on browser and do "Ctrl+F12" which will open up "Developer tools" and navigate to "Network" tab as shown below:
   - Property "workspaceResourceId" is optional and is not required to be specified. If not specified then it replaces this property with value "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]" in mainTemplate as a variables.
   - Placeholder "{{location}}" will get replaced and will be specified in "parameters" section on "mainTemplate.json" file.
@@ -323,6 +323,7 @@ Every CCP connector will have 4 building blocks and should be specified in seque
 ![ALT TEXT](connector-connected.png)
 
 ## References For CCP Connectors:
+- [Create a codeless connector for Microsoft Sentinel (Public preview)](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector)
 - [Codeless Connector](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector?tabs=deploy-via-arm-template%2Cconnect-via-the-azure-portal)
 - [Data Connectors](https://learn.microsoft.com/en-us/azure/templates/microsoft.securityinsights/dataconnectors?pivots=deployment-language-arm-template)
 - [Data Collection Rule](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/data-collection-rule-overview?tabs=portal)
