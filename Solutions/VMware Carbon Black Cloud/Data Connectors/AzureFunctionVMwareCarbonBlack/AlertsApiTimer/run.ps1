@@ -265,7 +265,7 @@ try {
     CarbonBlackAPI
     if((Get-AzStorageContainer -Context $Context).Name -contains "lastalertlog"){
         #Set Container
-        $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss | Out-File "$env:TEMP\lastalertlog.log"
+        $now | Out-File "$env:TEMP\lastalertlog.log"
         Set-AzStorageBlobContent -file "$env:TEMP\lastalertlog.log" -Container (Get-AzStorageContainer -Name "lastalertlog" -Context $Context).Name -Context $Context -Force
     }
     else {
@@ -273,7 +273,7 @@ try {
     if(-not $blob)
     {
     $azStorageContainer = New-AzStorageContainer -Name "lastalertlog" -Context $Context
-    $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss.000K | Out-File "$env:TEMP\lastalertlog.log"
+    $now | Out-File "$env:TEMP\lastalertlog.log"
     Set-AzStorageBlobContent -file "$env:TEMP\lastalertlog.log" -Container $azStorageContainer.name -Context $Context -Force
     }
     }
