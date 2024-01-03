@@ -40,23 +40,27 @@ if not match:
 
 
 async def main(mytimer: func.TimerRequest):
-    logging.info('Script started.')
-    start_ts = int(time.time())
-    async with aiohttp.ClientSession() as session:
-        async with aiohttp.ClientSession() as session_sentinel:
-            prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, start_ts, session=session, session_sentinel=session_sentinel)
+    try:
+        logging.info('Script started.')
+        start_ts = int(time.time())
+        async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession() as session_sentinel:
+                prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, start_ts, session=session, session_sentinel=session_sentinel)
 
-            tasks = [
-                prisma.process_alerts()
-            ]
+                tasks = [
+                    prisma.process_alerts()
+                ]
 
-            logging.info('LOGTYPE value : {}'.format(LOGTYPE))
-            if LOGTYPE.lower().__contains__('audit') :
-                tasks.append(prisma.process_audit_logs())
+                logging.info('LOGTYPE value : {}'.format(LOGTYPE))
+                if LOGTYPE.lower().__contains__('audit') :
+                    tasks.append(prisma.process_audit_logs())
 
-            await asyncio.gather(*tasks)
+                await asyncio.gather(*tasks)
 
-    logging.info('Program finished. {} events have been sent.'.format(prisma.sentinel.successfull_sent_events_number))
+        logging.info('Program finished. {} events have been sent.'.format(prisma.sentinel.successfull_sent_events_number))   
+    except Exception as error:
+        logging.error(error)
+
 
 
 class PrismaCloudConnector:
@@ -192,7 +196,7 @@ class PrismaCloudConnector:
                 raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
             res = await response.text()
             res = json.loads(res)
-
+        logging.info("No of events returned from API - {}".format(len(res['items'])))
         for item in res['items']:
             yield item
 
@@ -206,6 +210,7 @@ class PrismaCloudConnector:
                     raise Exception('Error while getting alerts. HTTP status code: {}'.format(response.status))
                 res = await response.text()
                 res = json.loads(res)
+            logging.info("No of events returned from Next Page API - {}".format(len(res['items'])))
             for item in res['items']:
                 yield item
             
