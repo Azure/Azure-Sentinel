@@ -317,10 +317,10 @@ function CarbonBlackAPI()
             $headers = @{
                 "X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)";
             };
-            $body= '{ "criteria" : { "minimum_severity": {min}}, "type": [ ], "policy_name": [ "ALL_POLICIES" ] }, "exclusions": { }, "sort": [ { "field": "severity", "order": "DESC" } ] }'
+            $body= '{ "criteria" : { "minimum_severity": {min}, "type": [ ], "policy_name": [ "ALL_POLICIES" ] }, "exclusions": { }, "sort": [ { "field": "severity", "order": "DESC" } ] }'
             $body=$body.Replace('{min}',$Severity)
             $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
-            $v7uri=([System.Uri]::new("$($hostName)/api/v7/orgs/$($OrgKey)/alerts/_search "))
+            $v7uri=([System.Uri]::new("$($hostName)/api/alerts/v7/orgs/$($OrgKey)/alerts/_search"))
             
             $notifications = Invoke-WebRequest -Body $body -Uri $v7uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
             if ($notifications.success -eq $true)
