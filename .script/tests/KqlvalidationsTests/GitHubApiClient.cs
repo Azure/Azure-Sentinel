@@ -55,30 +55,31 @@ namespace Kqlvalidations.Tests
                 {
                     if (_instance == null)
                     {
-                        //print the all environment variables
-                        foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
-                            Console.WriteLine("  {0} = {1}", de.Key, de.Value);
+                        if (IsForkRepo())
+                        {
+                            _instance = new GitHubApiClient();
+                        }
+                        else
+                        {
+                            string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
+                            var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
+                            var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
+                            if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
+                            {
+                                throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
+                            }
 
-                        Console.WriteLine($" Is fork value from the PR {Environment.GetEnvironmentVariable("IS_FORK")}");
-                        //string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
-                        //var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
-                        //var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
-                        //if (string.IsNullOrEmpty(appId) || string.IsNullOrEmpty(installationId) || string.IsNullOrEmpty(privateKey))
-                        //{
-                        //    throw new InvalidOperationException("GitHub App ID, Installation ID, or Private Key is missing.");
-                        //}
-
-                        //try
-                        //{
-                        //    var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
-                        //    var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
-                        //    _instance = new GitHubApiClient(accessToken);
-                        //}
-                        //catch (Exception ex)
-                        //{
-                        //    throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
-                        //}
-                        _instance =new GitHubApiClient();
+                            try
+                            {
+                                var jwtToken = GenerateJwtToken(appId, RemovePemHeaderAndFooter(privateKey));
+                                var accessToken = GetInstallationAccessToken(installationId, jwtToken).Result;
+                                _instance = new GitHubApiClient(accessToken);
+                            }
+                            catch (Exception ex)
+                            {
+                                throw new InvalidOperationException("Error occurred while creating GitHubApiClient instance.", ex);
+                            }
+                        }
                     }
                 }
             }
@@ -232,6 +233,21 @@ namespace Kqlvalidations.Tests
             }
             return _prNumber.GetValueOrDefault();
         }
+
+
+        public static bool IsForkRepo()
+        {
+            if (bool.TryParse(Environment.GetEnvironmentVariable("SYSTEM_PULLREQUEST_ISFORK"), out bool isForkRepo))
+            {
+                return isForkRepo;
+            }
+            else
+            {
+                Console.WriteLine("Unbale to retrieve the value from the env variable SYSTEM_PULLREQUEST_ISFORK");
+                return false;
+            }
+        }
+
     }
 
 }
