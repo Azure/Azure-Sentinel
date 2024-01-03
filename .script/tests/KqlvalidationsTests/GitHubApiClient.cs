@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using Octokit;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http;
@@ -54,6 +55,10 @@ namespace Kqlvalidations.Tests
                 {
                     if (_instance == null)
                     {
+                        //print the all environment variables
+                        foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
+                            Console.WriteLine("  {0} = {1}", de.Key, de.Value);
+
                         Console.WriteLine($" Is fork value from the PR {Environment.GetEnvironmentVariable("IS_FORK")}");
                         //string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
                         //var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
