@@ -30,11 +30,12 @@ def main(checkpoints: dict) -> str:
             if current_date > start_date.date():
                 days_to_fetch = (current_date - start_date.date()).days - 1
                 for day in range(days_to_fetch , -1, -1):
-                    day_to_fetch = current_date - timedelta(days=day)
+                    day_to_fetch = (current_date - timedelta(days=day))
+                    start_of_day = day_to_fetch.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
                     if event_type == 'detections':
-                        fetch_and_send_detections(ctx, event_type, day_to_fetch)
+                        fetch_and_send_detections(ctx, event_type, start_of_day)
                     else:
-                        fetch_and_send_events(ctx, event_type, day_to_fetch)
+                        fetch_and_send_events(ctx, event_type, start_of_day)
 
             if ctx.checkpoint is None:
                 return ""
