@@ -54,6 +54,7 @@ namespace Kqlvalidations.Tests
                 {
                     if (_instance == null)
                     {
+                        Console.WriteLine($" Is fork value from the PR {Environment.GetEnvironmentVariable("IS_FORK")}");
                         //string appId = Environment.GetEnvironmentVariable("GITHUBAPPID");
                         //var installationId = Environment.GetEnvironmentVariable("GITHUBAPPINSTALLATIONID");
                         //var privateKey = Environment.GetEnvironmentVariable("GITHUBAPPPRIVATEKEY");
