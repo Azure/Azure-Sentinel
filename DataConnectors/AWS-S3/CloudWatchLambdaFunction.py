@@ -74,39 +74,43 @@ def lambda_handler(event, context):
                     json_object = json.loads(json_string)
 
                     df = pd.DataFrame(json_object)
-                    if df.empty:
-                        print(f"No events for specified time - startTime:%s, endTime:%s, logGroupName:%s, logStreamName:%s" % (unix_start_time, unix_end_time, key["logGroupName"], key["logStreamName"])) 
+                    if not df.empty:
+                        # Convert unix time to zulu time for example from 1671086934783 to 2022-12-15T06:48:54.783Z
+                        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                        df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%dT%H:%M:%S.%f').str[:-3]+'Z'
 
-                    # Convert unix time to zulu time for example from 1671086934783 to 2022-12-15T06:48:54.783Z
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                    df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%dT%H:%M:%S.%f').str[:-3]+'Z'
-
-                    fileName = key["logStreamName"]
-                    # Find the index of the closing square bracket
-                    closing_bracket_index = fileName.find(']')
-                    # Check if the closing square bracket is present
-                    if closing_bracket_index != -1:
-                        # Extract the substring after the closing square bracket
-                        output_File_Name = fileName[closing_bracket_index + 1:]
+                        fileName = key["logStreamName"]
+                        # Find the index of the closing square bracket
+                        closing_bracket_index = fileName.find(']')
+                        # Check if the closing square bracket is present
+                        if closing_bracket_index != -1:
+                            # Extract the substring after the closing square bracket
+                            output_File_Name = fileName[closing_bracket_index + 1:]
+                        else:
+                            # Generate a random UUID
+                            random_uuid = uuid.uuid4()
+                            # Convert UUID to a string and remove dashes
+                            output_File_Name = str(random_uuid).replace('-', '')                        
+                        
+                        # Check if "ingestionTime" column exists in the DataFrame
+                        if "ingestionTime" in df.columns:
+                            # If the column exists, drop it
+                            df.drop(columns=["ingestionTime"], inplace=True)
+                            fileToS3 = df
+                            try:                
+                                # Export data to temporary file in the right format, which will be deleted as soon as the session ends
+                                fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
+                            
+                                # Upload data to desired folder in bucket
+                                s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')
+                            except Exception as e:                
+                                print("Error exporting to S3 %s %s: %s" % (log_Group_Name, log_Stream_Name, getattr(e, 'message', repr(e))))
+                        else:
+                            print(f"ingestionTime column missing in the DataFrame")        
                     else:
-                        # Generate a random UUID
-                        random_uuid = uuid.uuid4()
-                        # Convert UUID to a string and remove dashes
-                        output_File_Name = str(random_uuid).replace('-', '')                        
-                    
-                    # Check if "ingestionTime" column exists in the DataFrame
-                    if "ingestionTime" in df.columns:
-                        # If the column exists, drop it
-                        df.drop(columns=["ingestionTime"], inplace=True)
-                        fileToS3 = df
-                    try:                
-                        # Export data to temporary file in the right format, which will be deleted as soon as the session ends
-                        fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
-                    
-                        # Upload data to desired folder in bucket
-                        s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')
-                    except Exception as e:                
-                        print("Error exporting to S3 %s %s: %s" % (log_Group_Name, log_Stream_Name, getattr(e, 'message', repr(e))))
+                        print(f"No events for specified time - startTime:%s, endTime:%s, logGroupName:%s, logStreamName:%s" % (unix_start_time, unix_end_time, key["logGroupName"], key["logStreamName"])) 
+                else:
+                    print(f"No events for specified time - startTime:%s, endTime:%s, logGroupName:%s, logStreamName:%s" % (unix_start_time, unix_end_time, key["logGroupName"], key["logStreamName"]))                     
             else:
                 print(f"No log events for specified time - startTime:%s, endTime:%s, logGroupName:%s, logStreamName:%s" % (unix_start_time, unix_end_time, key["logGroupName"], key["logStreamName"])) 
     except Exception as e:
