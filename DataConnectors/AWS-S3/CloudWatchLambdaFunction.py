@@ -6,6 +6,7 @@ import time
 import pandas as pd
 from datetime import datetime
 import os
+import uuid
 
 logs = boto3.client('logs')
 s3 = boto3.resource('s3')
@@ -49,9 +50,11 @@ def lambda_handler(event, context):
                 }
                 log_groups_streams_arry.append(logGroup_logStream_entry) 
         
+        print(f"log_groups_streams_arry", log_groups_streams_arry)
         # Iterate through log_groups_dict
         for key in log_groups_streams_arry:            
             # Gets objects from cloud watch
+            print(f"Getting log events for specified time - startTime:%s, endTime:%s, logGroupName:%s, logStreamName:%s" % (unix_start_time, unix_end_time, key["logGroupName"], key["logStreamName"])) 
             try:
                 response = logs.get_log_events(
                     logGroupName = key["logGroupName"],
@@ -62,35 +65,50 @@ def lambda_handler(event, context):
             except Exception as e:                
                 print(f"An error occurred at get_log_events: {e}")
             
-            fileName = key["logStreamName"]
-            # Find the index of the closing square bracket
-            closing_bracket_index = fileName.find(']')
-            # Extract the substring after the closing square bracket
-            output_File_Name = fileName[closing_bracket_index + 1]
+            # Check if the response contains log events
+            if 'events' in response:
+                log_events = response['events']
+                if log_events:
+                    # Convert events to json object
+                    json_string = json.dumps(log_events)
+                    json_object = json.loads(json_string)
 
-            # Convert events to json object
-            json_string = json.dumps(response)
-            json_object = json.loads(json_string)
-            
-            df = pd.DataFrame(json_object['events'])
-            if df.empty:
-                print('No events for specified time')                
-            
-            # Convert unix time to zulu time for example from 1671086934783 to 2022-12-15T06:48:54.783Z
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%dT%H:%M:%S.%f').str[:-3]+'Z'
-            
-            try:
-                # Remove unnecessary column
-                fileToS3 = df.drop(columns=["ingestionTime"])
+                    df = pd.DataFrame(json_object)
+                    if df.empty:
+                        print(f"No events for specified time - startTime:%s, endTime:%s, logGroupName:%s, logStreamName:%s" % (unix_start_time, unix_end_time, key["logGroupName"], key["logStreamName"])) 
 
-                # Export data to temporary file in the right format, which will be deleted as soon as the session ends
-                fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
-            
-                # Upload data to desired folder in bucket
-                s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')
-            except Exception as e:                
-                print(f"An error occurred at Upload data to desired folder in bucket: {e}") 
+                    # Convert unix time to zulu time for example from 1671086934783 to 2022-12-15T06:48:54.783Z
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                    df['timestamp'] = df['timestamp'].dt.strftime('%Y-%m-%dT%H:%M:%S.%f').str[:-3]+'Z'
+
+                    fileName = key["logStreamName"]
+                    # Find the index of the closing square bracket
+                    closing_bracket_index = fileName.find(']')
+                    # Check if the closing square bracket is present
+                    if closing_bracket_index != -1:
+                        # Extract the substring after the closing square bracket
+                        output_File_Name = fileName[closing_bracket_index + 1:]
+                    else:
+                        # Generate a random UUID
+                        random_uuid = uuid.uuid4()
+                        # Convert UUID to a string and remove dashes
+                        output_File_Name = str(random_uuid).replace('-', '')                        
+                    
+                    # Check if "ingestionTime" column exists in the DataFrame
+                    if "ingestionTime" in df.columns:
+                        # If the column exists, drop it
+                        df.drop(columns=["ingestionTime"], inplace=True)
+                        fileToS3 = df
+                    try:                
+                        # Export data to temporary file in the right format, which will be deleted as soon as the session ends
+                        fileToS3.to_csv( f'/tmp/{output_File_Name}.gz', index=False, header=False, compression='gzip', sep = ' ', escapechar=' ',  doublequote=False, quoting=csv.QUOTE_NONE)
+                    
+                        # Upload data to desired folder in bucket
+                        s3.Bucket(BUCKET_NAME).upload_file(f'/tmp/{output_File_Name}.gz', f'{BUCKET_PREFIX}{output_File_Name}.gz')
+                    except Exception as e:                
+                        print("Error exporting to S3 %s %s: %s" % (log_Group_Name, log_Stream_Name, getattr(e, 'message', repr(e))))
+            else:
+                print(f"No log events for specified time - startTime:%s, endTime:%s, logGroupName:%s, logStreamName:%s" % (unix_start_time, unix_end_time, key["logGroupName"], key["logStreamName"])) 
     except Exception as e:
         print("Error exporting %s: %s" % (log_Group_Name, getattr(e, 'message', repr(e))))
 
