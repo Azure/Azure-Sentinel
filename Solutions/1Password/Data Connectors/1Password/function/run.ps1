@@ -25,12 +25,12 @@ foreach ($api in $endpoints) {
         # continue if the cursor does not exist and proceed with the lastRunTime
         $cursor = Get-Cursor @storagePayload -cursor $api -ErrorAction SilentlyContinue
         if ($cursor) {
-            $results = Get-AuditLogs -cursor $cursor -api $api
+            $results += Get-AuditLogs -cursor $cursor -api $api
         } else {
-            $results = Get-AuditLogs -lastRunTime $currentStartTime -api $api
+            $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
         }
     } catch {
-        $results = Get-AuditLogs -lastRunTime $currentStartTime -api $api
+        $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
     }
 
     if ($results.count -ge 1) {
