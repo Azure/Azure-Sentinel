@@ -59,6 +59,7 @@ function GenerateDate()
     if($null -ne $startTime)
     {
        $startTime = Get-Date -Date $startTime
+       #$startTime=$startTime.ToUniversalTime()
     }
 
     if($null -ne $startTime)
@@ -226,9 +227,7 @@ function CarbonBlackAlertsAPI() {
     }
     $method = "POST";
     $contentType = "application/json";
-    $headers = @{
-        "X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)";
-    };
+    
     $body = '{ "time_range": {
                   "start": "{starttime}",
                   "end": "{endtime}"
@@ -236,6 +235,11 @@ function CarbonBlackAlertsAPI() {
     $body = $body.Replace('{min}', $Severity)
     $body= $body.Replace('{starttime}', $startTime)
     $body=$body.Replace('{endtime}',$now)
+    $hosttest =$hostName.Split("https://")
+
+    $headers = @{
+        "X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)";
+    };
     $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)" }
     $v7uri = ([System.Uri]::new("$($hostName)/api/alerts/v7/orgs/$($OrgKey)/alerts/_search"))
             
@@ -261,6 +265,13 @@ try {
     $Context = New-AzStorageContext -ConnectionString $azstoragestring
     $startTime,$now=GenerateDate
     $startTime=$startTime | Get-Date -Format yyyy-MM-ddTHH:mm:ss.000K
+    if($startTime.Contains("Z"))
+    {
+            ## Do Nothing
+    }
+    else {
+        $startTime=$startTime+"Z"
+    }
     $now= $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss.000K
     CarbonBlackAPI
     if((Get-AzStorageContainer -Context $Context).Name -contains "lastalertlog"){
