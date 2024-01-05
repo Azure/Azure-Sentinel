@@ -7,12 +7,12 @@
 [Vendor installation instructions](#vendor-installation-instructions)\
 [Next steps](#next-steps)
 
-Varonis SaaS provides the capability to ingest [Varonis Alerts](https://varonisdatalertservicemockwebapi20230907161659.azurewebsites.net/Alert/alerts) into Microsoft Sentinel.
+Varonis SaaS provides the capability to ingest [Varonis Alerts](https://www.varonis.com/products/datalert) into Microsoft Sentinel.
 
 ## Connector Attributes
 | Connector attribute           | Description                                   |
 | ----------------------------- | --------------------------------------------- |
-| Azure function app code       | https://github.com/vkorenkov-varonis/sentinel |
+| Azure function app code       | https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/VaronisSaaS/Data%20Connectors/VaronisSaaSFunction |
 | Log Analytics table(s)        | VaronisAlerts_CL                              |
 | Data collection rules support | Not currently supported                       |
 | Supported by                  | Varonis Corporation                           |
@@ -44,7 +44,7 @@ Option 1 - Azure Resource Manager (ARM) Template
 Use this method for automated deployment of the data connector using an ARM Template.
 
 1. Click the Deploy to Azure button below.\
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fvkorenkov-varonis%2Fsentinel%2Fmaster%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVaronisSaaS%2FData%2520Connectors%2Fazuredeploy.json)
 2. Select the preferred Subscription, Resource Group and Location, Function App plan SKU.
 3. Enter Log Analytics Workspace Name, DatAlert Host Name, Dat Alert Api Key.
 4. Click Review + Create, Create.
@@ -57,7 +57,7 @@ Use the following step-by-step instructions to deploy the data connector manuall
 
     >NOTE: You will need to prepare VS code for Azure function development.
 
-    1. Download the [Azure Function App file](https://raw.githubusercontent.com/vkorenkov-varonis/sentinel/master/Varonis.Sentinel.Functions.zip). Extract archive to your local development computer.
+    1. Download the [Azure Function App file](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VaronisSaaS/Data%20Connectors/Varonis.Sentinel.Functions.zip). Extract archive to your local development computer.
     2. Start VS Code. Choose File in the main menu and select Open Folder.
     3. Select the top level folder from extracted files.
     4. Choose the Azure icon in the Activity bar, then in the Azure: Functions area, choose the Deploy to function app button. If you aren't already signed in, choose the Azure icon in the Activity bar, then in the Azure: Functions area, choose Sign in to Azure If you're already signed in, go to the next step.
