@@ -441,7 +441,7 @@ class UmbrellaClient:
                         'destinationPort': row[10],
                         'dataCenter': row[11],
                         'ruleId': row[12],
-                        'action': row[13]
+                        'verdict': row[13]
                     }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
