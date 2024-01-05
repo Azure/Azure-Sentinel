@@ -41,24 +41,24 @@ query:  |
   | where InitiatingProcessSHA256 in (sha256Hashes) or SHA256 in (sha256Hashes) or ( InitiatingProcessCommandLine has ('127.0.0.1\\ADMIN$') and InitiatingProcessCommandLine has_any (Command_Line))
   | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName,  InitiatingProcessSHA256, Type, AccountName, SHA256
   | extend Account = AccountName, Computer = DeviceName,  CommandLine = InitiatingProcessCommandLine, FileHash = case(InitiatingProcessSHA256 in (sha256Hashes), "InitiatingProcessSHA256", SHA256 in (sha256Hashes), "SHA256", "No Match")
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = case(FileHash == "InitiatingProcessSHA256", InitiatingProcessSHA256, FileHash == "SHA256", SHA256, "No Match"), AlgorithmCustomEntity = "SHA256"
+  | DvcHostName = Computer , ActorUsername = Account, ProcessName = InitiatingProcessFileName, FileHashName = case(FileHash == "InitiatingProcessSHA256", InitiatingProcessSHA256, FileHash == "SHA256", SHA256, "No Match"), AlgorithmName = "SHA256"
   ),
   ( SecurityEvent
   | where EventID == 4688
   | where ( CommandLine has (@'127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line))
   | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type, EventID
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
+  | DvcHostName = Computer , ActorUsername = Account, ProcessName = NewProcessName
   ),
   ( CommonSecurityLog
   | where FileHash in (sha256Hashes)
   | project TimeGenerated, Message, SourceUserID, FileHash, Type
-  | extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, Account = SourceUserID, AlgorithmCustomEntity = "SHA256"
+  | FileHashName = FileHash, Account = SourceUserID, AlgorithmName = "SHA256"
   ),
   ( imFileEvent
   | where Hash in~ (sha256Hashes) or  ( ActingProcessCommandLine has ('127.0.0.1\\ADMIN$') and ActingProcessCommandLine has_any (Command_Line))
   | extend Account = ActorUsername, Computer = DvcHostname, IPAddress = SrcIpAddr, CommandLine = ActingProcessCommandLine, FileHash = TargetFileSHA256
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, FileHashCustomEntity = FileHash, AlgorithmCustomEntity = "SHA256"
+  | ActorUsername = Account, DvcHostName = Computer, FileHashName = FileHash, AlgorithmName = "SHA256"
   ),
   (Event
   | where Source == "Microsoft-Windows-Sysmon"
@@ -72,17 +72,17 @@ query:  |
   | where (Hashes[0] =~ "SHA256" and Hashes[1] has_any (sha256Hashes)) or ( CommandLine has ('127.0.0.1\\ADMIN$') and CommandLine has_any (Command_Line)) 
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = UserName, ProcessCustomEntity = tostring(split(Image, '\\', -1)[-1]), FileHashCustomEntity = tostring(Hashes[1]), AlgorithmCustomEntity = "SHA256"
+  | DvcHostName = Computer , ActorUsername = UserName, ProcessName = tostring(split(Image, '\\', -1)[-1]), FileHashName = tostring(Hashes[1]), AlgorithmName = "SHA256"
   )
   )
-    | extend AccountName = tostring(split(UserName, "@")[0]), AccountUPNSuffix = tostring(split(UserName, "@")[1])
-  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
-  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(ActorUsername, "@")[0]), AccountUPNSuffix = tostring(split(ActorUsername, "@")[1])
+  | extend HostName = tostring(split(DvcHostName, ".")[0]), DomainIndex = toint(indexof(DvcHostName, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(DvcHostName, DomainIndex + 1), DvcHostName)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: UserName
+        columnName: ActorUsername
       - identifier: Name
         columnName: AccountName
       - identifier: UPNSuffix
@@ -90,11 +90,11 @@ entityMappings:
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
-        columnName: ProcessCustomEntity
+        columnName: ProcessName
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: Computer
+        columnName: DvcHostName
       - identifier: HostName
         columnName: HostName
       - identifier: NTDomain
@@ -102,8 +102,8 @@ entityMappings:
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: AlgorithmCustomEntity
+        columnName: AlgorithmName
       - identifier: Value
-        columnName: FileHashCustomEntity
+        columnName: FileHashName
 version: 2.0.2
 kind: Scheduled
