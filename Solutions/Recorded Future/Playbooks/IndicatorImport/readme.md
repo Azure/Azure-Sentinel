@@ -4,6 +4,9 @@ More information about Recorded Future Intelligence Solution for Microsoft Senti
 
 All **IndicatorImport** playbooks have the RecordedFuture-ThreatIntelligenceImport as a prerequisite. So always setup the RecordedFuture-ThreatIntelligenceImport first as part och the solution installation or as a single playbook installation below.  
 
+## Risk list size limitations
+The size and number of indicators imported is limited by logic apps file size and number of items. https://learn.microsoft.com/en-us/azure/logic-apps/logic-apps-limits-and-config?tabs=consumption%2Cazure-portal
+
 ## RecordedFuture-ThreatIntelligenceImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
