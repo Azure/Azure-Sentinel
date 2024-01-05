@@ -12,4 +12,4 @@ class GetAuditEventsRequest:
                         }
                     }
         if token:
-            self.payload.update({"meta": {"pagination": {"pageToken": token}}})
+            self.payload["meta"]["pagination"]["pageToken"] = token
