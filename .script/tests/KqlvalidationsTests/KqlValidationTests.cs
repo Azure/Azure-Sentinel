@@ -135,11 +135,14 @@ namespace Kqlvalidations.Tests
         {
             try
             {
-                var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr, filename);
-                if (!string.IsNullOrEmpty(suggestions))
+                if (!GitHubApiClient.IsForkRepo())
                 {
-                    var gitHubApiClient = GitHubApiClient.Create();
-                    gitHubApiClient.AddPRComment(suggestions);
+                    var suggestions = KqlBestPracticesChecker.CheckBestPractices(queryStr, filename);
+                    if (!string.IsNullOrEmpty(suggestions))
+                    {
+                        var gitHubApiClient = GitHubApiClient.Create();
+                        gitHubApiClient.AddPRComment(suggestions);
+                    } 
                 }
             }
             catch (Exception ex)

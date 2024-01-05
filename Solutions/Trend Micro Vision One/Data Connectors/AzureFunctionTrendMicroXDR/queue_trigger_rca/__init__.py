@@ -31,8 +31,15 @@ def main(rcaMsg: func.QueueMessage) -> None:
         if not token:
             raise GeneralException(f'Token not found for clp: {clp_id}')
 
+        if utils.check_token_is_expired(token):
+            logging.error(f"token is expired, clp: {clp_id}")
+            return
+
         rca_task_detail = get_rca_task_detail(token, task_id, target_guid)
         
+        if not rca_task_detail:
+            logging.error(f"No rca_task_detail for clp: {clp_id}")
+            return
         
         target_info = {
             'xdrCustomerID': clp_id,
