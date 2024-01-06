@@ -20,41 +20,51 @@ tags:
     SchemaVersion: 0.1.0
 
 query: |
-    let args = dynamic(["objectcategory","domainlist","dcmodes","adinfo","trustdmp","computers_pwdnotreqd","Domain Admins", "objectcategory=person", "objectcategory=computer", "objectcategory=*","dclist"]);
-    let parentProcesses = dynamic(["pwsh.exe","powershell.exe","cmd.exe"]);
-    imProcessCreate
-    //looks for execution from a shell
-    | where ActingProcessName has_any (parentProcesses)
-    | extend ActingProcessFileName = tostring(split(ActingProcessName, '\\')[-1])
-    | where ActingProcessFileName in~ (parentProcesses)
-    // main filter
-    | where Process hassuffix "AdFind.exe" or TargetProcessSHA256 == "c92c158d7c37fea795114fa6491fe5f145ad2f8c08776b18ae79db811e8e36a3"
-        // AdFind common Flags to check for from various threat actor TTPs
-        or CommandLine has_any (args)
-    | extend AccountCustomEntity = User, HostCustomEntity = Dvc, ProcessCustomEntity = ActingProcessName, CommandLineCustomEntity = CommandLine, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = TargetProcessSHA256
-    
+  let args = dynamic(["objectcategory","domainlist","dcmodes","adinfo","trustdmp","computers_pwdnotreqd","Domain Admins", "objectcategory=person", "objectcategory=computer", "objectcategory=*","dclist"]);
+  let parentProcesses = dynamic(["pwsh.exe","powershell.exe","cmd.exe"]);
+  imProcessCreate
+  //looks for execution from a shell
+  | where ActingProcessName has_any (parentProcesses)
+  | extend ActingProcessFileName = tostring(split(ActingProcessName, '\\')[-1])
+  | where ActingProcessFileName in~ (parentProcesses)
+  // main filter
+  | where Process hassuffix "AdFind.exe" or TargetProcessSHA256 == "c92c158d7c37fea795114fa6491fe5f145ad2f8c08776b18ae79db811e8e36a3"
+  // AdFind common Flags to check for from various threat actor TTPs
+  or CommandLine has_any (args)
+  | extend AccountName = tostring(split(User, @'\')[1]), AccountNTDomain = tostring(split(User, @'\')[0])
+  | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: User
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
+      - identifier: FullName
+        columnName: Dvc
       - identifier: HostName
-        columnName: HostCustomEntity
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
-        columnName: ProcessCustomEntity
+        columnName: ActingProcessName
       - identifier: CommandLine
-        columnName: CommandLineCustomEntity
+        columnName: CommandLine
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: AlgorithmCustomEntity
+        columnName: AlgorithmType
       - identifier: Value
-        columnName: FileHashCustomEntity
-version: 1.1.3
+        columnName: TargetProcessSHA256
+version: 1.1.5
 kind: Scheduled
 metadata:
     source:

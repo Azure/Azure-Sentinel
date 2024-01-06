@@ -1,0 +1,59 @@
+id: acbf7ef6-f964-44c3-9031-7834ec68175f
+name: RecordedFuture Threat Hunting Domain All Actors
+description: |
+  'Recorded Future Threat Hunting domain correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+customDetails: 
+  ActorInformation: RecordedFuturePortalLink
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Description}}'
+  alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{Domain_s}} from the {{Type}} table.\n'
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: RecordedFuturePortalLink
+query: |
+  let ioc_lookBack = 1d;
+  // The source table (imDns) can be replaced by any infrastructure table containing domain/dns data.
+  // The following workbook: Recorded Future - Domain Correlation will help researching available data and selecting tables and columns  
+  imDns
+  | where isnotempty(Domain)
+  | extend lowerDomain=tolower(Domain)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look at Domain IOCs
+  | where isnotempty(DomainName)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators  
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | extend lowerDomain=tolower(DomainName)
+  ) on lowerDomain 
+  // select column from the source table to match with Recorded Future $left.Domain
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
+  | project Domain, Description, Type, TimeGenerated, RecordedFuturePortalLink
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+version: 1.0.1
+kind: Scheduled
