@@ -22,8 +22,8 @@ CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition',"0")
 Message_Limit = os.getenv('Message_Limit',250)
-GroupName=os.getenv['GroupName']
-GroupInstanceName=os.getenv['GroupInstanceName']
+GroupName = os.environ['GroupName']
+GroupInstanceName = os.environ['GroupInstanceName']
 limit = int(Message_Limit)
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
