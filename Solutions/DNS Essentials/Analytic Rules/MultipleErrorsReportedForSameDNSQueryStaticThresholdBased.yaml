@@ -21,19 +21,48 @@ relevantTechniques:
 query: |
   let lookback=1h;
   let threshold = 2;
-  let errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
-  _Im_Dns(starttime=ago(lookback))
-    | where EventResultDetails has_any (errors)
-    | summarize SrcIPs = make_set(SrcIpAddr, 100) by DnsQuery, bin(TimeGenerated, 10min)
-    | where array_length(SrcIPs) >= threshold
-    | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = threshold
-entityMappings:
-  - entityType: DNS
-    fieldMappings:
-      - identifier: DomainName
-        columnName: DnsQuery
+  let errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']); 
+  _Im_Dns(starttime=ago(lookback)) 
+    | where EventResultDetails has_any (errors) 
+    | summarize SrcIPs = make_set(SrcIpAddr, 100), Dvcs = make_set(Dvc, 100), ResourceIds = make_set(_ResourceId, 100) by DnsQuery, bin(TimeGenerated, 10min) 
+    | where array_length(SrcIPs) >= threshold 
+    | extend TotalIPs = array_length(SrcIPs),IPCountthreshold = threshold 
+    | extend DomainName = strcat(split(DnsQuery, ".")[1], ".", split(DnsQuery, ".")[2])  
+    | mv-expand SrcIPs  
+    | extend SrcIP = tostring(SrcIPs)  
+    | mv-expand Dvcs  
+    | extend Dvc = tostring(Dvcs)  
+    | mv-expand ResourceIds  
+    | extend ResourceId = tostring(ResourceIds)  
+    | extend Dvc = strcat(split(Dvc, ".")[0])
+    | summarize Start=min(TimeGenerated), End=max(TimeGenerated) by SrcIP, Dvc, ResourceId, DnsQuery, DomainName
+    | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+    | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
+entityMappings: 
+  - entityType: DNS 
+    fieldMappings: 
+      - identifier: DomainName 
+        columnName: DnsQuery 
+  - entityType: IP 
+    fieldMappings: 
+      - identifier: Address 
+        columnName: SrcIP 
+  - entityType: AzureResource 
+    fieldMappings: 
+      - identifier: ResourceId
+        columnName: ResourceId
+  - entityType: Url
+    fieldMappings: 
+      - identifier: Url 
+        columnName: DnsQuery 
+  - entityType: Host 
+    fieldMappings: 
+      - identifier: HostName 
+        columnName: HostName 
+      - identifier: NTDomain 
+        columnName: HostNameDomain 
 eventGroupingSettings:
-  aggregationKind: AlertPerResult
+  aggregationKind: SingleAlert
 customDetails:
   SrcIPs: SrcIPs
   IPCountthreshold: IPCountthreshold
@@ -41,5 +70,5 @@ customDetails:
 alertDetailsOverride:
   alertDisplayNameFormat: "[Static threshold] Multiple errors for the same DNS query has been detected - '{{DnsQuery}}'"
   alertDescriptionFormat: "Multiple errors were detected on different clients for the same DNS query. These unsuccessful responses can be an indication of C2 communication. \n\nThreshold for total clients reporting errors: '{{IPCountthreshold}}'\n\nCurrent count of clients reporting errors for this DNS query: '{{TotalIPs}}'\n\nClients requesting this DNSQuery include:\n\n'{{SrcIPs}}'"
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled
