@@ -12,7 +12,8 @@ from .sentinel_connector import AzureSentinelConnector
 
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
 
-
+GroupName = os.environ['GroupName']
+GroupInstanceName = os.environ['GroupInstanceName']
 MessageEndpoint = os.environ['MessageEndpoint']
 StreamOcid = os.environ['StreamOcid'] 
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
@@ -22,8 +23,6 @@ CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition',"0")
 Message_Limit = os.getenv('Message_Limit',250)
-GroupName = os.environ['GroupName']
-GroupInstanceName = os.environ['GroupInstanceName']
 limit = int(Message_Limit)
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
