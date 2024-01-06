@@ -22,6 +22,8 @@ CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition',"0")
 Message_Limit = os.getenv('Message_Limit',250)
+GroupName=os.getenv['GroupName']
+GroupInstanceName=os.getenv['GroupInstanceName']
 limit = int(Message_Limit)
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
@@ -40,13 +42,21 @@ def main(mytimer: func.TimerRequest):
     start_ts = int(time.time())
     config = get_config()
     oci.config.validate_config(config)
+     
+
+    
 
     sentinel_connector = AzureSentinelConnector(LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=2000)
 
     stream_client = oci.streaming.StreamClient(config, service_endpoint=MessageEndpoint)
 
     if CURSOR_TYPE.lower() == 'group' :
-        cursor = get_cursor_by_group(stream_client, StreamOcid, "group1", "group1-instance1")
+       if (not GroupName or str(GroupName).isspace()) or (str(GroupName) in "<Optional>") : 
+        raise Exception("Please enter valid Group Name")
+    
+       if (not GroupInstanceName or str(GroupInstanceName).isspace()) or (str(GroupInstanceName) in "<Optional>") :
+        raise Exception("Please enter valid Group Instance Name")
+       cursor = get_cursor_by_group(stream_client, StreamOcid, GroupName, GroupInstanceName)
     else :
         cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
     
