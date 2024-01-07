@@ -178,7 +178,7 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
 
     $title = $ccpItem.title;
     $displayName = $title;
-    #$randomNumber = Get-Random
+
     return [PSCustomObject]@{
         type       = "Microsoft.OperationalInsights/workspaces/providers/contentTemplates";
         apiVersion = $contentResourceDetails.metadataApiVersion; # "2023-04-01-preview";
@@ -275,7 +275,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             For ($TemplateCounter = 1; $TemplateCounter -lt 3; $TemplateCounter++) {
                 if (!$global:baseMainTemplate.variables."_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)") {
-                    $dataConnectorContentIdName = $templateName + $templateKindByCounter[$TemplateCounter]
+                    if ($TemplateCounter -eq 1) {
+                        $dataConnectorContentIdName = $templateName;
+                    } else {
+                        $dataConnectorContentIdName = $templateName + $templateKindByCounter[$TemplateCounter];
+                    }
+                    
                     $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "$dataConnectorContentIdName"
                 }
             
