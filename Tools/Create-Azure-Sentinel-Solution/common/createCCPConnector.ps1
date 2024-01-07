@@ -183,7 +183,7 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
         type       = "Microsoft.OperationalInsights/workspaces/providers/contentTemplates";
         apiVersion = $contentResourceDetails.metadataApiVersion; # "2023-04-01-preview";
         name        = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', $contentTemplateName, $contentVersion)]";
-        #location   = "[parameters('workspace-location')]";
+        location   = "[parameters('workspace-location')]";
         dependsOn  = @(
             "$($contentResourceDetails.dependsOn)"
         );
@@ -222,7 +222,7 @@ function Get-ArmResource($name, $type, $kind, $properties){
         name       = $name;
         apiVersion = $apiVersion[$type]
         type       = $type;
-        #location   = "[parameters('workspace-location')]";
+        location   = "[parameters('workspace-location')]";
         kind       = $kind;
         properties = $properties;
     }
@@ -589,7 +589,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
                     if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
                         $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                        #$armResource.location = "[[parameters('$($placeHolderName)')]"
+                        $armResource.location = "[[parameters('$($placeHolderName)')]"
                         $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName $placeHolderName -isSecret $false
                     }
                 }
