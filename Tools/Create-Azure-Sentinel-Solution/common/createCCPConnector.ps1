@@ -275,7 +275,8 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             For ($TemplateCounter = 1; $TemplateCounter -lt 3; $TemplateCounter++) {
                 if (!$global:baseMainTemplate.variables."_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)") {
-                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "$templateName"
+                    $dataConnectorContentIdName = $templateName + $templateKindByCounter[$TemplateCounter]
+                    $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_dataConnectorContentId$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)" -NotePropertyValue "$dataConnectorContentIdName"
                 }
             
                 if (!$global:baseMainTemplate.variables."dataConnectorTemplateName$($templateKindByCounter[$TemplateCounter])$($global:connectorCounter)") {
