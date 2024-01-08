@@ -30,28 +30,29 @@ Function Get-AuditLogs {
         [string]$api
     )
 
-    $result = @()
+    $results = @()
 
     $headers = @{
         'Authorization' = "Bearer $env:APIKey"
         'ContentType'   = 'Application/Json'
     }
 
-    if ($cursor) {
-        Write-Host "Processing cursor"
-        $payload = @{
-            'cursor' = $cursor
-        }
-    }
-    else {
+    if (!($cursor)) {
         Write-Host "Processing Time Stamp"
         $payload = @{
             'start_time' = $lastRunTime
             'limit'      = 100
         }
     }
+    else {
+        Write-Host "Processing cursor"
+        $payload = @{
+            'cursor' = $cursor
+        }
+        Write-Host $payload
+    }
 
-    # try {
+    try {
         $uri = "$($env:apiEndpoint)/api/v1/$api"
         Do {
             $apiResponse = (Invoke-RestMethod -Method POST -Uri $uri -Headers $headers -body ($payload | ConvertTo-Json))
@@ -82,10 +83,10 @@ Function Get-AuditLogs {
             }
         }
         Write-Host "Results found: $($results.count)"
-    # }
-    # catch {
+    }
+    catch {
         # Write-Warning "Unable to connect to API [$($env:apiEndpoint)]"
-    # }
+    }
     if ($apiResponse.cursor) {
         Set-Cursor -cursor $api -cursorValue $apiResponse.cursor @storagePayload
     } else {
