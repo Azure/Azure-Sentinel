@@ -1,0 +1,57 @@
+id: e31bc14e-2b4c-42a4-af34-5bfd7d768aea
+name: RecordedFuture Threat Hunting IP All Actors
+description: |
+  'Recorded Future Threat Hunting IP correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+customDetails: 
+  ActorInformation: RecordedFuturePortalLink
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Description}}'
+  alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{NetworkIP}} from the {{Type}} table.\n'
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: RecordedFuturePortalLink
+query: |
+  let ioc_lookBack = 1d;
+  // The source table (ASimNetworkSessionLogs) can be replaced by any infrastructure table containing ip data.
+  // The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns  
+  imNetworkSession
+  | where isnotempty(DstIpAddr)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(NetworkIP)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators  
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  ) on $left.DstIpAddr == $right.NetworkIP
+  // select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.DstIpAddr
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
+  | project NetworkIP, Description, Type, TimeGenerated, RecordedFuturePortalLink
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: NetworkIP
+version: 1.0.1
+kind: Scheduled

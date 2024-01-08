@@ -41,6 +41,42 @@ Dataminr Pulse Alerts Data Connector brings our AI-powered real-time intelligenc
 5. Configure the companies, topics, geolocations, alert priority, and delivery settings for this Watchlist.
 6. When you’re done configuring the Watchlist, click Save to save it.
 
+### STEP 3 - App Registration steps for the Application in Microsoft Entra ID
+
+This integration requires an App registration in the Azure portal. Follow the steps in this section to create a new application in Microsoft Entra ID:
+
+1. Sign in to the Azure portal.
+2. Search for and select Microsoft Entra ID.
+3. Under Manage, select App registrations > New registration.
+4. Enter a display Name for your application.
+5. Select Register to complete the initial app registration.
+6. When registration finishes, the Azure portal displays the app registration's Overview pane. You see the Application (client) ID and Tenant ID. The client ID and Tenant ID is required as configuration parameters for the execution of DataminrPulse Data Connector.
+- Reference link: https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app
+
+### STEP 4 - Add a client secret for application in Microsoft Entra ID
+
+Sometimes called an application password, a client secret is a string value required for the execution of DataminrPulse Data Connector. Follow the steps in this section to create a new Client Secret:
+
+1. In the Azure portal, in App registrations, select your application.
+2. Select Certificates & secrets > Client secrets > New client secret.
+3. Add a description for your client secret.
+4. Select an expiration for the secret or specify a custom lifetime. Limit is 24 months.
+5. Select Add.
+6. Record the secret's value for use in your client application code. This secret value is never displayed again after you leave this page. The secret value is required as configuration parameter for the execution of DataminrPulse Data Connector.
+- Reference link: https://learn.microsoft.com/azure/active-directory/develop/quickstart-register-app#add-a-client-secret
+
+### STEP 5 - Assign role of Contributor to application in Microsoft Entra ID
+
+Follow the steps in this section to assign the role:
+
+1. In the Azure portal, Go to Resource Group and select your resource group.
+2. Go to Access control (IAM) from left panel.
+3. Click on Add, and then select Add role assignment.
+4. Select Contributor as role and click on next.
+5. In Assign access to, select User, group, or service principal.
+6. Click on add members and type your app name that you have created and select it.
+Now click on Review + assign and then again click on Review + assign.
+- Reference link: https://learn.microsoft.com/azure/role-based-access-control/role-assignments-portal
 
 
 ## Installing for the users<a name="Installing-for-the-users"></a>
@@ -58,41 +94,45 @@ iii. Click on Deploy to Azure
 It will lead to a custom deployment page where user need to select **Subscription**, **Resource Group** and **Location**.
 And need to enter below information to configure DataminrPulse data connector for Microsoft Sentinel.
 ```Function Name
-   BaseURL
-   ClientId
-   ClientSecret
-   AlertsTableName
-   LogLevel
-   Workspace ID
-   Workspace Key
+    Workspace ID
+    Workspace Key
+    AlertsTableName
+    BaseURL
+    ClientId
+    ClientSecret
+    AzureClientId
+    AzureClientSecret
+    AzureTenantId
+    AzureResourceGroupName
+    AzureWorkspaceName
+    AzureSubscriptionId
+    Schedule
+    LogLevel
 ```
 ### **Post Deployment Steps**<a name="Post Deployment Steps"></a>
 
-**Get the Function app endpoint**
+**1)Get the Function app endpoint**
     
     1. Go to Azure function Overview page and Click on "Functions" in the left blade.
     2. Click on the function called "DataminrPulseAlertsHttpStarter".
     3. Go to "GetFunctionurl" and copy the function url.
     4. Replace "{functionname}"  with "DataminrPulseAlertsSentinelOrchestrator" in copied function url.
 
-**Steps to add integration settings in Dataminr by running function app manually.**
+**2)Steps to add integration settings in Dataminr by running function app manually.**
 
-    1. Within Microsoft Sentinel, go to Azure function apps then `<your_function_app>` Overview page and Click on "Functions" in the left blade.
-    2. Click on the function called "DataminrPulseAlertsHttpStarter".
-    3. Go to "Code + Test" and click "Test/Run".
-    4. Provide the necessary details as mentioned below:
-        - HTTP Method : "POST"
-        - Key : default(Function key)
-        - Query : Name=functionName ,Value=DataminrPulseAlertsSentinelOrchestrator
-        - Reuqest Body (case-sensitive): 
+    1. Open any API request tool like Postman.
+    2. Click on '+' to create a new request.
+    3. Select HTTP request method as **'POST'**.
+    4. Enter the url prepapred in **point 1)**, in the request URL part.
+    5. In Body, select raw JSON and provide request body as below(case-sensitive):
             {
                 "integration-settings": "ADD",
                 "url": "<URL part from copied Function-url>",
                 "token": "<value of code parameter from copied Function-url>"
             }
-    5. After providing all required details, click "Run".
-    6. You will receive an integration setting ID in the HTTP response with a status code of 200.
-    7. Save "Integration ID" for future reference.
+    6. After providing all required details, click **Send**.
+    7. You will receive an integration setting ID in the HTTP response with a status code of 200.
+    8. Save "Integration ID" for future reference.
 
 ## Installing for testing<a name="Installing-for-testing"></a>
 
