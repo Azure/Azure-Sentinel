@@ -36,7 +36,7 @@ foreach ($api in $endpoints) {
 
 if ($results.count -gt 0) {
     Write-Host "Sending $($results.count) new records"
-    Send-Data -body ($results | ConvertTo-Json)
+    Send-Data -body ($results | ConvertTo-Json -AsArray)
     $updateTime = $true
 } else {
     Write-Host "No new data was found"
