@@ -32,13 +32,13 @@ foreach ($api in $endpoints) {
     } catch {
         $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
     }
+}
 
-    if ($results.count -ge 1) {
-        Send-Data -body ($results | ConvertTo-Json)
-        $updateTime = $true
-    } else {
-        Write-Host "No new data was found"
-    }
+if ($results.count -ge 1) {
+    Send-Data -body ($results | ConvertTo-Json)
+    $updateTime = $true
+} else {
+    Write-Host "No new data was found"
 }
 
     if ($true -eq $updateTime) {
