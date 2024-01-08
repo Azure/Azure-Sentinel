@@ -258,11 +258,13 @@ Function Send-Data {
         "ContentType"    = 'application/json'
     }
 
-    # try {
+    Write-Host $body
+
+    try {
         Invoke-RestMethod -Uri "$uri" -Body $body @requestHeader
-    # } catch {
-        # Write-Warning "Unable to sent data. Validate if the account '$($token.UserId)' has Access to the Data Collection Rule"
-    # }
+    } catch {
+        Write-Warning "Unable to sent data. Validate if the account '$($token.UserId)' has Access to the Data Collection Rule"
+    }
 
 }
 
