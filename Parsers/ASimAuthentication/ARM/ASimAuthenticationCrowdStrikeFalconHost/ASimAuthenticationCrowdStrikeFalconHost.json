@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimAuthenticationCrowdStrikeFalconHost",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Authentication parser for CrowdStrike Falcon Endpoint Protection",
+            "category": "ASIM",
+            "FunctionAlias": "ASimAuthenticationCrowdStrikeFalconHost",
+            "query": "let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)\n  [\n    \"0\", \"Informational\",\n    \"1\", \"Informational\",\n    \"2\", \"Low\",\n    \"3\", \"Medium\",\n    \"4\", \"High\",\n    \"5\", \"High\"\n];\nlet parser = (disabled: bool=false) {\n    CommonSecurityLog\n    | where not(disabled)\n    | where (DeviceVendor == \"CrowdStrike\" and DeviceProduct == \"FalconHost\")\n    | where DeviceEventCategory == \"AuthActivityAuditEvent\" and DeviceEventClassID in (\"userAuthenticate\", \"twoFactorAuthenticate\")\n    | lookup EventSeverityLookup on LogSeverity\n    | extend\n        EventResult = iff(EventOutcome == \"true\", \"Success\", \"Failure\"),\n        EventStartTime = todatetime(DeviceCustomDate1),\n        EventCount = int(1),\n        EventSchema = \"Authentication\",\n        EventSchemaVersion = \"0.1.3\",\n        EventType = \"Logon\",\n        EventProduct = \"FalconHost\",\n        EventVendor = \"CrowdStrike\"\n    | project-rename\n        TargetIpAddr = DestinationTranslatedAddress,\n        EventUid = _ItemId,\n        EventOriginalSeverity = LogSeverity,\n        EventOriginalSubType = DeviceEventClassID,\n        EventOriginalType = DeviceEventCategory,\n        EventProductVersion = DeviceVersion,\n        EventOriginalResultDetails = EventOutcome,\n        TargetUsername = DestinationUserName,\n        TargetAppName = ProcessName\n    | extend\n        EventEndTime = EventStartTime,\n        DvcIpAddr = TargetIpAddr,\n        TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),\n        TargetUserType = _ASIM_GetUserType(TargetUsername, \"\"),\n        TargetAppType = iff(isnotempty(TargetAppName), \"Service\", \"\"),\n        LogonMethod = iff(EventOriginalSubType =~ \"userAuthenticate\", \"Username and Password\", \"Two Factor Authentication\")\n    | extend\n        User = TargetUsername,\n        Dst = TargetIpAddr,\n        Dvc = coalesce(DvcIpAddr, EventProduct),\n        Application = TargetAppName\n    | project-away \n        Source*,\n        Destination*,\n        Device*,\n        AdditionalExtensions,\n        CommunicationDirection,\n        Computer,\n        EndTime,\n        FieldDevice*,\n        Flex*,\n        File*,\n        Old*,\n        MaliciousIP*,\n        OriginalLogSeverity,\n        Process*,\n        Protocol,\n        Activity,\n        ReceivedBytes,\n        SentBytes,\n        Remote*,\n        Request*,\n        SimplifiedDeviceAction,\n        StartTime,\n        TenantId,\n        Threat*,\n        IndicatorThreatType,\n        ExternalID,\n        ReportReferenceLink,\n        ReceiptTime,\n        Reason,\n        ApplicationProtocol,\n        _ResourceId,\n        ExtID,\n        Message\n};\nparser(disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
