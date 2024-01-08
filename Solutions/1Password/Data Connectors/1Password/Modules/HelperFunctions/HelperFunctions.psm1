@@ -248,7 +248,6 @@ Function Send-Data {
     )
 
     $uri = "$env:dataCollectionEndpoint"
-
     $token = Get-AzAccessToken -ResourceUrl https://monitor.azure.com
 
     $requestHeader = @{
@@ -257,8 +256,6 @@ Function Send-Data {
         "Method"         = 'POST'
         "ContentType"    = 'application/json'
     }
-
-    Write-Host $body
 
     try {
         Invoke-RestMethod -Uri "$uri" -Body $body @requestHeader
