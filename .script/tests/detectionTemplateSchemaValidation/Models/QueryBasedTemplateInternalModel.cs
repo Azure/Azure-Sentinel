@@ -24,7 +24,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         public Dictionary<string, string> CustomDetails { get; set; }
 
         [JsonProperty("entityMappings", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
-        [ValidEntityMappings(entityMappingsMinLength: 1, entityMappingsMaxLength: 5, fieldMappingsMinLength: 1, fieldMappingsMaxLength: 3)]
+        [ValidEntityMappings(entityMappingsMinLength: 1, entityMappingsMaxLength: 1, fieldMappingsMinLength: 1, fieldMappingsMaxLength: 3)]
         public List<EntityMapping> EntityMappings { get; set; }
 
         [JsonProperty("alertDetailsOverride", Required = Required.Default, NullValueHandling = NullValueHandling.Ignore)]
