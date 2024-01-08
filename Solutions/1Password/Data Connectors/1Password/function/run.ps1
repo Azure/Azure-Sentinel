@@ -34,16 +34,17 @@ foreach ($api in $endpoints) {
     }
 }
 
-if ($results.count -ge 1) {
+if ($results.count -gt 0) {
+    Write-Host "Sending $($results.count) new records"
     Send-Data -body ($results | ConvertTo-Json)
     $updateTime = $true
 } else {
     Write-Host "No new data was found"
 }
 
-    if ($true -eq $updateTime) {
-        $null = Set-TimeStamp @storagePayload -lastRun $currentUTCtime
-    }
+if ($true -eq $updateTime) {
+    $null = Set-TimeStamp @storagePayload -lastRun $currentUTCtime
+}
 
-    #clear the temp folder
-    Remove-Item $env:temp\* -Recurse -Force -ErrorAction SilentlyContinue
+#clear the temp folder
+Remove-Item $env:temp\* -Recurse -Force -ErrorAction SilentlyContinue
