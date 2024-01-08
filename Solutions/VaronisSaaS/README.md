@@ -27,11 +27,11 @@ VaronisAlerts_CL
 
 ## Prerequisites
 To integrate with Varonis SaaS (using Azure Functions) make sure you have:
-- Microsoft.Web/sites permissions: Read and write permissions to Azure Functions to create a Function App is required. See the [documentation](https://learn.microsoft.com/en-us/azure/azure-functions/) to learn more about Azure Functions.
+- Microsoft.Web/sites permissions: Read and write permissions to Azure Functions to create a Function App is required. See the [documentation](https://learn.microsoft.com/azure/azure-functions/) to learn more about Azure Functions.
 - Varonis API credentials: Varonis API credentials with permission read log is required for Varonis DatAlert API. See the [documentation]() to learn more about creating Varonis DatAlert API credentials.
 
 ## Vendor installation instructions
->This connector uses Azure Functions to connect to the Varonis DatAlert Endpoint API to pull logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/en-us/pricing/details/functions/) for details.
+>This connector uses Azure Functions to connect to the Varonis DatAlert Endpoint API to pull logs into Microsoft Sentinel. This might result in additional data ingestion costs. Check the [Azure Functions pricing page](https://azure.microsoft.com/pricing/details/functions/) for details.
 
 STEP 1 - Obtaining Varonis DatAlert Endpoint API credentials.
 
