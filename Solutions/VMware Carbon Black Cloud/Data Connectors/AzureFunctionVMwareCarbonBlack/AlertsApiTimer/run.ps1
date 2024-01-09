@@ -235,7 +235,6 @@ function CarbonBlackAlertsAPI() {
     $body = $body.Replace('{min}', $Severity)
     $body= $body.Replace('{starttime}', $startTime)
     $body=$body.Replace('{endtime}',$now)
-    $hosttest =$hostName.Split("https://")
 
     $headers = @{
         "X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)";
@@ -244,18 +243,28 @@ function CarbonBlackAlertsAPI() {
     $v7uri = ([System.Uri]::new("$($hostName)/api/alerts/v7/orgs/$($OrgKey)/alerts/_search"))
             
     $notifications = Invoke-WebRequest -Body $body -Uri $v7uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
-    if ($notifications.success -eq $true) {
-        $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
-        if (-not([string]::IsNullOrWhiteSpace($NotifLogJson))) {
-            $responseObj = (ConvertFrom-Json $NotifLogJson)
-            $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
-            Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-        }
-        else {
-            Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
-        }
+    if($null -ne $notifications -and $notifications.Length -ge 10)
+    {
+     $notificationsresults = $notifications | ConvertFrom-Json
+
+    foreach ($item in $notificationsresults.results) {
+<# $currentItemName is the current item #>
+    $NotifLogJson = $item | ConvertTo-Json -Depth 5
+   if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
+   {
+     $responseObj = (ConvertFrom-Json $NotifLogJson)
+     $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
+    Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+   }
+   else
+   {
+    Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
+   }
+
+   }
     }
-    else {
+    else
+    {
         Write-Host "Notifications API status failed , Please check."
     }
 }
