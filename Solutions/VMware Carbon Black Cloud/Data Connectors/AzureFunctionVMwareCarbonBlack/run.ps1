@@ -324,7 +324,7 @@ function CarbonBlackAPI()
             $v7uri=([System.Uri]::new("$($hostName)/api/alerts/v7/orgs/$($OrgKey)/alerts/_search"))
             
             $notifications = Invoke-WebRequest -Body $body -Uri $v7uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
-            if($null -ne $notifications -and $notifications.Length -ge 10)
+            if($notifications.Length -ge 10)
             {
              $notificationsresults = $notifications | ConvertFrom-Json
 
