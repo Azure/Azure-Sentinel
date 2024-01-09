@@ -322,9 +322,9 @@ function CarbonBlackAPI()
             $body=$body.Replace('{min}',$Severity)
             $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
             $v7uri=([System.Uri]::new("$($hostName)/api/alerts/v7/orgs/$($OrgKey)/alerts/_search"))
-            
+
             $notifications = Invoke-WebRequest -Body $body -Uri $v7uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
-            if($notifications.Length -ge 10)
+            if($notifications.RawContentLength -ge 10)
             {
              $notificationsresults = $notifications | ConvertFrom-Json
 
@@ -346,7 +346,7 @@ function CarbonBlackAPI()
             }
             else
             {
-                Write-Host "Notifications API status failed , Please check."
+                Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
             }
            
         }
