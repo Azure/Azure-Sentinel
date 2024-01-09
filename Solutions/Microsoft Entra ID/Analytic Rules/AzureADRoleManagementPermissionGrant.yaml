@@ -48,23 +48,34 @@ query: |
         where Property.displayName =~ "ServicePrincipal.ObjectID"
         | extend AppServicePrincipalId = trim('"',tostring(Property.newValue))
     )
-  | extend 
-      Initiator = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.displayName), tostring(InitiatedBy.user.userPrincipalName)),
-      InitiatorId = iif(isnotempty(InitiatedBy.app), tostring(InitiatedBy.app.servicePrincipalId), tostring(InitiatedBy.user.id))
-  | project TimeGenerated, OperationName, Result, PermissionGrant, AppDisplayName, AppServicePrincipalId, Initiator, InitiatorId, InitiatedBy, TargetResources, AdditionalDetails, CorrelationId
-  | extend Name = tostring(split(Initiator,'@',0)[0]), UPNSuffix = tostring(split(Initiator,'@',1)[0])
+  | extend InitiatingAppName = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName) 
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAdress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName,'@')[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@')[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: Initiator
       - identifier: Name
-        columnName: Name
-      - identifier: UPNSuffix
-        columnName: UPNSuffix
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
       - identifier: Name
-        columnName: AppDisplayName
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAdress
 version: 1.0.6
 kind: Scheduled
