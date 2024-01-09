@@ -181,6 +181,7 @@ function CarbonBlackAPI()
     $AuditLogTable = "CarbonBlackAuditLogs"
     $EventLogTable = "CarbonBlackEvents"
     $NotificationTable  = "CarbonBlackNotifications"
+    $AlertsTable="CarbonBlackAlerts"
     $OrgKey = $env:CarbonBlackOrgKey
     $s3BucketName = $env:s3BucketName
     $EventprefixFolder = $env:EventPrefixFolderName
@@ -333,7 +334,7 @@ function CarbonBlackAPI()
            if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
            {
              $responseObj = (ConvertFrom-Json $NotifLogJson)
-             $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
+             $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $AlertsTable;
             Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
            }
            else
