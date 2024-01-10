@@ -28,7 +28,7 @@ ParserQuery: |
   let parser = (disabled: bool=false) {
       CarbonBlackAuditLogs_CL
       | where not(disabled)
-      | where description_s has_any ("logged in", "login") and description_s !has "connector"
+      | where description_s has_any ("logged in", "login","second factor authentication") and description_s !has "connector"
       | extend
           EventStartTime = unixtime_milliseconds_todatetime(eventTime_d),
           EventResult = iff(description_s has "successfully", "Success", "Failure"),
@@ -41,7 +41,10 @@ ParserQuery: |
           EventSchemaVersion = "0.1.3",
           EventVendor = "VMware",
           EventType = "Logon",
-          EventResultDetails = iff(EventResult == "Failure", "Incorrect password", ""),
+          EventResultDetails = case(
+			                          EventResult == "Failure" and description_s has_any ("logged in", "login"), "Incorrect password",
+			                          EventResult == "Failure" and description_s has ("second factor authentication"), "MFA not satisfied",
+			                          ""),
           EventOriginalResultDetails = iff(EventResult == "Failure", tostring(split(description_s, ';')[1]), "")
       | project-rename
           EventMessage = description_s,
