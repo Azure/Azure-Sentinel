@@ -13,7 +13,7 @@ requiredDataConnectors:
       - SecurityEvent
   - connectorId: WindowsSecurityEvents
     dataTypes: 
-      - SecurityEvents 
+      - SecurityEvents
   - connectorId: WindowsForwardedEvents
     dataTypes: 
       - WindowsEvent 
@@ -33,8 +33,7 @@ query: |
   | where EventID == 4688
   | where Process =~ 'rundll32.exe' 
   | where CommandLine has_all ('Execute','RegRead','window.close')
-  | project TimeGenerated, Computer, Account, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
+  | project TimeGenerated, Computer, SubjectAccount = Account, SubjectUserName, SubjectDomainName, SubjectUserSid, Process, ProcessId, NewProcessName, CommandLine, ParentProcessName, _ResourceId
   ),
   (WindowsEvent
   | where EventID == 4688 and EventData has 'rundll32.exe' and EventData has_any ('Execute','RegRead','window.close')
@@ -43,28 +42,42 @@ query: |
   | where Process =~ 'rundll32.exe' 
   | extend CommandLine = tostring(EventData.CommandLine)
   | where CommandLine has_all ('Execute','RegRead','window.close')
-  | extend Account =  strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
+  | extend SubjectAccount =  strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)
   | extend ParentProcessName = tostring(EventData.ParentProcessName)  
-  | project TimeGenerated, Computer, Account, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account
-  ) )
-
+  | project TimeGenerated, Computer, SubjectAccount, SubjectUserName = EventData.SubjectUserName, SubjectDomainName = EventData.SubjectDomainName, SubjectUserSid = EventData.SubjectUserSid, Process, NewProcessName, CommandLine, ParentProcessName, _ResourceId
+  )
+  )
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: SubjectAccount
+      - identifier: Name
+        columnName: SubjectUserName
+      - identifier: NTDomain
+        columnName: SubjectDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: SubjectUserSid
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.1.3
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.1.5
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Shain
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

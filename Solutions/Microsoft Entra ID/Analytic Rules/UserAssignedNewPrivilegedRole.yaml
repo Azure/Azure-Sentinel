@@ -42,24 +42,44 @@ query: |
         | extend RoleName = trim('"',tostring(Property.newValue))
     )
   | where RoleName contains "Admin"
-  | extend InitiatingApp = tostring(InitiatedBy.app.displayName)
-  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
   // Comment below to alert for PIM activations
   | where Initiator != "MS-PIM"
-  | summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result
-  | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(Initiator,'@',0)[0]), InitiatorUPNSuffix = tostring(split(Initiator,'@',1)[0])
+  | summarize by bin(TimeGenerated, 1h), OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result
+  | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: Target
       - identifier: Name
         columnName: TargetName
       - identifier: UPNSuffix
         columnName: TargetUPNSuffix
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
       - identifier: Name
         columnName: InitiatorName
       - identifier: UPNSuffix
         columnName: InitiatorUPNSuffix
-version: 1.0.0
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
+version: 1.0.1
 kind: Scheduled

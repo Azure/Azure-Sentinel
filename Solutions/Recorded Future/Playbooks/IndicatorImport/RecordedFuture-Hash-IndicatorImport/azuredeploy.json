@@ -1,0 +1,240 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+  "metadata": {
+        "title": "RecordedFuture-Hash-IndicatorImport",
+        "description": "This playbook imports Hash risk lists from Recorded Future and stores them as Threat Intelligence Indicators in Microsoft Sentinel, for detection purposes.\n\nThis playbook depends on RecordedFuture-ThreatIntelligenceImport that need to be installed **manually** before installing this playbook.",
+        "prerequisites": [
+            "First install the RecordedFuture-ThreatIntelligenceImport playbook.",
+            "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the [documentation](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials)"
+        ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "prerequisitesDeployTemplateFile": "../RecordedFuture-ThreatIntelligenceImport/azuredeploy.json",
+        "lastUpdateTime": "2023-07-06T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Threat Intelligence" ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "RecordedFuture-Hash-IndicatorImport",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-Hash-IndicatorImport",
+            "type": "string"
+        },
+        "PlaybookNameBatching": {
+            "defaultValue": "RecordedFuture-ThreatIntelligenceImport",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "RecordedfutureConnectionName": "[concat('Recordedfuture-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@body('Recorded_Future_RiskLists_and_SCF_Download')",
+                            "actions": {
+                                "Parse_JSON": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each')",
+                                        "schema": {
+                                            "properties": {
+                                                "Algorithm": {},
+                                                "EvidenceDetails": {
+                                                    "properties": {
+                                                        "EvidenceDetails": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "Criticality": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "CriticalityLabel": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "EvidenceString": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Rule": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Timestamp": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "Rule",
+                                                                    "EvidenceString",
+                                                                    "CriticalityLabel",
+                                                                    "Timestamp",
+                                                                    "Criticality"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "Name": {
+                                                    "type": "string"
+                                                },
+                                                "Risk": {
+                                                    "type": "integer"
+                                                },
+                                                "riskString": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "RecordedFuture-ImportToSentinel": {
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SendToBatch",
+                                    "inputs": {
+                                        "batchName": "RFImportToSentinel",
+                                        "content": {
+                                            "confidence": "@int(body('Parse_JSON')?['Risk'])",
+                                            "created": "@{utcNow()}",
+                                            "description": "Recorded Future - HASH - Observed in Underground Virus Testing Sites",
+                                            "id": "indicator--@{guid()}",
+                                            "indicator_types": [
+                                                "malicious-activity"
+                                            ],
+                                            "labels": [
+                                                "@{body('Parse_JSON')?['EvidenceDetails']?['EvidenceDetails']}"
+                                            ],
+                                            "modified": "@{utcNow()}",
+                                            "name": "@{body('Parse_JSON')?['Name']}",
+                                            "pattern": "[[file:hashes.'@{body('Parse_JSON')?['Algorithm']}' = '@{body('Parse_JSON')?['Name']}']",
+                                            "pattern_type": "stix",
+                                            "spec_version": "2.1",
+                                            "type": "indicator",
+                                            "valid_from": "@{utcNow()}",
+                                            "valid_until": "@{addHours(utcNow(),24)}"
+                                        },
+                                        "host": {
+                                            "triggerName": "Batch_messages",
+                                            "workflow": {
+                                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('PlaybookNameBatching'))]"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Recorded_Future_RiskLists_and_SCF_Download": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Recorded_Future_RiskLists_and_SCF_Download": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['recordedfuture']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/fusion/files",
+                                "queries": {
+                                    "path": "/public/MicrosoftAzure/hash_observed_testing.json"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "recordedfuture": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('RecordedfutureConnectionName'))]",
+                                "connectionName": "[variables('RecordedfutureConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturev2')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "tags": {
+                "hidden-SentinelTemplateName": "RecordedFuture-Hash-IndicatorImport",
+                "hidden-SentinelTemplateVersion": "1.0"                
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('RecordedfutureConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('RecordedfutureConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('RecordedfutureConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Recordedfuturev2')]"
+                }
+            }
+        }
+    ]
+}

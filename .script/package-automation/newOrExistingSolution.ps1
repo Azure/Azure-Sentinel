@@ -39,7 +39,7 @@ else {
         $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
         Write-Host "List of files in PR: $diff"
 
-        $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' }
+        $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
         Write-Host "Filtered Files $filteredFiles"
 
         if ($filteredFiles.Count -le 0)
@@ -55,7 +55,7 @@ else {
             $offerId = ''
             $publisherId = ''
             $solutionFolderPath = 'Solutions/' + $solutionName
-            $filesList = git ls-files | Where-Object { $_ -like "Solutions/$solutionName/*" } | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' }
+            $filesList = git ls-files | Where-Object { $_ -like "Solutions/$solutionName/*" } | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
 
             Write-Host "List of files changed $filesList"
             try {
