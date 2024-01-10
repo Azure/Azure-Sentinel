@@ -84,7 +84,7 @@ ParserQuery: |
       | where not(disabled)
       | where (isnull(starttime) or TimeGenerated >= starttime)
           and (isnull(endtime) or TimeGenerated <= endtime)
-          and (description_s has_any ("logged in", "login") and description_s !has "connector")
+          and (description_s has_any ("logged in", "login","second factor authentication") and description_s !has "connector")
           and array_length(targetappname_has_any) == 0
           and array_length(actorusername_has_any) == 0
           and array_length(srchostname_has_any) == 0
@@ -98,7 +98,10 @@ ParserQuery: |
           EventType = "Logon"
       | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
           and (eventresult == '*' or EventResult has eventresult)
-      | extend EventResultDetails = iff(EventResult == "Failure", "Incorrect password", "")
+      | extend EventResultDetails = case(
+			    EventResult == "Failure" and description_s has_any ("logged in", "login"), "Incorrect password",
+			    EventResult == "Failure" and description_s has ("second factor authentication"), "MFA not satisfied",
+			    "")
       | where (array_length(eventresultdetails_in) == 0 or EventResultDetails has_any (eventresultdetails_in))
       | extend
           EventStartTime = unixtime_milliseconds_todatetime(eventTime_d),
