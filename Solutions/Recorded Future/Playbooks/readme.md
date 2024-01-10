@@ -5,7 +5,10 @@
 
 Microsoft article that describes roles and permissions in Microsoft Sentinel [Roles and permissions in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/roles).
 
-Following permissions are required on the resource group level [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) and [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
+
+During installation, permissions are required on the resource group level to use and authorize the playbooks. [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) and [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
+
+Alternative use [managed identity](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview) authorization for playbook. The user performing the installation needs to have the role of **Owner** or **Role Based Access Control Administrator** on resource group level.
 
 ## Prerequisites  
 
