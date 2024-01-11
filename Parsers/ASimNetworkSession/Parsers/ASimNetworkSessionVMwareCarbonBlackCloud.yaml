@@ -1,7 +1,7 @@
 Parser:
   Title: NetworkSession ASIM Parser for VMware Carbon Black Cloud
-  Version: '0.1.0'
-  LastUpdated: Oct 25, 2023
+  Version: '0.1.1'
+  LastUpdated: Dec 11, 2023
 Product:
   Name: VMware Carbon Black Cloud
 Normalization:
@@ -26,8 +26,8 @@ ParserParams:
 ParserQuery: |
   let NetworkProtocolLookup = datatable (netconn_protocol_s: string, NetworkProtocol: string)
     [
-        "PROTO_TCP", "TCP",
-        "PROTO_UDP", "UDP"
+    "PROTO_TCP", "TCP",
+    "PROTO_UDP", "UDP"
     ];
     let DvcActionLookup = datatable (sensor_action_s: string, DvcAction: string)
         [
@@ -57,7 +57,50 @@ ParserQuery: |
         "10", 100
     ];
     let parser=(disabled: bool=false) {
-        let alldata = CarbonBlackEvents_CL
+        let CarbonBlackEventsSchema = datatable ( 
+        eventType_s: string,
+        netconn_protocol_s: string,
+        sensor_action_s: string,
+        alert_id_g: string,
+        device_name_s: string,
+        action_s: string,
+        createTime_s: string,
+        netconn_domain_s: string,
+        remote_ip_s: string,
+        netconn_inbound_b: bool,
+        process_guid_s: string,
+        remote_port_d: real,
+        local_port_d: real,
+        process_pid_d: real,
+        device_external_ip_s: string,
+        local_ip_s: string,
+        device_id_s: string,
+        device_os_s: string,
+        event_description_s: string,
+        event_id_g: string,
+        event_origin_s: string,
+        process_path_s: string,
+        process_username_s: string,
+        org_key_s: string,
+    )[];
+        let CarbonBlackNotificationsSchema = datatable (
+        type_s: string,
+        threatInfo_incidentId_g: string,
+        threatInfo_score_d: real,
+        threatInfo_summary_s: string,
+        threatInfo_time_d: real,
+        threatInfo_threatCause_threatCategory_s: string,
+        threatInfo_threatCause_causeEventId_g: string,
+        ruleName_s: string,
+        deviceInfo_deviceVersion_s: string,
+        threatInfo_threatCause_originSourceType_s: string,
+        threatInfo_threatCause_reputation_s: string,
+        threatInfo_threatCause_reason_s: string,
+        id_g: string,
+        primary_event_id_g: string,
+        threat_id_g: string
+    )[];
+        let alldata = union (CarbonBlackEventsSchema), (CarbonBlackEvents_CL)
             | where not(disabled)
             | where eventType_s == "endpoint.event.netconn"
             | lookup NetworkProtocolLookup on netconn_protocol_s
@@ -65,7 +108,7 @@ ParserQuery: |
             | lookup EventSeverityLookup on DvcAction;
         let alldatawiththreat = alldata 
             | where isnotempty(alert_id_g)
-            | join kind=leftouter(CarbonBlackNotifications_CL
+            | join kind=leftouter(union (CarbonBlackNotifications_CL), (CarbonBlackNotificationsSchema)
                 | where type_s == "THREAT"
                 | project
                     threatInfo_incidentId_g,
@@ -80,11 +123,10 @@ ParserQuery: |
                     threatInfo_threatCause_reputation_s,
                     threatInfo_threatCause_reason_s)
                 on $left.alert_id_g == $right.threatInfo_incidentId_g
-            | join kind=leftouter(CarbonBlackNotifications_CL
+            | join kind=leftouter(union (CarbonBlackNotifications_CL), (CarbonBlackNotificationsSchema)
                 | where type_s == "CB_ANALYTICS"
                 | project
                     id_g,
-                    primary_event_id_g,
                     deviceInfo_deviceVersion_s,
                     threat_id_g,
                     threatInfo_score_d,
@@ -94,6 +136,7 @@ ParserQuery: |
             | extend 
                 ThreatCategory = threatInfo_threatCause_threatCategory_s,
                 ThreatFirstReportedTime = unixtime_milliseconds_todatetime(threatInfo_time_d),
+                RuleName = ruleName_s,
                 AdditionalFields_threat = bag_pack(
                                 "threatInfo_threatCause_reason",
                                 coalesce(threatInfo_threatCause_reason_s, threatInfo_threatCause_reason_s1),
@@ -123,7 +166,8 @@ ParserQuery: |
                     ""
                 ),
             AdditionalFields_Common = bag_pack(
-                                "Process Guid", process_guid_s
+                                "Process Guid",
+                                process_guid_s
                             ),
             DstPortNumber = toint(remote_port_d),
             NetworkDirection = case(
@@ -201,8 +245,6 @@ ParserQuery: |
             RawData,
             SourceSystem,
             TenantId,
-            AdditionalFields_*,
-            *_d1,
-            *_s1
+            AdditionalFields_*
     };
-  parser(disabled = disabled)
+    parser(disabled = disabled)
