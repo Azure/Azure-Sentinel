@@ -116,9 +116,7 @@ $exclusionDomainList = @("&&sudo","schema.management","schemas.microsoft","twitt
 foreach ($currentFile in $filterOutExclusionList)
 {
   $urlList = @()
-		$fileContent = ReadFileContent -filePath $currentfile // getting error if file format is yaml
-
-		$fileContent=  Get-Content -Path $currentFile 
+		$fileContent = ReadFileContent -filePath $currentfile
         $list = $fileContent | Select-String -Pattern '(http|https):\/\/([\w\-_]+(?:(?:\.[\w\-_]+)+))([\w\-\.,@?^=%&amp;:/~\+#]*[\w\-\@?^=%&amp;/~\+#])?' -AllMatches 
         $urlList += $list.Matches.Value
 		$urlList = $urlList | Select-Object -Unique
