@@ -2,16 +2,10 @@ import os.path
 from datetime import datetime, timedelta, timezone, date
 from typing import List
 
+from globalVariables import SUPPORTED_EVENT_TYPES, BUCKETS
 from .s3_client import S3Client, Context
 from .auth_client import Auth
 from .errors import InputError, ServerError
-
-EVENT_TYPES = ['suricata', 'observation']
-BUCKETS = {
-    "production": "fortindr-cloud-metastream",
-    "uat": "fortindr-cloud-metastream-uat"
-}
-
 
 def _validate_start_date(start_date: datetime, checkpoint: datetime):
     if start_date > checkpoint:
@@ -28,8 +22,8 @@ def _validate_day(day: date):
 
 
 def _validate_event_types(event_types):
-    if not all(e in EVENT_TYPES for e in event_types):
-        raise InputError(f'event_types must be of the following: {", ".join(EVENT_TYPES)}')
+    if not all(e in SUPPORTED_EVENT_TYPES for e in event_types):
+        raise InputError(f'event_types must be of the following: {", ".join(SUPPORTED_EVENT_TYPES)}')
 
 
 def _validate_limit(limit: int):
@@ -115,7 +109,7 @@ def fetch_events(name: str, event_types: List[str], account_code: str = None, ap
     start_day = start_date.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
 
     if not event_types:
-        event_types = EVENT_TYPES
+        event_types = SUPPORTED_EVENT_TYPES
 
     num_events = 0
     cut_off = checkpoint - timedelta(seconds=1)
@@ -258,4 +252,4 @@ def fetch_detections(name: str, account_code: str, start_date: datetime, access_
 
 
 def fetch_event_types():
-    return EVENT_TYPES
+    return SUPPORTED_EVENT_TYPES

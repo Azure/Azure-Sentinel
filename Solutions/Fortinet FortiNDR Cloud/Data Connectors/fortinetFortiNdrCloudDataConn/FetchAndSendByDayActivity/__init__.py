@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from metastream import fetch_detections_by_day, fetch_events_by_day
 from metastream.s3_client import Context
 from sentinel.sentinel import post_data
-from global_variables import *
+from globalVariables import SUPPORTED_EVENT_TYPES
 
 AWS_ACCESS_KEY = os.environ.get('AwsAccessKeyId')
 AWS_SECRET_KEY = os.environ.get('AwsSecretAccessKey')

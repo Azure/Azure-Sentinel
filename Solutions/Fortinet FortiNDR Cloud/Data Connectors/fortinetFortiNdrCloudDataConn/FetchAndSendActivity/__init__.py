@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from metastream import fetch_detections, fetch_events
 from metastream.s3_client import Context
 from sentinel import post_data
-from global_variables import *
+from globalVariables import SUPPORTED_EVENT_TYPES
 
 AWS_ACCESS_KEY = os.environ.get('AwsAccessKeyId')
 AWS_SECRET_KEY = os.environ.get('AwsSecretAccessKey')  # is this encrypted

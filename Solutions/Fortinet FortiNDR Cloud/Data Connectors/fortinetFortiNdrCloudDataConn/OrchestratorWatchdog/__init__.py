@@ -8,10 +8,7 @@ import azure.durable_functions as df
 import azure.functions as func
 
 from metastream.errors import InputError
-
-ORCHESTRATION_NAME = 'SingletonEternalOrchestrator'
-
-SUPPORTED_EVENTS = set(['observation', 'suricata', 'detections'])
+from globalVariables import ORCHESTRATION_NAME, SUPPORTED_EVENT_TYPES
 
 NOT_RUNNING_FUNCTION_STATES = [
     df.OrchestrationRuntimeStatus.Completed,
@@ -36,9 +33,9 @@ except ValueError:
 
 
 def validate_configuration():
-    if EVENT_TYPES and not SUPPORTED_EVENTS.issuperset(EVENT_TYPES):
+    if EVENT_TYPES and not SUPPORTED_EVENT_TYPES.issuperset(EVENT_TYPES):
         raise InputError(
-            f"FncEvents must be one or more of {SUPPORTED_EVENTS}")
+            f"FncEvents must be one or more of {SUPPORTED_EVENT_TYPES}")
 
     sentinel_shared_key = (os.environ.get('WorkspaceKey') or '').strip()
     if not sentinel_shared_key:

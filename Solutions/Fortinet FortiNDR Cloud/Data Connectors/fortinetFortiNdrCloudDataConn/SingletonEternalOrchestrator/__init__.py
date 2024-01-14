@@ -1,6 +1,5 @@
 import logging
 from datetime import timedelta
-import time
 
 import azure.durable_functions as df
 

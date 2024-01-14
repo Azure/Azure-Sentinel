@@ -1,14 +1,8 @@
 import http.client
 import json
 
-
+from globalVariables import AUTH_URLS
 from .errors import InputError
-
-AUTH_URLS = {
-    "production": "auth.icebrg.io",
-    "uat": "auth-uat.icebrg.io"
-}
-
 
 def _get_auth_url(env):
     auth_url = AUTH_URLS.get(env)
