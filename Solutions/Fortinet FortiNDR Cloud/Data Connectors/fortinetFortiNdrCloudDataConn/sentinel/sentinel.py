@@ -4,6 +4,7 @@ import hmac
 import json
 import logging
 import os
+import time
 from datetime import datetime
 
 import requests
@@ -32,7 +33,6 @@ def post_data(events: list[dict], log_type_suffix: str):
         'Log-Type': log_type,
         'x-ms-date': rfc1123date
     }
-
     response = requests.post(LOG_ANALYTICS_URI, data=body, headers=headers)
     if (response.status_code >= 200 and response.status_code <= 299):
         logging.info(f'SentinelClient: posted {len(events)} events to {log_type}')

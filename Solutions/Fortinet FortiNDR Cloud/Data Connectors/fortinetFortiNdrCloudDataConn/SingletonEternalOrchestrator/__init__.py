@@ -1,45 +1,89 @@
 import logging
 from datetime import timedelta
+import time
 
 import azure.durable_functions as df
 
 def orchestrator_function(context: df.DurableOrchestrationContext):
     args: dict = context.get_input()
-    checkpoints: dict = args.get('checkpoints')
-    days_to_collect: int = args.get('days_to_collect', 0)
+    event_types: dict = args.get('event_types')
     interval: int = args.get('interval')
+    
+    logging.info(
+        f'SingletonEternalOrchestrator: event_types: {list(event_types)} instance_id: {context.instance_id}')
 
-    logging.info(f'SingletonEternalOrchestrator: days_to_collect: {days_to_collect} checkpoints: {checkpoints} instance_id: {context.instance_id}')
-
-    if not checkpoints:
+    if not event_types:
         return
 
-    if days_to_collect > 0:
-        events = list(checkpoints.keys())
-    
+    # Retrieving full days for each event_type one by one
+    failing = args.get('failing', [])
+    for event_type, event_type_args in event_types.items():    
+        if event_type in failing:
+            continue
+        attempt = event_type_args.get('attempt', 0)
+        remaining_days = event_type_args['days_to_collect']
+        if remaining_days > 0 and attempt <= 3:
+            try:
+                yield context.call_activity('FetchAndSendByDayActivity', {'day': remaining_days, 'event_type': event_type})
+                event_types[event_type]['days_to_collect'] = remaining_days-1
+                event_type_args['attempt'] = 0
+            except Exception as ex:
+                logging.error(f'Error when fetching events by day with event_type => {event_type} error => {ex}')
+                event_types[event_type]['attempt'] = attempt + 1
+                if attempt <= 3:
+                    logging.info(f"Retrying attempt {attempt}.")
+                else:
+                    failing.append(event_type)
+                    args['failing'] = failing
+
+            # Run the orchastrator new for each day to help avoid timeouts.
+            args['event_types'] = event_types
+            context.continue_as_new(args)
+            return
+
+    # Retrieving piece of a day for each event_type one by one
+    retrieved = args.get('retrieved', [])
+    for event_type, event_type_args in event_types.items():
+        attempt = event_type_args.get('attempt', 0)
+        if event_type in failing or event_type in retrieved or attempt > 3:
+            continue
+
         try:
-            yield context.call_activity('FetchAndSendByDayActivity', {'day': days_to_collect, 'events': events})
-            args['days_to_collect'] = days_to_collect-1
+            checkpoint = event_type_args['checkpoint']
+            next_checkpoint = yield context.call_activity('FetchAndSendActivity',  {'checkpoint': checkpoint, 'event_type': event_type})
+            event_types[event_type]['checkpoint'] = next_checkpoint
+            retrieved.append(event_type)
+            args['retrieved'] = retrieved
+            event_type_args['attempt'] = 0
         except Exception as ex:
-            logging.error(f'Failure: SingletonEternalOrchestrator: fetch_and_send_by_day error: {ex}')
-            args['days_to_collect'] = days_to_collect
-                
-        # Run the orchastrator new for each day to help avoid timeouts.
+            logging.error(f'Error when fetching events by checkpoints with event_type => {event_type} error => {ex}')
+            event_types[event_type]['attempt'] = attempt + 1
+            logging.error(str(ex))
+            if attempt <= 3:
+                logging.info(f"Retrying attempt {attempt}.")
+            else:
+                failing.append(event_type)
+                args['failing'] = failing
+
+        args['event_types'] = event_types
         context.continue_as_new(args)
         return
 
-    next_checkpoints = yield context.call_activity('FetchAndSendActivity', checkpoints)
-
-    if not next_checkpoints:
-        logging.info('SingletonEternalOrchestrator: No new checkpoints. Exiting Orchestrator.')
-        return
+    retrieved_events = args.get('retrieved', 'none')
+    failed_events = args.get('failing', 'none')
+    logging.info(f'Fech events finished. Retrieved Events: {retrieved_events}, Failed Events: {failed_events}')
+    args.pop('retrieved', None)
+    args.pop('failing', None)
+    for event_type_args in event_types.values():
+        event_type_args['attempt'] = 0
+    args['event_types'] = event_types
 
     # sleep
-    logging.info(f'SingletonEternalOrchestrator: Sleeping for {interval} minutes')
+    logging.info(
+        f'SingletonEternalOrchestrator: Sleeping for {interval} minutes')
     yield context.create_timer(context.current_utc_datetime + timedelta(minutes=interval))
-    logging.info(f'SingletonEternalOrchestrator: Woke up and will continue as new.')
-    context.continue_as_new({'checkpoints': next_checkpoints, 'interval': interval})
-
+    logging.info(
+        f'SingletonEternalOrchestrator: Woke up and will continue as new.')
+    context.continue_as_new(args)
 
 main = df.Orchestrator.create(orchestrator_function)
-

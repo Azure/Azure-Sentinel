@@ -11,7 +11,7 @@ from metastream.errors import InputError
 
 ORCHESTRATION_NAME = 'SingletonEternalOrchestrator'
 
-SUPPORTED_EVENTS = set(['observation', 'suricata'])
+SUPPORTED_EVENTS = set(['observation', 'suricata', 'detections'])
 
 NOT_RUNNING_FUNCTION_STATES = [
     df.OrchestrationRuntimeStatus.Completed,
@@ -20,9 +20,8 @@ NOT_RUNNING_FUNCTION_STATES = [
     None
 ]
 
-EVENT_TYPES =(os.environ.get("FncEvents") or "observation").split(",")
+EVENT_TYPES = (os.environ.get("FncEvents") or "observation").split(",")
 EVENT_TYPES = [event.strip() for event in EVENT_TYPES if event]
-DETECTIONS = (os.environ.get("FncDetections") or "true").strip().lower() == 'true'
 TERMINATE_APP = os.environ.get("FncTerminateApp").strip().lower() == 'true'
 
 try:
@@ -37,16 +36,9 @@ except ValueError:
 
 
 def validate_configuration():
-    account_code = (os.environ.get("FncAccountCode") or '').strip()
-    if not account_code:
-        raise InputError(f'FncAccountCode is required.')
-
     if EVENT_TYPES and not SUPPORTED_EVENTS.issuperset(EVENT_TYPES):
-        raise InputError(f"FncEvents must be one or more of {SUPPORTED_EVENTS}")
-
-    sentinel_customer_id = (os.environ.get('WorkspaceId') or '').strip()
-    if not sentinel_customer_id:
-        raise InputError(f'WorkspaceId is required.')
+        raise InputError(
+            f"FncEvents must be one or more of {SUPPORTED_EVENTS}")
 
     sentinel_shared_key = (os.environ.get('WorkspaceKey') or '').strip()
     if not sentinel_shared_key:
@@ -64,7 +56,8 @@ async def main(mytimer: func.TimerRequest, starter: str) -> None:
     instance_id = "FncIntegrationSentinelStaticInstanceId"
 
     existing_instance = await client.get_status(instance_id)
-    logging.info(f'OrchestratorWatchdog: {ORCHESTRATION_NAME} status: {existing_instance.runtime_status}')
+    logging.info(
+        f'OrchestratorWatchdog: {ORCHESTRATION_NAME} status: {existing_instance.runtime_status}')
 
     if TERMINATE_APP:
         reason = f'FncTerminateApp set to {TERMINATE_APP}'
@@ -77,26 +70,30 @@ async def main(mytimer: func.TimerRequest, starter: str) -> None:
         await client.start_new(ORCHESTRATION_NAME, instance_id, create_args())
         logging.info(f"OrchestratorWatchdog: Started {ORCHESTRATION_NAME}")
 
-    
+
 async def terminate_app(client, status, instance_id, reason: str):
     if status not in NOT_RUNNING_FUNCTION_STATES:
         await client.terminate(instance_id=instance_id, reason=reason)
-        logging.info(f'OrchestrationWatchdog: Termination request sent to {ORCHESTRATION_NAME}.')
+        logging.info(
+            f'OrchestrationWatchdog: Termination request sent to {ORCHESTRATION_NAME}.')
 
 
 def create_args():
     timestamp = datetime.now(tz=timezone.utc)
+    days_to_collect = DAYS_TO_COLLECT if DAYS_TO_COLLECT else 0
+
     if DAYS_TO_COLLECT:
         start_date = timestamp.replace(hour=0, minute=0, second=0).isoformat()
     else:
         start_date = (timestamp - timedelta(minutes=INTERVAL)).isoformat()
 
     args = {}
-    args['checkpoints'] = {event_type.strip(): start_date for event_type in EVENT_TYPES}
-    if DETECTIONS:
-        args['checkpoints']['detections'] = start_date
-    if DAYS_TO_COLLECT:
-        args['days_to_collect'] = DAYS_TO_COLLECT
-
+    args['event_types'] = {
+        event_type.strip(): {
+            "checkpoint": start_date,
+            "days_to_collect": days_to_collect
+        }
+        for event_type in EVENT_TYPES
+    }
     args['interval'] = INTERVAL
     return args
