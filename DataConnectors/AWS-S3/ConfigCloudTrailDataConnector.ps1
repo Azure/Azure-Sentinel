@@ -237,6 +237,10 @@ Write-Log -Message "Starting CloudTrail data connector configuration script" -Lo
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable CloudTrail Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -Severity Information -LinePadding 2
 Write-ScriptNotes
 
+# Add an Identity Provider
+if($script:regionForSecurity -eq "Fairfax"){
+    New-OidcProvider
+}
 New-ArnRole
 
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
