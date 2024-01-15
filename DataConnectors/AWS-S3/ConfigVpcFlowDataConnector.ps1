@@ -6,7 +6,7 @@ Write-Log -Message "This script creates an Assume Role with minimal permissions 
 Write-ScriptNotes
 
 # Add an Identity Provider
-if($script:regionForSecurity -eq "Fairfax"){
+if($script:CloudEnv -eq "Gov"){
     New-OidcProvider
 }
 # Create new Arn Role

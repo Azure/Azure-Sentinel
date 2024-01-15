@@ -101,7 +101,7 @@ function New-ArnRole
             $workspaceId = Read-ValidatedHost -Prompt "Please enter your Azure Sentinel External ID (Workspace ID)"
             Write-Log "Using Azure Sentinel Workspace ID: $workspaceId" -LogFileName $LogFileName -Severity Information -Indent 2
 
-            if($regionForSecurity -eq "Fairfax")
+            if($script:CloudEnv -eq "Gov")
             {
                 $rolePolicy = Get-OIDCRoleArnPolicy -WorkspaceId $workspaceId -CustomerAWSAccountId $CustomerAWSAccountId
             }

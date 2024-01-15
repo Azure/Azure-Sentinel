@@ -41,6 +41,10 @@ function Get-OIDCRoleArnPolicy
 		Returns a customized Arn policy using the Sentinel Workspace Id
 	.PARAMETER WorkspaceId
 		Specifies the Azure Sentinel workspace id 
+	.PARAMETER CustomerAWSAccountId
+		Specifies the customer AWS account id
+	.PARAMETER SentinelTenantId
+		Specifies the Sentinel tenant id
    #>
 [OutputType([string])]
 [CmdletBinding()]
@@ -52,7 +56,8 @@ param (
 	[Parameter(position=1)]
 	[ValidateNotNullOrEmpty()]
 	[string]
-	$CustomerAWSAccountId
+	$CustomerAWSAccountId,
+	$SentinelTenantId
 )  
    $arnRolePolicy = "{
             'Version': '2012-10-17',
@@ -60,12 +65,12 @@ param (
                 {
                     'Effect': 'Allow',
 					'Principal': {
-						'Federated': 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/'
+						'Federated': 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/'
 					},
                     'Action': 'sts:AssumeRole',
 					'Condition': {
 						'StringEquals': {
-							'sts.windows.net/33e01921-4d64-4f8c-a055-5bdaffd5e33d/:aud': 'api://21f935c0-8092-4b62-a772-5a2afd714569',
+							'sts.windows.net/$($SentinelTenantId)/:aud': 'api://$($SentinelClientId)',
 							'sts:RoleSessionName': 'MicrosoftDefenderForClouds_$WorkspaceId'
 						}
 					}
