@@ -2520,12 +2520,44 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                             $alertRule | Add-Member -NotePropertyName tactics -NotePropertyValue $yaml.tactics # Add Tactics property if exists
                         }
+
+                        $subtechniques = @()
+                        $techniques = @()
+
                         if ($yaml.relevantTechniques -and ($yaml.relevantTechniques.Count -gt 0) ) {
                             if ($yaml.relevantTechniques -match ' ') {
                                 $yaml.relevantTechniques = $yaml.relevantTechniques -replace ' ', ''
                             }
-                            $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue ([array]($yaml.relevantTechniques | ForEach-Object { ($_ -split "\.")[0] })) # Add relevantTechniques property if exists
+                        
+                            foreach ($item in [array]($yaml.relevantTechniques)) {
+                                if ($item.contains('.')) {
+                                    if (!$subtechniques.Contains($item)) {
+                                        $subtechniques += $item
+                                    }
+                                }
+
+                                if (!$techniques.Contains($item)) {
+                                    $techniques += ($item -split "\.")[0]
+                                }
+                            }
                         }
+
+                        if ($subtechniques.Count -gt 0) {
+                            Write-Host "Has Sub-Techniques for Analytic rule file name $fileName"
+                            $alertRule | Add-Member -NotePropertyName subTechniques -NotePropertyValue ([array]($subtechniques))
+                        }
+
+                        if ($techniques.Count -gt 0) {
+                            Write-Host "Has Techniques for Analytic rule file name $fileName"
+                            $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue ([array]($techniques))
+                        }
+
+                        # if ($yaml.relevantTechniques -and ($yaml.relevantTechniques.Count -gt 0) ) {
+                        #     if ($yaml.relevantTechniques -match ' ') {
+                        #         $yaml.relevantTechniques = $yaml.relevantTechniques -replace ' ', ''
+                        #     }
+                        #     $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue ([array]($yaml.relevantTechniques | ForEach-Object { ($_ -split "\.")[0] })) # Add relevantTechniques property if exists
+                        # }
                         $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any.
                         if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')) {
                             # Remove surrounding single-quotes (') from YAML block literal string, in case the string starts with a single quote in Yaml.

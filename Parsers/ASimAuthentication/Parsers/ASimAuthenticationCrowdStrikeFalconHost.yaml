@@ -1,0 +1,109 @@
+Parser:
+  Title: ASIM Authentication parser for CrowdStrike Falcon Endpoint Protection
+  Version: '0.1.0'
+  LastUpdated: Oct 26 2023
+Product:
+  Name: CrowdStrike Falcon Endpoint Protection
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: CrowdStrike Falcon Endpoint Protection Documentation
+  Link: 
+    https://falcon.us-2.crowdstrike.com/documentation/page/d88d9ed6/streaming-api-event-dictionary
+    https://falcon.us-2.crowdstrike.com/documentation/page/eb1587d1/siem-connector#mc98af8f
+Description: |
+  This ASIM parser supports normalizing CrowdStrike Falcon Endpoint Protection logs to the ASIM Authentication normalized schema. These events are captured through CrowdStrike Falcon Endpoint Protection data connector which allows you to easily connect your CrowdStrike Falcon Event Stream with Microsoft Sentinel.
+ParserName: ASimAuthenticationCrowdStrikeFalconHost
+EquivalentBuiltInParser: _ASim_Authentication_CrowdStrikeFalconHost
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+    [
+      "0", "Informational",
+      "1", "Informational",
+      "2", "Low",
+      "3", "Medium",
+      "4", "High",
+      "5", "High"
+  ];
+  let parser = (disabled: bool=false) {
+      CommonSecurityLog
+      | where not(disabled)
+      | where (DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost")
+      | where DeviceEventCategory == "AuthActivityAuditEvent" and DeviceEventClassID in ("userAuthenticate", "twoFactorAuthenticate")
+      | lookup EventSeverityLookup on LogSeverity
+      | extend
+          EventResult = iff(EventOutcome == "true", "Success", "Failure"),
+          EventStartTime = todatetime(DeviceCustomDate1),
+          EventCount = int(1),
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.3",
+          EventType = "Logon",
+          EventProduct = "FalconHost",
+          EventVendor = "CrowdStrike"
+      | project-rename
+          TargetIpAddr = DestinationTranslatedAddress,
+          EventUid = _ItemId,
+          EventOriginalSeverity = LogSeverity,
+          EventOriginalSubType = DeviceEventClassID,
+          EventOriginalType = DeviceEventCategory,
+          EventProductVersion = DeviceVersion,
+          EventOriginalResultDetails = EventOutcome,
+          TargetUsername = DestinationUserName,
+          TargetAppName = ProcessName
+      | extend
+          EventEndTime = EventStartTime,
+          DvcIpAddr = TargetIpAddr,
+          TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+          TargetAppType = iff(isnotempty(TargetAppName), "Service", ""),
+          LogonMethod = iff(EventOriginalSubType =~ "userAuthenticate", "Username and Password", "Two Factor Authentication")
+      | extend
+          User = TargetUsername,
+          Dst = TargetIpAddr,
+          Dvc = coalesce(DvcIpAddr, EventProduct),
+          Application = TargetAppName
+      | project-away 
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          Computer,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          Protocol,
+          Activity,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          Threat*,
+          IndicatorThreatType,
+          ExternalID,
+          ReportReferenceLink,
+          ReceiptTime,
+          Reason,
+          ApplicationProtocol,
+          _ResourceId,
+          ExtID,
+          Message
+  };
+  parser(disabled=disabled)

@@ -329,6 +329,13 @@ def main(mytimer: func.TimerRequest) -> None:
             start_time = (end_time - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             end_time = end_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
+        # Check if start_time  is less than current UTC time minus 180 days. If yes, then set end_time to current UTC time minus 179 days
+        # Google Workspace Reports API only supports 180 days of data
+        if (datetime.utcnow() - timedelta(days=180)) > datetime.strptime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ"):
+            logging.info("End time older than 180 days. Setting start time to current UTC time minus 179 days as Google Workspace Reports API only supports 180 days of data.")
+            start_time = (datetime.utcnow() - timedelta(days=179)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            start_time = start_time[:-4] + 'Z'
+
         # check if differenc between start_time and end_time is more than 15 mins. If yes, then set end_time to start_time + 15 mins
         # This is to avoid fetching too many events in one go
         if (convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ") - convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ")).total_seconds() > 900:
