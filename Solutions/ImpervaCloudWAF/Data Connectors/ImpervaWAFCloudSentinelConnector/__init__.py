@@ -133,6 +133,7 @@ class ImpervaFilesHandler:
         file_data = file_splitted[1]
         file_encryption_flag = file_header.find("key:")
         events_arr = []
+        events_data = None
         if file_encryption_flag == -1:
             try:
                 events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
