@@ -17,6 +17,7 @@ import requests
 import logging
 import time
 import math
+from azure.storage.blob import BlobServiceClient
 
 
 class ThreatIntelFeedRequestHelper:
@@ -134,11 +135,16 @@ class ThreatIntelFeedRequestHelper:
             secret_key=os.environ["mimecast_secret_key"],
             base_url=os.environ["mimecast_base_url"],
         )
+        # Create a BlobServiceClient
+        blob_service_client = BlobServiceClient.from_connection_string(os.environ["AzureWebJobsStorage"])
 
+        # Get a BlobClient for the specific blob
+        blob_client = blob_service_client.get_blob_client(container="tir-checkpoints", blob="checkpoint.txt")
         next_token = None
         has_more_logs = True
-        feed = []
+        latest_feed = None
         while has_more_logs:
+            feed = []
             model = GetThreatIntelFeedRequest(start_date, end_date, feed_type, next_token)
             response = self.send_post_request(model.payload, MimecastEndpoints.get_threat_intel_feed)
             response_helper.check_response_codes(response, MimecastEndpoints.get_threat_intel_feed)
@@ -147,8 +153,13 @@ class ThreatIntelFeedRequestHelper:
             )
             has_more_logs, next_token = response_helper.get_next_token(response, next_token)
             feed.extend(success_response)
+            if feed:
+                latest_feed = self.send_feeds_to_azure(feed)
+                blob_client.upload_blob(latest_feed, overwrite=True)
+            else:
+                return latest_feed
 
-        return feed
+        return latest_feed
 
     @staticmethod
     def filter_out_duplicates(feeds):
