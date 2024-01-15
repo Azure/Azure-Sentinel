@@ -23,50 +23,72 @@ tags:
 query: |
     let threshold = 10;
     let default_ad_attributes = dynamic(["LastDirSyncTime", "StsRefreshTokensValidFrom", "Included Updated Properties", "AccountEnabled", "Action Client Name", "SourceAnchor"]);
-    AuditLogs
+    let addUsers = AuditLogs
     | where OperationName =~ "Add user"
     | where Result =~ "success"
-    | extend properties = TargetResources[0].modifiedProperties
-    | mv-expand properties
-    | evaluate bag_unpack(properties) : (displayName:string, oldValue: string, newValue: string , TenantId : string, SourceSystem : string, TimeGenerated : datetime, ResourceId : string, OperationName : string, OperationVersion : string, Category : string, ResultType : string, ResultSignature : string, ResultDescription : string, DurationMs : long, CorrelationId : string, Resource : string, ResourceGroup : string, ResourceProvider : string, Identity : string, Level : string, Location : string, AdditionalDetails : dynamic, Id : string, InitiatedBy : dynamic, LoggedByService : string, Result : string, ResultReason : string, TargetResources : dynamic, AADTenantId : string, ActivityDisplayName : string, ActivityDateTime : datetime, AADOperationType : string, Type : string)
+    | extend AccountProperties = TargetResources[0].modifiedProperties
+    | mv-expand AccountProperties
+    ;
+    addUsers
+    | evaluate bag_unpack(AccountProperties) : (displayName:string, oldValue: string, newValue: string , TenantId : string, SourceSystem : string, TimeGenerated : datetime, ResourceId : string, OperationName : string, OperationVersion : string, Category : string, ResultType : string, ResultSignature : string, ResultDescription : string, DurationMs : long, CorrelationId : string, Resource : string, ResourceGroup : string, ResourceProvider : string, Identity : string, Level : string, Location : string, AdditionalDetails : dynamic, Id : string, InitiatedBy : dynamic, LoggedByService : string, Result : string, ResultReason : string, TargetResources : dynamic, AADTenantId : string, ActivityDisplayName : string, ActivityDateTime : datetime, AADOperationType : string, Type : string)
     | extend displayName = column_ifexists("displayName", "Unknown Value")
     | summarize count() by displayName, TenantId
     | where displayName !in (default_ad_attributes)
     | top threshold by count_ desc
     | summarize make_set(displayName) by TenantId
-    | join kind=inner (AuditLogs
-    | where Result =~ "success"
-    | where OperationName =~ "Add user"
+    | join kind=inner (
+    addUsers
     | extend CreatingUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend CreatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend CreatingUserIPAddress = tostring(InitiatedBy.user.ipAddress)
     | extend CreatedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
-    | extend AccountProperties = TargetResources[0].modifiedProperties
-    | mv-expand AccountProperties
-    | extend PropName = tostring(AccountProperties.displayName)) on TenantId
-    | summarize makeset(PropName) by TimeGenerated, CorrelationId, CreatedUserPrincipalName, CreatingUserPrincipalName, tostring(set_displayName)
+    | extend PropName = tostring(AccountProperties.displayName)) 
+    on TenantId
+    | summarize makeset(PropName) by TimeGenerated, CorrelationId, CreatedUserPrincipalName, CreatingUserPrincipalName, CreatingAadUserId, CreatingUserIPAddress, tostring(set_displayName)
     | extend missing_props = set_difference(todynamic(set_displayName), set_PropName)
     | where array_length(missing_props) > 0
-    | join kind=innerunique (AuditLogs
+    | join kind=innerunique (
+    AuditLogs
     | where Result =~ "success"
     | where OperationName =~ "Add user"
-    | extend CreatedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)) on CorrelationId, CreatedUserPrincipalName
+    | extend CreatedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)) 
+    on CorrelationId, CreatedUserPrincipalName
     | extend ExpectedProperties = set_displayName
     | project-away set_displayName, set_PropName
+    | extend InitiatingAccountName = tostring(split(CreatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(CreatingUserPrincipalName, "@")[1])
+    | extend TargetAccountName = tostring(split(CreatedUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(CreatedUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: CreatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: CreatingAadUserId
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: CreatedUserPrincipalName
-version: 1.0.3
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CreatingUserIPAddress
+version: 1.1.0
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
