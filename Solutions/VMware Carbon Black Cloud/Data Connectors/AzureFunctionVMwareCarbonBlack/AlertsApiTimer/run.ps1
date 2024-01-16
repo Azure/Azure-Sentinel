@@ -9,7 +9,8 @@ $currentUTCtime = (Get-Date).ToUniversalTime()
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
 }
-
+[int]$maxdurationminutes=10
+$script_start_time=([System.DateTime]::UtcNow)
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
 <#
@@ -72,7 +73,6 @@ function GenerateDate()
 
     $now = [System.DateTime]::UtcNow
     #$Duration = New-TimeSpan -Start $startTime -End $now()
-
     if($startTime -le $now)
     {
         [int]$noofmins = $($now-$startTime).TotalMinutes
@@ -105,6 +105,7 @@ function CarbonBlackAPI() {
     $AuditLogTable = "CarbonBlackAuditLogs"
     $EventLogTable = "CarbonBlackEvents"
     $NotificationTable = "CarbonBlackNotifications"
+    $AlertsTable="CarbonBlackAlerts"
     $OrgKey = $env:CarbonBlackOrgKey
     $s3BucketName = $env:s3BucketName
     $EventprefixFolder = $env:EventPrefixFolderName
@@ -197,6 +198,33 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
 }
 <#
 .SYNOPSIS
+##
+
+.DESCRIPTION
+Long description
+
+.PARAMETER percentage
+Parameter description
+
+.PARAMETER script_start_time
+Parameter description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function check_if_script_runs_too_long($percentage, $script_start_time)
+{
+ [int]$seconds=(60)
+ [int]$duration = $(([System.DateTime]::UtcNow - $script_start_time).Seconds)
+ [int]$temp=$maxdurationminutes * $seconds 
+ [double]$maxduration= $temp * 0.8
+ return $duration -gt $maxduration
+}
+<#
+.SYNOPSIS
 Short description
 
 .DESCRIPTION
@@ -243,25 +271,32 @@ function CarbonBlackAlertsAPI() {
     $v7uri = ([System.Uri]::new("$($hostName)/api/alerts/v7/orgs/$($OrgKey)/alerts/_search"))
             
     $notifications = Invoke-WebRequest -Body $body -Uri $v7uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
-    if($null -ne $notifications -and $notifications.Length -ge 10)
+    if($notifications.RawContentLength -ge 10)
     {
      $notificationsresults = $notifications | ConvertFrom-Json
-
+     $TotalCount=0
     foreach ($item in $notificationsresults.results) {
 <# $currentItemName is the current item #>
     $NotifLogJson = $item | ConvertTo-Json -Depth 5
    if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
    {
      $responseObj = (ConvertFrom-Json $NotifLogJson)
-     $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
-    Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
+     $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $AlertsTable;
+     $TotalCount=$TotalCount+$responseObj.count
+     Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
    }
    else
    {
     Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
    }
+   if((check_if_script_runs_too_long -percentage 0.8 -script_start_time $script_start_time))
+   {
+       Write-Host "Script is running long"
+       break
+   }
 
    }
+   Write-Host("Total $($TotalCount) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel")
     }
     else
     {
@@ -282,6 +317,13 @@ try {
         $startTime=$startTime+"Z"
     }
     $now= $now | Get-Date -Format yyyy-MM-ddTHH:mm:ss.000K
+    if($now.Contains("Z"))
+    {
+            ## Do Nothing
+    }
+    else {
+        $now=$now+"Z"
+    }
     CarbonBlackAPI
     if((Get-AzStorageContainer -Context $Context).Name -contains "lastalertlog"){
         #Set Container
