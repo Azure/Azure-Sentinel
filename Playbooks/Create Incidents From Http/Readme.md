@@ -4,7 +4,7 @@
 
 Please use the below button to deploy
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate%2520Incidents%2520with%2520Email%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCreate%2520Incidents%2520From%2520Http%2Fazuredeploy.json)
 
 ### Deployment
 
@@ -31,6 +31,13 @@ Once configured, the logic app will look like this.
 ![image](https://github.com/samikroy/Azure-Sentinel/assets/20562985/3c239b3e-5808-4939-897e-8a36b536c90e)
 
 
+### Assign Permission
+
+Assign Microsoft Sentinel Contributor role to Logic App Identity so that it can generate incidents.
+
+![image](https://github.com/samikroy/Azure-Sentinel/assets/20562985/3e22ed6b-91e4-4628-9f27-6f0b73a8ffb6)
+
+
 ### Test
 
 Step 1: Make http request 
@@ -45,9 +52,9 @@ Step 2: Incident created in Sentinel
 
 
 ### Use cases
-
-SOC - In a organization there might be Security Incident / Suspicious activity occurring to the resources where Security is not tightened up yet. 
-So an email address can be whistle blower here. A suspicious activity can be reported over a dedicated email address to create an incident and address the incident.
+1. While using Microsoft Sentinel as a POC and using another SIEM as primary.
+2. Run another SIEM in parallel and want forward incidents to Microsoft Sentinel.
+3. Generating Incidents from external Systems.
 
 
 Thank you for using the tool.
