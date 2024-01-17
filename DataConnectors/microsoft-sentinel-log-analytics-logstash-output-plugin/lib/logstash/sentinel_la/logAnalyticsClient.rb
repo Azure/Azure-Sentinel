@@ -14,7 +14,7 @@ require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
 
 
-  def initialize (logstashLoganalyticsConfiguration)
+  def initialize(logstashLoganalyticsConfiguration)
     @logstashLoganalyticsConfiguration = logstashLoganalyticsConfiguration
     @logger = @logstashLoganalyticsConfiguration.logger
 
