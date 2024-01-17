@@ -11,3 +11,4 @@
 
 ## 1.1.1
 * Support China and US Government Azure sovereign clouds.
+* Increase timeout for read/open connections to 240 seconds.
