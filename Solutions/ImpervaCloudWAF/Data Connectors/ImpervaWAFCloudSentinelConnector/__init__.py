@@ -133,7 +133,6 @@ class ImpervaFilesHandler:
         file_data = file_splitted[1]
         file_encryption_flag = file_header.find("key:")
         events_arr = []
-        events_data = ''
         if file_encryption_flag == -1:
             try:
                 events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
@@ -141,7 +140,8 @@ class ImpervaFilesHandler:
                 if 'while decompressing data: incorrect header check' in err.args[0]:
                     events_data = file_data.decode("utf-8")
                 else:
-                    logging.error("Error during decompressing and decoding the file with error message {}.".format(err))                   
+                    logging.error("Error during decompressing and decoding the file with error message {}.".format(err))  
+                    return                 
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
