@@ -19,8 +19,8 @@ This playbook is intended to be run from the AS-IAM-Master-Playbook. It will loo
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* A Microsoft Entra ID [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-app-registration) with admin consent granted for "**User.ReadWrite.All**" in the "**Microsoft Graph**" API
-* An [Azure key vault secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-azure-key-vault-secret) containing your app registration client secret
+* A Microsoft Entra ID [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IAM-Master-Playbook/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-app-registration) with admin consent granted for "**User.ReadWrite.All**" in the "**Microsoft Graph**" API
+* An [Azure key vault secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IAM-Master-Playbook/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-azure-key-vault-secret) containing your app registration client secret
 
 
 # 
@@ -66,7 +66,7 @@ Enter a description and select the desired expiration date, then click "**Add**"
 
 ![RevokeUserSession_App_Registration_9](Images/RevokeUserSession_App_Registration_9.png)
 
-Copy the value of the secret that is generated, as this will be needed for [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-azure-key-vault-secret).
+Copy the value of the secret that is generated, as this will be needed for [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IAM-Master-Playbook/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-azure-key-vault-secret).
 
 ![RevokeUserSession_App_Registration_10](Images/RevokeUserSession_App_Registration_10.png)
 
@@ -79,11 +79,11 @@ Navigate to an existing key vault or create a new one. From the key vault overvi
 
 ![RevokeUserSession_Key_Vault_1](Images/RevokeUserSession_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**AS-Revoke-Azure-AD-User-Session-From-Incident--App-Registration-Client-Secret**", and enter the client secret copied in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**AS-Revoke-Azure-AD-User-Session-From-Incident--App-Registration-Client-Secret**", and enter the client secret copied in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IAM-Master-Playbook/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
 
 ![RevokeUserSession_Key_Vault_2](Images/RevokeUserSession_Key_Vault_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IAM-Master-Playbook/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#granting-access-to-azure-key-vault).
 
 ![RevokeUserSession_Key_Vault_3](Images/RevokeUserSession_Key_Vault_3.png)
 
@@ -110,11 +110,11 @@ In the **Instance Details** section:
 
 * **Playbook Name**: This can be left as "**AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP**" or you may change it.
 
-* **Client ID**: Enter the Application (client) ID of your app registration referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-app-registration).
+* **Client ID**: Enter the Application (client) ID of your app registration referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IAM-Master-Playbook/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-app-registration).
 
-* **Key Vault Name**: Enter the name of the key vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the key vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IAM-Master-Playbook/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-azure-key-vault-secret).
 
-* **Key Vault Secret Name**: Enter the name of the key vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-azure-key-vault-secret).
+* **Key Vault Secret Name**: Enter the name of the key vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-IAM-Master-Playbook/AS-Microsoft-Entra-ID-Revoke-User-Sessions-HTTP#create-an-azure-key-vault-secret).
 
 Towards the bottom, click on "**Review + create**". 
 
