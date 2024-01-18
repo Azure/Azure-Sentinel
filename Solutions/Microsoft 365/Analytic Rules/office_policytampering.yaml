@@ -1,5 +1,5 @@
 id: fbd72eb8-087e-466b-bd54-1ca6ea08c6d3
-name: Office policy tampering
+name: Office Policy Tampering
 description: |
   'Identifies if any tampering is done to either auditlog, ATP Safelink, SafeAttachment, AntiPhish or Dlp policy. 
   An adversary may use this technique to evade detection or avoid other policy based defenses.
@@ -9,7 +9,7 @@ status: Available
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
-      - OfficeActivity
+      - OfficeActivity (Exchange)
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -26,7 +26,7 @@ query: |
   //| where Operation startswith "Remove-" or Operation startswith "Disable-"
   | where Operation has_any ("Remove", "Disable")
   | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
-  | summarize make_set(Operation);
+  | summarize make_set(Operation, 500);
   OfficeActivity
   // Only admin or global-admin can disable/remove policy
   | where RecordType =~ "ExchangeAdmin"
@@ -44,15 +44,17 @@ query: |
   ClientIP
   )
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 2.0.0
+        columnName: ClientIP
+version: 2.0.2
 kind: Scheduled

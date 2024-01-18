@@ -23,8 +23,9 @@ Microsoft Sentinel provides Logstash output plugin to Log analytics workspace us
 Install the microsoft-sentinel-log-analytics-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
-- Logstash 7 Between 7.0 and 7.17.13
-- Logstash 8 Between 8.0 and 8.9.2
+- 7.0 - 7.17.13
+- 8.0 - 8.9
+- 8.11
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
@@ -41,8 +42,8 @@ output {
 }
 ```
 Note: make sure that the path exists before creating the sample file.
-2) Start Logstash. The plugin will write up to 10 records to a sample file named "sampleFile<epoch seconds>.json" in the configured path  
-(for example: "c:\temp\sampleFile1648453501.json")
+2) Start Logstash. The plugin will collect up to 10 records to a sample.
+3) The file named "sampleFile<epoch seconds>.json" in the configured path will be created once there are 10 events to sample or when the Logstash process exited gracefully. (for example: "c:\temp\sampleFile1648453501.json").
 
 
 ### Configurations:
@@ -124,6 +125,7 @@ output {
 - **proxy** - String, Empty by default. Specify which proxy URL to use for API calls for all of the communications with Azure.
 - **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service. Overrides the proxy setting.
 - **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint. Overrides the proxy setting.
+- **azure_cloud** - String, Empty by default. Used to specify the name of the Azure cloud that is being used, AzureCloud is set as default. Available values are: AzureCloud, AzureChinaCloud and AzureUSGovernment.
 
 #### Note: When setting an empty string as a value for a proxy setting, it will unset any system wide proxy setting.
 
