@@ -140,6 +140,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.CorelightConnectorExporter;
   }
+  else if (dataTypes[0].name.includes("AzureCloudNGFWByPaloAltoNetworks"))
+  {
+    return ConnectorCategory.AzureCloudNGFWByPaloAltoNetworks;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];
