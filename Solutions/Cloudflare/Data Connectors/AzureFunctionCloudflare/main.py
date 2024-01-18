@@ -109,7 +109,8 @@ class AzureBlobStorageConnector:
             return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False, max_single_get_size=MAX_CHUNK_SIZE_MB*1024*1024, max_chunk_get_size=MAX_CHUNK_SIZE_MB*1024*1024)
         except Exception as ex:
             logging.error('An error occurred in _create_container_client: {}'.format(str(ex)))
-            logging.error(traceback.format_exc())        
+            logging.error(traceback.format_exc())    
+            return None    
         
     async def get_blobs(self):
         try:
