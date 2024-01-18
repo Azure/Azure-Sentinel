@@ -49,6 +49,7 @@ class CheckpointManager:
                         LOGS_STARTS_WITH
                     )
                 )
+                return None
         except Exception as err:
             applogger.exception("{}: GET LAST DATA: {}".format(LOGS_STARTS_WITH, err))
             raise BitSightException()
@@ -121,7 +122,7 @@ class CheckpointManager:
                         endpoint, checkpoint_key
                     )
                 )
-                return
+                return None
             last_data = endpoint_last_data.get(checkpoint_key)
             applogger.debug(
                 "BitSight: get_endpoint_last_data: {}: {}: Data: {}".format(

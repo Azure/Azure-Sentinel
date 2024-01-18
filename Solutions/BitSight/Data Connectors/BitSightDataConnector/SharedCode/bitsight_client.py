@@ -23,9 +23,9 @@ class BitSight:
         self.logs_starts_with = LOGS_STARTS_WITH
         self.error_logs = "{}(method={}) {}"
         self.azuresentinel = MicrosoftSentinel()
-        self. messages = [{
+        self.messages = {
             403: "You cannot view this company as company might be removed from your portfolio."
-        }]
+        }
 
     def check_environment_var_exist(self, environment_var):
         """Check if required environment variables are set.
@@ -150,8 +150,8 @@ class BitSight:
         try:
             resp = requests.get(url=url, headers=self.headers, params=query_parameter)
             if resp.status_code == 403:
-                applogger.info("{} url={}".format(self.messages[resp.status_code], url))
-                return
+                applogger.info("BitSight: get_bitsight_data: {} url={}".format(self.messages.get(resp.status_code, ""), url))
+                return None
             resp.raise_for_status()
             response = resp.json()
             applogger.debug(

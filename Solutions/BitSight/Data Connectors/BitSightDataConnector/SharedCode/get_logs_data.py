@@ -51,17 +51,15 @@ def get_logs_data():
             workspace_id=WORKSPACE_ID, query=query, timespan=None
         )
         if response.status == LogsQueryStatus.SUCCESS:
-            applogger.info("Success data: ")
             data = response.tables
         else:
             data = response.partial_data
-            applogger.info("Partial Data: ")
             applogger.warning(response.partial_error)
         data_to_send = []
         for table in data:
             rows = table.rows
             data_to_send.extend(parse_table_data(rows=rows))
-        applogger.info(f"Data count: {len(data_to_send)}, Type: {type(data_to_send)}")
+        applogger.debug("BitSight: get_logs_data: Data count: {}".format(len(data_to_send)))
         return data_to_send, True
     except Exception as error:
         if "Failed to resolve table or column expression" in str(error):
