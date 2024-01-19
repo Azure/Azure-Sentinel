@@ -1,4 +1,4 @@
-[<img alt="Recorded Future" src="Playbooks\RecordedFuture-IOC_Enrichment\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
+[<img alt="Recorded Future" src="Playbooks/Enrichment/RecordedFuture-IOC_Enrichment/images/RecordedFuture.png"  />](https://www.recordedfuture.com/)
 # Recorded Future Intelligence for Microsoft Sentinel
 
 Instructions how to install and use Recorded Future Solution for Microsoft Sentinel or how to install individual playbooks kan be found in the main [readme.md](Playbooks/readme.md) in the Playbook sub directory in this repository.
