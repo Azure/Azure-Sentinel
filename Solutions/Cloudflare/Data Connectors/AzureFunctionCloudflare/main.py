@@ -1,5 +1,3 @@
-# This is package content 1
-
 import os
 import asyncio
 from azure.storage.blob.aio import ContainerClient

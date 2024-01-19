@@ -45,10 +45,14 @@ query: |
   | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope1 "]" *
   | where ConsentFull has "offline_access" and ConsentFull has_any ("Files.Read", "Mail.Read", "Notes.Read", "ChannelMessage.Read", "Chat.Read", "TeamsActivity.Read", "Group.Read", "EWS.AccessAsUser.All", "EAS.AccessAsUser.All")
   | where GrantConsentType != "AllPrincipals" // NOTE: we are ignoring if OAuth application was granted to all users via an admin - but admin due diligence should be audited occasionally
-  | extend GrantIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
-  | extend GrantInitiatedBy = tostring(iff(isnotempty(InitiatedBy.user.userPrincipalName),InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName))
+  | extend GrantInitiatedByAppName = tostring(InitiatedBy.app.displayName)
+  | extend GrantInitiatedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend GrantInitiatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend GrantInitiatedByAadUserId = tostring(InitiatedBy.user.id)
+  | extend GrantIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
+  | extend GrantInitiatedBy = iff(isnotempty(GrantInitiatedByUserPrincipalName), GrantInitiatedByUserPrincipalName, GrantInitiatedByAppName)
   | extend GrantUserAgent = tostring(iff(AdditionalDetails[0].key =~ "User-Agent", AdditionalDetails[0].value, ""))
-  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, GrantIpAddress, GrantUserAgent, AppClientId, OperationName, ConsentFull, CorrelationId
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, GrantInitiatedByUserPrincipalName, GrantInitiatedByAadUserId, GrantInitiatedByAppName, GrantInitiatedByAppServicePrincipalId, GrantIpAddress, GrantUserAgent, AppClientId, OperationName, ConsentFull, CorrelationId
   | join kind = leftouter (AuditLogs
   | where TimeGenerated > ago(joinLookback)
   | where LoggedByService =~ "Core Directory"
@@ -81,18 +85,28 @@ query: |
   | extend GrantOperation = OperationName
   | project GrantAuthentication, GrantOperation, CorrelationId
   ) on CorrelationId
-  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, AppReplyURLs, GrantIpAddress, GrantUserAgent, AppClientId, GrantAuthentication, OperationName, GrantOperation, CorrelationId, ConsentFull
-  | extend timestamp = TimeGenerated, Name = tostring(split(GrantInitiatedBy,'@',0)[0]), UPNSuffix = tostring(split(GrantInitiatedBy,'@',1)[0])
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, AppReplyURLs, GrantInitiatedByUserPrincipalName, GrantInitiatedByAadUserId, GrantInitiatedByAppName, GrantInitiatedByAppServicePrincipalId, GrantIpAddress, GrantUserAgent, AppClientId, GrantAuthentication, OperationName, GrantOperation, CorrelationId, ConsentFull
+  | extend Name = tostring(split(GrantInitiatedByUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(GrantInitiatedByUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: GrantInitiatedByUserPrincipalName
       - identifier: Name
         columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: GrantInitiatedByAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: GrantInitiatedByAppServicePrincipalId
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: GrantIpAddress
-version: 1.0.1
+version: 1.0.2
 kind: Scheduled

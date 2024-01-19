@@ -38,8 +38,10 @@ query: |
   // Exclude Remote Desktop Users group: S-1-5-32-555
   | where TargetSid !in ("S-1-5-32-555")
   | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
-  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, GroupAddTargetAccount = TargetAccount, 
-  GroupAddTargetSid = TargetSid, GroupAddSubjectAccount = SubjectAccount, GroupAddSubjectUserSid = SubjectUserSid, GroupSid = MemberSid
+  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, 
+  GroupAddTargetAccount = TargetAccount, GroupAddTargetUserName = TargetUserName, GroupAddTargetDomainName = TargetDomainName, GroupAddTargetSid = TargetSid, 
+  GroupAddSubjectAccount = SubjectAccount, GroupAddSubjectUserName = SubjectUserName, GroupAddSubjectDomainName = SubjectDomainName, GroupAddSubjectUserSid = SubjectUserSid, 
+  GroupSid = MemberSid
   ),
   (
   WindowsEvent 
@@ -59,8 +61,10 @@ query: |
   | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
   | extend MemberSid = tostring(EventData.MemberSid)
   | extend Activity= "GroupAddActivity"
-  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, GroupAddTargetAccount = TargetAccount, 
-  GroupAddTargetSid = TargetSid, GroupAddSubjectAccount = Account, GroupAddSubjectUserSid = SubjectUserSid, GroupSid = MemberSid
+  | project GroupAddTime = TimeGenerated, GroupAddEventID = EventID, GroupAddActivity = Activity, GroupAddComputer = Computer, 
+  GroupAddTargetAccount = TargetAccount, GroupAddTargetUserName = EventData.TargetUserName, GroupAddTargetDomainName = EventData.TargetDomainName, GroupAddTargetSid = TargetSid, 
+  GroupAddSubjectAccount = Account, GroupAddSubjectUserName = tostring(EventData.SubjectUserName), GroupAddSubjectDomainName = tostring(EventData.SubjectDomainName), GroupAddSubjectUserSid = SubjectUserSid, 
+  GroupSid = MemberSid
   ));
   let GroupCreated = (union isfuzzy=true  
   (SecurityEvent
@@ -69,8 +73,10 @@ query: |
   // 4754 - A security-enabled universal group was created
   | where EventID in ("4727", "4731", "4754")
   | where AccountType =~ "User"
-  | project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer, GroupCreateTargetAccount = TargetAccount, 
-  GroupCreateSubjectAccount = SubjectAccount, GroupCreateSubjectUserSid = SubjectUserSid, GroupSid = TargetSid
+  | project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer, 
+  GroupCreateTargetAccount = TargetAccount, GroupCreateTargetUserName = TargetUserName, GroupCreateTargetDomainName = TargetDomainName,
+  GroupCreateSubjectAccount = SubjectAccount, GroupCreateSubjectUserName = SubjectUserName, GroupCreateSubjectDomainName = SubjectDomainName, GroupCreateSubjectUserSid = SubjectUserSid, 
+  GroupSid = TargetSid
   ),
   (WindowsEvent
   // 4727 - A security-enabled global group was created
@@ -85,31 +91,60 @@ query: |
   | extend SubjectAccount = strcat(EventData.SubjectDomainName,"\\", EventData.SubjectUserName)  
   | extend TargetSid = tostring(EventData.TargetSid) 
   | extend Activity= "GroupAddActivity"
-  | project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer, GroupCreateTargetAccount = TargetAccount, 
-  GroupCreateSubjectAccount = SubjectAccount, GroupCreateSubjectUserSid = SubjectUserSid, GroupSid = TargetSid
+  | project GroupCreateTime = TimeGenerated, GroupCreateEventID = EventID, GroupCreateActivity = Activity, GroupCreateComputer = Computer, 
+  GroupCreateTargetAccount = TargetAccount, GroupCreateTargetUserName = EventData.TargetUserName, GroupCreateTargetDomainName = EventData.TargetDomainName, 
+  GroupCreateSubjectAccount = SubjectAccount, GroupCreateSubjectUserName = tostring(EventData.SubjectUserName), GroupCreateSubjectDomainName = tostring(EventData.SubjectDomainName),GroupCreateSubjectUserSid = SubjectUserSid, 
+  GroupSid = TargetSid
   ));
   GroupCreated
   | join (
   GroupAddition
   ) on GroupSid
+  | extend GroupCreateHostName = tostring(split(GroupCreateComputer , ".")[0]), DomainIndex = toint(indexof(GroupCreateComputer , '.'))
+  | extend GroupCreateHostNameDomain = iff(DomainIndex != -1, substring(GroupCreateComputer , DomainIndex + 1), GroupCreateComputer)
+  | extend GroupAddHostName = tostring(split(GroupAddComputer , ".")[0]), DomainIndex = toint(indexof(GroupAddComputer , '.'))
+  | extend GroupAddHostNameDomain = iff(DomainIndex != -1, substring(GroupAddComputer , DomainIndex + 1), GroupAddComputer)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: GroupCreateSubjectAccount
-      - identifier: Sid
-        columnName: GroupCreateSubjectUserSid
+      - identifier: Name
+        columnName: GroupCreateSubjectUserName
+      - identifier: NTDomain
+        columnName: GroupCreateSubjectDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: GroupCreateTargetAccount
+      - identifier: Name
+        columnName: GroupAddSubjectUserName
+      - identifier: NTDomain
+        columnName: GroupAddSubjectDomainName
   - entityType: Host
     fieldMappings:
       - identifier: FullName
         columnName: GroupCreateComputer
-version: 1.1.3
+      - identifier: HostName
+        columnName: GroupCreateHostName
+      - identifier: DnsDomain
+        columnName: GroupCreateHostNameDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: GroupAddComputer
+      - identifier: HostName
+        columnName: GroupAddHostName
+      - identifier: DnsDomain
+        columnName: GroupAddHostNameDomain
+version: 1.1.5
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Shain
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:
