@@ -57,7 +57,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Microsoft Exchange Security - Exchange Online",
-    "_solutionVersion": "3.0.3",
+    "_solutionVersion": "3.0.4",
     "solutionId": "microsoftsentinelcommunity.azure-sentinel-solution-esionline",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "ESI-ExchangeOnlineCollector",
@@ -73,7 +73,7 @@
       "_parserName1": "[concat(parameters('workspace'),'/','ExchangeConfiguration')]",
       "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'ExchangeConfiguration')]",
       "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('ExchangeConfiguration-Parser')))]",
-      "parserVersion1": "1.0.1",
+      "parserVersion1": "1.6.1",
       "parserContentId1": "ExchangeConfiguration-Parser"
     },
     "parserObject2": {
@@ -117,7 +117,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Microsoft Exchange Security - Exchange Online data connector with template version 3.0.3",
+        "description": "Microsoft Exchange Security - Exchange Online data connector with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -645,7 +645,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ExchangeConfiguration Data Parser with template version 3.0.3",
+        "description": "ExchangeConfiguration Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject1').parserVersion1]",
@@ -662,7 +662,7 @@
                 "displayName": "Parser for ExchangeConfiguration",
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "ExchangeConfiguration",
-                "query": "// Parameters simulation\n// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.\n//\n// let SpecificSectionList = '';\n// let SpecificConfigurationDate = 'lastdate';\n// let SpecificConfigurationEnv = 'All';\n// let Target = 'On-Premises';\n//\n// Parameters definition\nlet _SpecificSectionList = split(SpecificSectionList,',');\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\n// Building Base Request\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \n    | where TimeGenerated > _targetDate\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \n    | where ScopedEnvironment in (_configurationEnv)\n    | extend EntryDate = todatetime(EntryDate_s)\n    | project-away EntryDate_s);\n// Find Config Id (can be multiple id in all)\nlet findConfigDate = baseRequest\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\n    | top-nested of Env by Ignore0=max(1), \n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \n    | project GenerationInstanceID_g;\n// Parse Result\nlet ParseExchangeConfig = () { baseRequest \n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\n | extend TimeGenerated = EntryDate\n | extend Identity = IdentityString_s\n | extend CmdletResultValue = parse_json(rawData_s)\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\n | project-away TenantId,SourceSystem,Type,EntryDate\n};\nParseExchangeConfig\n",
+                "query": "// Version:         1.6.1\n// Last Updated:    19/12/2023\n//  \n// DESCRIPTION:\n// This parser takes raw ESI Exchange Configuration Collector to pivot raw information and retrieve a specific date configuration. This is the same parser for Exchange On-Premises version and Exchange online version of the solution.\n//\n// USAGE:\n// Parameters : 4 parameters to add during creation. \n//    1. SpecificSectionList, type string, default value \"\"\n//    2. SpecificConfigurationDate, type string, default value \"lastdate\"\n//    3. Target, type string, default value \"On-Premises\"\n//    4. SpecificConfigurationEnv, type string, default value \"All\"\n//\n// Parameters simulation\n// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.\n//\n// let SpecificSectionList = '';\n// let SpecificConfigurationDate = 'lastdate';\n// let SpecificConfigurationEnv = 'All';\n// let Target = 'On-Premises';\n//\n// Parameters definition\nlet _SpecificSectionList = split(SpecificSectionList,',');\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\n// Building Base Request\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \n    | where TimeGenerated > _targetDate\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \n    | where ScopedEnvironment in (_configurationEnv)\n    | extend EntryDate = todatetime(EntryDate_s)\n    | project-away EntryDate_s);\n// Find Config Id (can be multiple id in all)\nlet findConfigDate = baseRequest\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\n    | top-nested of Env by Ignore0=max(1), \n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \n    | project GenerationInstanceID_g;\n// Parse Result\nlet ParseExchangeConfig = () { baseRequest \n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\n | extend TimeGenerated = EntryDate\n | extend Identity = IdentityString_s\n | extend CmdletResultValue = parse_json(rawData_s)\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\n | project-away TenantId,SourceSystem,Type,EntryDate\n};\nParseExchangeConfig\n",
                 "functionParameters": "SpecificSectionList:string = \"\", SpecificConfigurationDate:string = \"lastdate\", Target:string = \"On-Premises\", SpecificConfigurationEnv:string = \"All\"",
                 "version": 2,
                 "tags": [
@@ -711,8 +711,8 @@
         "contentId": "[variables('parserObject1').parserContentId1]",
         "contentKind": "Parser",
         "displayName": "Parser for ExchangeConfiguration",
-        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.1')))]",
-        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.1')))]",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.6.1')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.6.1')))]",
         "version": "[variables('parserObject1').parserVersion1]"
       }
     },
@@ -726,7 +726,7 @@
         "displayName": "Parser for ExchangeConfiguration",
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "ExchangeConfiguration",
-        "query": "// Parameters simulation\n// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.\n//\n// let SpecificSectionList = '';\n// let SpecificConfigurationDate = 'lastdate';\n// let SpecificConfigurationEnv = 'All';\n// let Target = 'On-Premises';\n//\n// Parameters definition\nlet _SpecificSectionList = split(SpecificSectionList,',');\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\n// Building Base Request\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \n    | where TimeGenerated > _targetDate\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \n    | where ScopedEnvironment in (_configurationEnv)\n    | extend EntryDate = todatetime(EntryDate_s)\n    | project-away EntryDate_s);\n// Find Config Id (can be multiple id in all)\nlet findConfigDate = baseRequest\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\n    | top-nested of Env by Ignore0=max(1), \n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \n    | project GenerationInstanceID_g;\n// Parse Result\nlet ParseExchangeConfig = () { baseRequest \n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\n | extend TimeGenerated = EntryDate\n | extend Identity = IdentityString_s\n | extend CmdletResultValue = parse_json(rawData_s)\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\n | project-away TenantId,SourceSystem,Type,EntryDate\n};\nParseExchangeConfig\n",
+        "query": "// Version:         1.6.1\n// Last Updated:    19/12/2023\n//  \n// DESCRIPTION:\n// This parser takes raw ESI Exchange Configuration Collector to pivot raw information and retrieve a specific date configuration. This is the same parser for Exchange On-Premises version and Exchange online version of the solution.\n//\n// USAGE:\n// Parameters : 4 parameters to add during creation. \n//    1. SpecificSectionList, type string, default value \"\"\n//    2. SpecificConfigurationDate, type string, default value \"lastdate\"\n//    3. Target, type string, default value \"On-Premises\"\n//    4. SpecificConfigurationEnv, type string, default value \"All\"\n//\n// Parameters simulation\n// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.\n//\n// let SpecificSectionList = '';\n// let SpecificConfigurationDate = 'lastdate';\n// let SpecificConfigurationEnv = 'All';\n// let Target = 'On-Premises';\n//\n// Parameters definition\nlet _SpecificSectionList = split(SpecificSectionList,',');\nlet _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),\"lastdate\",tostring(SpecificConfigurationDate));\nlet _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == \"all\",\"All\",tostring(SpecificConfigurationEnv)),',');\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\n// Building Base Request\nlet _targetDate = iff(_configurationDate == \"lastdate\", ago(7d), iif(_configurationDate == \"alllife\",ago(1080d),todatetime(_configurationDate)));\nlet baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* \n    | where TimeGenerated > _targetDate\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target\n    | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \n    | where ScopedEnvironment in (_configurationEnv)\n    | extend EntryDate = todatetime(EntryDate_s)\n    | project-away EntryDate_s);\n// Find Config Id (can be multiple id in all)\nlet findConfigDate = baseRequest\n    | extend Env =strcat(Source, \"_\",ESIEnvironment_s)\n    | summarize count() by GenerationInstanceID_g,Env,EntryDate\n    | extend distance = iff(_configurationDate == \"lastdate\" or _configurationDate == \"alllife\", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))\n    | top-nested of Env by Ignore0=max(1), \n        top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, \n        top-nested of GenerationInstanceID_g by Ignore2=max(2) \n    | project GenerationInstanceID_g;\n// Parse Result\nlet ParseExchangeConfig = () { baseRequest \n | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g\n | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)\n | extend TimeGenerated = EntryDate\n | extend Identity = IdentityString_s\n | extend CmdletResultValue = parse_json(rawData_s)\n | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s\n | project-away TenantId,SourceSystem,Type,EntryDate\n};\nParseExchangeConfig\n",
         "functionParameters": "SpecificSectionList:string = \"\", SpecificConfigurationDate:string = \"lastdate\", Target:string = \"On-Premises\", SpecificConfigurationEnv:string = \"All\"",
         "version": 2,
         "tags": [
@@ -775,7 +775,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "ExchangeEnvironmentList Data Parser with template version 3.0.3",
+        "description": "ExchangeEnvironmentList Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject2').parserVersion2]",
@@ -793,7 +793,7 @@
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "ExchangeEnvironmentList",
                 "query": "// Parameters simulation\n// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.\n//\n// let Target = 'On-Premises';\n//\n// Parameters definition\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\nlet ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange*\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target;\n// Base Request\nScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s\n",
-                "functionParameters": "Target:string",
+                "functionParameters": "Target:string = \"On-Premises\"",
                 "version": 2,
                 "tags": [
                   {
@@ -857,7 +857,7 @@
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "ExchangeEnvironmentList",
         "query": "// Parameters simulation\n// If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.\n//\n// let Target = 'On-Premises';\n//\n// Parameters definition\nlet _target = iff(isnull(Target) or isempty(Target),\"On-Premises\",Target);\nlet ScalarbaseRequest = union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange*\n    | extend Source = iff (TableName contains \"Online\", \"Online\", \"On-Premises\")\n    | where _target == 'All' or Source == _target;\n// Base Request\nScalarbaseRequest | summarize by ESIEnvironment_s | project-rename ESIEnvironment = ESIEnvironment_s\n",
-        "functionParameters": "Target:string",
+        "functionParameters": "Target:string = \"On-Premises\"",
         "version": 2,
         "tags": [
           {
@@ -905,7 +905,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "MESCheckVIP Data Parser with template version 3.0.3",
+        "description": "MESCheckVIP Data Parser with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('parserObject3').parserVersion3]",
@@ -923,7 +923,7 @@
                 "category": "Microsoft Sentinel Parser",
                 "functionAlias": "MESCheckVIP",
                 "query": "//let UserToCheck = \"SampleEntry\";\nlet _UserToCheck = iif(UserToCheck == \"\" or UserToCheck == \"All\",\"All\",tolower(UserToCheck));\nlet fuzzyWatchlist = datatable(displayName:string, userPrincipalName:string, sAMAccountName:string, objectSID:string, objectGUID:guid, canonicalName:string, comment:string) [\n    \"NONE\",\"NONE\",\"NONE\",\"NONE\",\"00000001-0000-1000-0000-100000000000\",\"NONE\",\"NONE\"];\nlet Watchlist = union isfuzzy=true withsource=TableName _GetWatchlist('ExchangeVIP'), fuzzyWatchlist | where objectGUID != \"00000001-0000-1000-0000-100000000000\" | project-away TableName;\nlet SearchUser = Watchlist | where _UserToCheck =~ canonicalName \n    or _UserToCheck =~ displayName \n    or _UserToCheck =~ userPrincipalName \n    or _UserToCheck =~ sAMAccountName \n    or _UserToCheck =~ objectSID \n    or _UserToCheck == tostring(objectGUID) \n    or _UserToCheck =~ distinguishedName\n    or _UserToCheck == \"All\"\n    | extend ValueChecked = iif(_UserToCheck==\"All\",strcat(\"#\",displayName,\"#\",userPrincipalName,\"#\",sAMAccountName,\"#\",objectGUID,\"#\",objectSID,\"#\",distinguishedName,\"#\"),_UserToCheck);\nSearchUser\n",
-                "functionParameters": "UserToCheck:string",
+                "functionParameters": "UserToCheck:string = \"All\"",
                 "version": 2,
                 "tags": [
                   {
@@ -987,7 +987,7 @@
         "category": "Microsoft Sentinel Parser",
         "functionAlias": "MESCheckVIP",
         "query": "//let UserToCheck = \"SampleEntry\";\nlet _UserToCheck = iif(UserToCheck == \"\" or UserToCheck == \"All\",\"All\",tolower(UserToCheck));\nlet fuzzyWatchlist = datatable(displayName:string, userPrincipalName:string, sAMAccountName:string, objectSID:string, objectGUID:guid, canonicalName:string, comment:string) [\n    \"NONE\",\"NONE\",\"NONE\",\"NONE\",\"00000001-0000-1000-0000-100000000000\",\"NONE\",\"NONE\"];\nlet Watchlist = union isfuzzy=true withsource=TableName _GetWatchlist('ExchangeVIP'), fuzzyWatchlist | where objectGUID != \"00000001-0000-1000-0000-100000000000\" | project-away TableName;\nlet SearchUser = Watchlist | where _UserToCheck =~ canonicalName \n    or _UserToCheck =~ displayName \n    or _UserToCheck =~ userPrincipalName \n    or _UserToCheck =~ sAMAccountName \n    or _UserToCheck =~ objectSID \n    or _UserToCheck == tostring(objectGUID) \n    or _UserToCheck =~ distinguishedName\n    or _UserToCheck == \"All\"\n    | extend ValueChecked = iif(_UserToCheck==\"All\",strcat(\"#\",displayName,\"#\",userPrincipalName,\"#\",sAMAccountName,\"#\",objectGUID,\"#\",objectSID,\"#\",distinguishedName,\"#\"),_UserToCheck);\nSearchUser\n",
-        "functionParameters": "UserToCheck:string",
+        "functionParameters": "UserToCheck:string = \"All\"",
         "version": 2,
         "tags": [
           {
@@ -1035,7 +1035,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Microsoft Exchange Least Privilege with RBAC - Online Workbook with template version 3.0.3",
+        "description": "Microsoft Exchange Least Privilege with RBAC - Online Workbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion1')]",
@@ -1122,7 +1122,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Microsoft Exchange Security Review - Online Workbook with template version 3.0.3",
+        "description": "Microsoft Exchange Security Review - Online Workbook with template version 3.0.4",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('workbookVersion2')]",
@@ -1223,7 +1223,7 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.3",
+        "version": "3.0.4",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Microsoft Exchange Security - Exchange Online",
@@ -1285,7 +1285,7 @@
             {
               "kind": "Watchlist",
               "contentId": "[variables('_Exchange VIP')]",
-              "version": "3.0.3"
+              "version": "3.0.4"
             }
           ]
         },

@@ -42,6 +42,10 @@ resource "google_iam_workload_identity_pool" "sentinel-workload-identity-pool" {
   display_name              = "sentinel-workload-identity-pool"
 }
 
+output "workload_identity_pool_id" {
+  value = local.workload_identity_pool_id
+}
+
 resource "google_iam_workload_identity_pool_provider" "sentinel-workload-identity-pool-provider" {
   provider                           = google-beta
   workload_identity_pool_id          = local.workload_identity_pool_id
