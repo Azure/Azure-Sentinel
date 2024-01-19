@@ -1,0 +1,160 @@
+Parser:
+  Title: Audit Event ASIM parser for CrowdStrike Falcon Endpoint Protection
+  Version: '0.1.0'
+  LastUpdated: Oct 30 2023
+Product:
+  Name: CrowdStrike Falcon Endpoint Protection
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: CrowdStrike Falcon Endpoint Protection Documentation
+  Link: 
+    https://falcon.us-2.crowdstrike.com/documentation/page/d88d9ed6/streaming-api-event-dictionary
+    https://falcon.us-2.crowdstrike.com/documentation/page/eb1587d1/siem-connector#mc98af8f
+Description: |
+  This ASIM parser supports normalizing CrowdStrike Falcon Endpoint Protection logs to the ASIM Audit Event normalized schema. These events are captured through CrowdStrike Falcon Endpoint Protection data connector which allows you to easily connect your CrowdStrike Falcon Event Stream with Microsoft Sentinel.
+ParserName: ASimAuditEventCrowdStrikeFalconHost
+EquivalentBuiltInParser: _ASim_AuditEvent_CrowdStrikeFalconHost
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventFieldsLookup = datatable(
+      Activity: string,
+      Operation: string,
+      EventType_lookup: string,
+      EventSubType: string,
+      Object: string,
+      ObjectType: string
+  ) 
+      [
+      "delete_report_execution", "Delete Report Execution", "Delete", "", "Report Execution", "Scheduled Task",
+      "delete_scheduled_report", "Delete Scheduled Report", "Delete", "", "Scheduled Report", "Scheduled Task",
+      "update_scheduled_report", "Update Scheduled Report", "Set", "", "Scheduled Report", "Scheduled Task",
+      "create_scheduled_report", "Create Scheduled Report", "Create", "", "Scheduled Report", "Scheduled Task",
+      "update_class_action", "Update Class Action", "Set", "", "Class Action", "Other",
+      "update_policy", "Update Policy", "Set", "", "Policy", "Policy Rule",
+      "enable_policy", "Enable Policy", "Enable", "", "Policy", "Policy Rule",
+      "create_policy", "Create Policy", "Create", "", "Policy", "Policy Rule",
+      "remove_rule_group", "Remove Rule Group", "Other", "Remove", "Rule Group", "Service",
+      "create_rule_group", "Create Rule Group", "Create", "", "Rule Group", "Service",
+      "delete_rule_group", "Delete Rule Group", "Delete", "", "Rule Group", "Service",
+      "add_rule_group", "Add Rule Group", "Other", "Add", "Rule Group", "Service",
+      "delete_rule", "Delete Rule", "Delete", "", "Rule", "Policy Rule",
+      "update_rule", "Update Rule", "Set", "", "Rule", "Policy Rule",
+      "create_rule", "Create Rule", "Create", "", "Rule", "Policy Rule",
+      "disable_policy", "Disable Policy", "Disable", "", "Policy", "Policy Rule",
+      "delete_policy", "Delete Policy", "Delete", "", "Policy", "Policy Rule",
+      "update_priority", "Update Priority", "Set", "", "Policy", "Policy Rule",
+      "assign_policy", "Assign Policy", "Other", "Assign", "Policy", "Policy Rule",
+      "remove_policy", "Remove Policy", "Other", "Remove", "Policy", "Policy Rule",
+      "ip_rules_added", "IP Rules Added", "Create", "", "Rule", "Other",
+      "ip_rules_removed", "IP Rules Removed", "Delete", "", "Rule", "Other",
+      "hide_host_requested", "Hide Host Requested", "Delete", "", "Host", "Other",
+      "mobile_hide_host_requested", "Mobile Hide Host Requested", "Delete", "", "Mobile Host", "Other",
+      "CreateAPIClient", "Create API Client", "Create", "", "API Client", "Service",
+      "UpdateAPIClient", "Update API Client", "Set", "", "API Client", "Service"
+  ];
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+      [
+      "0", "Informational",
+      "1", "Informational",
+      "2", "Low",
+      "3", "Medium",
+      "4", "High",
+      "5", "High"
+  ];
+  let UserAuditActivities = dynamic(["delete_report_execution", "delete_scheduled_report", "update_scheduled_report", "create_scheduled_report", "update_class_action", "update_policy", "enable_policy", "create_policy", "remove_rule_group", "create_rule_group", "delete_rule_group", "add_rule_group", "delete_rule", "update_rule", "create_rule", "disable_policy", "delete_policy", "update_priority", "assign_policy", "remove_policy", "ip_rules_added", "ip_rules_removed", "hide_host_requested", "mobile_hide_host_requested"]);
+  let AuthAuditActivities = dynamic(["CreateAPIClient", "UpdateAPIClient"]);
+  let parser = (disabled: bool=false) {
+      CommonSecurityLog
+      | where not(disabled)
+      | where (DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost")
+      | where (DeviceEventClassID == "UserActivityAuditEvent" and Activity in (UserAuditActivities)) or (DeviceEventCategory == "AuthActivityAuditEvent" and Activity in (AuthAuditActivities))
+      | lookup EventFieldsLookup on Activity
+      | lookup EventSeverityLookup on LogSeverity
+      | extend
+          EventType = EventType_lookup,
+          EventStartTime = case(
+                      DeviceEventClassID == "UserActivityAuditEvent",
+                      unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
+                      DeviceEventCategory == "AuthActivityAuditEvent",
+                      todatetime(DeviceCustomDate1),
+                      datetime(null)
+                  ),
+          EventOriginalType = case(
+                          DeviceEventClassID == "UserActivityAuditEvent",
+                          DeviceEventClassID,
+                          DeviceEventCategory == "AuthActivityAuditEvent",
+                          DeviceEventCategory,
+                          ""
+                      ),
+          EventResult = iff(EventOutcome == "false", "Failure", "Success"),
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "0.1",
+          EventCount = int(1),
+          DvcAction = "Allowed",
+          EventProduct = "FalconHost",
+          EventVendor = "CrowdStrike"
+      | project-rename
+          ActorUsername = DestinationUserName,
+          EventUid = _ItemId,
+          DvcIpAddr = DestinationTranslatedAddress,
+          EventOriginalSeverity = LogSeverity,
+          EventProductVersion = DeviceVersion,
+          TargetAppName = ProcessName,
+          EventOriginalResultDetails = EventOutcome,
+          EventOriginalSubType = Activity
+      | extend
+          EventEndTime = EventStartTime,
+          Application = TargetAppName,
+          TargetIpAddr = DvcIpAddr,
+          User = ActorUsername,
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
+          ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
+          TargetAppType = iff(isnotempty(TargetAppName), "Service", "")
+      | extend
+          Dvc = coalesce(DvcIpAddr, EventProduct),
+          Dst = TargetIpAddr
+      | project-away 
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          Computer,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          Protocol,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          Threat*,
+          ExternalID,
+          ReportReferenceLink,
+          ReceiptTime,
+          Reason,
+          ApplicationProtocol,
+          _ResourceId,
+          ExtID,
+          Message,
+          IndicatorThreatType,
+          EventType_*
+  };
+  parser(disabled=disabled)
