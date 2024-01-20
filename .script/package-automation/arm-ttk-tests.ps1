@@ -1,6 +1,7 @@
 
 try {
-    $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+    #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+    $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
     Write-Host "List of files in PR: $diff"
 
     $hasmainTemplateChanged = $false
