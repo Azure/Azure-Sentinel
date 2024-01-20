@@ -38,13 +38,14 @@ if ($mainTemplateChanged -eq $true)
         }
         elseif($testInfo.Name -eq 'Template Should Not Contain Blanks')
         {
-            for ($i = 0; $i -lt $testInfo.AllOutput.Count; $i++) {
-                $lineNumber = $testInfo.AllOutput[$i].Location.Line;
+            $uniqueAllOutputs = $testInfo.AllOutput | Get-Unique
+            for ($i = 0; $i -lt $uniqueAllOutputs.Count; $i++) {
+                $lineNumber = $uniqueAllOutputs[$i].Location.Line;
                 $selectedLineContent = $mainTemplateContent | Select-Object -First $lineNumber | Select-Object -Last 1;
                 if ($selectedLineContent -like '*"requiredDataConnectors"*') {
                     $hasRequiredDataConnectorsError = $true
                 } else {
-                    $filteredTestInfoAllOutput.Add($testInfo.AllOutput[$i]);
+                    $filteredTestInfoAllOutput.Add($uniqueAllOutputs[$i]);
                 }
             }
         }
@@ -62,6 +63,9 @@ if ($mainTemplateChanged -eq $true)
                     $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
                     $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
                 }
+            } elseif ($null -ne $testInfo.Summary -and $filteredTestInfoAllOutput.Count -gt 0)
+            {
+                $testInfo.AllOutput = $filteredTestInfoAllOutput
             }
 
             $filterTestResults.Add($testInfo)
