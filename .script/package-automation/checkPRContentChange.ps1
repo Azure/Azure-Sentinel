@@ -32,6 +32,7 @@ try {
     }
 
     #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+    git fetch --depth=1 origin master
     $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
     Write-Host "List of files in Pull Request: $diff"
 

@@ -43,6 +43,7 @@ try
         {
             # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
             #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+            git fetch --depth=1 origin master
             $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
             Write-Host "List of files changed in PR: $diff"
 
