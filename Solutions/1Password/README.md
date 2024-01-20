@@ -8,13 +8,33 @@ The key function of this solution is to retrieve data provided by the 1Password 
 
 ### Required
 
-- Microsoft Sentinel
+- [1Password API key](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens)
+- [Microsoft Azure](https://azure.microsoft.com/en-us/free)
+- [Microsoft Sentinel](https://azure.microsoft.com/en-us/products/microsoft-sentinel/)
+- Contributor role with User Access Administrator role on the Microsoft Sentinel Resource Group <br>
+**or**
+- Owner on the Microsoft Sentinel Resource Group 
 
-## Installation
+## Automated Installation
 
-The installation of the 1Password Solution for Microsoft Sentinel is very straight forward.
+The installation of the 1Password Solution for Microsoft Sentinel is very straight forward.  
+Just click the button below and the deployment wizard will be opened. <br>
 
-1. Install the data connector using the ARM template
+[![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fazurekid%2FAzure-Sentinel%2Ffeature%2F1password%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fazuredeploy_1Password_API_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fazurekid%2FAzure-Sentinel%2Ffeature%2F1password%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fdeployment%2FUiDefinition.json)
+
+> NOTE: To deploy the solution, the user account executing the deployment needs to have `Owner` permissions on the Microsoft Sentinel `Resource Group` in Azure.<br>
+> This is required to assign the correct RBAC role to the managed identity of the FunctionApp!  
+
+## Manual Installation using the ARM template
+
+<details>
+
+<summary>Deployment steps</summary>
+<br/>
+
+## Manual Installation using the ARM template
+
+1. Install the data connector using the ARM template or use this link to skip the steps below
 
 ![Alt text](images/image.png)
 
@@ -22,10 +42,23 @@ The installation of the 1Password Solution for Microsoft Sentinel is very straig
 
 ![Alt text](images/dataconnector.png)
 
-3. 
+3. Select the `Open connector page` button to open the data connector configuration
+4. click on the `Deploy to Azure` button<br>
+This will open a new browser page containing a deployment wizard in Microsoft Azure.<br>
+Fill in all the required fields and select `create` on the last page.
+
+![Alt text](image.png)
+
+The required resources for the deployment will now be created.
+
+</details>
+
 ## Deployed Resources
 
 The 1Password solution exists out of the following resources:
+
+> Click on the topics below to fold them out.
+
 <details>
 
 <summary>Resource Group</summary>
@@ -151,32 +184,3 @@ The 1Password solution for Microsoft Sentinel is deployed from the data connecto
 ## Post Deployment steps
 
 - N/A
-
-
-########################################
-
-# 1Password
-
-This article describes how to integrate the 1Password audit logs into Microsoft Sentinel for further analytics.
-
-## Installation
-
-To get started with this beta version of the 1Password solution for Microsoft Sentinel a few basic steps need to be executed.  
-Once the solution is GA (general available) you will be able to install it from the Microsoft Sentinel Content Hub.  
-  
-To use this solution we first need to deploy the data connector. Once this is done, the resources required for the integration can be deployed from within the data connector configuration.  
-
-> Click on the topics below to fold them out.
-
-<details>
-
-<summary>Prerequisites</summary>
-<br/>
-
-- [1Password API key](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens)
-- [Microsoft Azure](https://azure.microsoft.com/en-us/free)
-- [Microsoft Sentinel](https://azure.microsoft.com/en-us/products/microsoft-sentinel/)
-</details>
-
-## Architecture
-
