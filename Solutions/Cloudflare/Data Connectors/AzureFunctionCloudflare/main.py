@@ -16,8 +16,8 @@ logging.getLogger(
     'azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
 logging.getLogger('charset_normalizer').setLevel(logging.ERROR)
 
-
-MAX_SCRIPT_EXEC_TIME_MINUTES = 5
+# Defines how long the function can run, max in consumption mode is 10 minutes
+MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10)) 
 
 
 AZURE_STORAGE_CONNECTION_STRING = os.environ['AZURE_STORAGE_CONNECTION_STRING']
@@ -30,7 +30,7 @@ LINE_SEPARATOR = os.environ.get(
 
 # Defines how many files can be processed simultaneously
 MAX_CONCURRENT_PROCESSING_FILES = int(
-    os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 20))
+    os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 1))
 
 # Defines page size while listing files from blob storage. New page is not processed while old page is processing.
 MAX_PAGE_SIZE = int(MAX_CONCURRENT_PROCESSING_FILES * 1.5)
@@ -39,7 +39,7 @@ MAX_PAGE_SIZE = int(MAX_CONCURRENT_PROCESSING_FILES * 1.5)
 MAX_BUCKET_SIZE = int(os.environ.get('MAX_BUCKET_SIZE', 2000))
 
 # Defines max chunk download size for blob storage in MB
-MAX_CHUNK_SIZE_MB = int(os.environ.get('MAX_CHUNK_SIZE_MB', 2))
+MAX_CHUNK_SIZE_MB = int(os.environ.get('MAX_CHUNK_SIZE_MB', 500))
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
@@ -53,6 +53,7 @@ if not match:
 
 
 async def main(mytimer: func.TimerRequest):
+    logging.basicConfig(level=logging.INFO)
     logging.info('Starting script')
     logging.info('Concurrency parameters: MAX_CONCURRENT_PROCESSING_FILES {}, MAX_PAGE_SIZE {}, MAX_BUCKET_SIZE {}.'.format(
         MAX_CONCURRENT_PROCESSING_FILES, MAX_PAGE_SIZE, MAX_BUCKET_SIZE))
@@ -97,14 +98,15 @@ class AzureBlobStorageConnector:
     async def get_blobs(self):
         container_client = self._create_container_client()
         async with container_client:
-            async for blob in container_client.list_blobs():
+            async for blob in container_client.list_blobs(include=['tags']):
                 if 'ownership-challenge' not in blob['name']:
-                    yield blob
+                    if blob['tags'] is None or 'StartedProcessing' not in blob['tags']:
+                        yield blob
 
     def check_if_script_runs_too_long(self):
         now = int(time.time())
         duration = now - self.script_start_time
-        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
+        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.75)
         return duration > max_duration
 
     async def delete_blob(self, blob, container_client):
@@ -141,6 +143,11 @@ class AzureBlobStorageConnector:
     async def process_blob(self, blob, container_client, session: aiohttp.ClientSession):
         async with self.semaphore:
             logging.info("Start processing {}".format(blob['name']))
+            blob_client = container_client.get_blob_client(blob['name'])
+            tags = await blob_client.get_blob_tags()
+            updated_tags = {'StartedProcessing': 'true'}
+            tags.update(updated_tags)
+            await blob_client.set_blob_tags(tags)
             sentinel = AzureSentinelConnectorAsync(
                 session, LOG_ANALYTICS_URI, WORKSPACE_ID, SHARED_KEY, LOG_TYPE, queue_size=MAX_BUCKET_SIZE)
             blob_cor = await container_client.download_blob(blob['name'])

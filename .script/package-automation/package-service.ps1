@@ -5,6 +5,9 @@ Write-Host "RunId $runId, PR Number  $pullRequestNumber"
 
 
 try {
+  $baseFolderPath = $baseFolderPath + "/"
+  $baseFolderPath = $baseFolderPath.replace("//", "/")
+
   Write-Host "====Identifying Solution Name===="
   # Get Solution Name
   . $PSScriptRoot/getSolutionName.ps1 $runId $pullRequestNumber $instrumentationKey
