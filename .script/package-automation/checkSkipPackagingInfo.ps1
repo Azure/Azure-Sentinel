@@ -42,8 +42,7 @@ try
         else
         {
             # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
-            #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
-            $diff = git diff --diff-filter=d --name-only --first-parent origin/master HEAD
+            $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
             Write-Host "List of files changed in PR: $diff"
 
             $changesInPackageFolder = $diff | Where-Object {$_ -like "Solutions/$solutionName/Package/*" }
