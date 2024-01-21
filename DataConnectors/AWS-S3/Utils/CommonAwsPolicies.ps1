@@ -64,10 +64,10 @@ param (
 					'Principal': {
 						'Federated': 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/'
 					},
-                    'Action': 'sts:AssumeRole',
+                    'Action': 'sts:AssumeRoleWithWebIdentity',
 					'Condition': {
 						'StringEquals': {
-							'sts.windows.net/$($SentinelTenantId)/:aud': 'api://$($SentinelClientId)',
+							'sts.windows.net/$($SentinelTenantId)/:aud': '$($SentinelClientId)',
 							'sts:RoleSessionName': 'MicrosoftDefenderForClouds_$WorkspaceId'
 						}
 					}

@@ -37,8 +37,7 @@ function New-OidcProvider
             {
                 Write-Log -Message "Adding new client ID $SentinelClientId" -LogFileName $LogFileName -Severity Information -Indent 2
                 Write-Log -Message "Executing: aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' --client-id $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
-                $tempForOutput = aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" --client-id $SentinelClientId 2>&1
-                Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
+                aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" --client-id $SentinelClientId 2>&1
 
                 # If the client ID was added then the operation was successful
                 if ($lastexitcode -eq 0)
