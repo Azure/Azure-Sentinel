@@ -47,7 +47,7 @@ try
             $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
             Write-Host "List of files changed in PR: $diff"
 
-            $changesInPackageFolder = $diff | Where-Object {$_ -like "Solutions/$solutionName/Package/*" }
+            $changesInPackageFolder = $diff | Where-Object {$_ -notlike '*testParameters.json' } | Where-Object {$_ -like "Solutions/$solutionName/Package/*" }
             Write-Host "List of files changed in Package folder:  $changesInPackageFolder"
 
             if ($changesInPackageFolder.Count -gt 0)
