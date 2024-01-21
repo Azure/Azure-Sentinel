@@ -43,8 +43,6 @@ function Get-OIDCRoleArnPolicy
 		Specifies the Azure Sentinel workspace id 
 	.PARAMETER CustomerAWSAccountId
 		Specifies the customer AWS account id
-	.PARAMETER SentinelTenantId
-		Specifies the Sentinel tenant id
    #>
 [OutputType([string])]
 [CmdletBinding()]
@@ -56,8 +54,7 @@ param (
 	[Parameter(position=1)]
 	[ValidateNotNullOrEmpty()]
 	[string]
-	$CustomerAWSAccountId,
-	$SentinelTenantId
+	$CustomerAWSAccountId
 )  
    $arnRolePolicy = "{
             'Version': '2012-10-17',

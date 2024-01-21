@@ -5,10 +5,6 @@ function New-OidcProvider
         Checks if an OIDC provider already exists, gets a list of the approved client IDs, and adds a new client ID if it's not already there.
         if the OIDC provider doesn't exists creates an IAM entity to describe an identity provider (IdP) that supports OpenID Connect (OIDC) provider for Sentinel Application.
     #>
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$tenantId
-    )
 
     Write-Log -Message "Checking existing OIDC provider" -LogFileName $LogFileName -Severity Information -LinePadding 2
     Write-Log -Message "Executing Set-RetryAction" -LogFileName $LogFileName -Severity Verbose
@@ -19,8 +15,8 @@ function New-OidcProvider
         $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
         Write-Log -Message $CustomerAWSAccountId -LogFileName $LogFileName -Severity Verbose
          
-        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$tenantId' 2>&1" -LogFileName $LogFileName -Severity Verbose
-        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$tenantId" 2>&1
+        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" 2>&1
         Write-Log -Message $providerInfo -LogFileName $LogFileName -Severity Verbose
 
         # If the provider was retrieved then the provider already exists
@@ -40,8 +36,8 @@ function New-OidcProvider
             else
             {
                 Write-Log -Message "Adding new client ID $SentinelClientId" -LogFileName $LogFileName -Severity Information -Indent 2
-                Write-Log -Message "Executing: aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$tenantId' --client-id $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
-                $tempForOutput = aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$tenantId" --client-id $SentinelClientId 2>&1
+                Write-Log -Message "Executing: aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' --client-id $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
+                $tempForOutput = aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" --client-id $SentinelClientId 2>&1
                 Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
 
                 # If the client ID was added then the operation was successful
@@ -59,8 +55,8 @@ function New-OidcProvider
         
             Set-RetryAction({
         
-                Write-Log -Message "Executing: aws iam create-open-id-connect-provider --url 'https://sts.windows.net/$tenantId' --ThumbprintList '626d44e704d1ceabe3bf0d53397464ac8080142c' --client-id-list '$SentinelClientId' 2>&1" -LogFileName $LogFileName -Severity Verbose
-                $tempForOutput = aws iam create-open-id-connect-provider --url "https://sts.windows.net/$tenantId" --ThumbprintList "626d44e704d1ceabe3bf0d53397464ac8080142c"  --client-id-list $SentinelClientId 2>&1
+                Write-Log -Message "Executing: aws iam create-open-id-connect-provider --url 'https://sts.windows.net/$($SentinelTenantId)' --ThumbprintList '626d44e704d1ceabe3bf0d53397464ac8080142c' --client-id-list $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
+                $tempForOutput = aws iam create-open-id-connect-provider --url "https://sts.windows.net/$($SentinelTenantId)" --thumbprint-list "626d44e704d1ceabe3bf0d53397464ac8080142c"  --client-id-list $SentinelClientId 2>&1
                 Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
         
                 # If the provider was created then the operation was successful
@@ -101,8 +97,10 @@ function New-ArnRole
             $workspaceId = Read-ValidatedHost -Prompt "Please enter your Azure Sentinel External ID (Workspace ID)"
             Write-Log "Using Azure Sentinel Workspace ID: $workspaceId" -LogFileName $LogFileName -Severity Information -Indent 2
 
-            if($script:CloudEnv -eq "Gov")
+            if($CloudEnv -eq "Gov")
             {
+
+                $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
                 $rolePolicy = Get-OIDCRoleArnPolicy -WorkspaceId $workspaceId -CustomerAWSAccountId $CustomerAWSAccountId
             }
             else

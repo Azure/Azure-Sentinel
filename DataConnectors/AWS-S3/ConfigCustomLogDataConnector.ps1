@@ -8,7 +8,7 @@ Write-Log -Message "This script creates an Assume Role with minimal permissions 
 Write-ScriptNotes
 
 # Add an Identity Provider
-if($script:CloudEnv -eq "Gov"){
+if($CloudEnv -eq "Gov"){
     New-OidcProvider
 }
 New-ArnRole
