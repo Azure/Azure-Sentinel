@@ -65,6 +65,11 @@ def get_workbench_list(token, start_time, end_time, offset=0, limit=200):
         f'Get workbench list response: {response.text}'
         f'Get workbench list trace: {get_trace_log(response.headers)}'
     )
+
+    if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
+        logger.error(f"response status code: {response.status_code}")
+        return 0, []
+
     response.raise_for_status()
     response_data = response.json()
 
@@ -89,6 +94,11 @@ def get_workbench_detail(token, workbench_id):
         f'Get workbench detail response: {response.text}.'
         f'Get workbench detail trace: {get_trace_log(response.headers)}'
     )
+
+    if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
+        logger.error(f"response status code: {response.status_code}")
+        return []
+
     response.raise_for_status()
     response_data = response.json()
 
@@ -130,6 +140,11 @@ def get_rca_task(token, workbench_id):
             f'Get rca task response: {response.text}'
             f'Get rca task trace: {get_trace_log(response.headers)}'
         )
+
+        if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
+            logger.error(f"response status code: {response.status_code}")
+            return []
+
         response.raise_for_status()
         response_data = response.json()
 
@@ -153,6 +168,11 @@ def get_rca_task_detail(token, task_id, endpoint_guid):
         f'Get rca detail response: {response.text}'
         f'Get rca detail trace: {get_trace_log(response.headers)}'
     )
+
+    if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
+        logger.error(f"response status code: {response.status_code}")
+        return []
+
     response.raise_for_status()
     response_data = response.json()
 
