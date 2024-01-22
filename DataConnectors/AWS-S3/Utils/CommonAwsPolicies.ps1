@@ -34,6 +34,49 @@ param (
 	return $arnRolePolicy.Replace("'",'\"')
 }
 
+function Get-OIDCRoleArnPolicy
+{
+   <#
+	.SYNOPSIS
+		Returns a customized Arn policy using the Sentinel Workspace Id
+	.PARAMETER WorkspaceId
+		Specifies the Azure Sentinel workspace id 
+	.PARAMETER CustomerAWSAccountId
+		Specifies the customer AWS account id
+   #>
+[OutputType([string])]
+[CmdletBinding()]
+param (
+	[Parameter(position=0)]
+	[ValidateNotNullOrEmpty()]
+	[string]
+	$WorkspaceId,
+	[Parameter(position=1)]
+	[ValidateNotNullOrEmpty()]
+	[string]
+	$CustomerAWSAccountId
+)  
+   $arnRolePolicy = "{
+            'Version': '2012-10-17',
+            'Statement': [
+                {
+                    'Effect': 'Allow',
+					'Principal': {
+						'Federated': 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/'
+					},
+                    'Action': 'sts:AssumeRoleWithWebIdentity',
+					'Condition': {
+						'StringEquals': {
+							'sts.windows.net/$($SentinelTenantId)/:aud': '$($SentinelClientId)',
+							'sts:RoleSessionName': 'MicrosoftDefenderForClouds_$WorkspaceId'
+						}
+					}
+                }
+            ]
+        }"
+	return $arnRolePolicy.Replace("'",'\"')
+}
+
 function Get-S3AndRuleSQSPolicies
 {
    	<#
