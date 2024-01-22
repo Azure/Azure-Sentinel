@@ -15,8 +15,8 @@ function New-OidcProvider
         $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
         Write-Log -Message $CustomerAWSAccountId -LogFileName $LogFileName -Severity Verbose
          
-        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' 2>&1" -LogFileName $LogFileName -Severity Verbose
-        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" 2>&1
+        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" 2>&1
         Write-Log -Message $providerInfo -LogFileName $LogFileName -Severity Verbose
 
         # If the provider was retrieved then the provider already exists
@@ -36,8 +36,8 @@ function New-OidcProvider
             else
             {
                 Write-Log -Message "Adding new client ID $SentinelClientId" -LogFileName $LogFileName -Severity Information -Indent 2
-                Write-Log -Message "Executing: aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn 'arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' --client-id $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
-                aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "arn:aws:iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" --client-id $SentinelClientId 2>&1
+                Write-Log -Message "Executing: aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' --client-id $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
+                aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" --client-id $SentinelClientId 2>&1
 
                 # If the client ID was added then the operation was successful
                 if ($lastexitcode -eq 0)

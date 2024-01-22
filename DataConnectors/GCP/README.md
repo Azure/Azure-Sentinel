@@ -14,13 +14,12 @@ This set of Terraform scripts can be used to automatically configure the necessa
 
 At a high level, these scripts do the following:
 
-### `GCPInitialAuthenticationSetup.tf` or `GCPInitialAuthenticationSetupGov.tf` script:
+### `GCPInitialAuthenticationSetup.tf` script:
 
 1. Create a workload identity pool (only if marked as not exist) with azure tenant id as its id.
 2. Create a workload identity provider with Sentinel's application settings.
 3. Create a service account with permissions to read from pub/sub subscription.
 
-For Microsoft Azure Government, please use GCPInitialAuthenticationSetup.tf script.
 For Microsoft Azure Government, please use GCPInitialAuthenticationSetupGov.tf script.
 
 ### `Script that configures data to subscription` (for example GCPAuditLogsSetup.tf script):
