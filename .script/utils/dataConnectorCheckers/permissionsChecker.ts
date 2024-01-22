@@ -42,6 +42,21 @@ const SysLogPermissions = {
     ]
 };
 
+const SysLogDataSourcesPermissions = {
+    "resourceProvider": [
+            {
+                "provider": "Microsoft.OperationalInsights/workspaces/datasources",
+                "permissionsDisplayText": "read and write permissions.",
+                "providerDisplayName": "Workspace data sources",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                    "read": true,
+                    "delete": true
+                }
+            }
+        ]
+};
+
 const AzureFunctionPermissions = {
     "resourceProvider": [
         {
@@ -87,6 +102,10 @@ export function isValidPermissions(permissions: RequiredConnectorPermissions, co
             break;
         case ConnectorCategory.SysLog:
             if(!_.isEqual(permissions.resourceProvider, SysLogPermissions.resourceProvider))
+            {
+                throw new DataConnectorValidationError("Provided permissions does not match with Syslog Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json ");
+            }
+            else(!_.isEqual(permissions.resourceProvider, SysLogDataSourcesPermissions.resourceProvider))
             {
                 throw new DataConnectorValidationError("Provided permissions does not match with Syslog Connector Template. Please refer template https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Templates/Connector_Syslog_template.json ");
             }
