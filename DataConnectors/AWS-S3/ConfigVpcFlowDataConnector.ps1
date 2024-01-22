@@ -5,6 +5,10 @@ Write-Log -Message "Starting Vpc flow data connector configuration script" -LogF
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable VPCFlow Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName
 Write-ScriptNotes
 
+# Add an Identity Provider
+if($CloudEnv -eq "Gov"){
+    New-OidcProvider
+}
 # Create new Arn Role
 New-ArnRole
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose

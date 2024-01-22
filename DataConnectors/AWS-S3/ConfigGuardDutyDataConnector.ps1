@@ -273,6 +273,10 @@ Write-Log -Message "Starting GuardDuty data connector configuration script" -Log
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable GuardDuty Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -LinePadding 2
 Write-ScriptNotes
 
+# Add an Identity Provider
+if($CloudEnv -eq "Gov"){
+    New-OidcProvider
+}
 New-ArnRole
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
 $roleArnObject = aws iam get-role --role-name $roleName
