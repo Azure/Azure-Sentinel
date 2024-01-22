@@ -49,7 +49,7 @@ Function Get-AuditLogs {
         $payload = @{
             'cursor' = $cursor
         }
-        Write-Host $payload
+        Write-Verbose $payload
     }
 
     try {
