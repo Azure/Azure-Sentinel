@@ -51,7 +51,7 @@ const SysLogDataSourcesPermissions = {
                 "scope": "Workspace",
                 "requiredPermissions": {
                     "read": true,
-                    "delete": true
+                    "write": true
                 }
             }
         ]
