@@ -2,7 +2,7 @@
 
 ARM template for ASIM Authentication schema parser for Okta.
 
-This ASIM parser supports normalizing Okta sign in logs, stored in the  Okta_CL table, to the ASIM Authentication schema.
+This ASIM parser supports normalizing Okta sign in logs, stored in the Okta_CL table and in OktaV2_CL table, to the ASIM Authentication schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
