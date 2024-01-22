@@ -1,4 +1,4 @@
-param($runId, $pullRequestNumber, $instrumentationKey)
+param($runId, $pullRequestNumber, $instrumentationKey, $isPRMerged = $false)
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 
 $solutionName = ''
@@ -12,8 +12,12 @@ try
     }
 
     #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
-    git fetch --depth=1 origin master
-    $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+    if ($isPRMerged) {
+        $diff = git diff --diff-filter=d --name-only --first-parent origin/master HEAD^1 
+    } else {
+        git fetch --depth=1 origin master
+        $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+    }
     Write-Host "List of files in PR: $diff"
 
     $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' } 
