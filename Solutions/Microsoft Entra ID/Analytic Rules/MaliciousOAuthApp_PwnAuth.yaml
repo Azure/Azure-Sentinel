@@ -1,0 +1,116 @@
+id: 39198934-62a0-4781-8416-a81265c03fd6
+name: Suspicious application consent similar to PwnAuth
+description: |
+  'This will alert when a user consents to provide a previously-unknown Azure application with the same OAuth permissions used by the FireEye PwnAuth toolkit (https://github.com/fireeye/PwnAuth).
+  The default permissions/scope for the PwnAuth toolkit are user.read, offline_access, mail.readwrite, mail.send, and files.read.all.
+  Consent to applications with these permissions should be rare, especially as the knownApplications list is expanded. Public contributions to expand this filter are welcome!
+  For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+  - DefenseEvasion
+relevantTechniques:
+  - T1528
+  - T1550
+query: |
+  let detectionTime = 1d;
+  let joinLookback = 14d;
+  AuditLogs
+  | where TimeGenerated > ago(detectionTime)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | where OperationName =~ "Consent to application"
+  | where TargetResources has "offline"
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "ServicePrincipal"
+        | extend AppDisplayName = tostring(TargetResource.displayName),
+                 AppClientId = tostring(TargetResource.id),
+                 props = TargetResource.modifiedProperties
+    )
+  | where AppClientId !in ((externaldata(knownAppClientId:string, knownAppDisplayName:string)[@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.OAuth.KnownApplications.csv"] with (format="csv")))
+  | mv-apply ConsentFull = props on 
+    (
+        where ConsentFull.displayName =~ "ConsentAction.Permissions"
+    )
+  | parse ConsentFull with * "ConsentType: " GrantConsentType ", Scope: " GrantScope1 "]" *
+  | where ConsentFull has_all ("user.read", "offline_access", "mail.readwrite", "mail.send", "files.read.all")
+  | where GrantConsentType != "AllPrincipals" // NOTE: we are ignoring if OAuth application was granted to all users via an admin - but admin due diligence should be audited occasionally
+  | extend GrantInitiatedByAppName = tostring(InitiatedBy.app.displayName)
+  | extend GrantInitiatedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend GrantInitiatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend GrantInitiatedByAadUserId = tostring(InitiatedBy.user.id)
+  | extend GrantIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
+  | extend GrantInitiatedBy = iff(isnotempty(GrantInitiatedByUserPrincipalName), GrantInitiatedByUserPrincipalName, GrantInitiatedByAppName)
+  | mv-apply AdditionalDetail = AdditionalDetails on 
+    (
+        where AdditionalDetail.key =~ "User-Agent"
+        | extend GrantUserAgent = AdditionalDetail.value
+    )
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, GrantInitiatedByUserPrincipalName, GrantInitiatedByAadUserId, GrantInitiatedByAppName, GrantInitiatedByAppServicePrincipalId, GrantIpAddress, GrantUserAgent, AppClientId, OperationName, ConsentFull, CorrelationId
+  | join kind = leftouter (AuditLogs
+  | where TimeGenerated > ago(joinLookback)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | where OperationName =~ "Add service principal"
+    | mv-apply TargetResource = TargetResources on 
+        (
+            where TargetResource.type =~ "ServicePrincipal"
+            | extend props = TargetResource.modifiedProperties,
+                    AppClientId = tostring(TargetResource.id)
+        )
+    | mv-apply Property = props on 
+        (
+            where Property.displayName =~ "AppAddress" and Property.newValue has "AddressType"
+            | extend AppReplyURLs = trim('"',tostring(Property.newValue))
+        )
+  | distinct AppClientId, tostring(AppReplyURLs)
+  )
+  on AppClientId
+  | join kind = innerunique (AuditLogs
+  | where TimeGenerated > ago(joinLookback)
+  | where LoggedByService =~ "Core Directory"
+  | where Category =~ "ApplicationManagement"
+  | where OperationName =~ "Add OAuth2PermissionGrant" or OperationName =~ "Add delegated permission grant"
+        | mv-apply TargetResource = TargetResources on 
+            (
+                where TargetResource.type =~ "ServicePrincipal" and array_length(TargetResource.modifiedProperties) > 0 and isnotnull(TargetResource.displayName)
+                | extend GrantAuthentication = tostring(TargetResource.displayName)
+            )
+  | extend GrantOperation = OperationName
+  | project GrantAuthentication, GrantOperation, CorrelationId
+  ) on CorrelationId
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, AppReplyURLs, GrantInitiatedByUserPrincipalName, GrantInitiatedByAadUserId, GrantInitiatedByAppName, GrantInitiatedByAppServicePrincipalId, GrantIpAddress, GrantUserAgent, AppClientId, GrantAuthentication, OperationName, GrantOperation, CorrelationId, ConsentFull
+  | extend timestamp = TimeGenerated, Name = tostring(split(GrantInitiatedByUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(GrantInitiatedByUserPrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: GrantInitiatedByUserPrincipalName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: GrantInitiatedByAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: GrantInitiatedByAppServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: GrantIpAddress
+version: 1.0.2
+kind: Scheduled

@@ -55,6 +55,11 @@ while [[ $# -gt 0 ]]; do
 		DEVMODE=1
 		shift 1
 		;;
+	--tag-version)
+		TAG_VERSION="$2"
+		FORCE=1
+		shift 2
+		;;	
 	--dev-acr)
 		DEVURL="$2"
 		shift 2
@@ -160,6 +165,14 @@ while IFS= read -r contname; do
 			tagver="$tag-preview"
 		else
 			tagver=$tag
+		fi
+		# in case the TAG_VERSION is defined we are updating the tag specific version
+		if [ $TAG_VERSION ]; then
+			if [ $PREVIEW ]; then
+				tagver=${tagver/latest/$TAG_VERSION}
+			else
+				tagver=${tagver/latest/$TAG_VERSION-latest}
+			fi
 		fi
 	fi
 

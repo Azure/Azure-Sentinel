@@ -1,0 +1,96 @@
+id: 83ba3057-9ea3-4759-bf6a-933f2e5bc7ee
+name: Rare application consent
+description: |
+  'This will alert when the "Consent to application" operation occurs by a user that has not done this operation before or rarely does this.
+  This could indicate that permissions to access the listed Azure App were provided to a malicious actor.
+  Consent to application, Add service principal and Add OAuth2PermissionGrant should typically be rare events.
+  This may help detect the Oauth2 attack that can be initiated by this publicly available tool - https://github.com/fireeye/PwnAuth
+  For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 3
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1136
+  - T1068
+query: |
+  let current = 1d;
+  let auditLookback = 7d;
+  // Setting threshold to 3 as a default, change as needed.
+  // Any operation that has been initiated by a user or app more than 3 times in the past 7 days will be excluded
+  let threshold = 3;
+  // Gather initial data from lookback period, excluding current, adjust current to more than a single day if no results
+  let AuditTrail = AuditLogs | where TimeGenerated >= ago(auditLookback) and TimeGenerated < ago(current)
+  // 2 other operations that can be part of malicious activity in this situation are
+  // "Add OAuth2PermissionGrant" and "Add service principal", extend the filter below to capture these too
+  | where OperationName has "Consent to application"
+  | extend InitiatedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)),
+            tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "ServicePrincipal"
+        | extend TargetResourceName = tolower(tostring(TargetResource.displayName))
+    )
+  | summarize max(TimeGenerated), OperationCount = count() by OperationName, InitiatedBy, TargetResourceName
+  // only including operations initiated by a user or app that is above the threshold so we produce only rare and has not occurred in last 7 days
+  | where OperationCount > threshold;
+  // Gather current period of audit data
+  let RecentConsent = AuditLogs | where TimeGenerated >= ago(current)
+  | where OperationName has "Consent to application"
+  | extend IpAddress = case(
+                isnotempty(tostring(InitiatedBy.user.ipAddress)) and tostring(InitiatedBy.user.ipAddress) != 'null', tostring(InitiatedBy.user.ipAddress),
+                isnotempty(tostring(InitiatedBy.app.ipAddress)) and tostring(InitiatedBy.app.ipAddress) != 'null', tostring(InitiatedBy.app.ipAddress),
+                'Not Available')
+  | extend InitiatedBy = iff(isnotempty(tostring(InitiatedBy.user.userPrincipalName)),
+                            tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "ServicePrincipal"
+        | extend TargetResourceName = tolower(tostring(TargetResource.displayName)),
+                 props = TargetResource.modifiedProperties
+    )
+  | parse props with * "ConsentType: " ConsentType "]" *
+  | mv-apply AdditionalDetail = AdditionalDetails on 
+    (
+        where AdditionalDetail.key =~ "User-Agent"
+        | extend UserAgent = tostring(AdditionalDetail.value)
+    )
+  | project TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType, UserAgent, CorrelationId, Type;
+  // Exclude previously seen audit activity for "Consent to application" that was seen in the lookback period
+  // First for rare InitiatedBy
+  let RareConsentBy = RecentConsent | join kind= leftanti AuditTrail on OperationName, InitiatedBy
+  | extend Reason = "Previously unseen user consenting";
+  // Second for rare TargetResourceName
+  let RareConsentApp = RecentConsent | join kind= leftanti AuditTrail on OperationName, TargetResourceName
+  | extend Reason = "Previously unseen app granted consent";
+  RareConsentBy | union RareConsentApp
+  | summarize Reason = make_set(Reason,100) by TimeGenerated, InitiatedBy, IpAddress, TargetResourceName, Category, OperationName, ConsentType, UserAgent, CorrelationId, Type
+  | extend timestamp = TimeGenerated, Name = tolower(tostring(split(InitiatedBy,'@',0)[0])), UPNSuffix = tolower(tostring(split(InitiatedBy,'@',1)[0]))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatedBy
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetResourceName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+version: 1.1.5
+kind: Scheduled

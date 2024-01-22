@@ -22,20 +22,46 @@ query: |
   let OriginalFileNameList = dynamic (["sethc.exe","utilman.exe","osk.exe","Magnify.exe","Narrator.exe","DisplaySwitch.exe","AtBroker.exe","SR.exe","utilman2.exe","ScreenMagnifier.exe"]); 
   Event
   | where EventLog == "Microsoft-Windows-Sysmon/Operational" and EventID==1
-  | parse EventData with * 'Image">' Image "<" * 'OriginalFileName">' OriginalFileName "<" *
+  | parse EventData with * 'ProcessId">' ProcessId "<" * 'Image">' Image "<" * 'OriginalFileName">' OriginalFileName "<" *
   | where Image has_any (ImagesList) and not (OriginalFileName has_any (OriginalFileNameList))
   | parse EventData with * 'ProcessGuid">' ProcessGuid "<" * 'Description">' Description "<" * 'CommandLine">' CommandLine "<" * 'CurrentDirectory">' CurrentDirectory "<" * 'User">' User "<" * 'LogonGuid">' LogonGuid "<" * 'Hashes">' Hashes "<" * 'ParentProcessGuid">' ParentProcessGuid "<" * 'ParentImage">' ParentImage "<" * 'ParentCommandLine">' ParentCommandLine "<" * 'ParentUser">' ParentUser "<" *
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessGuid, CommandLine, Description, OriginalFileName, CurrentDirectory, Hashes
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, User, ParentImage, ParentProcessGuid, ParentCommandLine, ParentUser, Image, ProcessId, ProcessGuid, CommandLine, Description, OriginalFileName, CurrentDirectory, Hashes
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(User, "\\")[1]), AccountNTDomain = tostring(split(User, "\\")[0])
+  | extend ImageFileName = tostring(split(Image, "\\")[-1])
+  | extend ImageDirectory = replace_string(Image, ImageFileName, "")
+  | project-away DomainIndex
 entityMappings:
   - entityType: Process
     fieldMappings:
       - identifier: CommandLine
         columnName: CommandLine
+      - identifier: ProcessId
+        columnName: ProcessId
   - entityType: Host
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.0.1
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: ImageFileName
+      - identifier: Directory
+        columnName: ImageDirectory
+version: 1.0.3
 kind: Scheduled
 metadata:
     source:

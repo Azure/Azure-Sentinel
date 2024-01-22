@@ -9,7 +9,7 @@ status: Available
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
-      - OfficeActivity
+      - OfficeActivity (Exchange)
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -23,7 +23,8 @@ relevantTechniques:
 query: |
  let Keywords = dynamic(["helpdesk", " alert", " suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
  OfficeActivity
- | where Operation =~ "New-InboxRule"
+ | where OfficeWorkload =~ "Exchange" 
+ | where Operation =~ "New-InboxRule" and (ResultStatus =~ "True" or ResultStatus =~ "Succeeded")
  | where Parameters has "Deleted Items" or Parameters has "Junk Email"  or Parameters has "DeleteMessage"
  | extend Events=todynamic(Parameters)
  | parse Events  with * "SubjectContainsWords" SubjectContainsWords '}'*
@@ -36,19 +37,21 @@ query: |
  | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))
  | extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\')[-1]))
  | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail
- | extend timestamp = StartTimeUtc,  IPCustomEntity = ClientIPAddress, AccountCustomEntity = UserId , HostCustomEntity =  OriginatingServer
+ | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: OriginatingServer
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 2.0.1
+        columnName: ClientIPAddress
+version: 2.0.3
 kind: Scheduled
