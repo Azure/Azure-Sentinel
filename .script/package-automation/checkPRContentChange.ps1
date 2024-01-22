@@ -31,9 +31,7 @@ try {
         return $newDataConnectorFilesWithoutExcludedFiles;
     }
 
-    #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
-    git fetch --depth=1 origin master
-    $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+    $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
     Write-Host "List of files in Pull Request: $diff"
 
     # FILTER OUT FILES AND CHECK IF THERE ARE ANY CHNAGES IN FILES BY WHICH USER CAN CREATE PACKAGE.

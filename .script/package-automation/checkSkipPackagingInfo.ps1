@@ -44,10 +44,10 @@ try
             # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
             #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
             if ($isPRMerged) {
-                $diff = git diff --diff-filter=d --name-only --first-parent origin/master HEAD^1 
-            } else {
                 git fetch --depth=1 origin master
                 $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+            } else {
+                $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
             }
             Write-Host "List of files changed in PR: $diff"
 
