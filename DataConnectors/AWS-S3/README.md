@@ -29,8 +29,8 @@ You must have PowerShell and the AWS CLI installed before using these scripts.
   - Run from PowerShell `aws configure`. For more details please see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
 
 ## Using the scripts
-
-Download the scripts in this folder and subfolders or download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer. 
+For Microsoft Azure, please download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer.
+For Microsoft Azure Government, please download and extract the `ConfigAwsS3DataConnectorGOVScripts.zip` file to your computer.
 Make sure that you have PowerShell and the AWS CLI installed.
 
 > IMPORTANT 
