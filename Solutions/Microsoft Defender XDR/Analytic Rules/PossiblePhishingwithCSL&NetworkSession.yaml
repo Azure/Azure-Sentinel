@@ -81,11 +81,11 @@ query: |
     (DeviceEvents
     | where ActionType =~ "BrowserLaunchedToOpenUrl"| where isnotempty(RemoteUrl)
     | project  UrlClickedByUserSid = RemoteUrl,
-    InitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName
+    InitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName, InitiatingProcessAccountUpn, InitiatingProcessAccountDomain 
     )
     on $left.AccountSID == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid
     | distinct  RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId,
-     AccountSID, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName
+     AccountSID, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName, InitiatingProcessAccountUpn, InitiatingProcessAccountDomain  
     |  join kind=inner
     (
     //Suspicious url clicked found in common security logs
@@ -100,15 +100,23 @@ query: |
     | where not(ipv4_is_private(DstIpAddr))
     | project TimeGenerated, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes
     ) on  $left.DestinationIP == $right.DstIpAddr //The relevant network session being projected 
-    | summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountName, DeviceName, InitiatingProcessFileName,DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication
+    | summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountName, InitiatingProcessAccountUpn, InitiatingProcessAccountDomain, DeviceName, InitiatingProcessFileName,DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication
     | extend HostName = iff(DeviceName has '.', substring(DeviceName,0,indexof(DeviceName,'.')),DeviceName)
     | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName,indexof(DeviceName,'.')+1),"")
-    | extend Name = tostring(split(InitiatingProcessAccountName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountName,'@',1)[0])
+    | extend Name = tostring(split(RecipientEmailAddress,'@',0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName 
+        columnName: InitiatingProcessAccountUpn
+      - identifier: Name
         columnName: InitiatingProcessAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingProcessAccountDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName 
+        columnName: RecipientEmailAddress
       - identifier: Name
         columnName: Name
       - identifier: UPNSuffix

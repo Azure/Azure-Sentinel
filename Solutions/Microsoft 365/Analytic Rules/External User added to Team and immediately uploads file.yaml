@@ -26,17 +26,17 @@ query: |
  OfficeActivity
   | where OfficeWorkload =~ "MicrosoftTeams"
   | where Operation =~ "MemberAdded"
-  | extend UPN = tostring(parse_json(Members)[0].UPN)
-  | where UPN contains ("#EXT#")
-  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName
+  | extend MemberAdded = tostring(parse_json(Members)[0].UPN)
+  | where MemberAdded contains ("#EXT#")
+  | project TimeAdded=TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName
   | join kind = inner(
                         OfficeActivity
                         | where OfficeWorkload =~ "MicrosoftTeams"
                         | where Operation =~ "MemberRemoved"
-                        | extend UPN = tostring(parse_json(Members)[0].UPN)
-                        | where UPN contains ("#EXT#")
-                        | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName
-                      ) on UPN
+                        | extend MemberAdded = tostring(parse_json(Members)[0].UPN)
+                        | where MemberAdded contains ("#EXT#")
+                        | project TimeDeleted=TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName
+                      ) on MemberAdded
   | where TimeDeleted > TimeAdded
   | join kind=inner 
                     (
@@ -53,13 +53,13 @@ query: |
                                         | summarize FileAccessCount = count() by OfficeObjectId
                                         | where FileAccessCount > fileAccessThrehold
                                         ) on $left.OfficeObjectId == $right.OfficeObjectId
-                    )on $left.UPN == $right.UserId
-  | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1])
+                    )on $left.MemberAdded == $right.UserId
+  | extend AccountName = tostring(split(MemberAdded, "@")[0]), AccountUPNSuffix = tostring(split(MemberAdded, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName 
-        columnName: UPN
+        columnName: MemberAdded
       - identifier: Name
         columnName: AccountName
       - identifier: UPNSuffix

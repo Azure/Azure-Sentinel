@@ -24,27 +24,31 @@ query: |
   | where Operation == Op
   | where Members has ("#EXT#")
   | mv-expand Members
-  | extend UPN = tostring(Members.UPN)
-  | where UPN has ("#EXT#")
-  | project TimeGenerated, Operation, UPN, UserId, TeamName
+  | extend MemberAdded = tostring(Members.UPN)
+  | where MemberAdded has ("#EXT#")
+  | project TimeGenerated, Operation, MemberAdded, UserId, TeamName, ClientIP
   };
   let TeamsAdd = TeamsAddDel("MemberAdded")
-  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName;
+  | project TimeAdded=TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName, ClientIP;
   let TeamsDel = TeamsAddDel("MemberRemoved")
-  | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName;
+  | project TimeDeleted=TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName, ClientIP;
   TeamsAdd
-  | join kind=inner (TeamsDel) on UPN
+  | join kind=inner (TeamsDel) on MemberAdded
   | where TimeDeleted > TimeAdded
-  | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName
-  | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1])
+  | project TimeAdded, TimeDeleted, MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, ClientIP
+  | extend AccountName = tostring(split(MemberAdded, "@")[0]), AccountUPNSuffix = tostring(split(MemberAdded, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName 
-        columnName: UPN
+        columnName: MemberAdded
       - identifier: Name
         columnName: AccountName
       - identifier: UPNSuffix
         columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
 version: 2.0.2
 kind: Scheduled
