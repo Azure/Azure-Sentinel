@@ -1,0 +1,62 @@
+id: 6db6a8e6-2959-440b-ba57-a505875fcb37
+name: RecordedFuture Threat Hunting Hash All Actors
+description: |
+  'Recorded Future Threat Hunting hash correlation for all actors.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 15m
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+customDetails: 
+  ActorInformation: RecordedFuturePortalLink
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{Description}}'
+  alertDescriptionFormat: '**{{Description}}**\n\nCorrelation found on {{Hash_s}} from the {{Type}} table.\n'
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: RecordedFuturePortalLink
+query: |
+  let ioc_lookBack = 1d;
+  // The source table (imDns) can be replaced by any infrastructure table containing Hash data.
+  // The following workbook: Recorded Future - Hash Correlation will help researching available data and selecting tables and columns  
+  imFileEvent
+  | where isnotempty(Hash)
+  | extend lowerHash=tolower(Hash)
+  | join kind=inner (
+  ThreatIntelligenceIndicator
+  // Only look for IOCs
+  | where isnotempty(FileHashValue)
+  // Only look at Recorded Future Threat Hunt Indicators.
+  | where Description startswith "Recorded Future - Threat Hunt"
+  // Only work with the latest indicators  
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | extend lowerHash=tolower(FileHashValue)
+  ) on lowerHash
+  // select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.Hash
+  | mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
+  | project Hash, HashType, Description, Type, TimeGenerated, RecordedFuturePortalLink
+
+entityMappings:
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: Hash
+      - identifier: Algorithm
+        columnName: HashType
+version: 1.0.1
+kind: Scheduled

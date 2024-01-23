@@ -1,0 +1,331 @@
+Parser:
+  Title: NetworkSession ASIM Parser for VMware Carbon Black Cloud
+  Version: '0.1.1'
+  LastUpdated: Dec 11, 2023
+Product:
+  Name: VMware Carbon Black Cloud
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM NetworkSession Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: VMware Carbon Black Cloud documentation 
+  Link: https://developer.carbonblack.com/reference/carbon-black-cloud/
+        https://developer.carbonblack.com/reference/cb-threathunter/latest/event-search-fields/
+Description: |
+  This ASIM parser supports normalizing VMware Carbon Black Cloud logs to the ASIM NetworkSession normalized schema. VMware Carbon Black Cloud events are captured through VMware Carbon Black Cloud data connector which ingests Carbon Black Audit, Notification and Event data into Microsoft Sentinel through the REST API.
+ParserName: vimNetworkSessionVMwareCarbonBlackCloud
+EquivalentBuiltInParser: _Im_NetworkSession_VMwareCarbonBlackCloud
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let NetworkProtocolLookup = datatable (netconn_protocol_s: string, NetworkProtocol: string)
+    [
+    "PROTO_TCP", "TCP",
+    "PROTO_UDP", "UDP"
+  ];
+  let DvcActionLookup = datatable (sensor_action_s: string, DvcAction: string)
+      [
+      "ACTION_ALLOW", "Allow",
+      "ACTION_SUSPEND", "Drop",
+      "ACTION_TERMINATE", "Drop",
+      "ACTION_BREAK", "Drop",
+      "ACTION_BLOCK", "Deny"
+  ];
+  let EventSeverityLookup = datatable (DvcAction: string, EventSeverity: string)
+      [
+      "Allow", "Informational",
+      "Drop", "Low",
+      "Deny", "Low"
+  ];
+  let ThreatConfidenceLookup = datatable (ThreatOriginalConfidence: string, ThreatConfidence: int)
+      [
+      "1", 10,
+      "2", 20,
+      "3", 30,
+      "4", 40,
+      "5", 50,
+      "6", 60,
+      "7", 70,
+      "8", 80,
+      "9", 90,
+      "10", 100
+  ];
+  let parser=(
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]), 
+      dstipaddr_has_any_prefix: dynamic=dynamic([]), 
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      dstportnumber: int=int(null), 
+      hostname_has_any: dynamic=dynamic([]), 
+      dvcaction: dynamic=dynamic([]), 
+      eventresult: string='*', 
+      disabled: bool=false
+      ) {
+      let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+      let CarbonBlackEventsSchema = datatable ( 
+      eventType_s: string,
+      netconn_protocol_s: string,
+      sensor_action_s: string,
+      alert_id_g: string,
+      device_name_s: string,
+      action_s: string,
+      createTime_s: string,
+      netconn_domain_s: string,
+      remote_ip_s: string,
+      netconn_inbound_b: bool,
+      process_guid_s: string,
+      remote_port_d: real,
+      local_port_d: real,
+      process_pid_d: real,
+      device_external_ip_s: string,
+      local_ip_s: string,
+      device_id_s: string,
+      device_os_s: string,
+      event_description_s: string,
+      event_id_g: string,
+      event_origin_s: string,
+      process_path_s: string,
+      process_username_s: string,
+      org_key_s: string
+  )[];
+      let CarbonBlackNotificationsSchema = datatable (
+      type_s: string,
+      threatInfo_incidentId_g: string,
+      threatInfo_score_d: real,
+      threatInfo_summary_s: string,
+      threatInfo_time_d: real,
+      threatInfo_threatCause_threatCategory_s: string,
+      threatInfo_threatCause_causeEventId_g: string,
+      ruleName_s: string,
+      deviceInfo_deviceVersion_s: string,
+      threatInfo_threatCause_originSourceType_s: string,
+      threatInfo_threatCause_reputation_s: string,
+      threatInfo_threatCause_reason_s: string,
+      id_g: string,
+      primary_event_id_g: string,
+      threat_id_g: string
+  )[];
+      let alldata = union (CarbonBlackEventsSchema), (CarbonBlackEvents_CL)
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+              and array_length(hostname_has_any) == 0
+              and eventType_s == "endpoint.event.netconn"
+              and (isnull(dstportnumber) or toint(remote_port_d) == dstportnumber)
+          | lookup NetworkProtocolLookup on netconn_protocol_s
+          | lookup DvcActionLookup on sensor_action_s
+          | lookup EventSeverityLookup on DvcAction
+          | invoke _ASIM_ResolveDvcFQDN('device_name_s')
+          | extend temp_action = tostring(split(action_s, "|")[0])
+          | extend 
+              EventResult = case(
+                    temp_action == "ACTION_CONNECTION_CREATE_FAILED",
+                    "Failure",
+                    sensor_action_s == "ACTION_ALLOW" or isempty(sensor_action_s),
+                    "Success",
+                    "Failure"
+                ),
+              temp_SrcMatch = has_any_ipv4_prefix(local_ip_s, src_or_any),
+              temp_DstMatch = has_any_ipv4_prefix(remote_ip_s, dst_or_any)
+          | extend 
+              ASimMatchingIpAddr=case(
+                        array_length(src_or_any) == 0 and array_length(dst_or_any) == 0,
+                        "-",
+                        temp_SrcMatch and temp_DstMatch,
+                        "Both",
+                        temp_SrcMatch,
+                        "SrcIpAddr",
+                        temp_DstMatch,
+                        "DstIpAddr",
+                        "No match"
+                    ),
+              ASimMatchingHostname = case(
+                            array_length(hostname_has_any) == 0,
+                            "-",
+                            DvcHostname has_any (hostname_has_any),
+                            "SrcHostname",
+                            "No match"
+                        )
+          | where (eventresult == "*" or eventresult =~ EventResult)
+              and (array_length(dvcaction) == 0 or DvcAction has_any (dvcaction))
+              and ASimMatchingIpAddr != "No match"
+              and ASimMatchingHostname != "No match";
+      let alldatawiththreat = alldata 
+          | where isnotempty(alert_id_g)
+          | join kind=leftouter(union (CarbonBlackNotifications_CL), (CarbonBlackNotificationsSchema)
+              | where type_s == "THREAT"
+              | project
+                  threatInfo_incidentId_g,
+                  threatInfo_score_d,
+                  threatInfo_summary_s,
+                  threatInfo_time_d,
+                  threatInfo_threatCause_threatCategory_s,
+                  threatInfo_threatCause_causeEventId_g,
+                  ruleName_s,
+                  deviceInfo_deviceVersion_s,
+                  threatInfo_threatCause_originSourceType_s,
+                  threatInfo_threatCause_reputation_s,
+                  threatInfo_threatCause_reason_s)
+              on $left.alert_id_g == $right.threatInfo_incidentId_g
+          | join kind=leftouter(union (CarbonBlackNotifications_CL), (CarbonBlackNotificationsSchema)
+              | where type_s == "CB_ANALYTICS"
+              | project
+                  id_g,
+                  deviceInfo_deviceVersion_s,
+                  threat_id_g,
+                  threatInfo_score_d,
+                  threatInfo_summary_s,
+                  threatInfo_threatCause_reason_s)
+              on $left.alert_id_g == $right.id_g
+          | extend 
+              ThreatCategory = threatInfo_threatCause_threatCategory_s,
+              ThreatFirstReportedTime = unixtime_milliseconds_todatetime(threatInfo_time_d),
+              RuleName = ruleName_s,
+              AdditionalFields_threat = bag_pack(
+                                "threatInfo_threatCause_reason",
+                                coalesce(threatInfo_threatCause_reason_s, threatInfo_threatCause_reason_s1),
+                                "threatInfo_threatCause_reputation",
+                                threatInfo_threatCause_reputation_s,
+                                "threatInfo_threatCause_originSourceType",
+                                threatInfo_threatCause_originSourceType_s,
+                                "threatInfo_summary",
+                                coalesce(threatInfo_summary_s, threatInfo_summary_s1)
+                            ),
+              ThreatId = threat_id_g,
+              ThreatOriginalConfidence = tostring(toint(coalesce(threatInfo_score_d, threatInfo_score_d1))),
+              DvcOsVersion = coalesce(deviceInfo_deviceVersion_s, deviceInfo_deviceVersion_s1)
+          | lookup ThreatConfidenceLookup on ThreatOriginalConfidence;
+      let alldatawithoutthreat = alldata
+          | where isempty(alert_id_g);
+      union alldatawiththreat, alldatawithoutthreat
+      | extend
+          EventStartTime = todatetime(split(createTime_s, '+')[0]),
+          SrcDomain = case(
+                  netconn_domain_s == remote_ip_s or netconn_domain_s has ":" or netconn_domain_s !has ".",
+                  "",
+                  netconn_inbound_b,
+                  netconn_domain_s,
+                  ""
+              ),
+          AdditionalFields_Common = bag_pack(
+                                "Process Guid",
+                                process_guid_s
+                            ),
+          DstPortNumber = toint(remote_port_d),
+          NetworkDirection = case(
+                        temp_action == "ACTION_CONNECTION_LISTEN",
+                        "Listen",
+                        netconn_inbound_b == true,
+                        "Inbound",
+                        "Unknown"
+                    ),
+          SrcPortNumber = toint(local_port_d),
+          SrcProcessId = tostring(toint(process_pid_d))
+      | project-rename
+          DstIpAddr = remote_ip_s,
+          DvcIpAddr = device_external_ip_s,
+          EventUid = _ItemId,
+          SrcIpAddr = local_ip_s,
+          DvcId = device_id_s,
+          DvcOriginalAction = sensor_action_s,
+          DvcOs = device_os_s,
+          EventMessage = event_description_s,
+          EventOriginalType = action_s,
+          EventOriginalUid = event_id_g,
+          EventOwner = event_origin_s,
+          SrcUsername = process_username_s,
+          SrcProcessName = process_path_s,
+          DvcScopeId = org_key_s
+      | extend
+          EventCount = int(1),
+          EventProduct = "Carbon Black Cloud",
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "EndpointNetworkSession",
+          EventVendor = "VMware",
+          SrcHostname = SrcIpAddr,
+          DstHostname = iff(NetworkDirection == "Inbound", coalesce(DvcHostname, DstIpAddr), DstIpAddr),
+          NetworkProtocolVersion = case(
+                              DstIpAddr contains ".",
+                              "IPv4",       
+                              DstIpAddr contains ":",
+                              "IPv6", 
+                              ""
+                          )
+      | extend
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
+          EventEndTime = EventStartTime,
+          Dst = coalesce(DstHostname, DstIpAddr),
+          Src = coalesce(SrcHostname, SrcIpAddr),
+          IpAddr = SrcIpAddr,
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          SrcUserType = _ASIM_GetUserType(SrcUsername, ""),
+          SrcDomainType = iff(isnotempty(SrcDomain), "FQDN", ""),
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          AdditionalFields = bag_merge(AdditionalFields_threat, AdditionalFields_Common),
+          SrcAppName = SrcProcessName,
+          SrcAppId = SrcProcessId,
+          SrcAppType = "Process",
+          Hostname = DstHostname
+      | project-away
+          *_d,
+          *_s,
+          *_g,
+          *_b,
+          temp*,
+          _ResourceId,
+          Computer,
+          MG,
+          ManagementGroupName,
+          RawData,
+          SourceSystem,
+          TenantId,
+          AdditionalFields_*
+  };
+  parser(
+      starttime=starttime, 
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+      dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, 
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      dstportnumber=dstportnumber, 
+      hostname_has_any=hostname_has_any, 
+      dvcaction=dvcaction, 
+      eventresult=eventresult, 
+      disabled=disabled
+  )
