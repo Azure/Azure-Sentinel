@@ -40,26 +40,23 @@ if not match:
 
 
 async def main(mytimer: func.TimerRequest):
-    try:
-        logging.info('Script started.')
-        start_ts = int(time.time())
-        async with aiohttp.ClientSession() as session:
-            async with aiohttp.ClientSession() as session_sentinel:
-                prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, start_ts, session=session, session_sentinel=session_sentinel)
+    logging.info('Script started.')
+    start_ts = int(time.time())
+    async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession() as session_sentinel:
+            prisma = PrismaCloudConnector(API_URL, USER, PASSWORD, start_ts, session=session, session_sentinel=session_sentinel)
 
-                tasks = [
-                    prisma.process_alerts()
-                ]
+            tasks = [
+                prisma.process_alerts()
+            ]
 
-                logging.info('LOGTYPE value : {}'.format(LOGTYPE))
-                if LOGTYPE.lower().__contains__('audit') :
-                    tasks.append(prisma.process_audit_logs())
+            logging.info('LOGTYPE value : {}'.format(LOGTYPE))
+            if LOGTYPE.lower().__contains__('audit') :
+                tasks.append(prisma.process_audit_logs())
 
-                await asyncio.gather(*tasks)
+            await asyncio.gather(*tasks)
 
-        logging.info('Program finished. {} events have been sent.'.format(prisma.sentinel.successfull_sent_events_number))   
-    except Exception as error:
-        logging.error(error)
+    logging.info('Program finished. {} events have been sent.'.format(prisma.sentinel.successfull_sent_events_number))   
 
 
 
@@ -108,6 +105,13 @@ class PrismaCloudConnector:
             self.sent_alerts += 1
             if check_if_script_runs_too_long(self.start_ts):
                 logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                self.last_alert_ts = last_alert_ts_ms
+
+                conn = self.sentinel.get_log_type_connector(ALERT_LOG_TYPE)
+                if conn:
+                    await conn.flush()
+                    logging.info('{} alerts have been sent'.format(self.sent_alerts))
+                await self.save_alert_checkpoint()
                 return
 
 
@@ -214,9 +218,9 @@ class PrismaCloudConnector:
             for item in res['items']:
                 yield item
             
-            if check_if_script_runs_too_long(self.start_ts):
-                logging.info(f'Script is running too long. Stop processing new events. Finish script.')
-                return
+            #if check_if_script_runs_too_long(self.start_ts):
+            #    logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+            #    return
 
     @staticmethod
     def clear_alert(alert):
