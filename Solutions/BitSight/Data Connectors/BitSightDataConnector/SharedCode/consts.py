@@ -21,7 +21,7 @@ VULNERABILITIES_URL = (
     "https://service.bitsighttech.com/customer-api/v1/defaults/vulnerabilities"
 )
 PORTFOLIO_PAGE_SIZE = 500
-FINDINGS_PAGE_SIZE = 3000
+FINDINGS_PAGE_SIZE = 1000
 ALERTS_PAGE_SIZE = 1000
 AZURE_CLIENT_ID = os.environ.get("Azure_Client_Id")
 AZURE_CLIENT_SECRET = os.environ.get("Azure_Client_Secret")
