@@ -49,8 +49,8 @@ Set-RetryAction({
 	$vpcTagSpecifications = "ResourceType=vpc-flow-log,Tags=[{Key=Name,Value=${vpcName}}, {Key=$(Get-SentinelTagKey),Value=$(Get-SentinelTagValue)}]"
 	Write-Log -Message "Vpc tag specification: $vpcTagSpecifications" -LogFileName $LogFileName
 
-	Write-Log -Message "Executing: aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceIds.Split(' ') --traffic-type $vpcTrafficType --log-destination-type s3 --log-destination arn:aws:s3:::$bucketName --tag-specifications $vpcTagSpecifications 2>&1" -LogFileName $LogFileName -Severity Verbose
-	$tempForOutput = aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceIds.Split(' ') --traffic-type $vpcTrafficType.ToUpper() --log-destination-type s3 --log-destination arn:aws:s3:::$bucketName --tag-specifications $vpcTagSpecifications 2>&1
+	Write-Log -Message "Executing: aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceIds.Split(' ') --traffic-type $vpcTrafficType --log-destination-type s3 --log-destination $($AwsCloudResource):s3:::$bucketName --tag-specifications $vpcTagSpecifications 2>&1" -LogFileName $LogFileName -Severity Verbose
+	$tempForOutput = aws ec2 create-flow-logs --resource-type VPC --resource-ids $vpcResourceIds.Split(' ') --traffic-type $vpcTrafficType.ToUpper() --log-destination-type s3 --log-destination ${AwsCloudResource}:s3:::$bucketName --tag-specifications $vpcTagSpecifications 2>&1
 	Write-Log $tempForOutput -LogFileName $LogFileName -Severity Verbose
 
 })

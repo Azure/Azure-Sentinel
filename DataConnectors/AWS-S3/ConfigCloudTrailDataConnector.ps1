@@ -47,7 +47,7 @@ function Get-OrganizationCloudTrailS3Policy
                 ]
             },
         'Action': 's3:PutObject',
-        'Resource': 'arn:aws:s3:::${bucketName}/AWSLogs/${organizationId}/*',
+        'Resource': '$($AwsCloudResource):s3:::${bucketName}/AWSLogs/${organizationId}/*',
         'Condition': {
             'StringEquals': {
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -73,7 +73,7 @@ function Get-KmsS3Policy
                 'Service': 'cloudtrail.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/*',
+            'Resource': '$($AwsCloudResource):s3:::${bucketName}/*',
             'Condition': {
                 'StringNotEquals': {
                     's3:x-amz-server-side-encryption': 'aws:kms'
@@ -87,7 +87,7 @@ function Get-KmsS3Policy
                 'Service': 'cloudtrail.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/*',
+            'Resource': '$($AwsCloudResource):s3:::${bucketName}/*',
             'Condition': {
                 'StringNotEquals': {
                     's3:x-amz-server-side-encryption-aws-kms-key-id': '${kmsArn}'
@@ -114,7 +114,7 @@ function Get-RoleAndCloudTrailS3Policy
                 'AWS': '${roleArn}'
             },
             'Action': ['s3:GetObject'],
-            'Resource': 'arn:aws:s3:::${bucketName}/*'
+            'Resource': '$($AwsCloudResource):s3:::${bucketName}/*'
         },
 		{
             'Sid': 'AWSCloudTrailAclCheck20150319',
@@ -123,7 +123,7 @@ function Get-RoleAndCloudTrailS3Policy
                 'Service': 'cloudtrail.amazonaws.com'
             },
             'Action': 's3:GetBucketAcl',
-            'Resource': 'arn:aws:s3:::${bucketName}'
+            'Resource': '$($AwsCloudResource):s3:::${bucketName}'
         },
         {
             'Sid': 'AWSCloudTrailWrite20150319',
@@ -132,7 +132,7 @@ function Get-RoleAndCloudTrailS3Policy
                 'Service': 'cloudtrail.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::${bucketName}/AWSLogs/${callerAccount}/*',
+            'Resource': '$($AwsCloudResource):s3:::${bucketName}/AWSLogs/${callerAccount}/*',
             'Condition': {
                 'StringEquals': {
                     's3:x-amz-acl': 'bucket-owner-full-control'
@@ -187,8 +187,8 @@ function Set-CloudTrailDataEventConfig
 	$DataEventsConfirmation = Read-ValidatedHost `n'Do you want to enable the CloudTrail data events? [y/n]' -ValidationType Confirm
 	if ($DataEventsConfirmation -eq 'y')
 	{
-		Write-Log -Message "Executing: aws cloudtrail put-event-selectors --trail-name $cloudTrailName --event-selectors '[{'DataResources': [{'Type':'AWS::S3::Object', 'Values': ['arn:aws:s3:::']}]}]' | Out-Null" -LogFileName $LogFileName -Severity Verbose
-		aws cloudtrail put-event-selectors --trail-name $cloudTrailName --event-selectors '[{\"DataResources\": [{\"Type\":\"AWS::S3::Object\", \"Values\": [\"arn:aws:s3:::\"]}]}]' | Out-Null
+		Write-Log -Message "Executing: aws cloudtrail put-event-selectors --trail-name $cloudTrailName --event-selectors '[{'DataResources': [{'Type':'AWS::S3::Object', 'Values': ['$($AwsCloudResource):s3:::']}]}]' | Out-Null" -LogFileName $LogFileName -Severity Verbose
+		aws cloudtrail put-event-selectors --trail-name $cloudTrailName --event-selectors '[{\"DataResources\": [{\"Type\":\"AWS::S3::Object\", \"Values\": [\"'$($AwsCloudResource)':s3:::\"]}]}]' | Out-Null
 	}
 }
 function Set-MultiRegionTrailConfig
