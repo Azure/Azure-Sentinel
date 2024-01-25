@@ -1,7 +1,6 @@
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from time import sleep
 
 from azure.durable_functions.models import DurableOrchestrationStatus
 import azure.durable_functions as df

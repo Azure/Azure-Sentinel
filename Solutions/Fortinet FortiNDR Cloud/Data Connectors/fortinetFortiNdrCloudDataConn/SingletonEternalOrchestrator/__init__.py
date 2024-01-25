@@ -28,7 +28,8 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
                 event_type_args['attempt'] = 0
             except Exception as ex:
                 logging.error(f'Error when fetching events by day with event_type => {event_type} error => {ex}')
-                event_types[event_type]['attempt'] = attempt + 1
+                attempt += 1
+                event_types[event_type]['attempt'] = attempt
                 if attempt <= 3:
                     logging.info(f"Retrying attempt {attempt}.")
                 else:
@@ -56,8 +57,8 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
             event_type_args['attempt'] = 0
         except Exception as ex:
             logging.error(f'Error when fetching events by checkpoints with event_type => {event_type} error => {ex}')
-            event_types[event_type]['attempt'] = attempt + 1
-            logging.error(str(ex))
+            attempt += 1
+            event_types[event_type]['attempt'] = attempt
             if attempt <= 3:
                 logging.info(f"Retrying attempt {attempt}.")
             else:

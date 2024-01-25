@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from metastream import fetch_detections, fetch_events
 from metastream.s3_client import Context
