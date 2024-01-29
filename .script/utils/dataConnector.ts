@@ -211,6 +211,6 @@ export enum ConnectorCategory {
   PowerBIActivity="PowerBIActivity",
   SecurityAlertOATP="SecurityAlert(OATP)",
   SecurityAlertASC="SecurityAlert(ASC)",
-  fluentbit_CLAzureCloudNGFWbyPaloAlto="fluentbit_CL (Azure Cloud NGFW by PaloAlto)",
+  fluentbit_CLAzureCloudNGFWbyPaloAlto="fluentbit_CL(AzureCloudNGFWbyPaloAlto)",
   AzureCloudNGFWByPaloAltoNetworks="AzureCloudNGFWByPaloAltoNetworks"
 }
