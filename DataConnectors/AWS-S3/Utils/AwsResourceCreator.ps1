@@ -15,8 +15,8 @@ function New-OidcProvider
         $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
         Write-Log -Message $CustomerAWSAccountId -LogFileName $LogFileName -Severity Verbose
          
-        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' 2>&1" -LogFileName $LogFileName -Severity Verbose
-        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" 2>&1
+        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/' 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/" 2>&1
         Write-Log -Message $providerInfo -LogFileName $LogFileName -Severity Verbose
 
         # If the provider was retrieved then the provider already exists
@@ -55,7 +55,7 @@ function New-OidcProvider
             Set-RetryAction({
         
                 Write-Log -Message "Executing: aws iam create-open-id-connect-provider --url 'https://sts.windows.net/$($SentinelTenantId)' --ThumbprintList '626d44e704d1ceabe3bf0d53397464ac8080142c' --client-id-list $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
-                $tempForOutput = aws iam create-open-id-connect-provider --url "https://sts.windows.net/$($SentinelTenantId)" --thumbprint-list "626d44e704d1ceabe3bf0d53397464ac8080142c"  --client-id-list $SentinelClientId 2>&1
+                $tempForOutput = aws iam create-open-id-connect-provider --url "https://sts.windows.net/$($SentinelTenantId)/" --thumbprint-list "626d44e704d1ceabe3bf0d53397464ac8080142c"  --client-id-list $SentinelClientId 2>&1
                 Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
         
                 # If the provider was created then the operation was successful
