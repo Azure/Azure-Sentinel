@@ -68,6 +68,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.ThreatIntelligenceIndicator;
   }
+  else if (dataTypes[0].name.includes("fluentbit_CL (Azure Cloud NGFW by PaloAlto)"))
+  {
+    return ConnectorCategory.fluentbit_CLAzureCloudNGFWbyPaloAlto;
+  }
   else if (dataTypes[0].name.includes("PowerBIActivity"))
   {
     return ConnectorCategory.PowerBIActivity;
