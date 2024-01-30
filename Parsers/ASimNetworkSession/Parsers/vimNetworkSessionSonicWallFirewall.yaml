@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM filtering parser for SonicWall firewalls
   Version: '0.1.0'
-  LastUpdated: Jan 26, 2024
+  LastUpdated: Jan 30, 2024
 Product:
   Name: SonicWall
 Normalization:
@@ -68,8 +68,8 @@ ParserQuery: |
   | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
   | where not(disabled)
   | where DeviceVendor == "SonicWall"
-  | where DeviceEventClassID !in (14, 97, 1382)
-  | where ( isnotempty(SourceIP) or isnotempty(DestinationIP) )
+  | where DeviceEventClassID !in (14, 97, 1382, 440, 441, 442, 646, 647, 734, 735)
+  | where ( isnotempty(SourceIP) and isnotempty(DestinationIP) )
   | where (isnull(dstportnumber) or DestinationPort == dstportnumber) and (array_length(hostname_has_any) == 0)
   | extend
       temp_SrcMatch=has_any_ipv4_prefix(SourceIP, src_or_any)
@@ -90,6 +90,9 @@ ParserQuery: |
                                     "No match"
                                     )
   | parse-kv AdditionalExtensions as (['gcat']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string, ['af_action']:string, ['af_polid']:string, ['af_policy']:string, ['af_type']:string, ['af_service']:string, ['af_object']:string, ['contentObject']:string, ['fileid']:string, ['uuid']:string) with (pair_delimiter=";", kv_delimiter="=")
+  | extend
+      gcat = column_ifexists("gcat", 0)
+  | where gcat in (3, 5, 6, 10) // Include only these event categories.
   | extend fw_action = column_ifexists("fw_action", "") // Firewall Action, such as drop, forward, mgmt, NA
   | lookup Actions on fw_action
     | where (array_length(dvcaction) == 0 or DvcAction has_any(dvcaction))
@@ -169,8 +172,7 @@ ParserQuery: |
     , SrcNatPortNumber = SourceTranslatedPort
     , HttpUserAgent = RequestClientApplication
   | extend
-      gcat = column_ifexists("gcat", 0) // If column doesn't exist, creates the column and sets it to 0. Also avoids errors if returned query is empty.
-    , appcat = column_ifexists("appcat", "") // Application Category from App Control. Sets an empty appcat column if column doesn't exist.
+    appcat = column_ifexists("appcat", "") // Application Category from App Control. Sets an empty appcat column if column doesn't exist.
     , ipspri = column_ifexists("ipspri", "")
     , spypri = column_ifexists("spypri", "")
   | extend sosLogMsgCategory = case(gcat == 1, "System (1)",
@@ -296,15 +298,6 @@ ParserQuery: |
     , sosCFSCategoryID = extract(@'(\d+)\s', 1, column_ifexists("CFSFullString", "")) // Application Name from App Control
     , sosCFSCategoryName = extract(@'.*-("(.*))', 1, column_ifexists("CFSFullString", "")) // Application Name from App Control
     , sosCFSPolicyName = extract(@'Policy: (.*), Info:', 1, column_ifexists("LogMsgNote", ""))
-    , auditId = column_ifexists("auditId", "") // Audit ID of the Configuration Auditing event.
-    , tranxId = column_ifexists("tranxId", "") // Transaction ID of the entries pertaining to the same transaction or batch.
-    , userMode = column_ifexists("userMode", "") // User Mode. Displays the privileges assigned to a user.
-    , grpName = column_ifexists("grpName", "") // Labels a group of data usually associated with a table (ex: VPN Policy list, Syslog Server list, etc.)
-    , grpIndex = column_ifexists("grpIndex", "") // Labels the instance of the data group (ex: a VPN policy name, Syslog server entry in the list, etc.)
-    , oldValue = column_ifexists("oldValue", "") // The previous value associated with the auditing event.
-    , newValue = column_ifexists("newValue", "") // The new value associated with the auditing event.
-    , auditTime = column_ifexists("auditTime", "") // The timestamp indicates the time configuration was changed.
-    , auditPath = column_ifexists("auditPath", "") // The logical location of the configuration setting.
     , EventStartTime = coalesce(todatetime(StartTime), TimeGenerated)
     , EventEndTime = coalesce(todatetime(EndTime), TimeGenerated)
     , EventType = "NetworkSession"
@@ -376,15 +369,6 @@ ParserQuery: |
     , sosSourcePortSPT = spt // Source port
     , sosNATSourcePort = snpt // NAT'ed source port
     , sosBladeID = bid // Blade ID
-    , sosAuditID = auditId // Audit ID of the Configuration Auditing event.
-    , sosAuditTransactionID = tranxId // Transaction ID of the entries pertaining to the same transaction or batch.
-    , sosAuditUserPrivileges = userMode // User Mode. Displays the privileges assigned to a user.
-    , sosAuditGroupName = grpName // Labels a group of data usually associated with a table (ex: VPN Policy list, Syslog Server list, etc.)
-    , sosAuditGroupIndex = grpIndex // Labels the instance of the data group (ex: a VPN policy name, Syslog server entry in the list, etc.)
-    , sosAuditOldValue = oldValue // The previous value associated with the auditing event.
-    , sosAuditNewValue = newValue // The new value associated with the auditing event.
-    , sosAuditTime = auditTime // The timestamp indicates the time configuration was changed.
-    , sosAuditPath = auditPath // The logical location of the configuration setting.
     , sosUUID = uuid
     , sosHttpRequestMethod = HttpRequestMethod
     , sosFileName = FileName
@@ -421,15 +405,6 @@ ParserQuery: |
     , "SourcePortSPT", sosSourcePortSPT
     , "NATSourcePort", sosNATSourcePort
     , "BladeID", sosBladeID
-    , "AuditID", sosAuditID
-    , "AuditTransactionID", sosAuditTransactionID
-    , "AuditUserPrivileges", sosAuditUserPrivileges
-    , "AuditGroupName", sosAuditGroupName
-    , "AuditGroupIndex", sosAuditGroupIndex
-    , "AuditOldValue", sosAuditOldValue
-    , "AuditNewValue", sosAuditNewValue
-    , "AuditTime", sosAuditTime
-    , "AuditPath", sosAuditPath
     , "UUID", sosUUID
     , "HttpRequestMethod", sosHttpRequestMethod
     , "FileName", sosFileName
@@ -469,7 +444,6 @@ ParserQuery: |
     , "RequestURL", RequestURL
     , "Activity", EventMessage
     , "EventMessageDetail", sosEventMessageDetail
-    , "AdditionalExtensions", AdditionalExtensions
     , "UserSessionType", sosUserSessionType
     , "UserSessionDuration", sosUserSessionDuration
     )
