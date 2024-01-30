@@ -37,35 +37,48 @@ query: |
         | extend DisplayName = trim('"',tostring(Property.displayName)),
                  GroupName = trim('"',tostring(Property.newValue))
     )
-  | extend AppId = InitiatedBy.app.appId,
-        InitiatedByDisplayName = case(isnotempty(InitiatedBy.app.displayName), InitiatedBy.app.displayName, isnotempty(InitiatedBy.user.displayName), InitiatedBy.user.displayName, "not available"),
-        ServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),
-        ServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName),
-        UserId = InitiatedBy.user.id,
-        UserIPAddress = InitiatedBy.user.ipAddress,
-        UserRoles = InitiatedBy.user.roles,
-        UserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAppId = tostring(InitiatedBy.app.appId)
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))        
+  | extend InitiatingUserRoles = InitiatedBy.user.roles
   | where GroupName in~ (PrivilegedGroups)
   // If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.
   //| where InitiatedByDisplayName != "MS-PIM"
-  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, AppId, InitiatedByDisplayName, ServicePrincipalId, ServicePrincipalName, DisplayName, GroupName, UserId, UserIPAddress, UserRoles, UserPrincipalName, TargetUserPrincipalName
-  | extend AccountCustomEntity = case(isnotempty(ServicePrincipalName), ServicePrincipalName, 
-                                      isnotempty(UserPrincipalName), UserPrincipalName,  
-                                      "")
-  | extend AccountName = tostring(split(AccountCustomEntity,'@',0)[0]), AccountUPNSuffix = tostring(split(AccountCustomEntity,'@',1)[0])
+  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppId, InitiatingAppServicePrincipalId, InitiatingIpAddress, InitiatingUserRoles, DisplayName, GroupName, TargetUserPrincipalName
+  | extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
   | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName    
       - identifier: Name
-        columnName: AccountName      
+        columnName: InitiatedByName      
       - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
+        columnName: InitiatedByUPNSuffix
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: TargetUserPrincipalName   
       - identifier: Name
         columnName: TargetName      
       - identifier: UPNSuffix
         columnName: TargetUPNSuffix
-version: 1.0.4
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
+version: 1.0.5
 kind: NRT
