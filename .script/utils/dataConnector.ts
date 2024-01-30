@@ -210,6 +210,5 @@ export enum ConnectorCategory {
   AzureActivity="AzureActivity",
   PowerBIActivity="PowerBIActivity",
   SecurityAlertOATP="SecurityAlert(OATP)",
-  SecurityAlertASC="SecurityAlert(ASC)",
-  AzureCloudNGFWByPaloAltoNetworks="AzureCloudNGFWByPaloAltoNetworks"
+  SecurityAlertASC="SecurityAlert(ASC)"
 }
