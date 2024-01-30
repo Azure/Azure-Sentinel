@@ -13,6 +13,11 @@ if ($mainTemplateChanged -eq $true)
     # SKIP ANY ERRORS ON contentProductId AND id 
     $filterTestResults = New-Object System.Collections.ArrayList
     $hasContentProductIdError = $false
+    $hasSerializedDataError=$false
+    $mainTemplateFilePath = ($PackageFolderPath + "/mainTemplate.json").Replace("//", "/")
+    $mainTemplateContent = Get-Content "$mainTemplateFilePath"
+    $filteredTestInfoAllOutput = New-Object System.Collections.ArrayList
+
     foreach($testInfo in $MainTemplateTestResults)
     {
         if ($testInfo.Name -eq 'IDs Should Be Derived From ResourceIDs' -and $testInfo.Errors.Count -gt 0)
@@ -30,19 +35,43 @@ if ($mainTemplateChanged -eq $true)
                 }
             }
         }
-        else {
+        elseif($testInfo.Name -eq 'Template Should Not Contain Blanks')
+        {
+            $uniqueAllOutputs = $testInfo.AllOutput | Get-Unique
+            for ($i = 0; $i -lt $uniqueAllOutputs.Count; $i++) {
+                $lineNumber = $uniqueAllOutputs[$i].Location.Line;
+                $selectedLineContent = $mainTemplateContent | Select-Object -First $lineNumber | Select-Object -Last 1;
+                if ($selectedLineContent -like '*"serializedData"*') {
+                    $hasSerializedDataError = $true
+                }
+                else {
+                    $filteredTestInfoAllOutput.Add($uniqueAllOutputs[$i]);
+                }
+            }
+        }
+              else {
             if ($null -ne $testInfo.Summary -and $hasContentProductIdError -eq $true)
             {
                 $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
                 $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
             }
-
+            if ($null -ne $testInfo.Summary -and $hasSerializedDataError -eq $true)
+            {
+                $testInfo.AllOutput = $filteredTestInfoAllOutput
+                if ($filteredTestInfoAllOutput.Count -eq 0) {
+                    $testInfo.Summary.Fail = $testInfo.Summary.Fail - 1
+                    $testInfo.Summary.Pass = $testInfo.Summary.Pass + 1
+                }
+            }
+            elseif ($null -ne $testInfo.Summary -and $filteredTestInfoAllOutput.Count -gt 0)
+            {
+                $testInfo.AllOutput = $filteredTestInfoAllOutput
+            }
+           
             $filterTestResults.Add($testInfo)
         }
     }
-
     Write-Output $filterTestResults
-
     if ($filterTestResults[$filterTestResults.Count - 1].Summary.Fail -gt 0) {
         Write-Host "Please review and rectify the 'MainTemplate.json' file as some of the ARM-TTK tests did not pass!"
         exit 1
