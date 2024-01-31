@@ -1,17 +1,19 @@
 Parser:
   Title: Web Session ASIM parser for SonicWall firewalls
   Version: '0.1.0'
-  LastUpdated: Jan 26, 2024
+  LastUpdated: Jan 31, 2024
 Product:
   Name: SonicWall
 Normalization:
   Schema: WebSession
   Version: '0.2.6'
 References:
-- Title: ASIM Web Session Schema
-  Link: https://aka.ms/ASimWebSessionDoc
-- Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  - Title: ASIM Web Session Schema
+    Link: https://aka.ms/ASimWebSessionDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
+  - Title: SonicWall SonicOS/X 7.0.1 Log Events Reference Guide [PDF]
+    Link: https://www.sonicwall.com/techdocs/pdf/SonicOS-X_7.0.1_LogEvents_ReferenceGuide.pdf
 Description: |
   This ASIM parser supports normalizing SonicWall SonicOS ArcSight-formatted syslog ingested by Microsoft Sentinel to the ASIM WebSession normalized schema.
 ParserName: ASimWebSessionSonicWallFirewall
@@ -23,20 +25,15 @@ ParserParams:
 ParserQuery: |
   let parser=(disabled:bool=false){
       let Actions=datatable(fw_action:string, DvcAction:string, EventSeverity:string)
-        [ "reset client", "Reset Source", "Low"
-        , "reset server", "Reset Destination", "Low"
-        , "reset both", "Reset", "Low"
-        , "allow", "Allow", "Informational"
-        , "\"forward\"", "Allow", "Informational"
+        [ "\"forward\"", "Allow", "Informational"
         , "\"mgmt\"", "Other", "Informational"
         , "\"NA\"", "Other", "Informational"
-        , "deny", "Deny", "Low"
         , "\"drop\"", "Drop", "Low"
-        , "drop ICMP", "Drop ICMP", "Low"
       ];
       CommonSecurityLog
       | where not(disabled)
       | where DeviceVendor == "SonicWall"
+      | where DeviceEventClassID in (14, 97)
       | where (isnotempty(SourceIP) or isnotempty(DestinationIP))
       | where Protocol has_any(dynamic(["udp/http", "tcp/http", "udp/https", "tcp/https"]))
       | parse-kv AdditionalExtensions as (['gcat']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string, ['af_action']:string, ['af_polid']:string, ['af_policy']:string, ['af_type']:string, ['af_service']:string, ['af_object']:string, ['contentObject']:string, ['fileid']:string, ['uuid']:string) with (pair_delimiter=";", kv_delimiter="=")
@@ -46,6 +43,7 @@ ParserQuery: |
       | extend RequestURL_ = iif(RequestURL_ has_any(dynamic(["af_polid=", "ipscat=", "snpt=", "dnpt="])), "", RequestURL_)
       | extend RequestURL = iif(isnotempty(RequestURL), RequestURL, iif(RequestURL_ contains "/" and RequestURL_ contains ".", RequestURL_, ""))
       | where isnotempty(RequestURL)
+      | where isnotempty(fw_action)
       | lookup Actions on fw_action
       // Sets the mandatory EventResult based on the DvcAction.
       | extend EventResult = case(DvcAction == "Allow", "Success",
@@ -393,7 +391,6 @@ ParserQuery: |
     , "LogMsgID", sosLogMsgID
     , "Activity", EventMessage
     , "EventMessageDetail", sosEventMessageDetail
-    , "AdditionalExtensions", AdditionalExtensions
     , "UserSessionType", sosUserSessionType
     , "UserSessionDuration", sosUserSessionDuration
     )

@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM filtering parser for SonicWall firewalls
   Version: '0.1.0'
-  LastUpdated: Jan 26, 2024
+  LastUpdated: Jan 31, 2024
 Product:
   Name: SonicWall
 Normalization:
@@ -63,20 +63,15 @@ ParserQuery: |
       let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
       let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
       let Actions=datatable(fw_action:string, DvcAction:string, EventSeverity:string)
-        [ "reset client", "Reset Source", "Low"
-        , "reset server", "Reset Destination", "Low"
-        , "reset both", "Reset", "Low"
-        , "allow", "Allow", "Informational"
-        , "\"forward\"", "Allow", "Informational"
+        [ "\"forward\"", "Allow", "Informational"
         , "\"mgmt\"", "Other", "Informational"
         , "\"NA\"", "Other", "Informational"
-        , "deny", "Deny", "Low"
         , "\"drop\"", "Drop", "Low"
-        , "drop ICMP", "Drop ICMP", "Low"
       ];
       CommonSecurityLog
       | where not(disabled)
       | where DeviceVendor == "SonicWall"
+      | where DeviceEventClassID in (14, 97)
       | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
       | where (isnotempty(SourceIP) or isnotempty(DestinationIP))
       | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any)
@@ -98,6 +93,7 @@ ParserQuery: |
       | extend RequestURL = iif(isnotempty(RequestURL), RequestURL, iif(RequestURL_ contains "/" and RequestURL_ contains ".", RequestURL_, ""))
       | where isnotempty(RequestURL)
       | where (array_length(url_has_any) == 0 or RequestURL has_any (url_has_any))
+      | where isnotempty(fw_action)
       | lookup Actions on fw_action
       // Sets the mandatory EventResult based on the DvcAction.
       | extend EventResult = case(DvcAction == "Allow", "Success",
@@ -445,7 +441,6 @@ ParserQuery: |
     , "LogMsgID", sosLogMsgID
     , "Activity", EventMessage
     , "EventMessageDetail", sosEventMessageDetail
-    , "AdditionalExtensions", AdditionalExtensions
     , "UserSessionType", sosUserSessionType
     , "UserSessionDuration", sosUserSessionDuration
     )
