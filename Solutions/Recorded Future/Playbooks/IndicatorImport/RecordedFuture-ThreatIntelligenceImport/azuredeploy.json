@@ -1,0 +1,173 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "RecordedFuture-ThreatIntelligenceImport",
+        "description": "This playbook will write indicators in batch to ThreatIntelligenceIndicator log analytics table.",
+        "prerequisites": [
+            "Microsoft Sentinel Threat Intelligence active"
+        ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
+        "lastUpdateTime": "2023-10-13T00:00:00.000Z",
+        "entities": [],
+        "tags": [ "Threat Intelligence" ],
+        "support": {
+            "tier": "Partner",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "RecordedFuture-ThreatIntelligenceImport",
+                "notes": [ "Initial version" ]
+            },
+             {
+                "version": "1.1",
+                "title": "RecordedFuture-ThreatIntelligenceImport",
+                "notes": [ "Fixed Api connection" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RecordedFuture-ThreatIntelligenceImport",
+            "type": "string"
+        },
+        "WorkspaceID": {
+            "type": "string",
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Microsoft Sentinel WorkspaceID"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Batch_messages": {
+                            "type": "Batch",
+                            "inputs": {
+                                "configurations": {
+                                    "RFImportToSentinel": {
+                                        "releaseCriteria": {
+                                            "messageCount": 100,
+                                            "recurrence": {
+                                                "frequency": "Minute",
+                                                "interval": 2
+                                            }
+                                        }
+                                    }
+                                },
+                                "mode": "Inline"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Select": {
+                            "runAfter": {},
+                            "type": "Select",
+                            "inputs": {
+                                "from": "@triggerBody()['items']",
+                                "select": "@item()['content']"
+                            }
+                        },
+                        "Threat_Intelligence_-_Upload_Indicators_of_Compromise_(V2)_(Preview)": {
+                            "runAfter": {
+                                "Select": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "indicators": "@body('Select')",
+                                    "sourcesystem": "Recorded Future"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "[concat( '/V2/ThreatIntelligence/',parameters('WorkspaceID'),'/UploadIndicators/')]",
+                                "retryPolicy": {
+                                    "count": 10,
+                                    "interval": "PT20S",
+                                    "maximumInterval": "PT1H",
+                                    "minimumInterval": "PT10S",
+                                    "type": "exponential"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RecordedFuture-ThreatIntelligenceImport",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

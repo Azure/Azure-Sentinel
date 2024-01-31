@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.2       | 31-01-2024                     | Updated **Parser** Corelight <br/> Updated tactics of **Hunting Query** Corelight - Repetitive DNS Failures                             |
 | 3.0.1       | 16-11-2023                     | Updated package mainTemplate variables                             |
 | 3.0.0       | 20-09-2023                     | Changed backend format to use separate tables with parsed values   |
 | 2.0.0       | 10-06-2022                     | Updated **Workbooks**                                               | 
