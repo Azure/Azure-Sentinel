@@ -12,7 +12,7 @@ requiredDataConnectors:
       - CommonSecurityLog
   - connectorId: SonicWallFirewall
     dataTypes:
-      - ASimNetworkSessionSonicWallFirewall
+      - CommonSecurityLog
 queryFrequency: 5m
 queryPeriod: 5m
 triggerOperator: gt
@@ -22,17 +22,29 @@ tactics:
 relevantTechniques:
   - T1204
 query: |
-  ASimNetworkSessionSonicWallFirewall
-  | where LogMsgID == 1631 and CaptureATPVerdict == "BAD"
+  CommonSecurityLog
+  | where DeviceEventClassID == 1631
+  | extend CaptureATPVerdict = extract(@'Gateway Anti-Virus Status: (.*)\. ', 1, column_ifexists("Message", ""))
+  | where CaptureATPVerdict == "BAD"
+  | extend RequestURL_ = extract(@"(?:[.*;]+?)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)(?:;fw_action|;fileid)", 1, AdditionalExtensions)
+  | extend RequestURL_ = iif(RequestURL_ startswith "snpt" or RequestURL_ startswith "dnpt" or RequestURL_ startswith "appid" or RequestURL_ startswith "appName", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), RequestURL_)
+  | extend RequestURL_ = iif(RequestURL_ matches regex @"^(.{2,6}=.{1,6})", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), iif(RequestURL_ matches regex @"^\w=\d$", "", RequestURL_))
+  | extend RequestURL_ = iif(RequestURL_ has_any(dynamic(["af_polid=", "ipscat=", "snpt=", "dnpt="])), "", RequestURL_)
+  | extend RequestURL = iif(isnotempty(RequestURL), RequestURL, iif(RequestURL_ contains "/" and RequestURL_ contains ".", RequestURL_, ""))
+  | parse-kv AdditionalExtensions as (['susr']:string, ['fileid']:string) with (pair_delimiter=";", kv_delimiter="=")
+  | extend NetworkProtocol = toupper(trim_end(@"/.*", Protocol)),
+      NetworkApplicationProtocol = tostring(toupper(trim_start(@".*/", Protocol)))
   | project
-      DeviceModel,
-      SerialNumber,
-      SrcIpAddr,
-      SrcUsername,
-      Protocol,
-      RequestURL = coalesce(RequestURL, RequestURL_),
-      File = url_decode(tostring(coalesce(split(RequestURL, '/')[-1], split(RequestURL_, '/')[-1]))),
-      Hash = FileIdentifier,
+      TimeGenerated,
+      DeviceModel = DeviceProduct,
+      SerialNumber = Computer,
+      SrcIpAddr = SourceIP,
+      SrcUsername = coalesce(susr, SourceUserName),
+      NetworkProtocol,
+      NetworkApplicationProtocol,
+      RequestURL,
+      File = url_decode(tostring(split(RequestURL, '/')[-1])),
+      Hash = fileid,
       Verdict = CaptureATPVerdict
 entityMappings:
   - entityType: File
