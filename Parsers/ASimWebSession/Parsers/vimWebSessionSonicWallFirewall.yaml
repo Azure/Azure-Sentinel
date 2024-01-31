@@ -28,9 +28,6 @@ ParserParams:
   - Name: srcipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
-  - Name: dstipaddr_has_any_prefix
-    Type: dynamic
-    Default: dynamic([])    
   - Name: ipaddr_has_any_prefix
     Type: dynamic
     Default: dynamic([])
@@ -39,6 +36,9 @@ ParserParams:
     Default: dynamic([])
   - Name: httpuseragent_has_any
     Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
     Default: dynamic([])
   - Name: eventresult
     Type: string
@@ -51,17 +51,15 @@ ParserQuery: |
     starttime:datetime=datetime(null),
     endtime:datetime=datetime(null),
     srcipaddr_has_any_prefix:dynamic=dynamic([]),
-    dstipaddr_has_any_prefix:dynamic=dynamic([]),
     ipaddr_has_any_prefix:dynamic=dynamic([]), 
     url_has_any:dynamic=dynamic([]),
     httpuseragent_has_any:dynamic=dynamic([]),
+    eventresultdetails_in:dynamic=dynamic([]),
     eventresult:string='*',
     disabled:bool=false
     )
     {
       let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix);
-      let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
-      let ip_any = set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
       let Actions=datatable(fw_action:string, DvcAction:string, EventSeverity:string)
         [ "\"forward\"", "Allow", "Informational"
         , "\"mgmt\"", "Other", "Informational"
@@ -75,14 +73,16 @@ ParserQuery: |
       | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
       | where (isnotempty(SourceIP) or isnotempty(DestinationIP))
       | extend temp_SrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any)
-        , temp_DstMatch = has_any_ipv4_prefix(DestinationIP, dst_or_any)
-      | extend ASimMatchingIpAddr = case(array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-",
+        , temp_DstMatch = has_any_ipv4_prefix(DestinationIP, ipaddr_has_any_prefix)
+      | extend ASimMatchingIpAddr = case(array_length(src_or_any) == 0, "-",
                                         temp_SrcMatch and temp_DstMatch, "Both",
                                         temp_SrcMatch, "SrcIpAddr",
                                         temp_DstMatch, "DstIpAddr",
                                         "No match")
       | where ASimMatchingIpAddr != "No match"
       | project-away temp_*
+      | extend EventResultDetails = "NA"
+      | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) has_any(eventresultdetails_in))
       | where (array_length(httpuseragent_has_any) == 0 or RequestClientApplication has_any (httpuseragent_has_any))
       | where Protocol has_any(dynamic(["udp/http", "tcp/http", "udp/https", "tcp/https"]))
       | parse-kv AdditionalExtensions as (['gcat']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string, ['af_action']:string, ['af_polid']:string, ['af_policy']:string, ['af_type']:string, ['af_service']:string, ['af_object']:string, ['contentObject']:string, ['fileid']:string, ['uuid']:string) with (pair_delimiter=";", kv_delimiter="=")
@@ -302,7 +302,6 @@ ParserQuery: |
       , EventSchema = "WebSession"
       , EventCount = toint(1)
       , EventUid = _ItemId
-      , EventResultDetails = "NA"
       , UserAgent = HttpUserAgent
   | extend
       UrlCategory = sosCFSCategoryName
@@ -496,4 +495,4 @@ ParserQuery: |
     , DvcOs
     , DvcOsVersion
   };
-  parser (starttime=starttime, endtime=endtime, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresult=eventresult, disabled=disabled)
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
