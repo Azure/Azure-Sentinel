@@ -34,7 +34,7 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
     # Post REST request
 
     return RestClient::Request.execute(method: :post, url: @uri, payload: body, headers: headers,
-                                        proxy: @logstashLoganalyticsConfiguration.proxy_endpoint, timeout: 120)
+                                        proxy: @logstashLoganalyticsConfiguration.proxy_endpoint, timeout: 240)
   end # def post_data
 
   # Static function to return if the response is OK or else
