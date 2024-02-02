@@ -179,6 +179,8 @@ def build_signature(customer_id, shared_key, date, content_length, method, conte
 
 
 def post_data(customer_id, shared_key, body, log_type, chunk_count):
+    logging.info("Posting the below data to Log Analytics Workspace")
+    logging.info(body)
     method = 'POST'
     content_type = 'application/json'
     resource = '/api/logs'
