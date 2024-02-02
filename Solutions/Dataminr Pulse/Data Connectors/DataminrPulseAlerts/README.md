@@ -111,31 +111,28 @@ And need to enter below information to configure DataminrPulse data connector fo
 ```
 ### **Post Deployment Steps**<a name="Post Deployment Steps"></a>
 
-**Get the Function app endpoint**
+**1)Get the Function app endpoint**
     
     1. Go to Azure function Overview page and Click on "Functions" in the left blade.
     2. Click on the function called "DataminrPulseAlertsHttpStarter".
     3. Go to "GetFunctionurl" and copy the function url.
     4. Replace "{functionname}"  with "DataminrPulseAlertsSentinelOrchestrator" in copied function url.
 
-**Steps to add integration settings in Dataminr by running function app manually.**
+**2)Steps to add integration settings in Dataminr by running function app manually.**
 
-    1. Within Microsoft Sentinel, go to Azure function apps then `<your_function_app>` Overview page and Click on "Functions" in the left blade.
-    2. Click on the function called "DataminrPulseAlertsHttpStarter".
-    3. Go to "Code + Test" and click "Test/Run".
-    4. Provide the necessary details as mentioned below:
-        - HTTP Method : "POST"
-        - Key : default(Function key)
-        - Query : Name=functionName ,Value=DataminrPulseAlertsSentinelOrchestrator
-        - Reuqest Body (case-sensitive): 
+    1. Open any API request tool like Postman.
+    2. Click on '+' to create a new request.
+    3. Select HTTP request method as **'POST'**.
+    4. Enter the url prepapred in **point 1)**, in the request URL part.
+    5. In Body, select raw JSON and provide request body as below(case-sensitive):
             {
                 "integration-settings": "ADD",
                 "url": "<URL part from copied Function-url>",
                 "token": "<value of code parameter from copied Function-url>"
             }
-    5. After providing all required details, click "Run".
-    6. You will receive an integration setting ID in the HTTP response with a status code of 200.
-    7. Save "Integration ID" for future reference.
+    6. After providing all required details, click **Send**.
+    7. You will receive an integration setting ID in the HTTP response with a status code of 200.
+    8. Save "Integration ID" for future reference.
 
 ## Installing for testing<a name="Installing-for-testing"></a>
 
