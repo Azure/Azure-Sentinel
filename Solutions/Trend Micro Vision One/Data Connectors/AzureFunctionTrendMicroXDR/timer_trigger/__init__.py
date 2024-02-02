@@ -74,6 +74,10 @@ def main(mytimer: func.TimerRequest, wbMsg: func.Out[typing.List[str]]) -> None:
             clp_id = utils.get_clp_id(token)
             health_check_data['clpId'] = clp_id
 
+            if utils.check_token_is_expired(token):
+                logging.error(f"token is expired, clp: {clp_id}")
+                continue
+
             start_time, end_time = generate_time(table_service, clp_id)
             start_time_str = start_time.strftime(DATETIME_FORMAT)
             end_time_str = end_time.strftime(DATETIME_FORMAT)

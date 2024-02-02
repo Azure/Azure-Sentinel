@@ -54,6 +54,12 @@
                 "description": "Enter value for Collection ID"
             }
         },
+        "OrgnizationUUID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter unique identifier for your organization. This will be used to create unique object IDs for the bundle. This should be a UUID in the format of xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx."
+            }
+        },
         "SentinelWorkspace": {
             "type": "string",
             "metadata": {
@@ -111,6 +117,10 @@
                             "defaultValue": "[parameters('Default TLP Label')]",
                             "type": "string"
                         },
+                        "OrgnizationUUID": {
+                            "defaultValue": "[parameters('OrgnizationUUID')]",
+                            "type": "string"
+                        },
                         "ResourceGroup": {
                             "defaultValue": "[variables('ResourceGroup')]",
                             "type": "string"
@@ -160,6 +170,216 @@
                     "actions": {
                         "Condition_to_check_if_at_least_one_indicator_to_send": {
                             "actions": {
+                                "For_each_IncidentID_create_a_Grouping": {
+                                    "foreach": "@variables('IncidentIDLabelsForGrouping')",
+                                    "actions": {
+                                        "Condition_to_check_if_Indicator_is_not_part_of_any_Incident_skip_Grouping": {
+                                            "actions": {
+                                                "Condition_to_check_if_Grouping_for_IncidentID_is_already_created": {
+                                                    "actions": {
+                                                        "Append_to_array_TempIncidentArray": {
+                                                            "runAfter": {
+                                                                "Grouping_Object_Composition": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "TempIncidentIdArray",
+                                                                "value": "@split(items('For_each_IncidentID_create_a_Grouping'), ';')[2]"
+                                                            }
+                                                        },
+                                                        "For_each_combination_extract_IndicatorId_and_MarkingRefObj": {
+                                                            "foreach": "@body('Extract_Goruping_details_for_each_Indicatorids')",
+                                                            "actions": {
+                                                                "Append_to_array_GroupingConfidence": {
+                                                                    "runAfter": {
+                                                                        "Append_to_array_GroupingIndicators": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "GroupingConfidence",
+                                                                        "value": "@int(split(items('For_each_combination_extract_IndicatorId_and_MarkingRefObj'), ';')[1])"
+                                                                    }
+                                                                },
+                                                                "Append_to_array_GroupingDescription": {
+                                                                    "runAfter": {
+                                                                        "Append_to_array_GroupingMarkingRefObjs": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "GroupingDescription",
+                                                                        "value": "@split(items('For_each_combination_extract_IndicatorId_and_MarkingRefObj'), ';')[4]"
+                                                                    }
+                                                                },
+                                                                "Append_to_array_GroupingIndicators": {
+                                                                    "runAfter": {},
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "GroupingIndicators",
+                                                                        "value": "@split(items('For_each_combination_extract_IndicatorId_and_MarkingRefObj'), ';')[0]"
+                                                                    }
+                                                                },
+                                                                "Append_to_array_GroupingMarkingRefObjs": {
+                                                                    "runAfter": {
+                                                                        "Append_to_array_GroupingConfidence": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "GroupingMarkingRefObjs",
+                                                                        "value": "@split(items('For_each_combination_extract_IndicatorId_and_MarkingRefObj'), ';')[3]"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "Foreach"
+                                                        },
+                                                        "Grouping_Object_Composition": {
+                                                            "actions": {
+                                                                "Append_GroupObj_to_Indicators_array": {
+                                                                    "runAfter": {
+                                                                        "Compose_Group_Object": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "Indicators",
+                                                                        "value": "@outputs('Compose_Group_Object')"
+                                                                    }
+                                                                },
+                                                                "Compose_Group_Object": {
+                                                                    "runAfter": {},
+                                                                    "type": "Compose",
+                                                                    "inputs": {
+                                                                        "confidence": "@min(variables('GroupingConfidence'))",
+                                                                        "context": "suspicious-activity",
+                                                                        "created": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                                                        "created_by_ref": "@variables('CreatedByRefObjId')",
+                                                                        "description": "@first(variables('GroupingDescription'))",
+                                                                        "id": "grouping--@{guid()}",
+                                                                        "modified": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                                                        "object_marking_refs": "@union(variables('GroupingMarkingRefObjs'), variables('GroupingMarkingRefObjs'))",
+                                                                        "object_refs": "@union(variables('GroupingIndicators'), variables('GroupingIndicators'))",
+                                                                        "spec_version": "2.1",
+                                                                        "type": "grouping"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "For_each_combination_extract_IndicatorId_and_MarkingRefObj": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Scope"
+                                                        },
+                                                        "Reset_Array_GroupingConfidence": {
+                                                            "runAfter": {
+                                                                "Reset_Array_GroupingIndicators": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "GroupingConfidence",
+                                                                "value": []
+                                                            }
+                                                        },
+                                                        "Reset_Array_GroupingDescription": {
+                                                            "runAfter": {
+                                                                "Reset_Array_GroupingMarkingRefObjs": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "GroupingDescription",
+                                                                "value": []
+                                                            }
+                                                        },
+                                                        "Reset_Array_GroupingIndicators": {
+                                                            "runAfter": {
+                                                                "Append_to_array_TempIncidentArray": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "GroupingIndicators",
+                                                                "value": []
+                                                            }
+                                                        },
+                                                        "Reset_Array_GroupingMarkingRefObjs": {
+                                                            "runAfter": {
+                                                                "Reset_Array_GroupingConfidence": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "GroupingMarkingRefObjs",
+                                                                "value": []
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Extract_Goruping_details_for_each_Indicatorids": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@contains(variables('TempIncidentIdArray'), split(items('For_each_IncidentID_create_a_Grouping'), ';')[2])",
+                                                                        "@true"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Extract_Goruping_details_for_each_Indicatorids": {
+                                                    "runAfter": {},
+                                                    "type": "Query",
+                                                    "inputs": {
+                                                        "from": "@variables('IncidentIDLabelsForGrouping')",
+                                                        "where": "@equals(split(items('For_each_IncidentID_create_a_Grouping'), ';')[2], split(item(), ';')[2])"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@split(items('For_each_IncidentID_create_a_Grouping'), ';')[2]",
+                                                                "NoIncident"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
                                 "For_each_filtered_indicator": {
                                     "foreach": "@body('Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete')",
                                     "actions": {
@@ -186,40 +406,6 @@
                                         ]
                                     },
                                     "type": "Foreach"
-                                },
-                                "Grouping_Object_Composition": {
-                                    "actions": {
-                                        "Append_GroupObj_to_Indicators_array": {
-                                            "runAfter": {
-                                                "Compose_Group_Object": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "Indicators",
-                                                "value": "@outputs('Compose_Group_Object')"
-                                            }
-                                        },
-                                        "Compose_Group_Object": {
-                                            "runAfter": {},
-                                            "type": "Compose",
-                                            "inputs": {
-                                                "confidence": 100,
-                                                "context": "suspicious-activity",
-                                                "created": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
-                                                "created_by_ref": "@variables('CreatedByRefObjId')",
-                                                "id": "grouping--@{guid()}",
-                                                "modified": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
-                                                "object_marking_refs": "@union(variables('AllMarkingRefObjIds'), variables('MarkingRefsObjIds'))",
-                                                "object_refs": "@variables('IndicatorIds')",
-                                                "spec_version": "2.1",
-                                                "type": "grouping"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {},
-                                    "type": "Scope"
                                 },
                                 "HTTP_POST_stix_bundle_to_TAXII_server": {
                                     "runAfter": {
@@ -270,14 +456,13 @@
                                                 "identity_class": "organization",
                                                 "modified": "@formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
                                                 "name": "CTIS",
-                                                "object_marking_refs": "@union(variables('AllMarkingRefObjIds'), variables('MarkingRefsObjIds'))",
                                                 "spec_version": "2.1",
                                                 "type": "identity"
                                             }
                                         }
                                     },
                                     "runAfter": {
-                                        "Grouping_Object_Composition": [
+                                        "For_each_IncidentID_create_a_Grouping": [
                                             "Succeeded"
                                         ]
                                     },
@@ -292,8 +477,9 @@
                                     "type": "SetVariable",
                                     "inputs": {
                                         "name": "StixBuldle",
-                                        "value": "{\n    \"type\": \"bundle\",\n    \"id\": \"bundle--1736e032-a96a-41e9-8302-126677d4d781\",\n    \"objects\": @{variables('Indicators')}\n}"
-                                    }
+                                        "value": "{\n    \"type\": \"bundle\",\n    \"id\": \"bundle--@{parameters('OrgnizationUUID')}\",\n    \"objects\": @{union(variables('Indicators'), variables('Indicators'))}\n}"
+                                    },
+                                    "description": "Union of Indicators to remove duplicate TLP MarkingRefObjs"
                                 }
                             },
                             "runAfter": {
@@ -342,9 +528,53 @@
                         "For_each_Indicator": {
                             "foreach": "@body('Filter_array_of_indicators_where_tags_do_not_contain_Export_Complete')",
                             "actions": {
-                                "Append_IndicatorId_to_array_IndicatorsIds": {
+                                "Add_description_to_GroupingObjs_Array": {
+                                    "actions": {
+                                        "Append_description_to_array_GroupingObjs": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "GroupingObjs",
+                                                "value": "@variables('Indicator')?['description']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition_to_check_if_'killChainPhases'_property_exist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Scope",
+                                    "description": "descirption later to be used in Grouping"
+                                },
+                                "Append_GroupObjs_to_array_IncidentIDLablesForGrouping": {
+                                    "runAfter": {
+                                        "Reset_array_MarkingRefsObjIds": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "IncidentIDLabelsForGrouping",
+                                        "value": "@join(variables('GroupingObjs'), ';')"
+                                    }
+                                },
+                                "Append_IndicatorId_to_array_GroupingObj": {
                                     "runAfter": {
                                         "Set_variable_IndicatorId": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "GroupingObjs",
+                                        "value": "@variables('IndicatorId')"
+                                    },
+                                    "description": "Store IndicatorID, later to be used for Grouping"
+                                },
+                                "Append_IndicatorId_to_array_IndicatorsIds": {
+                                    "runAfter": {
+                                        "Append_IndicatorId_to_array_GroupingObj": [
                                             "Succeeded"
                                         ]
                                     },
@@ -368,7 +598,7 @@
                                 },
                                 "Append_to_array_Indicators": {
                                     "runAfter": {
-                                        "Condition_to_check_if_'killChainPhases'_property_exist": [
+                                        "Add_description_to_GroupingObjs_Array": [
                                             "Succeeded"
                                         ]
                                     },
@@ -387,6 +617,7 @@
                                     "type": "Compose",
                                     "inputs": {
                                         "created": "@formatDateTime(string(items('For_each_Indicator')?['properties']?['created']), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                        "created_by_ref": "@variables('CreatedByRefObjId')",
                                         "id": "@variables('IndicatorId')",
                                         "modified": "@addSeconds(formatDateTime(string(items('For_each_Indicator')?['properties']?['lastUpdatedTimeUtc'])), 5, 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
                                         "pattern": "@items('For_each_Indicator')?['properties']?['pattern']",
@@ -398,6 +629,19 @@
                                 },
                                 "Condition_to_check_if_'confidence'_property_exist": {
                                     "actions": {
+                                        "Append_confidence_score_to_array_GroupingObjs": {
+                                            "runAfter": {
+                                                "Set_variable_Indicator_with_'confidence'_property": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "GroupingObjs",
+                                                "value": "@items('For_each_Indicator')?['properties']?['confidence']"
+                                            },
+                                            "description": "confidence score later to be used in Grouping"
+                                        },
                                         "Compose_'confidence'_property": {
                                             "runAfter": {},
                                             "type": "Compose",
@@ -420,6 +664,18 @@
                                         "Set_variable_Indicator_with_mandatory_properties": [
                                             "Succeeded"
                                         ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_confidence_score_100_to_array_GroupingObjs": {
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "GroupingObjs",
+                                                    "value": 100
+                                                }
+                                            }
+                                        }
                                     },
                                     "expression": {
                                         "and": [
@@ -969,12 +1225,25 @@
                                                             "actions": {
                                                                 "Condition_to_check_if_it_is_incident_tag": {
                                                                     "actions": {
+                                                                        "Append_IncidentTag_to_array_GroupingObjs": {
+                                                                            "runAfter": {
+                                                                                "Set_variable_IncidentTag": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "AppendToArrayVariable",
+                                                                            "inputs": {
+                                                                                "name": "GroupingObjs",
+                                                                                "value": "@variables('IncidentTag')"
+                                                                            },
+                                                                            "description": "Store IncidentID, later to be used for Grouping"
+                                                                        },
                                                                         "Set_variable_IncidentTag": {
                                                                             "runAfter": {},
                                                                             "type": "SetVariable",
                                                                             "inputs": {
                                                                                 "name": "IncidentTag",
-                                                                                "value": "@{string(items('For_each_Lable_in_Lables'))}"
+                                                                                "value": "@{items('For_each_Lable_in_Lables')}"
                                                                             }
                                                                         }
                                                                     },
@@ -997,6 +1266,19 @@
                                                         }
                                                     },
                                                     "runAfter": {},
+                                                    "else": {
+                                                        "actions": {
+                                                            "Append_'NoIncident'_to_array_GroupingObjs": {
+                                                                "runAfter": {},
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "GroupingObjs",
+                                                                    "value": "@string('NoIncident')"
+                                                                },
+                                                                "description": "Append 'NoIncident' if IncidentID is not present"
+                                                            }
+                                                        }
+                                                    },
                                                     "expression": {
                                                         "and": [
                                                             {
@@ -1455,6 +1737,18 @@
                                     },
                                     "type": "If"
                                 },
+                                "Reset_array_GroupObjs": {
+                                    "runAfter": {
+                                        "Append_GroupObjs_to_array_IncidentIDLablesForGrouping": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "GroupingObjs",
+                                        "value": []
+                                    }
+                                },
                                 "Reset_array_MarkingRefsObjIds": {
                                     "runAfter": {
                                         "Reset_variable_MarkingRefObject": [
@@ -1527,7 +1821,7 @@
                                     "actions": {
                                         "Append_MarkingRefObjID_to_array_AllMarkingRefsObjectIds": {
                                             "runAfter": {
-                                                "Append_MarkingRefObjID_to_array_MarkingRefsObjectIds": [
+                                                "Append_MarkingRefObjID_to_array_GroupingObjs": [
                                                     "Succeeded"
                                                 ]
                                             },
@@ -1537,6 +1831,19 @@
                                                 "value": "@variables('MarkingRefObjId')"
                                             },
                                             "description": "This array is used in Identity Object creation."
+                                        },
+                                        "Append_MarkingRefObjID_to_array_GroupingObjs": {
+                                            "runAfter": {
+                                                "Append_MarkingRefObjID_to_array_MarkingRefsObjectIds": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "GroupingObjs",
+                                                "value": "@variables('MarkingRefObjId')"
+                                            },
+                                            "description": "Store MarkingRefObjID, later to be used for Grouping"
                                         },
                                         "Append_MarkingRefObjID_to_array_MarkingRefsObjectIds": {
                                             "runAfter": {
@@ -1558,7 +1865,7 @@
                                             },
                                             "type": "Compose",
                                             "inputs": {
-                                                "created": "@formatDateTime(string(items('For_each_Indicator')?['properties']?['created']), 'yyyy-MM-ddTHH:mm:ss.ffffffK')",
+                                                "created": "@concat(formatDateTime(string(utcNow()), 'yyyy-MM-ddTHH'), ':00:00.000000Z')",
                                                 "extensions": {
                                                     "extension-definition--60a3c5c5-0d10-413e-aab3-9e08dde9e88d": {
                                                         "extension_type": "property-extension",
@@ -1736,6 +2043,109 @@
                                 ]
                             }
                         },
+                        "Initialize_array_GroupingConfidence": {
+                            "runAfter": {
+                                "Initialize_array_GroupingDescription": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GroupingConfidence",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_GroupingDescription": {
+                            "runAfter": {
+                                "Initialize_array_GroupingMarkingRefObjs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GroupingDescription",
+                                        "type": "array",
+                                        "value": "@null"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_GroupingIndicators": {
+                            "runAfter": {
+                                "Initialize_array_TempIncidentIdArray": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GroupingIndicators",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_GroupingMarkingRefObjs": {
+                            "runAfter": {
+                                "Initialize_array_GroupingIndicators": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GroupingMarkingRefObjs",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_GroupingObjs": {
+                            "runAfter": {
+                                "Initialize_variable_TLPLabel": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "GroupingObjs",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_array_IncidentIDLabelsForGrouping": {
+                            "runAfter": {
+                                "Initialize_array_GroupingObjs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IncidentIDLabelsForGrouping",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "description": "Array stores all the combinations of IndicatorId, IncidentId and MarkingRefObj as ';' concatenated string"
+                        },
                         "Initialize_array_IndicatorIds": {
                             "runAfter": {
                                 "Initialize_variable_IndicatorId": [
@@ -1820,6 +2230,24 @@
                                     }
                                 ]
                             }
+                        },
+                        "Initialize_array_TempIncidentIdArray": {
+                            "runAfter": {
+                                "Initialize_array_IncidentIDLabelsForGrouping": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TempIncidentIdArray",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "description": "Array to store IncidentId which grouping is created"
                         },
                         "Initialize_variable_Description": {
                             "runAfter": {
@@ -1908,7 +2336,7 @@
                         },
                         "Initialize_variable_MarkingRefObj": {
                             "runAfter": {
-                                "Initialize_variable_TLPLabel": [
+                                "Initialize_array_GroupingConfidence": [
                                     "Succeeded"
                                 ]
                             },
