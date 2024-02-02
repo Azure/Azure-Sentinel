@@ -1,2 +1,0 @@
-This folder is used to supress a warning regarding the Managed Identity when running from a zip package.
-Due to the nature of a zip deployment, this folder cannot be created when the managed identity is added to the functionApp
