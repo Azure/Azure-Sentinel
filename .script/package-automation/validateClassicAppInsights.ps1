@@ -37,7 +37,7 @@ try {
         $objFileContent = $fileContent | ConvertFrom-Json 
         $appInsightComponentObject = $objFileContent.resources | Where-Object { $_.type -eq 'Microsoft.Insights/components'}
 
-        $hasWorkspaceResourceId = [bool]($appInsightComponentObject.PSobject.Properties.name -match "WorkspaceResourceId")
+        $hasWorkspaceResourceId = [bool]($appInsightComponentObject.properties.PSobject.Properties.name -match "WorkspaceResourceId")
         if (!$hasWorkspaceResourceId) {
           # if not present then throw error by adding to list later
           $appInsightResourceWithoutWorkspaceResourceList += $file;
@@ -72,7 +72,6 @@ try {
   . $PSScriptRoot/getSolutionName.ps1 $runId $pullRequestNumber $instrumentationKey $false
   $hasSolutionName = $solutionName -eq '' ? $false : $true
   if ($hasSolutionName) {
-    Write-Host "SolutionName is $solutionName"
     $solutionFolderPath = 'Solutions/' + $solutionName + "/"
     $filesinSolutions = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
     Write-Host "Solution files $filesinSolutions"
