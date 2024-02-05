@@ -42,7 +42,8 @@ query:  |
   //| where ObjectName contains '<GUID of ADFS Policy Store DKM Group object' This is unique to the domain. Check description for more details.
   | where ObjectType contains '5cb41ed0-0e4c-11d0-a286-00aa003049e2' // Contact Class
   | where Properties contains '8d3bca50-1d7e-11d0-a081-00aa006c33ed' // Picture Attribute - Ldap-Display-Name: thumbnailPhoto
-  | extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = SubjectAccount
+  | extend AccountName = SubjectUserName, AccountDomain = SubjectDomainName
+  | extend timestamp = TimeGenerated, DeviceName = Computer
   ),
   ( WindowsEvent 
   | where EventID == 4662 // You need to create a SACL on the ADFS Policy Store DKM group for this event to be created. 
@@ -56,35 +57,41 @@ query:  |
   | where ObjectType contains '5cb41ed0-0e4c-11d0-a286-00aa003049e2' // Contact Class
   | extend Properties = tostring(EventData.Properties)
   | where Properties contains '8d3bca50-1d7e-11d0-a081-00aa006c33ed' // Picture Attribute - Ldap-Display-Name: thumbnailPhoto
-  | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName), "\\", tostring(EventData.SubjectUserName))
-  | extend 
-      timestamp = TimeGenerated,
-      HostCustomEntity = Computer,
-      AccountCustomEntity = SubjectAccount
+  | extend AccountName = tostring(EventData.SubjectUserName), AccountDomain = tostring(EventData.SubjectDomainName)
+  | extend timestamp = TimeGenerated, DeviceName = Computer
   ),
   (DeviceEvents
   | where ActionType =~ "LdapSearch"
   | where AdditionalFields.AttributeList contains "thumbnailPhoto"
   | where AdditionalFields.DistinguishedName contains "CN=ADFS,CN=Microsoft,CN=Program Data" // Filter results to show only hits related to the ADFS AD container
-  | extend timestamp = TimeGenerated, HostCustomEntity = DeviceName, AccountCustomEntity = InitiatingProcessAccountName
+  | extend timestamp = TimeGenerated, AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain
   )
   )
+  | extend Account = strcat(AccountDomain, "\\", AccountName)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.1.2
+      - identifier: HostName
+        columnName: DeviceName
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: _ResourceId
+version: 1.2.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

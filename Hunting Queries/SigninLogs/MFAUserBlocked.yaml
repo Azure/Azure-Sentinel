@@ -1,17 +1,25 @@
 id: 75fd68a2-9ed4-4a1c-8bd7-18efe4c99081
 name: Login attempt by Blocked MFA user
 description: |
-  'An account could be blocked if there are too many failed authentication attempts in a row. This hunting query identifies if a MFA user account that is set to blocked tries to login to Azure AD.'
+  'An account could be blocked if there are too many failed authentication attempts in a row. This hunting query identifies if a MFA user account that is set to blocked tries to login to Microsoft Entra ID.
+   This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
 tactics:
   - InitialAccess
 relevantTechniques:
   - T1078
 query: |
 
+  let riskScoreCutoff = 20; //Adjust this based on volume of results
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 7d;
@@ -38,24 +46,54 @@ query: |
   u_MFABlocked
   | extend OS = tostring(DeviceDetail.operatingSystem), Browser = tostring(DeviceDetail.browser)
   | extend FullLocation = strcat(Location,'|', LocationDetails.state, '|', LocationDetails.city)
-  | summarize TimeGenerated = makelist(TimeGenerated), Status = makelist(Status), IPAddresses = makelist(IPAddress), IPAddressCount = dcount(IPAddress),
+  | summarize TimeGenerated = make_list(TimeGenerated), Status = make_list(Status), IPAddresses = make_list(IPAddress), IPAddressCount = dcount(IPAddress),
     AttemptCount = count() by UserPrincipalName, UserId, UserDisplayName, AppDisplayName, Browser, OS, FullLocation , CorrelationId
   | mvexpand TimeGenerated, IPAddresses, Status
   | extend TimeGenerated = todatetime(tostring(TimeGenerated)), IPAddress = tostring(IPAddresses), Status = tostring(Status)
   | project-away IPAddresses
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, UserId, UserDisplayName, Status,  IPAddress, IPAddressCount, AppDisplayName, Browser, OS, FullLocation
-  | extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+  | extend timestamp = StartTime, UserPrincipalName = tolower(UserPrincipalName), Account_0_Name = UserPrincipalName, IP_0_Address = IPAddress
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+  ) on UserPrincipalName
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename IPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPAddress
+  ) on IPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | where UEBARiskScore > riskScoreCutoff
+  | sort by UEBARiskScore desc
 
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: UserPrincipalName
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: IPAddress
+version: 2.0.1
 metadata:
     source:
         kind: Community

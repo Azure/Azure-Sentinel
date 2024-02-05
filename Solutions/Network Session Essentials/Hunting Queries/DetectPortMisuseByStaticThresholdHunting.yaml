@@ -1,0 +1,128 @@
+id: 70e2a349-87f0-4266-809c-e92fc71e0830
+name: Detect port misuse by static threshold (ASIM Network Session schema)
+description: |
+  'There is an normal amount of traffic that goes on a particular port in any organization. This hunting query identifies port usage higher than threshold defined in 'NetworkSession_Monitor_Configuration' watchlist to determine high port usage.'
+
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSVPCFlow
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight_CL
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoMeraki
+    dataTypes:
+      - Syslog
+      - CiscoMerakiNativePoller
+
+tactics:
+  - CommandAndControl
+  - InitialAccess
+  - Execution
+relevantTechniques:
+  - T1905
+  - T1190
+  - T1059
+  - T1203
+
+query: |
+  let lookback = 10m; 
+  let mapping = _GetWatchlist('NetworkSession_Monitor_Configuration')
+  | where Type == "Hunting" and ThresholdType == "Static" and Severity != "Disabled"  
+  | extend Ports = split(Ports,","),
+          App = split(App,","),
+          Protocol = split(Protocol,","),
+          Direction = split(Direction,","),
+          Action = split(Action,",")
+  | project Ports, App, Protocol, Direction, Action, Type, ThresholdType, Threshold, Severity, Tactic, Name, Description
+  | mv-expand Ports
+  | mv-expand App
+  | mv-expand Protocol
+  | mv-expand Direction
+  | mv-expand Action
+  | extend Ports = tostring(Ports), App = tostring(App), Protocol = tostring(Protocol), Direction = tostring(Direction), Action = tostring(Action), Threshold = toint(Threshold)
+  ;
+  let nosummary = materialize(
+                union isfuzzy=true 
+                  (
+                      NetworkCustomAnalytics_protocol_CL 
+                      | project v = int(2)
+                  ),
+                  (
+                      print int(1) 
+                      | project v = print_0
+                  )
+                  | summarize maxv = max(v)
+                  | extend nosum = (maxv > 1)
+                );
+  let allData = union isfuzzy=true 
+      (
+          (datatable(exists:int, nosum:bool)[1,false] | join (nosummary) on nosum) | join (
+          _Im_NetworkSession(starttime=bin(now(-10m),10m), endtime=bin(now(),10m))
+          | where TimeGenerated > bin(now(-10m),10m)
+          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
+          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+          ) on exists
+          | project-away exists, maxv, nosum*
+      ),
+      (
+          NetworkCustomAnalytics_protocol_CL
+          | where EventTime_t == toscalar(NetworkCustomAnalytics_protocol_CL | summarize max(EventTime_t))
+          | project-rename NetworkProtocol=NetworkProtocol_s, DstPortNumber=DstPortNumber_d, DstAppName=DstAppName_s, NetworkDirection=NetworkDirection_s, DvcAction=DvcAction_s, Count=count__d, EventTime=EventTime_t
+          | extend Count = toint(Count),DstPortNumber = toint(DstPortNumber)
+      )
+  ;
+  allData
+        | where isnotempty(DstPortNumber)
+        | summarize Sum=sum(Count) by DstPortNumber, NetworkProtocol, NetworkDirection, DvcAction 
+        | join kind=inner ['mapping'] where Ports has tostring(DstPortNumber)
+        | where Sum > Threshold         
+                  and (Protocol == "*" or Protocol has NetworkProtocol)
+                  and (Direction == "*" or Direction has NetworkDirection)
+                  and (Action == "*" or Action has DvcAction)
+        | project Name, Description, NetworkProtocol, DstPortNumber, NetworkDirection, DvcAction, Severity, Tactic
+        | summarize NetworkProtocols=make_set_if(NetworkProtocol,isnotempty(NetworkProtocol),20), 
+                    NetworkDirections=make_set_if(NetworkDirection,isnotempty(NetworkDirection),5), 
+                    DvcActions=make_set_if(DvcAction,isnotempty(DvcAction),10) by Name, Severity, Tactic, DstPortNumber, Description

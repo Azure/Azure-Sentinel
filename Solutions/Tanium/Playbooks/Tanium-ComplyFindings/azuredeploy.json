@@ -6,7 +6,7 @@
         "description": "This playbook starts with a Microsoft Sentinel incident, gets the hosts associated with that incident, queries the Tanium API Gateway for Comply Findings for those hosts, and then adds a comment to the incident with that information.",
         "prerequisites": [
             "1. Microsoft Sentinel incidents with associated hosts.",
-            "2. A [Tanium API Token](https://docs.tanium.com/platform_user/platform_user/console_api_tokens.html) granting access to your Tanium environment: the query will be made with the user priviledges of that token.",
+            "2. A [Tanium API Token](https://docs.tanium.com/platform_user/platform_user/console_api_tokens.html) granting access to your Tanium environment: the query will be made with the user privileges of that token.",
             "3. A hostname for your Tanium environment reachable from Logic Apps."
         ],
         "postDeploymentSteps": [
@@ -14,7 +14,7 @@
         ],
         "entities": [ "host" ],
         "tags": ["Enrichment"],
-        "lastUpdateTime": "2022-09-15T00:00:00.000Z",
+        "lastUpdateTime": "2023-12-07T00:00:00.000Z",
         "support": {
             "tier": "developer",
             "link": "https://www.tanium.com"
@@ -29,22 +29,16 @@
             "type": "string"
         },
         "IntegrationAccountName": {
-            "defaultValue": "Tanium-ComplyFindings-Integration",
+            "defaultValue": "",
             "type": "string",
             "metadata": {
-                "description": "An Integration Account is required to run inline JavaScript actions"
+                "description": "The name of an existing Azure Integration Account (required to run inline JavaScript actions)"
             }
         },
-        "IntegrationAccountPricingTier": {
+        "IntegrationAccountResourceGroupName": {
             "type": "string",
-            "defaultValue": "Free",
-            "allowedValues": [
-                "Free",
-                "Basic",
-                "Standard"
-            ],
             "metadata": {
-                "description": "Specify the Pricing Tier of the Integration Account."
+                "description": "The resource group name for the existing Azure Integration Account"
             }
         },
         "TaniumApiToken": {
@@ -56,7 +50,7 @@
         },
         "TaniumServerHostname": {
             "defaultValue": "hostname",
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "The hostname for your Tanium server e.g. tanium.example.com"
             }
@@ -68,43 +62,30 @@
     },
     "resources": [
         {
-          "type": "Microsoft.Web/connections",
-          "apiVersion": "2018-07-01-preview",
-          "name": "[variables('AzureSentinelConnectionName')]",
-          "location": "[resourceGroup().location]",
-          "properties": {
-              "displayName": "[variables('AzureSentinelConnectionName')]",
-              "customParameterValues": {},
-              "api": {
-                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
-              }
-          }
-        },
-        {
-            "type": "Microsoft.Logic/integrationAccounts",
-            "apiVersion": "2016-06-01",
-            "name": "[parameters('IntegrationAccountName')]",
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('AzureSentinelConnectionName')]",
             "location": "[resourceGroup().location]",
-            "sku": {
-                "name": "[parameters('IntegrationAccountPricingTier')]"
-            },
             "properties": {
-                "state": "Enabled"
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
             }
         },
         {
             "type": "Microsoft.Logic/workflows",
-            "apiVersion": "2019-05-01",
+            "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
-              "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
-              "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
-            ],
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+              ],
             "properties": {
                 "state": "Enabled",
                 "integrationAccount": {
-                    "id": "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
+                    "id": "[resourceId(parameters('integrationAccountResourceGroupName'), 'Microsoft.Logic/integrationAccounts', parameters('integrationAccountName'))]"
                 },
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
@@ -114,14 +95,14 @@
                             "defaultValue": {},
                             "type": "Object"
                         },
+                        "TaniumApiGatewayApi": {
+                            "type": "String"
+                        },
                         "TaniumApiToken": {
-                            "type": "securestring",
+                            "type": "SecureString",
                             "metadata": {
                                 "description": "The Tanium API Token provides access to the Tanium Server. Access is restricted to the level of access available to the user who generated the token."
                             }
-                        },
-                        "TaniumApiGatewayApi": {
-                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -141,9 +122,9 @@
                         }
                     },
                     "actions": {
-                        "Add_comment_to_incident_(V3)_2": {
+                        "Add_comment_to_incident_(V3)_4": {
                             "runAfter": {
-                                "Create_HTML_table": [
+                                "Add_CVE_Link_To_Table": [
                                     "Succeeded"
                                 ]
                             },
@@ -151,7 +132,7 @@
                             "inputs": {
                                 "body": {
                                     "incidentArmId": "@triggerBody()?['object']?['id']",
-                                    "message": "<p>@{body('Create_HTML_table')}</p>"
+                                    "message": "<p>@{body('Add_CVE_Link_To_Table')}</p>"
                                 },
                                 "host": {
                                     "connection": {
@@ -162,19 +143,18 @@
                                 "path": "/Incidents/Comment"
                             }
                         },
-                        "Create_HTML_table": {
+                        "Add_CVE_Link_To_Table": {
                             "runAfter": {
-                                "Flatten_API_Gateway_endpoints": [
+                                "Build_CVE_Table": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Table",
+                            "type": "JavaScriptCode",
                             "inputs": {
-                                "format": "HTML",
-                                "from": "@body('Flatten_API_Gateway_endpoints')"
+                                "code": "var d = workflowContext.actions.Build_CVE_Table.outputs.body;\r\n\r\nvar regex = /(cve-\\d+-\\d+)/gi;  \r\n  \r\nreturn d.replace(regex, function(match) {  \r\n    return '<a href=\"https://nvd.nist.gov/vuln/detail/' + match + '\" target=\"_blank\">' + match + '</a>';  \r\n});  \r\n"
                             }
                         },
-                        "Entities_-_Get_Hosts": {
+                        "Get_Hosts_From_Incident": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
@@ -220,7 +200,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Entities_-_Get_Hosts": [
+                                "Get_Hosts_From_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -228,7 +208,7 @@
                                 "and": [
                                     {
                                         "less": [
-                                            "@length(body('Entities_-_Get_Hosts')?['Hosts'])",
+                                            "@length(body('Get_Hosts_From_Incident')?['Hosts'])",
                                             1
                                         ]
                                     }
@@ -244,160 +224,31 @@
                             },
                             "type": "JavaScriptCode",
                             "inputs": {
-                                "code": "var e = workflowContext.actions.Parse_endpoints_array.outputs.body;\r\n\r\nfunction sensorReadings(r) {\r\n\treturn r.columns.map(c => {\r\n\t\tif (c.sensor && c.sensor.name) {\r\n\t\t\treturn { name: [c.sensor.name, c.name].join(' - '), value: c.values.join(' ') };\r\n\t\t} else {\r\n\t\t\treturn { name: c.name, value: c.values.join(' ') };\r\n\t\t}\r\n\t});\r\n}\r\n\r\nfunction flatten(obj, pk = '') {\r\n\tif (pk !== '') pk += ' ';\r\n\tlet flat = {};\r\n\tObject.keys(obj).forEach((key) => {\r\n\t\tif (key === 'sensorReadings') {\r\n\t\t\tsensorReadings(obj[key]).forEach((r) => {\r\n\t\t\t\tflat[r.name] = r.value;\r\n\t\t\t});\r\n\t\t} else {\r\n\t\t\tif (typeof obj[key] === 'object' && obj[key] !== null) {\r\n\t\t\t\tObject.assign(flat, flatten(obj[key], pk + key));\r\n\t\t\t} else {\r\n\t\t\t\tflat[pk + key] = obj[key];\r\n\t\t\t}\r\n\t\t}\r\n\t});\r\n\treturn flat;\r\n}\r\n\r\nreturn e.map(function(e) { return flatten(e.node); });"
+                                "code": "function flD(e, l) {\r\n    v = e.node.compliance.cveFindings.map((f) => {\r\n      return {\r\n        name: e.node.name,\r\n        ipAddress: e.node.ipAddress,\r\n        cveId: f.cveId,\r\n        cvssScoreV3: f.cvssScoreV3,\r\n        severity: f.severity,\r\n        summary:\r\n          f.summary.replace(/[^a-z0-9.-_, ]/gi,'').substr(0, 70)+\r\n          (f.summary.length > 70 ? \"...\" : \"\"),\r\n      };\r\n    });\r\n    return srtD(v).slice(0,l)\r\n  }\r\n\r\nfunction srtD(fld) {\r\n  fld.sort((a, b) => {\r\n    if (a.cvssScoreV3 !== b.cvssScoreV3) {\r\n      return b.cvssScoreV3 - a.cvssScoreV3; // Descending order by cvssScoreV3\r\n    } else {\r\n      // Descending order by CVE ID year\r\n      let yearA = parseInt(a.cveId.split(\"-\")[1]);\r\n      let yearB = parseInt(b.cveId.split(\"-\")[1]);\r\n      return yearB - yearA;\r\n    }\r\n  });\r\n\r\n  return fld;\r\n}\r\n\r\nlet e = workflowContext.actions.Parse_endpoints_array.outputs.body;\r\n\r\nreturn e.map((item) => flD(item, 20))"
                             }
                         },
-                        "For_each_incident_host": {
-                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
-                            "actions": {
-                                "If_ip_address": {
-                                    "actions": {
-                                        "Append_to_endpoint_filters": {
-                                            "runAfter": {
-                                                "Compose_endpoint_filter_for_host_and_ip_address": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "endpoint filters",
-                                                "value": "@outputs('Compose_endpoint_filter_for_host_and_ip_address')"
-                                            }
-                                        },
-                                        "Compose_endpoint_filter_for_host_and_ip_address": {
-                                            "runAfter": {},
-                                            "type": "Compose",
-                                            "inputs": {
-                                                "filters": [
-                                                    {
-                                                        "op": "CONTAINS",
-                                                        "path": "ipAddress",
-                                                        "value": "@{body('Parse_host_json')?['additionalData']?['LastIpAddress']}"
-                                                    },
-                                                    {
-                                                        "path": "name",
-                                                        "value": "@{body('Parse_host_json')?['hostName']}"
-                                                    }
-                                                ]
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Parse_host_json": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "Append_host_only_to_endpoint_filters": {
-                                                "runAfter": {
-                                                    "Compose_endpoint_filter_for_host_only": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "type": "AppendToArrayVariable",
-                                                "inputs": {
-                                                    "name": "endpoint filters",
-                                                    "value": "@outputs('Compose_endpoint_filter_for_host_only')"
-                                                }
-                                            },
-                                            "Compose_endpoint_filter_for_host_only": {
-                                                "runAfter": {},
-                                                "type": "Compose",
-                                                "inputs": {
-                                                    "filters": [
-                                                        {
-                                                            "path": "name",
-                                                            "value": "@{body('Parse_host_json')?['hostName']}"
-                                                        }
-                                                    ]
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "not": {
-                                                    "equals": [
-                                                        "@body('Parse_host_json')?['additionalData']?['LastIpAddress']",
-                                                        "@null"
-                                                    ]
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    "type": "If"
-                                },
-                                "Parse_host_json": {
-                                    "runAfter": {},
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@items('For_each_incident_host')",
-                                        "schema": {
-                                            "properties": {
-                                                "Type": {
-                                                    "type": "string"
-                                                },
-                                                "additionalData": {
-                                                    "properties": {
-                                                        "AvStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "FQDN": {
-                                                            "type": "string"
-                                                        },
-                                                        "HealthStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastExternalIpAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastIpAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastSeen": {
-                                                            "type": "string"
-                                                        },
-                                                        "LoggedOnUsers": {
-                                                            "type": "string"
-                                                        },
-                                                        "MdatpDeviceId": {
-                                                            "type": "string"
-                                                        },
-                                                        "OnboardingStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "RiskScore": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "friendlyName": {
-                                                    "type": "string"
-                                                },
-                                                "hostName": {
-                                                    "type": "string"
-                                                },
-                                                "osFamily": {
-                                                    "type": "string"
-                                                },
-                                                "osVersion": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "type": "object"
-                                        }
-                                    }
-                                }
+                        "Build_Endpoint_Filter_from_Hosts": {
+                            "inputs": {
+                                "code": "var hosts = workflowContext.actions.Get_Hosts_From_Incident.outputs.body.Hosts;\r\nvar filters=[];for(let i=0;i<hosts.length;i++){var a=hosts[i].hostName,t=hosts[i].additionalData,e=null!=t,s=t&&null!==t.LastIpAddress&&void 0!==t.LastIpAddress,l=t&&null!==t.FQDN&&void 0!==t.FQDN&&t.FQDN.includes(\".\");if(null!=a&&\"\"!==a){if(l&&s){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress},{any:!0,filters:[{path:\"name\",value:hosts[i].hostName},{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1}]});continue}if(l){filters.push({any:!0,filters:[{path:\"name\",value:hosts[i].hostName},{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1});continue}if(s){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress},{path:\"name\",value:hosts[i].hostName}]});continue}filters.push({filters:[{path:\"name\",value:hosts[i].hostName}]})}}\r\nreturn filters;"
                             },
                             "runAfter": {
-                                "Initialize_Endpoint_Filters_array": [
+                                "Initialize_Endpoint_Filter": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Foreach"
+                            "type": "JavaScriptCode"
+                        },
+                        "Set_Endpoint_Filter": {
+                            "inputs": {
+                                "name": "endpoint filters",
+                                "value": "@body('Build_Endpoint_Filter_from_Hosts')"
+                            },
+                            "runAfter": {
+                                "Build_Endpoint_Filter_from_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable"
                         },
                         "Initialize_API_Gateway_Query": {
                             "runAfter": {
@@ -411,7 +262,7 @@
                                     {
                                         "name": "api gateway query",
                                         "type": "string",
-                                        "value": "query ($incidentHosts: EndpointFieldFilter, $endCursor: Cursor, $source: EndpointSource) {\n  endpoints(source: $source, first: 10, after: $endCursor, filter: $incidentHosts) {\n    edges {\n      node {\n        name\n        ipAddress\n        sensorReadings(\n          sensors: [{name: \"Comply - Compliance Percentage\"}]\n        ) {\n          columns {\n            sensor {\n              name\n            }\n            name\n            values\n          }\n        }\n      }\n    }\n    pageInfo {\n      hasNextPage\n      endCursor\n    }\n  }\n}"
+                                        "value": "query endpointVulnerabilityCVSSv2($incidentHosts: EndpointFieldFilter, $endCursor: Cursor, $source: EndpointSource) {\n\tendpoints(source: $source, first: 10, after: $endCursor, filter: $incidentHosts) {\n\t  edges {\n\t\tnode {\n\t\t  id\n\t\t  name\n\t\t  ipAddress\n\t\t  compliance {\n\t\t\tcveFindings (\n\t\t\tfilter: {any: false, filters: [{any:true,path:\"cveId\",op:CONTAINS,value:\"-\"}]}\n\t\t\t){\n\t\t\t  cveId\n\t\t\t  cvssScoreV3\n\t\t\t  lastFound\n\t\t\t  severity\n\t\t\t  summary\n\t\t\t}\n\t\t  }\n\t\t}\n\t  }\n\t  pageInfo {\n\t\tstartCursor\n\t\tendCursor\n\t\thasPreviousPage\n\t\thasNextPage\n\t  }\n\t}\n  }\n"
                                     }
                                 ]
                             },
@@ -453,7 +304,7 @@
                         },
                         "Initialize_API_Gateway_query_cursor": {
                             "runAfter": {
-                                "Parse_API_Gateway_response": [
+                                "Stop_If_Tanium_Has_No_Hosts_From_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -468,7 +319,7 @@
                                 ]
                             }
                         },
-                        "Initialize_Endpoint_Filters_array": {
+                        "Initialize_Endpoint_Filter": {
                             "runAfter": {
                                 "Initialize_API_Gateway_Query": [
                                     "Succeeded"
@@ -486,7 +337,7 @@
                         },
                         "Initialize_Tanium_Endpoint_Source_to_TDS": {
                             "runAfter": {
-                                "For_each_incident_host": [
+                                "Set_Endpoint_Filter": [
                                     "Succeeded"
                                 ]
                             },
@@ -520,6 +371,17 @@
                                         "value": "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['edges']"
                                     }
                                 ]
+                            }
+                        },
+                        "Build_CVE_Table": {
+                            "runAfter": {
+                                "Flatten_API_Gateway_endpoints": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "JavaScriptCode",
+                            "inputs": {
+                                "code": "var d = workflowContext.actions.Flatten_API_Gateway_endpoints.outputs.body;\r\nconst gT = (d) => {      \r\n    if (!d || d.length === 0) return '';    \r\n    let iK = [...new Set([].concat(...d.map(e => Object.keys(e[0]))))];\r\n\r\n    let table = `<table><thead><tr>${iK.map(k => `<th>${k}</th>`).join('')}</tr></thead><tbody>`;  \r\n    iK = iK.slice(2,10);\r\n    \r\n    let count = table.length;  \r\n    for (let i of d) {  \r\n        let rows = i.map(r => {return \"<tr><td>\" + iK.map(k => {return r[k]} ).join(\"</td><td>\") + \"</td></tr>\" })\r\n        rows[0] = rows[0].replace('<tr><td>', `<tr><td rowspan=\"${rows.length}\">${i[0][\"name\"]}</td><td rowspan=\"${rows.length}\">${i[0][\"ipAddress\"]}</td><td>`)\r\n        for (let r of rows) {\r\n            if (count + r.length > 28000) break;\r\n            table += r;  \r\n            count += r.length;\r\n        }          \r\n    }  \r\n    return table + '</tbody></table>';  \r\n};\r\nreturn gT(d)"
                             }
                         },
                         "Paginate_API_Gateway_query_if_needed": {
@@ -560,7 +422,7 @@
                                             "inputs": {
                                                 "body": {
                                                     "query": "@variables('api gateway query')",
-                                                    "variables": "@variables('api gateway query variables')"
+                                                    "variables": "@json(variables('api gateway query variables'))"
                                                 },
                                                 "headers": {
                                                     "Content-Type": "application/json",
@@ -609,10 +471,22 @@
                                                                         "pageInfo": {
                                                                             "properties": {
                                                                                 "endCursor": {
-                                                                                    "type": "string"
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
                                                                                 },
                                                                                 "hasNextPage": {
                                                                                     "type": "boolean"
+                                                                                },
+                                                                                "hasPreviousPage": {
+                                                                                    "type": "boolean"
+                                                                                },
+                                                                                "startCursor": {
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
                                                                                 }
                                                                             },
                                                                             "type": "object"
@@ -694,7 +568,58 @@
                                                             "items": {
                                                                 "properties": {
                                                                     "node": {
-                                                                        "properties": {},
+                                                                        "properties": {
+                                                                            "compliance": {
+                                                                                "properties": {
+                                                                                    "cveFindings": {
+                                                                                        "items": {
+                                                                                            "properties": {
+                                                                                                "cveId": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "cvssScoreV3": {
+                                                                                                    "type": [
+                                                                                                        "number",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "lastFound": {
+                                                                                                    "type": "string"
+                                                                                                },
+                                                                                                "severity": {
+                                                                                                    "type": [
+                                                                                                        "string",
+                                                                                                        "null"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "summary": {
+                                                                                                    "type": "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "required": [
+                                                                                                "cveId",
+                                                                                                "cvssScoreV3",
+                                                                                                "lastFound",
+                                                                                                "severity",
+                                                                                                "summary"
+                                                                                            ],
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "type": "array"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "ipAddress": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
                                                                         "type": "object"
                                                                     }
                                                                 },
@@ -708,10 +633,22 @@
                                                         "pageInfo": {
                                                             "properties": {
                                                                 "endCursor": {
-                                                                    "type": "string"
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
                                                                 },
                                                                 "hasNextPage": {
                                                                     "type": "boolean"
+                                                                },
+                                                                "hasPreviousPage": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "startCursor": {
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
                                                                 }
                                                             },
                                                             "type": "object"
@@ -721,20 +658,6 @@
                                                 }
                                             },
                                             "type": "object"
-                                        },
-                                        "errors": {
-                                            "items": {
-                                                "properties": {
-                                                    "message": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "required": [
-                                                    "message"
-                                                ],
-                                                "type": "object"
-                                            },
-                                            "type": "array"
                                         }
                                     },
                                     "type": "object"
@@ -766,7 +689,7 @@
                             "inputs": {
                                 "body": {
                                     "query": "@variables('api gateway query')",
-                                    "variables": "@variables('api gateway query variables')"
+                                    "variables": "@json(variables('api gateway query variables'))"
                                 },
                                 "headers": {
                                     "Content-Type": "application/json",
@@ -783,6 +706,54 @@
                                 }
                             }
                         },
+                        "Stop_If_Tanium_Has_No_Hosts_From_Incident": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_3": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>No data found in Tanium for hosts.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Terminate_no_hosts_in_Tanium": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_API_Gateway_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
                         "Switch_to_TS_from_TDS_if_needed": {
                             "actions": {
                                 "Requery_the_API_Gateway": {
@@ -795,7 +766,7 @@
                                     "inputs": {
                                         "body": {
                                             "query": "@variables('api gateway query')",
-                                            "variables": "@variables('api gateway query variables')"
+                                            "variables": "@json(variables('api gateway query variables'))"
                                         },
                                         "headers": {
                                             "Content-Type": "application/json",
@@ -866,8 +837,7 @@
                             },
                             "type": "If"
                         }
-                    },
-                    "outputs": {}
+                    }
                 },
                 "parameters": {
                     "$connections": {

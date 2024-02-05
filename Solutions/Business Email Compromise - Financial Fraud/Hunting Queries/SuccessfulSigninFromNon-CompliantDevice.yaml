@@ -1,0 +1,69 @@
+id: 99885ff5-00cf-49e8-9452-6de6aba2a5c7
+name: Successful Signin From Non-Compliant Device
+description: |
+    'Detects successful sign ins from devices marked non-compliant.
+    Best practice is to block sign ins from non-complaint devices, however if allowed monitor these events to ensure they do not lead to other risky activity.'
+description_detailed: |
+  'Detects successful sign ins from devices marked non-compliant.
+    Best practice is to block sign ins from non-complaint devices, however if allowed monitor these events to ensure they do not lead to other risky activity.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-devices#non-compliant-device-sign-in
+    This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078.004
+query: |
+  SigninLogs
+    | where ResultType == 0
+    | where tostring(DeviceDetail.isCompliant) == "false"
+    | extend Account_0_Name = tolower(UserPrincipalName)
+    | extend IP_0_Address = IPAddress
+    | join kind=leftouter (
+        IdentityInfo
+        | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+        | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+        | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+        | summarize
+            Tags = make_set(Tags, 1000),
+            GroupMembership = make_set(GroupMembership, 1000),
+            AssignedRoles = make_set(AssignedRoles, 1000),
+            BlastRadiusInt = sum(BlastRadiusInt),
+            UserType = make_set(UserType, 1000),
+            UserAccountControl = make_set(UserType, 1000)
+        by AccountUPN
+        | extend Account_0_Name =tolower(AccountUPN)
+    ) on Account_0_Name
+    | join kind=leftouter (
+        BehaviorAnalytics
+        | where ActivityType in ("FailedLogOn", "LogOn")
+        | where isnotempty(SourceIPAddress)
+        | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+        | project-rename IP_0_Address = SourceIPAddress
+        | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+        by IP_0_Address
+    ) on IP_0_Address
+    | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+    | sort by UEBARiskScore desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.1

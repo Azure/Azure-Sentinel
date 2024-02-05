@@ -1,0 +1,50 @@
+id: 669e1338-b1a2-4d73-b720-a1e60d5d1474
+name: Suspicious Data Access to S3 Bucket from Unknown IP
+description: |
+    'This query identifies unusual access to cloud storage, particularly from IPs not historically seen accessing the bucket or downloading files. It can be limited to private buckets with sensitive files by setting BucketName values.'
+description_detailed: |
+  'Adversaries may access data objects from improperly secured cloud storage. This query will identify any access originating from a Source IP which was not seen historically accessing the bucket or downloading files from it.
+  You can also limit the query to only private buckets with sensitive files by setting the value or list of values to BucketName column.
+  Read more about ingest custom logs using Logstash at https://github.com/Azure/Azure-Sentinel/wiki/Ingest-Custom-Logs-LogStash 
+  and AWS S3 API GetObject at https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html and ListObject at https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html
+  and ListBucket at https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html
+  S3 LogStash Config: https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/Logstash/input-aws_s3-output-loganalytics.conf
+  S3 KQL Parser: https://aka.ms/AwsS3BucketAPILogsParser'
+requiredDataConnectors: []
+tactics:
+  - Collection
+relevantTechniques:
+  - T1530
+query: |
+
+  let EventNameList = dynamic(["ListBucket","ListObjects","GetObject"]);
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  AWSS3BucketAPILogParsed 
+  | where EventTime between(starttime..endtime)
+  | where EventName in (EventNameList)
+  | project EventTime, EventSource, EventName, SourceIPAddress, UserIdentityType, UserIdentityArn, UserIdentityUserName, BucketName, Host, AuthenticationMethod, SessionMfaAuthenticated, SessionUserName, Key
+  | join kind=leftanti
+  (
+    AWSS3BucketAPILogParsed 
+    | where EventTime between (lookback..starttime)
+    | where EventName in (EventNameList)
+  ) on SourceIPAddress
+  | summarize EventCount=count(), StartTimeUtc = min(EventTime), EndTimeUtc = max(EventTime), Files= makeset(Key), EventNames = makeset(EventName) by EventSource, SourceIPAddress, UserIdentityType, UserIdentityArn, UserIdentityUserName, BucketName, Host, AuthenticationMethod, SessionMfaAuthenticated, SessionUserName
+  | project StartTimeUtc, EndTimeUtc, EventSource, Host, SourceIPAddress, UserIdentityType, BucketName, EventNames, Files, AuthenticationMethod, SessionMfaAuthenticated, SessionUserName, EventCount
+  | extend timestamp = StartTimeUtc, HostCustomEntity = Host, AccountCustomEntity = SessionUserName, IPCustomEntity = SourceIPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1

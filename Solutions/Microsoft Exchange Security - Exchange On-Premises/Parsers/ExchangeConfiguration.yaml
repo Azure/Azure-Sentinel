@@ -1,0 +1,82 @@
+id: f2ae482d-999c-452e-b108-31880aa99620
+Function:
+  Title: Parser for ExchangeConfiguration
+  Version: '1.6.1'
+  LastUpdated: '2023-12-19'
+Category: Microsoft Sentinel Parser
+FunctionName: ExchangeConfiguration
+FunctionAlias: ExchangeConfiguration
+FunctionParams:
+    - Name: SpecificSectionList
+      Type: string
+      Description: The list of section to query. Default is all.
+      DefaultValue: ''
+    - Name: SpecificConfigurationDate
+      Type: string
+      Description: The date to query. Default is last 7 days.
+      DefaultValue: 'lastdate'
+    - Name: SpecificConfigurationEnv
+      Type: string
+      Description: The environment to query. Default is all.
+      DefaultValue: 'All'
+    - Name: Target
+      Type: string
+      Description: The target environment to query. Valid values are "On-Premises" or "Online". Default is "On-Premises".
+      DefaultValue: 'On-Premises'
+FunctionQuery: |
+    // Version:         1.6.1
+    // Last Updated:    19/12/2023
+    //  
+    // DESCRIPTION:
+    // This parser takes raw ESI Exchange Configuration Collector to pivot raw information and retrieve a specific date configuration. This is the same parser for Exchange On-Premises version and Exchange online version of the solution.
+    //
+    // USAGE:
+    // Parameters : 4 parameters to add during creation. 
+    //    1. SpecificSectionList, type string, default value ""
+    //    2. SpecificConfigurationDate, type string, default value "lastdate"
+    //    3. Target, type string, default value "On-Premises"
+    //    4. SpecificConfigurationEnv, type string, default value "All"
+    //
+    // Parameters simulation
+    // If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.
+    //
+    // let SpecificSectionList = '';
+    // let SpecificConfigurationDate = 'lastdate';
+    // let SpecificConfigurationEnv = 'All';
+    // let Target = 'On-Premises';
+    //
+    // Parameters definition
+    let _SpecificSectionList = split(SpecificSectionList,',');
+    let _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),"lastdate",tostring(SpecificConfigurationDate));
+    let _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == "all","All",tostring(SpecificConfigurationEnv)),',');
+    let _target = iff(isnull(Target) or isempty(Target),"On-Premises",Target);
+    // Building Base Request
+    let _targetDate = iff(_configurationDate == "lastdate", ago(7d), iif(_configurationDate == "alllife",ago(1080d),todatetime(_configurationDate)));
+    let baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* 
+        | where TimeGenerated > _targetDate
+        | extend Source = iff (TableName contains "Online", "Online", "On-Premises")
+        | where _target == 'All' or Source == _target
+        | extend ScopedEnvironment = iff(_configurationEnv contains "All", "All",ESIEnvironment_s) 
+        | where ScopedEnvironment in (_configurationEnv)
+        | extend EntryDate = todatetime(EntryDate_s)
+        | project-away EntryDate_s);
+    // Find Config Id (can be multiple id in all)
+    let findConfigDate = baseRequest
+        | extend Env =strcat(Source, "_",ESIEnvironment_s)
+        | summarize count() by GenerationInstanceID_g,Env,EntryDate
+        | extend distance = iff(_configurationDate == "lastdate" or _configurationDate == "alllife", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))
+        | top-nested of Env by Ignore0=max(1), 
+            top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, 
+            top-nested of GenerationInstanceID_g by Ignore2=max(2) 
+        | project GenerationInstanceID_g;
+    // Parse Result
+    let ParseExchangeConfig = () { baseRequest 
+     | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g
+     | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)
+     | extend TimeGenerated = EntryDate
+     | extend Identity = IdentityString_s
+     | extend CmdletResultValue = parse_json(rawData_s)
+     | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s
+     | project-away TenantId,SourceSystem,Type,EntryDate
+    };
+    ParseExchangeConfig

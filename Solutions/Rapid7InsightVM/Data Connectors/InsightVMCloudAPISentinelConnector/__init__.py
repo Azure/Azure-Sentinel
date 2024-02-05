@@ -54,11 +54,17 @@ async def main(mytimer: func.TimerRequest):
                                               file_path='rapid7_last_scan_date')
             start_time = await state_manager.get_last_date_from_storage(end_time=end_time, current_time=current_time,
                                                                         shift_start_time=shift_start_time)
+            if(datetime.timedelta(days=4) < (end_time - start_time)):
+                end_time = start_time + datetime.timedelta(days=4)
             logging.info(f'Data processing. Period(UTC): {start_time} - {end_time}')
+            last_processed_date = None
             async for assets in api.get_assets(start_time=start_time, end_time=end_time):
                 last_processed_date = await process_assets(assets=assets, api=api, sentinel=sentinel,
                                                            state_manager=state_manager)
                 state_manager.remember_last_date(last_processed_date)
+            if(last_processed_date is None):
+                logging.info('Last Processed date is None so setting EndDate {}'.format(end_time))
+                state_manager.remember_last_date(end_time)
             await state_manager.save_last_date_to_storage()
     logging.info(f'Script finished. Total sent events: {sentinel.successfull_sent_events_number}')
 
@@ -107,7 +113,7 @@ class InsightVMAPI:
         delay_res = []
         if res:
             for event in res["data"]:
-                if parse_date(event["last_scan_end"]) < end_time:
+                if "last_scan_end" in event and parse_date(event["last_scan_end"]) < end_time:
                     delay_res.append(event)
         else:
             res = {}

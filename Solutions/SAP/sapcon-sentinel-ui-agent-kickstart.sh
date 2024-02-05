@@ -38,6 +38,8 @@ RESTARTPOLICY="--restart unless-stopped"
 NETWORKSTRING=""
 CLOUD="public"
 UI_AGENT=""
+UPDATEPOLICY='{ "auto_update" : true }'
+
 while [[ $# -gt 0 ]]; do
 	case $1 in
 	--keymode)
@@ -60,6 +62,10 @@ while [[ $# -gt 0 ]]; do
 	--appid)
 		APPID="$2"
 		shift 2
+		;;
+  	--hostnetwork)
+		HOSTNETWORK=1
+		shift 1
 		;;
 	--appsecret)
 		APPSECRET="$2"
@@ -114,6 +120,10 @@ while [[ $# -gt 0 ]]; do
 		UI_AGENT="-e UI_AGENT=True"
 		shift 1
 		;;
+	--agent-name)
+		AGENTNAME="$2"
+		shift 2
+		;;
 	--preview)
 		PREVIEW=1
 		shift 1
@@ -128,10 +138,12 @@ while [[ $# -gt 0 ]]; do
 		echo "--keymode [kvmi|kvsi]"
 		echo "--configpath <path>"
 		echo "--sdk <filename>"
+		echo "--hostnetwork"
 		echo "--network <network>"
 		echo "--appid <guid>"
 		echo "--appsecret <secret>"
 		echo "--tenantid <guid>"
+		echo "--agent-name <agent_name>"
 		echo "--kvaultname <keyvaultname>"
 		echo "--noautorestart"
 		echo "--sapcryptolibpath <path to folder containing sap crypto lib and sapgenpse"
@@ -149,6 +161,7 @@ done
 # UI Agent validation
 if [ -z "$UI_AGENT" ] || 
    [ -z "$GUID" ] || 
+   [ -z "$AGENTNAME" ] || 
    [ -z "$kv" ] || 
    [ -z "$SDKFILELOC" ] || 
    ( [ "$MODE" != 'kvsi' ] && [ "$MODE" != 'kvmi' ] ) ||   
@@ -338,7 +351,7 @@ log 'Latest Microsoft Sentinel data connector downloaded successfully.'
 imagereleaseid=$(docker inspect "$dockerimage$tag" --format '{{ index .Config.Labels "com.visualstudio.msazure.image.release.releaseid"}}')
 log "Downloaded data connector version $imagereleaseid" 
 
-sysfileloc=$CONFIGPATH/$containername/$GUID/
+sysfileloc=$CONFIGPATH/$containername/$AGENTNAME/
 
 sudo mkdir -p "$sysfileloc"
 sudo chown "$USER" "$sysfileloc"
@@ -365,21 +378,23 @@ if [ $USESNC ]; then
 	sudo chown root:root "$sysfileloc"sec >/dev/null 2>&1
 fi
 
-#Verifying SDK version
-unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
-sudo chmod +x -R /tmp/nwrfcsdk/lib/*.so
-SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
-sdkok=$?
-rm -rf /tmp/nwrfcsdk
-if [ ! $sdkok -eq 0 ]; then
-	log "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
-	log "$SDKLOADRESULT"
-	log "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
-	exit 1
+#Verifying SDK version only in case of non-fedora OS
+if [ "$os" != "fedora" ]; then
+	unzip -o "$SDKFILELOC" -d /tmp/ > /dev/null 2>&1
+	sudo chmod +x -R /tmp/nwrfcsdk/lib/*.so
+	SDKLOADRESULT=$(ldd /tmp/nwrfcsdk/lib/libsapnwrfc.so 2>&1)
+	sdkok=$?
+	rm -rf /tmp/nwrfcsdk
+	if [ ! $sdkok -eq 0 ]; then
+		log "Invalid SDK supplied. The error while attempting to load the SAP NetWeaver SDK:"
+		log "$SDKLOADRESULT"
+		log "Please rerun script supplying version of SAP NetWeaver SDK compatible with the current OS platform"
+		exit 1
+	fi
 fi
 
 #Building the container
-containername="$containername-$GUID"
+containername="$containername-$AGENTNAME"
 cmdparams=""
 sudo docker inspect "$containername" >/dev/null 2>&1
 if [ $? -eq 0 ]; then
@@ -416,10 +431,12 @@ elif [ "$MODE" == "kvsi" ]; then
 	log "Creating agent and configuring to use Azure Key vault and application authentication"
 	cmdparams+=" -e AZURE_CLIENT_ID=$APPID -e AZURE_CLIENT_SECRET=$APPSECRET -e AZURE_TENANT_ID=$TENANT"
 fi
-
+if [ $HOSTNETWORK ]; then
+	cmdparams+=" --network host "
+fi
 sudo docker create -v "$sysfileloc":/sapcon-app/sapcon/config/system $cmdparams --name "$containername" $dockerimage$tagver >/dev/null
 
-log 'Created Microsoft Sentinel SAP agent '"$GUID"
+log 'Created Microsoft Sentinel SAP agent '"$AGENTNAME"
 
 sudo docker run --rm --entrypoint cat $dockerimage$tagver /sapcon-app/template/systemconfig-kickstart-blank.ini | sudo tee "$sysfileloc$sysconf" > /dev/null
 
@@ -428,9 +445,8 @@ if [ ! $? -eq 0 ]; then
 	exit 1
 fi
 
-# Commenting out the following lines as they are not required for now
 # #populate settings.json
-# echo $UPDATEPOLICY> "$sysfileloc/$settingsjson"
+echo $UPDATEPOLICY> "$sysfileloc$settingsjson"
 
 log 'System information Has been Updated'
 

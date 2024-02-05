@@ -27,7 +27,7 @@ query: |
     let hotwords = pack_array('drop table', 'drop database'); // List of monitored hot words.
     let processedData = materialize (
         AzureDiagnostics
-        | where TimeGenerated >= ago(detectionWindow)
+        | where TimeGenerated >= ago(trainingWindow)
         | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
         | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
                   ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
@@ -49,7 +49,7 @@ query: |
             , anySuccessfulMonitoredStatement = anyif(Statement, (hasHotword == 1) and (Error == 0))
             , anyInfo = anyif(AdditionalInfo, hasHotword == 1)
             , hotWord = anyif(extract(strcat_array(hotwords, '|'), 0, tolower(Statement)), hasHotword == 1)
-            by Database, ClientIp, ApplicationName, PrincipalName, timeSlice   
+            by Database, ClientIp, ApplicationName, PrincipalName, timeSlice,HostName,ResourceId   
         | extend WindowType = case( timeSlice >= ago(detectionWindow), 'detection',
                                                (ago(trainingWindow) <= timeSlice and timeSlice < ago(detectionWindow)), 'training', 'other')
         | where WindowType in ('detection', 'training'));
@@ -65,11 +65,14 @@ query: |
         , anomalyScore = round(countStatementsWithHotwords/monitoredStatementsThreshold, 0)
     | where IsHotwordAnomalyOnStatement == 'true'
     | sort by countSuccessfulStatementsWithHotwords desc,  anomalyScore desc, timeSlice desc
+    | extend Name = tostring(split(PrincipalName,'@',0)[0]), UPNSuffix = tostring(split(PrincipalName,'@',1)[0])    
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: PrincipalName
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -86,5 +89,5 @@ entityMappings:
     fieldMappings:
       - identifier: ResourceId
         columnName: ResourceId
-version: 1.1.0
+version: 1.1.1
 kind: Scheduled

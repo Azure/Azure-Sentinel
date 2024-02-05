@@ -1,0 +1,393 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\"width=\"75px\"height=\"75px\">\n\n**Note:** Please refer to the following before installing the solution: \r \n • Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Business%20Email%20Compromise%20-%20Financial%20Fraud/ReleaseNotes.md)\r \n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\n[Business Email Compromise (BEC)](https://www.microsoft.com/en-in/security/business/security-101/what-is-business-email-compromise-bec?rtc=1) attacks often aim to commit financial fraud by locating sensitive payment or invoice details and using these to hijack legitimate transactions. This solution, in combination with other solutions listed below, provide a range of content to help detect and investigate BEC attacks at different stages of the attack cycle, and across multiple data sources including AWS, SAP, Okta, Dynamics 365, Microsoft Entra ID, Microsoft 365 and network logs.\n\nThis content covers all stages of the attack chain from an initial phishing attack vector, establishing persistence to an environment, locating and collecting sensitive financial information from data stores, and then perpetrating and hiding their fraud. This range of content complements the coverage [Microsoft Defender XDR provides across Microsoft Defender products](https://learn.microsoft.com/microsoft-365/security/defender/automatic-attack-disruption).\n\nIn order to gain the most comprehensive coverage possible customers should deploy the content included in this solution as well as content from the following solutions:<ul>\n\n<li> Microsoft Entra ID solution for Microsoft Sentinel\n\n</li><li>Microsoft 365 solution for Microsoft Sentinel\n\n</li><li>Amazon Web Services\n\n</li><li>Microsoft Defender XDR\n\n</li><li>Okta Single Sign On\n\n</li></ul>\n\n**Analytic Rules:** 7, **Hunting Queries:** 13\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Account Elevated to New Role",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects an account that is elevated to a new role where that account has not had that role in the last 14 days.\n  Role elevations are a key mechanism for gaining permissions, monitoring which users have which roles, and for anomalies in those roles is useful for finding suspicious activity.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Authentication Method Changed for Privileged Account",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies authentication methods being changed for a privileged account. This could be an indication of an attacker adding an auth method to the account so they can have continued access.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Malicious BEC Inbox Rule",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Often times after the initial compromise in a BEC attack the attackers create inbox rules to delete emails that contain certain keywords related to their BEC attack.\n This is done so as to limit ability to warn compromised users that they've been compromised"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Privileged Account Permissions Changed",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects changes to permissions assigned to admin users. Threat actors may try and increase permission scope by adding additional roles to already privileged accounts.\nReview any modifications to ensure they were made legitimately.\nRef: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious access of BEC related documents",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query looks for users with suspicious spikes in the number of files accessed that relate to topics commonly accessed as part of Business Email Compromise (BEC) attacks. The query looks for access to files in storage that relate to topics such as invoices or payments, and then looks for users accessing these files in significantly higher numbers than in the previous 14 days. Incidents raised by this analytic should be investigated to see if the user accessing these files should be accessing them, and if the volume they accessed them at was related to a legitimate business need. \nThis query contains thresholds to reduce the chance of false positives, these can be adjusted to suit individual environments. In addition false positives could be generated by legitimate, scheduled actions that occur less often than every 14 days, additional exclusions can be added for these actions on username or IP address entities. This query uses the imFileEvent schema from ASIM, you will first need to ensure you have ASIM deployed in your environment. Ref https://learn.microsoft.com/azure/sentinel/normalization-about-parsers"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious access of BEC related documents in AWS S3 buckets",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query looks for users with suspicious spikes in the number of files accessed that relate to topics commonly accessed as part of Business Email Compromise (BEC) attacks. The query looks for access to files in AWS S3 storage that relate to topics such as invoices or payments, and then looks for users accessing these files in significantly higher numbers than in the previous 14 days. Incidents raised by this analytic should be investigated to see if the user accessing these files should be accessing them, and if the volume they accessed them at was related to a legitimate business need. \nThis query contains thresholds to reduce the chance of false positives, these can be adjusted to suit individual environments. In addition false positives could be generated by legitimate, scheduled actions that occur less often than every 14 days, additional exclusions can be added for these actions on username or IP address entities."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "User Added to Admin Role",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects a user being added to a new privileged role. Monitor these additions to ensure the users are made eligible for these roles are intended to have these levels of access.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "S3 Bucket outbound Data transfer anomaly",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies S3 data transfer spikes using GetObject API, BytesTransferredOut, and KQL anomaly detection. Investigate sudden action frequency increases. Adjust scorethreshold to 3+ to reduce noise. "
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious Data Access to S3 Bucket from Unknown IP",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies unusual access to cloud storage, particularly from IPs not historically seen accessing the bucket or downloading files. It can be limited to private buckets with sensitive files by setting BucketName values. "
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "Email Forwarding Configuration with SAP download",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects external email forwarding with SAP download for sensitive financial transactions. Such activity by attackers may lead to financial gain, IP theft, or operational disruption. This hunting query depends on SAP MicrosoftThreatProtection Office365 data connector (SAPAuditLog EmailEvents OfficeActivity Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "Login attempts using Legacy Auth",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies use of legacy authentication in Microsoft Entra ID sign-in activity, which can bypass Azure Conditional Access policies. It includes UEBA logs IdentityInfo and BehaviorAnalytics for context. This hunting query depends on AzureActiveDirectory BehaviorAnalytics BehaviorAnalytics data connector (SigninLogs BehaviorAnalytics IdentityInfo Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "Microsoft Entra ID signins from new locations",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies new Microsoft Entra ID sign-in locations compared to historical data, potentially indicating password spraying or brute force attacks. It includes UEBA logs IdentityInfo and BehaviorAnalytics for context. This hunting query depends on AzureActiveDirectory BehaviorAnalytics data connector (SigninLogs IdentityInfo Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Office Mail Rule Creation with suspicious archive mail move activity",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunting query to detect new inbox rule creation with activity of mail moved from inbox to archive folder within 12minutes.Though such activities could be legitimate some attackers may use these techniques to perform email diversion attack. This hunting query depends on Office365 data connector (OfficeActivity (Exchange) Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery7",
+            "type": "Microsoft.Common.Section",
+            "label": "Risky Sign-in with new MFA method",
+            "elements": [
+              {
+                "name": "huntingquery7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies new MFA methods added to an account within 6 hours of a medium or high risk sign-in session. It includes UEBA logs IdentityInfo and BehaviorAnalytics for context. This hunting query depends on AzureActiveDirectory BehaviorAnalytics BehaviorAnalytics data connector (AuditLogs SigninLogs BehaviorAnalytics IdentityInfo Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery8",
+            "type": "Microsoft.Common.Section",
+            "label": "High count download from a SAP Privileged account",
+            "elements": [
+              {
+                "name": "huntingquery8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects high counts of download from a sensitive SAP Privileged account. A pre-built watchlist is leveraged to identify the privileged users that are under extra restrictions. This hunting query depends on SAP data connector (SAPAuditLog Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery9",
+            "type": "Microsoft.Common.Section",
+            "label": "Successful Signin From Non-Compliant Device",
+            "elements": [
+              {
+                "name": "huntingquery9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects successful sign ins from devices marked non-compliant.\nBest practice is to block sign ins from non-complaint devices, however if allowed monitor these events to ensure they do not lead to other risky activity. This hunting query depends on AzureActiveDirectory BehaviorAnalytics BehaviorAnalytics data connector (SigninLogs BehaviorAnalytics IdentityInfo Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery10",
+            "type": "Microsoft.Common.Section",
+            "label": "User Accounts - New Single Factor Auth",
+            "elements": [
+              {
+                "name": "huntingquery10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies users whose single Factor Auth Events in scenarios where it has not been seen before, or where only multi factor auth has been observed. This hunting query depends on AzureActiveDirectory AzureActiveDirectory BehaviorAnalytics data connector (SigninLogs AADNonInteractiveUserSignInLogs BehaviorAnalytics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery11",
+            "type": "Microsoft.Common.Section",
+            "label": "User Accounts - Unusual authentications occurring when countries do not conduct normal business operations.",
+            "elements": [
+              {
+                "name": "huntingquery11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies users whose single Factor Auth Events in scenarios where it has not been seen before, or where only multi factor auth has been observed. This hunting query depends on AzureActiveDirectory BehaviorAnalytics data connector (SigninLogs IdentityInfo Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery12",
+            "type": "Microsoft.Common.Section",
+            "label": "User detection added to privilege groups based in Watchlist",
+            "elements": [
+              {
+                "name": "huntingquery12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Based on a Watchlist Detects when a user has been added to a privileged group/role. We can exclude from the wathclist the users for whom we do not want this alert to be triggered This hunting query depends on AzureActiveDirectory data connector (SigninLogs Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery13",
+            "type": "Microsoft.Common.Section",
+            "label": "User Login IP Address Teleportation",
+            "elements": [
+              {
+                "name": "huntingquery13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies users logging in from two different countries within a specified time window, potentially indicating VPN use. It includes UEBA logs IdentityInfo and BehaviorAnalytics for context. This hunting query depends on AzureActiveDirectory BehaviorAnalytics BehaviorAnalytics data connector (SigninLogs BehaviorAnalytics IdentityInfo Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

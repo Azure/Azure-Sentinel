@@ -1,0 +1,79 @@
+id: 32c08696-2e37-4730-86f8-97d9c8b184c9
+name: Detect URLs containing known malicious keywords or commands (ASIM Web Session)
+description: |
+  'The utilization of system commands or functions in the request URL may suggest that an attacker is trying to gain unauthorized access to the environment by exploiting a vulnerable service.'
+severity: High
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1190
+  - T1133
+  - T1071
+query: |
+  let lookback = 5m;
+  let RiskyCommandsInUrl = materialize(externaldata(Commands: string)
+      [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/CommandsInURL.csv"]
+      with(format="csv", ignoreFirstRecord=True));
+  let CustomRiskyCommandsInUrl = (_ASIM_GetWatchlistRaw("Web_RiskyCommandsInUrl") // Create new Watchlist and add your custom indicators(Optional)
+      | extend
+          Commands = tostring(WatchlistItem["Commands"])
+      | project Commands
+      | where isnotempty(Commands));
+  let CombinedRiskyCommandsInUrl = union RiskyCommandsInUrl, CustomRiskyCommandsInUrl;
+  let knownRiskyCommandsInUrl=toscalar(CombinedRiskyCommandsInUrl
+      | where isnotempty(Commands)
+      | summarize make_set(Commands, 1000));
+  // You can add more keywords to the query as necessary, depending on the specific indicators you want to detect.
+  _Im_WebSession (starttime=ago(lookback), eventresult='Success', url_has_any=knownRiskyCommandsInUrl)
+  | where isnotempty(Url)
+  | project Url, SrcIpAddr, SrcUsername, SrcHostname, DstIpAddr, TimeGenerated
+  | extend Decoded_url = url_decode(Url)
+  | where Decoded_url has_any (knownRiskyCommandsInUrl)
+  | summarize
+      EventCount=count(),
+      EventStartTime=min(TimeGenerated),
+      EventEndTime=max(TimeGenerated)
+      by SrcIpAddr, SrcUsername, SrcHostname, Url, Decoded_url, DstIpAddr
+  | extend
+      Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+      UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  EventCount: EventCount
+  Decoded_url: Decoded_url
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+alertDetailsOverride:
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with IP '{{SrcIpAddr}}' has been identified as making request for URL '{{Url}}' that includes a recognizable malicious command"
+version: 1.0.0
+kind: Scheduled

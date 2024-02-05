@@ -1,8 +1,8 @@
 id: 15ae38a2-2e29-48f7-883f-863fb25a5a06
 name: Rare client observed with high reverse DNS lookup count
 description: |
-  'Identifies clients with a high reverse DNS counts which could be carrying out reconnaissance or discovery activity.
-  Alert is generated if the IP performing such reverse DNS lookups was not seen doing so in the preceding 7-day period.'
+  'Identifies clients with a high reverse DNS counts that could be carrying out reconnaissance or discovery activity.
+  Alerts are generated if the IP performing such reverse DNS lookups was not seen doing so in the preceding 7-day period.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -23,22 +23,23 @@ query: |
   let threshold = 10;
   DnsEvents
   | where TimeGenerated > ago(endtime)
-  | where Name contains "in-addr.arpa"
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(Name) by ClientIP
+  | where Name has "in-addr.arpa"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(Name), ReverseDNSLookup_List = make_set(Name,100) by ClientIP
   | where dcount_Name > threshold
-  | project StartTimeUtc, EndTimeUtc, ClientIP , dcount_Name
+  | project StartTimeUtc, EndTimeUtc, ClientIP , dcount_Name, ReverseDNSLookup_List
+  // Filter out previously seen IPs
+  // Returns all the records from the left side that don't have matches from the right
   | join kind=leftanti (DnsEvents
       | where TimeGenerated between(ago(starttime)..ago(endtime))
-      | where Name contains "in-addr.arpa"
+      | where Name has "in-addr.arpa"
       | summarize dcount(Name) by ClientIP, bin(TimeGenerated, 1d)
       | where dcount_Name > threshold
       | project ClientIP , dcount_Name
   ) on ClientIP
-  | extend timestamp = StartTimeUtc, IPCustomEntity = ClientIP
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.1
+        columnName: ClientIP
+version: 1.0.2
 kind: Scheduled

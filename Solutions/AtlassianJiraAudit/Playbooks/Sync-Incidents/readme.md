@@ -2,11 +2,11 @@
 Author: Thijs Lecomte
 
 ## Overview
-This tool will synchronize incidents between Azure Sentinel and JIRA Service Management using the following tools:
+This tool will synchronize incidents between Microsoft Sentinel and JIRA Service Management using the following tools:
 * Azure Logic Apps
 * Azure Functions
 * Automation for JIRA
-* Azure Sentinel Automation Rules
+* Microsoft Sentinel Automation Rules
 * Azure Key Vault
 
 This tool will do the following:
@@ -16,7 +16,7 @@ This tool will do the following:
 * Add the URL to the JIRA incident as a comment in Sentinel
 * Sync public comments from JIRA to Sentinel
 
-![Overview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/Solution%20overview.png)
+![Overview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Solution%20overview.png)
 
 [Blog post with more background information](https://www.thecollective.eu/en/insights/setting-up-a-bidirectional-sync-between-sentinel-and-jira)
 
@@ -25,7 +25,7 @@ To implement this solution, a few different steps need to be done:
 1. Create necessary Service Principals
 2. JIRA Configuration
    1. Custom fields
-   2. Deploy Automation for JIRA rules (used for sync from JIRA to Azure Sentinel)
+   2. Deploy Automation for JIRA rules (used for sync from JIRA to Microsoft Sentinel)
 3. Deploy the Key Vault and add secrets
 4. Deploy Azure Logic Apps (4) through ARM deployment
 5. Deploy Azure Function for comment sychronization and add the Powershell code (check the Functions)
@@ -33,9 +33,9 @@ To implement this solution, a few different steps need to be done:
 
 ## 1. Create Service Principal
 The tool requires a service principals for authentication to different services:
-* Authentication to AAD to retrieve user ID's (for assigning incidents in Sentinel)
+* Authentication to Microsoft Entra ID to retrieve user ID's (for assigning incidents in Sentinel)
   
-### AAD Service Principal
+### Microsoft Entra ID Service Principal
 This Service Principal needs to have User.Read.All application permissions.
 This Service Principal is used in the Logic app 'Sync-AssignedUser.
 
@@ -57,13 +57,13 @@ All Logic Apps need to be updated with the correct ID's of the fields.
 | Closure Reason | customfield_10047 | Select List (Single choice) |
 | Tenant Name | customfield_10149 | Select List (Single Choice) |
 | Created At | customfield_10154 | Date Time Picker |
-| Att&ck Tactics | customfield_10055 | Select List (Multiple choices) |
-| Affected User | customfield_10058 | Text Field (Multiline) |
+| Att&ck Tactics | customfield_10155 | Select List (Multiple choices) |
+| Affected User | customfield_10158 | Text Field (Multiline) |
 | Subscription ID | customfield_10162 | Text Field (Singline) |
 | Sentinel Resource Group | customfield_10169 | Text Field (Singline) |
-| Sentinel Workspace Name | customfield_10070 | Text Field (Singline) |
+| Sentinel Workspace Name | customfield_10170 | Text Field (Singline) |
 | Sentinel Workspace ID | customfield_10172 | Text Field (Singline) |
-| Sentinel Incident ID | customfield_10172 | Text Field (Singline) |
+| Sentinel Incident ID | customfield_10173 | Text Field (Singline) |
 | Sentinel Incident ARM ID | customfield_10175 | Text Field (Singline) |
 
 The Att&ck Tactics list contains all Sentinel Tactics.
@@ -84,30 +84,30 @@ Navigate to the project settings, then go to Automation to create rules.
 This automation rule has a trigger 'Issue Transitioned' and will trigger the Logic App 'Sync-Status'. 
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Sync%20Status.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Sync%20Status.png)
 
 #### Sync Assigned User
 This automation rule has a trigger 'Issue Assigned' and will trigger the Logic App 'Sync-AssignedUser'. 
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Sync%20Assigned%20User.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Sync%20Assigned%20User.png)
 
 #### Create Link
 This automation rule has a trigger 'Issue created' and will trigger the Logic App 'Add-JIRALinkComment'. 
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Create%20Link.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Create%20Link.png)
 
 #### Sync comment
-This automation rule will trigger the function app to sync public comments to Azure Sentinel.
+This automation rule will trigger the function app to sync public comments to Microsoft Sentinel.
 Provide the POST URL of the Sync Comment Function in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Sync%20Comment.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Sync%20Comment.png)
 
 ## 3. Deploy Key Vault
 The Key Vault is used to store three secrets:
-* One for the AAD Service Principal
-* One for the Azure Sentinel Service Principal
+* One for the Microsoft Entra ID Service Principal
+* One for the Microsoft Sentinel Service Principal
 * One for the JIRA Secret
 
 Create a new Key Vault or deploy an existing one and add the different secrets to it.
@@ -156,8 +156,8 @@ If you do not use organizations in JIRA, you can remove the switch.
 
 ### Sync status from JIRA to Sentinel
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FSync-Status%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FSync-Status%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-Status%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-Status%2Fazuredeploy.json)
 
 This Logic App will change the status in Sentinel when the status has been changed in JIRA.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule.
@@ -171,14 +171,14 @@ It uses one connections:
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-AssignedUser%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-AssignedUser%2Fazuredeploy.json)
 
-When a incident is assigned in JIRA, this will assign the correct user inside of Azure Sentinel.
+When a incident is assigned in JIRA, this will assign the correct user inside of Microsoft Sentinel.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule when the assigned user of an incident is changed.
 
-It will retrieve the client secret for the service principal with permissions to retrieve users in your Azure Active Directory. With this, it will query the user and retrieve the AAD Object ID from that user. Wit this information, we will update the incident in Azure Sentinel.
+It will retrieve the client secret for the service principal with permissions to retrieve users in your Microsoft Entra ID. With this, it will query the user and retrieve the Microsoft Entra ID Object ID from that user. Wit this information, we will update the incident in Microsoft Sentinel.
 
 There is a check built-in to make sure that JIRA provides the assigned user. Sometimes it does not and then we don't need to update the incident in Sentinel.
 * One connection to Sentinel through a Managed Identity
-* One connection to a Key Vault to retrieve the Secret for the Service Principal with AAD permissions (also configured when deploying the Logic App)
+* One connection to a Key Vault to retrieve the Secret for the Service Principal with Microsoft Entra ID permissions (also configured when deploying the Logic App)
 
 ### Add a link to the JIRA incident to the Sentinel incident
 
@@ -194,10 +194,10 @@ It uses one connections:
 
 ## 5. Deploy Azure Function
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FSync-Comments%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FSync-Comments%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-CommentsFunctionApp%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-CommentsFunctionApp%2Fazuredeploy.json)
 
-To sync incident comments from JIRA to Azure Sentinel an Azure Function is used. This Function App contains one Powershell Function.
+To sync incident comments from JIRA to Microsoft Sentinel an Azure Function is used. This Function App contains one Powershell Function.
 There are two types of comments in JIRA: internal and public comments. This script will only sync the public comments, so that customers don't have access to the internal ones.
 
 The code for this function can be found [in this repository](Sync-Comments/Sync-Comment.ps1).
@@ -224,10 +224,10 @@ Provide a name for the rule and for conditions choose 'Analytics Rule Name conta
 If you only want to sync certain incidents, choose the right condition.
 
 For actions, choose 'Run Playbook' and select the 'Sync-Incidents' Playbook.
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/Sentinel%20-%20Automation%20Rule.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Sentinel%20-%20Automation%20Rule.png)
 
 ## Conclusion
-After this solution, you are able to work on Azure Sentinel incidents while staying in your trusted ITSM tool.
+After this solution, you are able to work on Microsoft Sentinel incidents while staying in your trusted ITSM tool.
 This tool should take care of any previous synchronization issues between the JIRA and Sentinel.
 
 For any issues with the tool or requested improvements, feel free to create an issue on Github or contact me through [Twitter](https://twitter.com/thijslecomte).

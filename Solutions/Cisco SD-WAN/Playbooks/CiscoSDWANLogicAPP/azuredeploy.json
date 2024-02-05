@@ -1,0 +1,1469 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "CiscoSDWANLogicAPP",
+        "description": "This playbook provides an end-to-end example of sending an email, posting a message to the Microsoft Teams channel, and creating 3rd party ticket for the suspicious activity found in the data.",
+        "prerequisites": "",
+        "postDeployment": [
+            "**Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Click the AzureCommunicationService connection resource",
+            "2. Click edit API connections",
+            "3. Click Authorize",
+            "4. Provide Required Parameters",
+            "5. Click Save",
+            "6. Repeat steps for other connections"
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2023-07-03T00:00:00Z",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": ""
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CiscoSDWANLogicAPP",
+            "type": "string"
+        },
+        "3rd_Party_Ticket_System": {
+            "type": "string",
+            "metadata": {
+                "description": "Select 3rd Party Ticketing System."
+            },
+            "allowedValues": [
+                "Jira",
+                "ServiceNow"
+            ],
+            "defaultValue": "Jira"
+        },
+        "Jira_Instance": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the URL of Jira Instance if you have selected Jira as 3rd Party Ticketing system."
+            },
+            "defaultValue": ""
+        },
+        "Jira_Project_Key": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Jira Project Key if you have selected Jira as 3rd Party Ticketing system."
+            },
+            "defaultValue": ""
+        },
+        "Email": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter comma-separated email addresses on which alert details will be sent."
+            }
+        },
+        "From_Mobile_No": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the source mobile number with the Country code for sending SMS."
+            }
+        },
+        "To_Mobile_No": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the destination mobile number with the Country code for sending SMS."
+            }
+        },
+        "Teams_Channel_ID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the ID of the Microsoft Teams channel on which alert details will be sent."
+            }
+        },
+        "Teams_Group_ID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the ID of the Microsoft Teams channel group on which alert details will be sent."
+            }
+        }
+    },
+    "variables": {
+        "AzurecommunicationservicessmsConnectionName": "[concat('Azurecommunicationservicessms-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "JiraConnectionName": "[concat('Jira-', parameters('PlaybookName'))]",
+        "OutlookConnectionName": "[concat('Outlook-', parameters('PlaybookName'))]",
+        "Service-NowConnectionName": "[concat('Service-Now-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "3rd_Party_Ticket_System": {
+                            "type": "string",
+                            "defaultValue": "[parameters('3rd_Party_Ticket_System')]"
+                        },
+                        "Email": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Email')]"
+                        },
+                        "From_Mobile_No": {
+                            "type": "string",
+                            "defaultValue": "[parameters('From_Mobile_No')]"
+                        },
+                        "Jira_Instance": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Jira_Instance')]"
+                        },
+                        "Jira_Project_Key": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Jira_Project_Key')]"
+                        },
+                        "Teams_Channel_ID": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Teams_Channel_ID')]"
+                        },
+                        "Teams_Group_ID": {
+                            "type": "string",
+                            "defaultValue": "[parameters('Teams_Group_ID')]"
+                        },
+                        "To_Mobile_No": {
+                            "type": "string",
+                            "defaultValue": "[parameters('To_Mobile_No')]"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "For_each": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "actions": {
+                                "IPS_Event_Threshold": {
+                                    "actions": {
+                                        "Create_a_Ticket": {
+                                            "actions": {
+                                                "Create_a_new_issue_(V3)_2": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "fields": {
+                                                                "description": "IPS event found in the data:\n@{variables('classification')} : @{variables('classification_count')}",
+                                                                "summary": "Warning: IPS Event Found"
+                                                            }
+                                                        },
+                                                        "headers": {
+                                                            "X-Request-Jirainstance": "@parameters('Jira_Instance')"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['jira_2']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/v3/issue",
+                                                        "queries": {
+                                                            "issueTypeIds": "10001",
+                                                            "projectKey": "@parameters('Jira_Project_Key')"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_html_ips_event_threshold": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Create_Record_2": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "description": "IPS event found in the data:\n@{variables('classification')} : @{variables('classification_count')}",
+                                                                "priority": "High"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['service-now_1']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/api/now/v2/table/@{encodeURIComponent('ticket')}",
+                                                            "queries": {
+                                                                "sysparm_display_value": false,
+                                                                "sysparm_exclude_reference_link": true
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('3rd_Party_Ticket_System')",
+                                                            "Jira"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Post_message_in_a_chat_or_channel_2": {
+                                            "runAfter": {
+                                                "Set_html_ips_event_threshold": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "messageBody": "<p>Hi Team,<br>\n<br>\nIPS event found in the data:<br>\n@{variables('classification')} : @{variables('classification_count')}<br>\n</p>",
+                                                    "recipient": {
+                                                        "channelId": "@parameters('Teams_Channel_ID')",
+                                                        "groupId": "@parameters('Teams_Group_ID')"
+                                                    }
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                            }
+                                        },
+                                        "Send_SMS_2": {
+                                            "runAfter": {
+                                                "Set_html_ips_event_threshold": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "from": "@parameters('From_Mobile_No')",
+                                                    "message": "Hi Team,\nIPS event found in the data:\n@{variables('classification')} : @{variables('classification_count')}",
+                                                    "smsRecipients": [
+                                                        {
+                                                            "to": "@parameters('To_Mobile_No')"
+                                                        }
+                                                    ],
+                                                    "smsSendOptions": {
+                                                        "enableDeliveryReport": false
+                                                    }
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azurecommunicationservicessms']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/v2/sms"
+                                            }
+                                        },
+                                        "Send_an_email_(V2)_2": {
+                                            "runAfter": {
+                                                "Set_html_ips_event_threshold": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Body": "<p>Hi Team,<br>\n<br>\nIPS event found in the data:<br>\n@{variables('html')}</p>",
+                                                    "Importance": "Normal",
+                                                    "Subject": "Warning: IPS Event Found",
+                                                    "To": "@parameters('Email')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['outlook_2']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/v2/Mail"
+                                            }
+                                        },
+                                        "Set_classification": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "classification",
+                                                "value": "@{body('Parse_JSON')?['classification'][0]}"
+                                            }
+                                        },
+                                        "Set_classification_count": {
+                                            "runAfter": {
+                                                "Set_classification": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "classification_count",
+                                                "value": "@{body('Parse_JSON')?['classification_count'][0]}"
+                                            }
+                                        },
+                                        "Set_html_ips_event_threshold": {
+                                            "runAfter": {
+                                                "Set_classification_count": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "html",
+                                                "value": "<!DOCTYPE html>\n<html>\n\n<head>\n    <title>Black Border Table</title>\n    <style>\n        table {\n            border-collapse: collapse;\n            border-spacing: 0;\n        }\n\n        table th, table td {\n            border: 1px solid black;\n            padding: 10px;\n            font-weight: normal;\n        }\n\n        .heading_table {\n            background-color: lightgrey;\n            font-weight: bold;\n        }\n    </style>\n</head>\n\n<body>\n    <table>\n        <tr class=\"heading_table\">\n            <td class=\"heading_table\">Classification</td>\n            <td class=\"heading_table\">Count</td>\n        </tr>\n<tr><td>@{variables('classification')}</td><td>@{variables('classification_count')}</td></tr>         \n\n    </table>\n</body>\n\n</html>"
+                                            }
+                                        },
+                                        "reset__HTML": {
+                                            "runAfter": {
+                                                "Create_a_Ticket": [
+                                                    "Succeeded"
+                                                ],
+                                                "Post_message_in_a_chat_or_channel_2": [
+                                                    "Succeeded"
+                                                ],
+                                                "Send_SMS_2": [
+                                                    "Succeeded"
+                                                ],
+                                                "Send_an_email_(V2)_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "html",
+                                                "value": "@{null}"
+                                            }
+                                        },
+                                        "reset_classification": {
+                                            "runAfter": {
+                                                "reset__HTML": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "classification",
+                                                "value": "@{null}"
+                                            }
+                                        },
+                                        "reset_classification_count": {
+                                            "runAfter": {
+                                                "reset_classification": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "classification_count",
+                                                "value": "@{null}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Monitor_Critical_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Parse_JSON')?['classification'])",
+                                                    false
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Malware_Events": {
+                                    "actions": {
+                                        "Create_Jira_ServiceNow_Ticket": {
+                                            "actions": {
+                                                "Create_Jira_Ticket": {
+                                                    "foreach": "@body('Parse_JSON_data_list')",
+                                                    "actions": {
+                                                        "Create_a_new_issue_(V3)_3": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "fields": {
+                                                                        "description": "Malware event found in the data: \nMalware : @{items('Create_Jira_Ticket')['malware']}\nSource IP : @{items('Create_Jira_Ticket')['source_ip']}\nUsername : @{items('Create_Jira_Ticket')['username']}",
+                                                                        "summary": "Warning: Malware Event Found"
+                                                                    }
+                                                                },
+                                                                "headers": {
+                                                                    "X-Request-Jirainstance": "@parameters('Jira_Instance')"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['jira_2']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/v3/issue",
+                                                                "queries": {
+                                                                    "issueTypeIds": "10001",
+                                                                    "projectKey": "@parameters('Jira_Project_Key')"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "For_each_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Create_ServiceNow_Record": {
+                                                        "foreach": "@body('Parse_JSON_data_list')",
+                                                        "actions": {
+                                                            "Create_Record_3": {
+                                                                "runAfter": {},
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "body": {
+                                                                        "description": "Malware event found in the data:\nMalware : @{items('Create_ServiceNow_Record')['malware']}\nSource IP : @{items('Create_ServiceNow_Record')['source_ip']}\nUsername : @{items('Create_ServiceNow_Record')['username']}",
+                                                                        "priority": "High"
+                                                                    },
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "name": "@parameters('$connections')['service-now_1']['connectionId']"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "path": "/api/now/v2/table/@{encodeURIComponent('ticket')}",
+                                                                    "queries": {
+                                                                        "sysparm_display_value": false,
+                                                                        "sysparm_exclude_reference_link": true
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "Foreach"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('3rd_Party_Ticket_System')",
+                                                            "Jira"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "For_each_2": {
+                                            "foreach": "@body('Parse_JSON_data_list')",
+                                            "actions": {
+                                                "set__html": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "html",
+                                                        "value": "<!DOCTYPE html>\n<html>\n<head>\n    <title>Black Border Table</title>\n    <style>\n        table {\n            border-collapse: collapse;\n            border-spacing: 0;\n        }\n\n       table th, table td {\n            border: 1px solid black;\n            padding: 10px;\n        }\n.heading_table {\n            background-color: lightgrey;\nfont-weight: bold;\n        }\n    </style>\n</head>\n<body>\n    <table>\n        <thead class=\"heading_table\">\n        <td>Malware</td>\n        <td>Source IP</td>\n        <td>Username</td>\n      </thead>\n        <tr>\n        <td>@{items('For_each_2')['malware']}</td>\n        <td>@{items('For_each_2')['source_ip']}</td>\n        <td>@{items('For_each_2')['username']}</td>\n      </tr>\n\n    </table>\n</body>\n</html>"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_data_list": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Parse_JSON_data_list": {
+                                            "runAfter": {
+                                                "for_each_malware": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@variables('data_list')",
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "malware": {
+                                                                "type": "string"
+                                                            },
+                                                            "source_ip": {
+                                                                "type": "string"
+                                                            },
+                                                            "username": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "malware",
+                                                            "source_ip",
+                                                            "username"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        },
+                                        "Post_Message_Into_Microsoft_Teams_Channel": {
+                                            "foreach": "@body('Parse_JSON_data_list')",
+                                            "actions": {
+                                                "Post_message_in_a_chat_or_channel_3": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "messageBody": "<p>Hi Team,<br>\nMalware event found in the data:<br>\n<br>\nMalware Name : @{items('Post_Message_Into_Microsoft_Teams_Channel')['malware']}<br>\nSource IP &nbsp;: @{items('Post_Message_Into_Microsoft_Teams_Channel')['source_ip']}<br>\nUsername : @{items('Post_Message_Into_Microsoft_Teams_Channel')['username']}</p>",
+                                                            "recipient": {
+                                                                "channelId": "@parameters('Teams_Channel_ID')",
+                                                                "groupId": "@parameters('Teams_Group_ID')"
+                                                            }
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "For_each_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Send__SMS": {
+                                            "foreach": "@body('Parse_JSON_data_list')",
+                                            "actions": {
+                                                "Send_SMS_3": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "from": "@parameters('From_Mobile_No')",
+                                                            "message": "Hi Team, Malware Event found in the data:\nMalware : @{items('Send__SMS')['malware']}\nSource IP : @{items('Send__SMS')['source_ip']}\nUsername : @{items('Send__SMS')['username']}",
+                                                            "smsRecipients": [
+                                                                {
+                                                                    "to": "@parameters('To_Mobile_No')"
+                                                                }
+                                                            ],
+                                                            "smsSendOptions": {
+                                                                "enableDeliveryReport": false
+                                                            }
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azurecommunicationservicessms']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/v2/sms"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "For_each_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Send_an_email_(V2)_3": {
+                                            "runAfter": {
+                                                "For_each_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Body": "<p>Hi Team,<br>\n<br>\nMalware event found in the data:<br>\n@{variables('html')}</p>",
+                                                    "Subject": "Warning: Malware Event Found",
+                                                    "To": "@parameters('Email')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['outlook_2']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/v2/Mail"
+                                            }
+                                        },
+                                        "for_each_malware": {
+                                            "foreach": "@body('Parse_JSON')?['mal_malware']",
+                                            "actions": {
+                                                "Append_to_array_datalist": {
+                                                    "runAfter": {
+                                                        "Set_data_object": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "data_list",
+                                                        "value": "@variables('data_object')"
+                                                    }
+                                                },
+                                                "Set_data_object": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "data_object",
+                                                        "value": {
+                                                            "malware": "@{body('Parse_JSON')?['mal_malware'][0]}",
+                                                            "source_ip": "@{body('Parse_JSON')?['mal_src_ip'][0]}",
+                                                            "username": "@{body('Parse_JSON')?['mal_username'][0]}"
+                                                        }
+                                                    }
+                                                },
+                                                "reset_data_object": {
+                                                    "runAfter": {
+                                                        "Append_to_array_datalist": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "data_object",
+                                                        "value": "@null"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        },
+                                        "reset___HTML": {
+                                            "runAfter": {
+                                                "Create_Jira_ServiceNow_Ticket": [
+                                                    "Succeeded"
+                                                ],
+                                                "Post_Message_Into_Microsoft_Teams_Channel": [
+                                                    "Succeeded"
+                                                ],
+                                                "Send__SMS": [
+                                                    "Succeeded"
+                                                ],
+                                                "Send_an_email_(V2)_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "html",
+                                                "value": "@{null}"
+                                            }
+                                        },
+                                        "reset_datalist": {
+                                            "runAfter": {
+                                                "reset___HTML": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "data_list",
+                                                "value": "@null"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "IPS_Event_Threshold": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Parse_JSON')?['mal_malware'])",
+                                                    false
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Monitor_Critical_IP": {
+                                    "actions": {
+                                        "Compose_tablerow": {
+                                            "runAfter": {
+                                                "Create_HTML_table_criticalip": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@join(variables('table_row'),'')"
+                                        },
+                                        "Convert_criticalipforticket_list_to_string": {
+                                            "runAfter": {
+                                                "For_each_create_critical_ip_list": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "criticalipforticketstring",
+                                                "value": "@{join(variables('criticalipforticket'),', ')}"
+                                            }
+                                        },
+                                        "Create_HTML_table_criticalip": {
+                                            "runAfter": {
+                                                "For_each_create_table_row": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "columns": [
+                                                    {
+                                                        "header": "Critical_IP(s)_List",
+                                                        "value": "@item()"
+                                                    }
+                                                ],
+                                                "format": "HTML",
+                                                "from": "@variables('criticaliplist')"
+                                            }
+                                        },
+                                        "Create_Ticket": {
+                                            "actions": {
+                                                "Create_a_new_issue_(V3)": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "fields": {
+                                                                "description": "Following are the Critical IP(S) found in the data:\n  @{variables('criticalipforticketstring')}\n",
+                                                                "summary": "Warning: Critical IP(s) found"
+                                                            }
+                                                        },
+                                                        "headers": {
+                                                            "X-Request-Jirainstance": "@parameters('Jira_Instance')"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['jira_2']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/v3/issue",
+                                                        "queries": {
+                                                            "issueTypeIds": "10001",
+                                                            "projectKey": "@parameters('Jira_Project_Key')"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_html": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Create_Record": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "description": "Following are the Critical IP(S) found in the data:\n@{variables('criticalipforticketstring')}",
+                                                                "priority": "High"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['service-now_1']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/api/now/v2/table/@{encodeURIComponent('ticket')}",
+                                                            "queries": {
+                                                                "sysparm_display_value": true,
+                                                                "sysparm_exclude_reference_link": true
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@parameters('3rd_Party_Ticket_System')",
+                                                            "Jira"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "For_each_create_critical_ip_list": {
+                                            "foreach": "@body('Parse_JSON')?['critical_ip']",
+                                            "actions": {
+                                                "Append_to_array_criticalipforticket": {
+                                                    "runAfter": {
+                                                        "Append_to_array_criticaliplist": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "criticalipforticket",
+                                                        "value": "@variables('critical_ip')"
+                                                    }
+                                                },
+                                                "Append_to_array_criticaliplist": {
+                                                    "runAfter": {
+                                                        "set_critical_ip": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "criticaliplist",
+                                                        "value": "@variables('critical_ip')"
+                                                    }
+                                                },
+                                                "set_critical_ip": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "critical_ip",
+                                                        "value": "@{items('For_each_create_critical_ip_list')}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        },
+                                        "For_each_create_table_row": {
+                                            "foreach": "@variables('criticaliplist')",
+                                            "actions": {
+                                                "Append_to_array_table_row": {
+                                                    "runAfter": {
+                                                        "Compose_table_row": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "table_row",
+                                                        "value": "@outputs('Compose_table_row')"
+                                                    }
+                                                },
+                                                "Compose_table_row": {
+                                                    "runAfter": {},
+                                                    "type": "Compose",
+                                                    "inputs": "<tr><td>@{item()}</td></tr>"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Convert_criticalipforticket_list_to_string": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Post_message_in_a_chat_or_channel": {
+                                            "runAfter": {
+                                                "Set_html": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "messageBody": "<p>Hi Team,<br>\n<br>\nFollowing are the Critical IP(S) found in the data:<br>\n@{body('Create_HTML_table_criticalip')}<br>\n<br>\n</p>",
+                                                    "recipient": {
+                                                        "channelId": "@parameters('Teams_Channel_ID')",
+                                                        "groupId": "@parameters('Teams_Group_ID')"
+                                                    }
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/beta/teams/conversation/message/poster/@{encodeURIComponent('Flow bot')}/location/@{encodeURIComponent('Channel')}"
+                                            }
+                                        },
+                                        "Send_SMS": {
+                                            "runAfter": {
+                                                "Set_html": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "from": "@parameters('From_Mobile_No')",
+                                                    "message": "Hi Team,\nFollowing are the Critical IP(S) found in the data:\n@{body('Create_HTML_table_criticalip')}",
+                                                    "smsRecipients": [
+                                                        {
+                                                            "to": "@parameters('To_Mobile_No')"
+                                                        }
+                                                    ],
+                                                    "smsSendOptions": {
+                                                        "enableDeliveryReport": false
+                                                    }
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azurecommunicationservicessms']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/v2/sms"
+                                            }
+                                        },
+                                        "Send_an_email_(V2)": {
+                                            "runAfter": {
+                                                "Set_html": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Body": "<p>Hi Team,<br>\n<br>\nFollowing are the Critical IP(S) found in the data:<br>\n@{variables('html')}</p>",
+                                                    "Importance": "Normal",
+                                                    "Subject": "Warning: Critical IP(s) found",
+                                                    "To": "@parameters('Email')"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['outlook_2']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/v2/Mail"
+                                            }
+                                        },
+                                        "Set_html": {
+                                            "runAfter": {
+                                                "Compose_tablerow": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "html",
+                                                "value": "<!DOCTYPE html>\n<html>\n\n<head>\n    <title>Black Border Table</title>\n    <style>\n        table {\n            border-collapse: collapse;\n            border-spacing: 0;\n        }\n\n        table th, table td {\n            border: 1px solid black;\n            padding: 10px;\n            font-weight: normal;\n        }\n\n        .heading_table {\n            background-color: lightgrey;\n            font-weight: bold;\n        }\n    </style>\n</head>\n\n<body>\n    <table>\n        <tr class=\"heading_table\">\n            <td class=\"heading_table\">Critical IP List</td>\n        </tr>\n         @{outputs('Compose_tablerow')}\n    </table>\n</body>\n\n</html>"
+                                            }
+                                        },
+                                        "reset_critical_ip": {
+                                            "runAfter": {
+                                                "reset_criticaliplist": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "critical_ip",
+                                                "value": "@{null}"
+                                            }
+                                        },
+                                        "reset_criticaliplist": {
+                                            "runAfter": {
+                                                "reset_table_row": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "criticaliplist",
+                                                "value": "@null"
+                                            }
+                                        },
+                                        "reset_html": {
+                                            "runAfter": {
+                                                "Create_Ticket": [
+                                                    "Succeeded"
+                                                ],
+                                                "Post_message_in_a_chat_or_channel": [
+                                                    "Succeeded"
+                                                ],
+                                                "Send_SMS": [
+                                                    "Succeeded"
+                                                ],
+                                                "Send_an_email_(V2)": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "html",
+                                                "value": "@{null}"
+                                            }
+                                        },
+                                        "reset_table_row": {
+                                            "runAfter": {
+                                                "reset_html": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "table_row",
+                                                "value": "@null"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Parse_JSON')?['critical_ip'])",
+                                                    false
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema": {
+                                            "properties": {
+                                                "classification": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "classification_count": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "critical_ip": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "criticalipforticket": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "criticaliplist": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "mal_malware": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "mal_src_ip": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "mal_username": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_list_table_row": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Initialize_list_criticalipforticket": {
+                            "runAfter": {
+                                "Initialize_list_criticaliplist": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "criticalipforticket",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_list_criticaliplist": {
+                            "runAfter": {
+                                "Initialize_variable_criticalip": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "criticaliplist",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_list_datalist": {
+                            "runAfter": {
+                                "Initialize_object_dataobject": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "data_list",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_list_table_row": {
+                            "runAfter": {
+                                "Initialize_variable_html": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "table_row",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_object_dataobject": {
+                            "runAfter": {
+                                "Initialize_variable_classification_count": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "data_object",
+                                        "type": "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_classification": {
+                            "runAfter": {
+                                "Initialize_variable_criticalipforticketstring": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "classification",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_classification_count": {
+                            "runAfter": {
+                                "Initialize_variable_classification": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "classification_count",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_criticalip": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "critical_ip",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_criticalipforticketstring": {
+                            "runAfter": {
+                                "Initialize_list_criticalipforticket": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "criticalipforticketstring",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_html": {
+                            "runAfter": {
+                                "Initialize_variable_malware_count": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "html",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_malware_count": {
+                            "runAfter": {
+                                "Initialize_list_datalist": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "malware_count",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azurecommunicationservicessms": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzurecommunicationservicessmsConnectionName'))]",
+                                "connectionName": "[variables('AzurecommunicationservicessmsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azurecommunicationservicessms')]"
+                            },
+                            "azuresentinel_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "jira_2": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('JiraConnectionName'))]",
+                                "connectionName": "[variables('JiraConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Jira')]"
+                            },
+                            "outlook_2": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]",
+                                "connectionName": "[variables('OutlookConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
+                            },
+                            "service-now_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Service-NowConnectionName'))]",
+                                "connectionName": "[variables('Service-NowConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Service-Now')]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "CiscoSDWANLogicAPP4",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzurecommunicationservicessmsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('JiraConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Service-NowConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzurecommunicationservicessmsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzurecommunicationservicessmsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azurecommunicationservicessms')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('JiraConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('JiraConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Jira')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('OutlookConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('OutlookConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Service-NowConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('Service-NowConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Service-Now')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

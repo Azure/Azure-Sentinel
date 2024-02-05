@@ -39,7 +39,7 @@ query: |
   | extend extracted_encoded_ip_candidate = extract_all(ipv4_encoded_identification_regex, RequestURL)
   // We could have more than one candidate, expand them out
   | mv-expand extracted_encoded_ip_candidate to typeof(string)
-  | summarize Start=min(TimeGenerated), End=max(TimeGenerated), make_set(RequestURL) by extracted_encoded_ip_candidate
+  | summarize Start=min(TimeGenerated), End=max(TimeGenerated), make_set(RequestURL,100) by extracted_encoded_ip_candidate
   // Pad if we need to
   | extend extracted_encoded_ip_candidate = iff(strlen(extracted_encoded_ip_candidate) % 2 == 0, extracted_encoded_ip_candidate, strcat(extracted_encoded_ip_candidate, "="))
   // Now decode the candidate to a long array, we cannot go straight to string as it cannot handle non-UTF8, we need to strip that first
@@ -48,7 +48,7 @@ query: |
   | extend hex_extracted = extract_all(ipv4_decoded_hex_extract, extracted_encoded_ip_candidate)
   // Expand, it's still possible that we might have more than 1 IP
   | mv-expand hex_extracted
-  // Now we should have a clean string. We need to put it back into a dynamic array to convert back to a string.
+  // Now we should have a clean string. We need to put it back into a dynamic array for converting back to a string
   | extend hex_extracted = trim_end(",", tostring(hex_extracted))
   | extend hex_extracted = strcat("[",hex_extracted,"]")
   | extend hex_extracted = todynamic(hex_extracted)
@@ -61,10 +61,11 @@ query: |
   // If it's not an IP, throw it out
   | where isnotnull(ipmatch)
   | mv-expand ipmatch to typeof(string)
-  | extend timestamp = Start, IPCustomEntity = ipmatch
+  | extend timestamp = Start
+  | extend IP_0_Address = ipmatch
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: ipmatch
-version: 1.0.0
+version: 1.0.1

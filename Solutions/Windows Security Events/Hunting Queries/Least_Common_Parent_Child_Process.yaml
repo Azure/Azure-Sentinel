@@ -14,7 +14,6 @@ requiredDataConnectors:
 tactics:
   - Execution
 query: |
-
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 7d;
@@ -22,14 +21,15 @@ query: |
   let Sensitivity = 5;
   SecurityEvent
   | where TimeGenerated between(lookback..endtime)
-  | where EventID == 4688 and isnotnull(ParentProcessName)
+  | where EventID == 4688 and isnotempty(ParentProcessName)  
   | extend ProcArray = split(NewProcessName, '\\'), ParentProcArray = split(ParentProcessName, '\\')
   // ProcArrayLength is Folder Depth
-  | extend ProcArrayLength = arraylength(ProcArray), ParentProcArrayLength = arraylength(ParentProcArray)
+  | extend ProcArrayLength = array_length(ProcArray), ParentProcArrayLength = array_length(ParentProcArray)
   | extend LastIndex = ProcArrayLength - 1, ParentLastIndex = ParentProcArrayLength - 1
   | extend Proc = ProcArray[LastIndex], ParentProc = ParentProcArray[ParentLastIndex]
   | where Proc !in (Allowlist)
   | extend ParentChildPair = strcat(ParentProc , ' > ', Proc)
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = makeset(Computer), UserCount = dcount(SubjectUserName), Users = makeset(SubjectUserName) by ParentChildPair
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = make_set(Computer,maxSize=1000), UserCount = dcount(SubjectUserName), Users = make_set(SubjectUserName,maxSize=1000) by ParentChildPair
   | where TimesSeen < Sensitivity
   | extend timestamp = StartTimeUtc
+version: 2.0.1

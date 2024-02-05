@@ -1,0 +1,52 @@
+id: 8ac77493-3cae-4840-8634-15fb23f8fb68
+name: Malicious BEC Inbox Rule
+description: |
+  'Often times after the initial compromise in a BEC attack the attackers create inbox rules to delete emails that contain certain keywords related to their BEC attack.
+   This is done so as to limit ability to warn compromised users that they've been compromised. 
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1098
+  - T1078
+tags:
+  - BEC
+query: |
+ let BEC_Keywords = dynamic([ 'invoice','payment','paycheck','transfer','bank statement','bank details','closing','funds','bank account','account details','remittance','purchase','deposit',"PO#","Zahlung","Rechnung","Paiement", "virement bancaire","Bankuberweisung",'hacked','phishing']);
+ OfficeActivity
+ | where Operation =~ "New-InboxRule"
+ | where Parameters has "Deleted Items" or Parameters has "Junk Email"  or Parameters has "DeleteMessage"
+ | extend Events=todynamic(Parameters)
+ | parse Events  with * "SubjectContainsWords" SubjectContainsWords '}'*
+ | parse Events  with * "BodyContainsWords" BodyContainsWords '}'*
+ | parse Events  with * "SubjectOrBodyContainsWords" SubjectOrBodyContainsWords '}'*
+ | where SubjectContainsWords has_any (BEC_Keywords)
+  or BodyContainsWords has_any (BEC_Keywords)
+  or SubjectOrBodyContainsWords has_any (BEC_Keywords)
+ | extend ClientIPAddress = case( ClientIP has ".", tostring(split(ClientIP,":")[0]), ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))), ClientIP )
+ | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))
+ | extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\')[-1]))
+ | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail
+ | extend UserName = split(UserId, '@')[0], DomainName = split(UserId, '@')[1]
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: DomainName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIPAddress
+version: 1.0.1
+kind: Scheduled

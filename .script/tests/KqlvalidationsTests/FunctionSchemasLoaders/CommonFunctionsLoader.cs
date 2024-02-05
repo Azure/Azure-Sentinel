@@ -10,9 +10,10 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
     {
         public IEnumerable<FunctionSchema> Load()
         {
-            List<string> commonFunctionsYamlFiles = (new CommonFunctionsYamlFilesLoader()).GetFilesNames();
-            return  commonFunctionsYamlFiles.Select(GetFunction).ToList();
+            List<string> commonFunctionsYamlFiles = (new CommonFunctionsYamlFilesLoader()).GetFilesNames(true);
+            return commonFunctionsYamlFiles.Select(GetFunction).ToList();
         }
+
 
         /// <summary>
         /// Extracts the fuction's name, parameters and result columns from the yaml file and creates the FunctionSchema.
@@ -22,7 +23,7 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         private FunctionSchema GetFunction(string fileName)
         {
             var deserializer = new DeserializerBuilder().Build();
-            var yaml = deserializer.Deserialize<Dictionary<string, object>> (File.ReadAllText(fileName));
+            var yaml = deserializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(fileName));
             return new FunctionSchema((string)yaml["EquivalentBuiltInFunction"], (string)yaml["FunctionQuery"], GetFunctionParameters(yaml));
         }
 

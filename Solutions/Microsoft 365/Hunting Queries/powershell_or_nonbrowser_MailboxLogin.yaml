@@ -1,10 +1,12 @@
 id: 49a4f65a-fe18-408e-afec-042fde93d3ce
-name: Powershell or non-browser mailbox login activity
+name: PowerShell or non-browser mailbox login activity
 description: |
-  'This will help you determine if mailbox login was done from Exchange Powershell session. 
+  'Detects mailbox login from Exchange PowerShell. All accounts can use it by default, but admins can change it. Whitelist benign activities.'
+description-detailed: |
+  'This will help you determine if mailbox login was done from Exchange PowerShell session. 
   By default, all accounts you create in Office 365 are allowed to use Exchange Online PowerShell. 
   Administrators can use Exchange Online PowerShell to enable or disable a user's ability to connect to Exchange Online PowerShell.
-  Whitelist any benign scheduled activities using exchange powershell if applicable in your environment.
+  Whitelist any benign scheduled activities using exchange PowerShell if applicable in your environment.
   References: https://docs.microsoft.com/powershell/exchange/exchange-online/connect-to-exchange-online-powershell/connect-to-exchange-online-powershell?view=exchange-ps'
 requiredDataConnectors:
   - connectorId: Office365
@@ -19,15 +21,21 @@ relevantTechniques:
   - T1098
   - T1114
 query: |
-
   OfficeActivity
-  | where Operation == "MailboxLogin"
+  | where OfficeWorkload == "Exchange" and Operation == "MailboxLogin"
   | where ClientInfoString == "Client=Microsoft.Exchange.Powershell; Microsoft WinRM Client"
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Operation, OrganizationName, UserType, UserId, MailboxOwnerUPN, Logon_Type, ClientInfoString
-  | extend timestamp = StartTime, AccountCustomEntity = UserId
+  | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
+  | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+  | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
+  | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '')
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 2.0.0
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+version: 2.0.1

@@ -1,0 +1,64 @@
+id: bfb1c90f-8006-4325-98be-c7fffbc254d6
+name: Distributed Password cracking attempts in Microsoft Entra ID
+description: |
+  'Identifies distributed password cracking attempts from the Microsoft Entra ID SigninLogs.
+  The query looks for unusually high number of failed password attempts coming from multiple locations for a user account.
+  References: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+  50053   Account is locked because the user tried to sign in too many times with an incorrect user ID or password.
+  50055   Invalid password, entered expired password.
+  50056   Invalid or null password - Password does not exist in store for this user.
+  50126   Invalid username or password, or invalid on-premises username or password.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let s_threshold = 30;
+  let l_threshold = 3;
+  let aadFunc = (tableName:string){
+  table(tableName)
+  | where OperationName =~ "Sign-in activity"
+  // Error codes that we want to look at as they are related to the use of incorrect password.
+  | where ResultType in ("50126", "50053" , "50055", "50056")
+  | extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
+  | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+  | extend LocationString = strcat(tostring(LocationDetails.countryOrRegion), "/", tostring(LocationDetails.state), "/", tostring(LocationDetails.city))
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), LocationCount=dcount(LocationString), Location = make_set(LocationString,100),
+  IPAddress = make_set(IPAddress,100), IPAddressCount = dcount(IPAddress), AppDisplayName = make_set(AppDisplayName,100), ResultDescription = make_set(ResultDescription,50),
+  Browser = make_set(Browser,20), OS = make_set(OS,20), SigninCount = count() by UserPrincipalName, Type
+  // Setting a generic threshold - Can be different for different environment
+  | where SigninCount > s_threshold and LocationCount >= l_threshold
+  | extend Location = tostring(Location), IPAddress = tostring(IPAddress), AppDisplayName = tostring(AppDisplayName), ResultDescription = tostring(ResultDescription), Browser = tostring(Browser), OS = tostring(OS)
+  | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])};
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.4
+kind: Scheduled

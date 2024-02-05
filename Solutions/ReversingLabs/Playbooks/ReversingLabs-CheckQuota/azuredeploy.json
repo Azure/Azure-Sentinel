@@ -1,0 +1,949 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "ReversingLabs-CheckQuota",
+        "description": "This playbook will check your ReversingLabs TitaniumCloud API quota and provide usage details. To be used in conjunction with the ReversingLabs-CapabilitiesOverview workbook.",
+        "prerequisites": [
+            "ReversingLabs TitaniumCloud license",
+            "ReversingLabs TitaniumCloud username and password"
+        ],
+        "lastUpdateTime": "2023-02-21T10:00:00.000Z",
+        "entities": [],
+        "tags": [""],
+        "author": {
+            "name": "Aaron Hoffmann"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "ReversingLabs-CheckQuota",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook (Logic Apps resources) which will be created"
+            }
+        },
+        "RLPAPIUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Username used to authenticate to ReversingLabs TitaniumCloud API"
+            }
+        },
+        "RLPAPIPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Password used for authenticating to ReversingLabs TitaniumCloud API"
+            }
+        }
+    },
+    "variables": {
+        "keyVaultName": "[format('RLTiCloud-{0}', uniqueString(resourceGroup().id))]",
+        "connectionName_keyvault": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "connectionName_azureloganalyticsdatacollector": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('connectionName_keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[variables('keyVaultName')]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('connectionName_azureloganalyticsdatacollector')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2021-11-01-preview",
+            "name": "[variables('keyVaultName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "tenantId": "[subscription().tenantId]",
+                "enableRbacAuthorization": true,
+                "sku": {
+                    "family": "A",
+                    "name": "standard"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2021-11-01-preview",
+            "name": "[format('{0}/ticloudpw', variables('keyVaultName'))]",
+            "properties": {
+                "value": "[parameters('RLPAPIPassword')]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Compose_4": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "RLAPIConnectionStatus": "connected",
+                                        "RLAPIUser": "@{variables('ticloud_user')}",
+                                        "eventType": "connection_check"
+                                    }
+                                },
+                                "Send_Data_4": {
+                                    "runAfter": {
+                                        "Compose_4": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{outputs('Compose_4')}",
+                                        "headers": {
+                                            "Log-Type": "RLTiCloudQuotas"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP_-_GET_test_connection": [
+                                    "Succeeded",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Compose_5": {
+                                        "runAfter": {},
+                                        "type": "Compose",
+                                        "inputs": {
+                                            "RLAPIConnectionStatus": "error",
+                                            "RLAPIUser": "@{variables('ticloud_user')}",
+                                            "errorMessage": "@{outputs('HTTP_-_GET_test_connection')['statusCode']}",
+                                            "eventType": "connection_check"
+                                        }
+                                    },
+                                    "Send_Data_5": {
+                                        "runAfter": {
+                                            "Compose_5": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": "@{outputs('Compose_5')}",
+                                            "headers": {
+                                                "Log-Type": "RLTiCloudQuotas"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/api/logs"
+                                        }
+                                    },
+                                    "Terminate": {
+                                        "runAfter": {
+                                            "Send_Data_5": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "message": "Playbook run failed - error checking RLAPI connectivity"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('HTTP_-_GET_test_connection')['statusCode']",
+                                            200
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_each": {
+                            "foreach": "@body('Parse_JSON')?['rl']?['limits']",
+                            "actions": {
+                                "Compose": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "eventType": "company_quota_limits",
+                                        "limit": "@items('For_each')?['limit']",
+                                        "limit_exceeded": "@{items('For_each')?['limit_exceeded']}",
+                                        "limit_type": "@{items('For_each')?['limit_type']}",
+                                        "products": "@{items('For_each')?['products']}",
+                                        "users": "@{items('For_each')?['users']}"
+                                    }
+                                },
+                                "Send_Data": {
+                                    "runAfter": {
+                                        "Compose": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{outputs('Compose')}",
+                                        "headers": {
+                                            "Log-Type": "RLTiCloudQuotas"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_2": {
+                            "foreach": "@body('Parse_JSON_2')?['rl']?['usage_report']",
+                            "actions": {
+                                "Compose_2": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "eventType": "company_monthly_usage",
+                                        "month": "@{body('Parse_JSON_2')?['rl']?['month']}",
+                                        "numberOfQueries": "@items('For_each_2')?['number_of_queries']",
+                                        "product": "@{items('For_each_2')?['product']}"
+                                    }
+                                },
+                                "Send_Data_3": {
+                                    "runAfter": {
+                                        "Compose_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{outputs('Compose_2')}",
+                                        "headers": {
+                                            "Log-Type": "RLTiCloudQuotas"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_3": {
+                            "foreach": "@body('Parse_JSON_3')?['rl']?['usage_reports']",
+                            "actions": {
+                                "For_each_4": {
+                                    "foreach": "@items('For_each_3')['usage_report']",
+                                    "actions": {
+                                        "Compose_3": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "date": "@{items('For_each_3')?['date']}",
+                                                "eventType": "company_daily_usage",
+                                                "numberOfQueries": "@items('For_each_4')?['number_of_queries']",
+                                                "product": "@{items('For_each_4')?['product']}"
+                                            }
+                                        },
+                                        "Send_Data_2": {
+                                            "runAfter": {
+                                                "Compose_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@{outputs('Compose_3')}",
+                                                "headers": {
+                                                    "Log-Type": "RLTiCloudQuotas"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_5": {
+                            "foreach": "@body('Parse_JSON_4')?['rl']?['usage_report']",
+                            "actions": {
+                                "Compose_user_usage": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "date": "@{body('Parse_JSON_4')?['rl']?['date']}",
+                                        "eventType": "user_daily_usage",
+                                        "numberOfQueries": "@items('For_each_5')?['number_of_queries']",
+                                        "product": "@{items('For_each_5')?['product']}"
+                                    }
+                                },
+                                "Send_Data_user_usage": {
+                                    "runAfter": {
+                                        "Compose_user_usage": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{outputs('Compose_user_usage')}",
+                                        "headers": {
+                                            "Log-Type": "RLTiCloudQuotas"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_6": {
+                            "foreach": "@body('Parse_JSON_5')?['rl']?['usage_report']",
+                            "actions": {
+                                "Compose_user_monthly_usage": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "eventType": "user_monthly_usage",
+                                        "month": "@{body('Parse_JSON_5')?['rl']?['month']}",
+                                        "numberOfQueries": "@items('For_each_6')?['number_of_queries']",
+                                        "product": "@{items('For_each_6')?['product']}"
+                                    }
+                                },
+                                "Send_Data_user_monthly_usage": {
+                                    "runAfter": {
+                                        "Compose_user_monthly_usage": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{outputs('Compose_user_monthly_usage')}",
+                                        "headers": {
+                                            "Log-Type": "RLTiCloudQuotas"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Initialize_variable_-_ticloud_user": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('ticloudpw')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "HTTP_-_GET_Company_Quota_Limits": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret')?['value']",
+                                    "type": "Basic",
+                                    "username": "@variables('ticloud_user')"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "extended": "true",
+                                    "format": "json"
+                                },
+                                "uri": "https://data.reversinglabs.com/api/customer_usage/v1/limits/company"
+                            }
+                        },
+                        "HTTP_-_GET_company_daily_usage": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret')?['value']",
+                                    "type": "Basic",
+                                    "username": "@variables('ticloud_user')"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "format": "json",
+                                    "from": "@{formatDateTime(subtractFromTime(utcNow(),30,'Day'), 'yyyy-MM-dd')}",
+                                    "to": "@{formatDateTime(utcNow(), 'yyyy-MM-dd')}"
+                                },
+                                "uri": "https://data.reversinglabs.com/api/customer_usage/v1/usage/company/daily"
+                            }
+                        },
+                        "HTTP_-_GET_company_monthly_usage": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret')?['value']",
+                                    "type": "Basic",
+                                    "username": "@variables('ticloud_user')"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "format": "json"
+                                },
+                                "uri": "https://data.reversinglabs.com/api/customer_usage/v1/usage/company/monthly"
+                            }
+                        },
+                        "HTTP_-_GET_test_connection": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret')?['value']",
+                                    "type": "Basic",
+                                    "username": "@variables('ticloud_user')"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "format": "json"
+                                },
+                                "uri": "https://data.reversinglabs.com/api/customer_usage/v1/usage/daily"
+                            }
+                        },
+                        "HTTP_-_GET_user_daily_usage": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret')?['value']",
+                                    "type": "Basic",
+                                    "username": "@variables('ticloud_user')"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "format": "json"
+                                },
+                                "uri": "https://data.reversinglabs.com/api/customer_usage/v1/usage/daily"
+                            }
+                        },
+                        "HTTP_-_GET_user_monthly_usage": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@body('Get_secret')?['value']",
+                                    "type": "Basic",
+                                    "username": "@variables('ticloud_user')"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "format": "json"
+                                },
+                                "uri": "https://data.reversinglabs.com/api/customer_usage/v1/usage/monthly"
+                            }
+                        },
+                        "Initialize_variable_-_ticloud_user": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ticloud_user",
+                                        "type": "string",
+                                        "value": "[parameters('RLPAPIUsername')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP_-_GET_Company_Quota_Limits": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_GET_Company_Quota_Limits')",
+                                "schema": {
+                                    "properties": {
+                                        "rl": {
+                                            "properties": {
+                                                "limits": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "end_date": {
+                                                                "type": "string"
+                                                            },
+                                                            "free_flex": {
+                                                                "properties": {
+                                                                    "end_date": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "limit_size": {
+                                                                        "properties": {
+                                                                            "unit": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "value": {
+                                                                                "type": "integer"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "start_date": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "limit": {
+                                                                "type": "integer"
+                                                            },
+                                                            "limit_exceeded": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "limit_size": {
+                                                                "properties": {
+                                                                    "unit": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "value": {
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "limit_type": {
+                                                                "type": "string"
+                                                            },
+                                                            "products": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "start_date": {
+                                                                "type": "string"
+                                                            },
+                                                            "users": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "limit_type",
+                                                            "limit_exceeded",
+                                                            "products",
+                                                            "users"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_2": {
+                            "runAfter": {
+                                "HTTP_-_GET_company_monthly_usage": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_GET_company_monthly_usage')",
+                                "schema": {
+                                    "properties": {
+                                        "rl": {
+                                            "properties": {
+                                                "month": {
+                                                    "type": "string"
+                                                },
+                                                "usage_report": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "number_of_queries": {
+                                                                "type": "integer"
+                                                            },
+                                                            "product": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "product",
+                                                            "number_of_queries"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_3": {
+                            "runAfter": {
+                                "HTTP_-_GET_company_daily_usage": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_GET_company_daily_usage')",
+                                "schema": {
+                                    "properties": {
+                                        "rl": {
+                                            "properties": {
+                                                "usage_reports": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "date": {
+                                                                "type": "string"
+                                                            },
+                                                            "usage_report": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "number_of_queries": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "product": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "product",
+                                                                        "number_of_queries"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "date",
+                                                            "usage_report"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_4": {
+                            "runAfter": {
+                                "HTTP_-_GET_user_daily_usage": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_GET_user_daily_usage')",
+                                "schema": {
+                                    "properties": {
+                                        "rl": {
+                                            "properties": {
+                                                "date": {
+                                                    "type": "string"
+                                                },
+                                                "usage_report": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "number_of_queries": {
+                                                                "type": "integer"
+                                                            },
+                                                            "product": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "product",
+                                                            "number_of_queries"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_5": {
+                            "runAfter": {
+                                "HTTP_-_GET_user_monthly_usage": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_GET_user_monthly_usage')",
+                                "schema": {
+                                    "properties": {
+                                        "rl": {
+                                            "properties": {
+                                                "month": {
+                                                    "type": "string"
+                                                },
+                                                "usage_report": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "number_of_queries": {
+                                                                "type": "integer"
+                                                            },
+                                                            "product": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "product",
+                                                            "number_of_queries"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('connectionName_azureloganalyticsdatacollector'))]",
+                                "connectionName": "[variables('connectionName_azureloganalyticsdatacollector')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('connectionName_keyvault'))]",
+                                "connectionName": "[variables('connectionName_keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('connectionName_keyvault'))]",
+                "[resourceId('Microsoft.Web/connections', variables('connectionName_azureloganalyticsdatacollector'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2020-10-01-preview",
+            "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('keyVaultName'))]",
+            "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), resourceGroup().id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6'))]",
+            "properties": {
+                "description": "[format('Role required for {0} to access secrets in {1}', parameters('PlaybookName'), variables('keyVaultName'))]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId]",
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+                "principalType": "ServicePrincipal"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,38 @@
+id: 74e8773c-dfa9-45ca-bb60-5d767303e5b3
+name: Possible DNS Tunneling or Data Exfiltration Activity (ASIM DNS Solution)
+description: |
+  'Typical domain name lengths are short, whereas domain name queries used for data exfiltration or tunneling can often be very large in size. The hunting query looks for DNS queries that are more than 150 characters long.'
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1568
+  - T1008
+  - T1048
+query: |
+  // Setting URI length threshold count, shorter URI's may cause noise, change as needed
+  let lookback=1day;
+  let uriThreshold = 150;
+  let ExcludeDomains=dynamic(["cnr.io", "kr0.io", "arcticwolf.net", "webcfs00.com", "barracudabrts.com", "trendmicro.com", "sophosxl.net", 
+  "spotify.com", "e5.sk", "mcafee.com", "opendns.com", "spameatingmonkey.net", "_ldap", "_kerberos", "modsecurity.org", 
+  "fdmarc.net", "ipass.com", "wpad"]);
+  _Im_Dns(starttime=ago(lookback),endtime=now())
+  | summarize count() by SrcIpAddr, DnsQuery
+  | where not(DnsQuery has_any (ExcludeDomains))
+  | extend Urilength = strlen(DnsQuery)
+  | where Urilength >= uriThreshold
+  | order by Urilength
+  | extend IP_0_Address = SrcIpAddr
+  | extend DNS_0_DomainName = DnsQuery
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DnsQuery
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr

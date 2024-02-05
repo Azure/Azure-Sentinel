@@ -1,0 +1,227 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Fortinet-FortiGate-FunctionApp", 
+    "description": "This function app connects to Fortinet service end point and fetch the details of the entities of the fortinet firewall.",
+    "prerequisites": ["* Add new secret to the existing Key Vault (Create new if not exist) for Fortinet API key and capture the secret identifier of new key \n\n * Fortinet service end point should be known (ex: https://{yourVMIPorTrafficmanagername}/)"],
+    "lastUpdateTime": "2022-08-01T00:00:00.000Z", 
+    "entities": [], 
+    "tags": [], 
+    "postDeployment": ["* Create User Managed Identity in your subscription by following document. Refer this link [Create Managed Identity ](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal#create-a-user-assigned-managed-identity) \n\n * Assign role to user assigned identity. Refer this link [Assign role to user ](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-manage-ua-identity-portal#assign-a-role-to-a-user-assigned-managed-identity) \n\n * Open created function app, follow below steps or refer steps documented [Function app setting](https://docs.microsoft.com/azure/logic-apps/logic-apps-azure-functions#enable-authentication-for-functions) \n\n - Go to Authentication / Authorization option \n\n - Enable App Service Authentication \n\n - Select 'Login with Microsoft Entra ID' for Action to take when request is not authenticated \n\n - Select Microsoft Entra ID as Authentication Providers \n\n - Select advanced option from the management mode and fill details \n\n - UserIdentity object id as client ID (ex: b1fd400b-e34b-40c0-996f506d8a98) \n\n - Issuer url (format should be https://sts.windows.net/<tenentID>), refer for to get tenentID [Get tenentID](https://ms.portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/Overview) \n\n - Allow token Audiences (ex: [parameters('AzureManagementLink')] \n\n - Click ok \n\n - Click on save \n\n * Open function app and go to Identify and capture the object ID [Capture Object ID](https://docs.microsoft.com/azure/app-service/overview-managed-identity?tabs=dotnet) \n\n * Add azure function app to key Vault access policy [Add access policy](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)"],
+    "support": {
+        "tier": "microsoft" 
+    },
+    "author": {
+        "name": "Lior Tamir"
+    },
+    "releaseNotes": [
+    {
+      "version": "1.0.0",
+      "title": "Fortinet-FortiGate-FunctionApp",
+      "notes": [
+        "Initial version"
+      ]
+    }
+    ]
+  },
+  "parameters": {
+    "FunctionAppName": {
+      "type": "string",
+      "defaultValue": "FortinetFortigateFunctionApp",
+      "metadata": {
+        "description": "Function App name is global uniqueness should not contain any special symbol"
+      }
+    },
+    "Secret Identifier of Keyvalut": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Enter API key for all Azure function."
+      }
+    },
+    "service_EndPoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Enter endpoint URL"
+      }
+    },
+    "UserIdentifier": {
+      "type": "string",
+      "defaultValue": "fortinetuseridentity",
+      "metadata": {
+        "description": "User Identifer"
+      }
+    },
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[concat('[resourceGroup().locatio', 'n]')]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    }
+  },
+  "variables": {
+    "functionAppName": "[parameters('FunctionAppName')]",
+    "hostingPlanName": "[parameters('FunctionAppName')]",
+    "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
+    "StorageAccount": "Standard_LRS",
+    "functionWorkerRuntime": "dotnet",
+    "SecretIdentifierofKeyvalut": "[parameters('Secret Identifier of Keyvalut')]",
+    "location": "[parameters('location')]",
+    "appInsightsLocation": "[parameters('location')]",
+    "Endpoint": "[parameters('service_EndPoint')]",
+    "functionName": "Fortinet-GetEntityDetails",
+    "UserIdentifier": "[parameters('UserIdentifier')]",
+    "applicationInsightsName": "Fortinet Fortigate Application Insights",
+    "_applicationInsightsName": "[variables('applicationInsightsName')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-09-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "[variables('StorageAccount')]"
+      },
+      "kind": "Storage"
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2020-06-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "properties": {
+        "name": "[variables('hostingPlanName')]",
+        "computeMode": "Dynamic"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2020-06-01",
+      "name": "[parameters('FunctionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-09-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2021-09-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(variables('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~2"
+            },
+            {
+              "name": "WEBSITE_NODE_DEFAULT_VERSION",
+              "value": "~10"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('microsoft.insights/components', variables('_applicationInsightsName')), '2020-02-02').InstrumentationKey]"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "[variables('functionWorkerRuntime')]"
+            },
+            {
+              "name": "Authorization",
+              "value": "[concat('@','Microsoft.KeyVault(SecretUri=',variables('SecretIdentifierofKeyvalut'),')')]"
+
+            },
+            {
+              "name": "EndpointURL",
+              "value": "[variables('Endpoint')]"
+            },
+            {
+              "name": "BaseURL",
+              "value": "/api/v2/cmdb/firewall/"
+            }
+          ]
+        },
+        "cors": {
+          "allowedOrigins": [
+            "https://functions.azure.com",
+            "https://functions-staging.azure.com",
+            "https://functions-next.azure.com"
+          ],
+          "supportCredentials": false
+        }
+      }
+    },
+    {
+      "type": "microsoft.insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('_applicationInsightsName')]",
+      "location": "[variables('appInsightsLocation')]",
+      "tags": {
+        "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('_applicationInsightsName')))]": "Resource"
+      },
+      "properties": {
+        "ApplicationId": "[variables('_applicationInsightsName')]",
+        "Request_Source": "IbizaWebAppExtensionCreate"
+      }
+    },
+    {
+      "apiVersion": "2019-08-01",
+      "name": "[concat(variables('FunctionappName'),'/', variables('functionName'))]",
+      "type": "Microsoft.Web/sites/functions",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('UserIdentifier'))]": {}
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+      ],
+      "properties": {
+        "config": {
+          "bindings": [
+            {
+              "name": "req",
+              "webHookType": "genericJson",
+              "direction": "in",
+              "type": "httpTrigger",
+              "authLevel": "anonymous"
+            },
+            {
+              "name": "res",
+              "direction": "out",
+              "type": "http"
+            }
+          ]
+        },
+        "files": {
+          "run.csx": "#r \"Newtonsoft.Json\"\r\n #r \"System.Net.Http\"\r\n using System.Net;\r\n using Microsoft.AspNetCore.Mvc;\r\n using Microsoft.Extensions.Primitives;\r\n using Newtonsoft.Json;\r\n using Newtonsoft.Json.Linq;\r\n public static async Task<IActionResult> Run(HttpRequest req, ILogger log)\r\n{\r\nlog.LogInformation(\"HTTP request recived.\");\r\n var entity = req.Query[\"entity\"];\r\nvar filter = req.Query[\"filter\"];\r\nvar key = Environment.GetEnvironmentVariable(\"Authorization\", EnvironmentVariableTarget.Process);\r\nvar endpointURL = Environment.GetEnvironmentVariable(\"EndpointURL\", EnvironmentVariableTarget.Process);\r\nvar baseURL = Environment.GetEnvironmentVariable(\"BaseURL\", EnvironmentVariableTarget.Process);\r\nJToken results = null;\r\nlog.LogInformation(filter);\r\nlog.LogInformation(entity);\r\nvar httpclient = new HttpClient();\r\nvar httpRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(endpointURL + baseURL + entity + \"?\" + filter ));\r\nlog.LogInformation(httpRequest.RequestUri.ToString());\r\n if (key.StartsWith(\"Bearer\", StringComparison.InvariantCultureIgnoreCase)) {key = key.ToString() ;} else {key = \"Bearer \" + key.ToString();}\r\nhttpRequest.Headers.Add(\"Authorization\", key.ToString());\r\nvar response = httpclient.SendAsync(httpRequest).Result;\r\nvar responseJson = response.Content.ReadAsStringAsync().Result;\r\nif (responseJson != null)\r\n{\r\nJObject json = new JObject();\r\ndynamic obj = JsonConvert.DeserializeObject(responseJson);\r\njson = (JObject)obj;\r\nresults = json.SelectToken(\"results\");\r\nreturn new OkObjectResult(results);\r\n}\r\nreturn new OkObjectResult(results);\r\n}\r\n"
+        }
+      }
+    }
+  ]
+}

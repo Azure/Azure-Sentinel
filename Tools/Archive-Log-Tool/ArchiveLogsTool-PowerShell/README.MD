@@ -17,15 +17,12 @@
    ```  
 3. Script prompts you to enter your **Azure Tenant Id**
 
-4. **Azure Government support** using ```-AzEnvironment [AzureCloud | AzureUSGovernment]``` (Defaults to ```AzureCloud```).  
-    ```PowerShell
-     .\Configure-Long-Term-Retention.ps1 -TenantId xxxx -AzEnvironment  AzureUSGovernment  
-     ```
+4. **Supports both Azure Commercial and Azure Gov Tenants**  
 5. You are prompted to authenticate with credentials, once the user is authenticated, you will be prompted to choose 
 	- Subscription
 	- Log Analytics Workspace
 	- Table Plan
 	- Archive Days
 
-6.	Provide archiveRetention value - The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days.  
+6.	Provide archiveRetention value - The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383 days.  
 	Note: Archive retention is calculated by using archiveRetention = totalRetentionInDays - retentionInDays.

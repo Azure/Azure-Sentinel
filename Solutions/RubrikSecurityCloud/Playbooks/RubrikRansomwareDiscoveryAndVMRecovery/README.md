@@ -13,6 +13,7 @@ TThis playbook interacts with Rubrik Security Cloud to (1) optionally preserve e
 5. Store Service account credentials in Key Vault and obtain keyvault name and tenantId
     a. Create a Key Vault with unique name
     b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively
+6. Make sure that RubrikIOCScan and RubrikPollAsyncResult playbook is deployed before deploying RubrikRansomwareDiscoveryAndVMRecovery playbook.
 
 ### Deployment instructions
 
@@ -38,4 +39,3 @@ Once deployment is complete, authorize each connection like teams, keyvault.
 4. Sign in
 5. Click Save
 6. Repeat steps for other connections
-

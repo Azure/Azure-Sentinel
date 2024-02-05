@@ -9,7 +9,8 @@ OutputEntityTypes:
 QueryPeriodBefore: 1h
 QueryPeriodAfter: 1h
 DataSources:
-  - Syslog
+  - SecurityEvent
+  - imProcessCreate
 Tactics:
   - Execution
   - Persistence
@@ -17,19 +18,30 @@ Tactics:
   - LateralMovement
   - Collection
 query: |
-
-  let GetSysLogEventsByAccount = (v_Account_Name:string){
-  Syslog
-  | extend v_Account_Name = case(
-  v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
-  v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
-  v_Account_Name
-  )
-  | where SyslogMessage has v_Account_Name
-  | extend info = pack('HostName', HostName, 'HostIP', HostIP)
-  | summarize Process_Aux_StartTime=min(EventTime), Process_Aux_EndTime=max(EventTime), count(), Process_Aux_info = makeset(info) by Computer, ProcessName, ProcessID
-  | top 10 by count_ asc nulls last 
-  | project Process_Aux_StartTime, Process_Aux_EndTime, Process_Host_UnstructuredName=Computer, Process_ImageFile_FullPath=ProcessName, Process_ProcessId=tostring(ProcessID), Process_Aux_info
+ let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+ let Legacy = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+  | join kind=inner(
+    SecurityEvent
+    | where EventID == 4688
+    | where Account has v_Account_Name
+    | extend info = pack('HostName', Computer, 'HostIP', "")
+    | summarize Process_Aux_StartTime=min(TimeGenerated), Process_Aux_EndTime=max(TimeGenerated), count(), Process_Aux_info = make_set(info, maxsize=100) by Computer, NewProcessName
+    | top 10 by count_ asc nulls last 
+    | project Process_Aux_StartTime, Process_Aux_EndTime, Process_Host_UnstructuredName=Computer, Process=NewProcessName, Process_Aux_info  
+    | extend exists=int(1)) on exists
+    | project-away exists, exists1 
   };
+   let Normalized = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+  | join kind=inner (
+  imProcessCreate(targetusername=v_Account_Name)
+    | extend info = pack('HostName', Dvc, 'HostIP', DvcIpAddr)
+    | extend TargetProcessFilename = column_ifexists("TargetProcessFilename", "")
+    | extend Process = case(isnotempty(Process), Process, isnotempty(TargetProcessFilename), TargetProcessFilename, isnotempty(ActingProcessName), ActingProcessName, split(ActingProcessCommandLine, " ")[0])
+    | summarize Process_Aux_StartTime=min(TimeGenerated), Process_Aux_EndTime=max(TimeGenerated), count(), Process_Aux_info = make_set(info, maxsize=100) by Dvc, Process
+    | top 10 by count_ asc nulls last 
+    | project Process_Aux_StartTime, Process_Aux_EndTime, Process_Host_UnstructuredName=Dvc, Process, Process_Aux_info
+    | extend exists=int(1)) on exists | project-away exists, exists1 };
   // change <Name> value below
-  GetSysLogEventsByAccount('<Name>')
+  union isfuzzy=true Legacy('<Name>'), Normalized('<Name>')

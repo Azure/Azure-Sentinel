@@ -34,9 +34,9 @@ query: |
   ),
   (imProcessCreate
   | where ParentProcessName endswith "diawp.exe" or ParentProcessName endswith "ReportingServicesService.exe" or ParentProcessName endswith "RSPortal.exe" or ParentProcessName endswith "RsPowerBI.exe" or ParentProcessName endswith "taskexecutor.exe"
-  | where ActingProcessName = "cmd.exe"
+  | where ActingProcessName == "cmd.exe"
   | where (CommandLine has_any (cmdline_tokens))
-  | extend timestamp = TimeGenerated, HostCustomEntity = DvcHostname , AccountCustomEntity = ActorUsername, ProcessCustomEntity = TargetProcessFilePath
+  | extend timestamp = TimeGenerated, HostCustomEntity = DvcHostname , AccountCustomEntity = ActorUsername, ProcessCustomEntity = TargetProcessName
   ),
   (SecurityEvent
   | where EventID == '4688'
@@ -59,18 +59,31 @@ query: |
   | extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName
   )
   )
+  | extend NTDomain = tostring(split(AccountCustomEntity, '\\', 0)[0]), Name = tostring(split(AccountCustomEntity, '\\', 1)[0])
+  | extend HostName = tostring(split(HostCustomEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostCustomEntity, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend Process_0_ProcessId = ProcessCustomEntity
+  | extend Process_0_CommandLine = CommandLineCustomEntity
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
         columnName: ProcessCustomEntity
       - identifier: CommandLine
         columnName: CommandLineCustomEntity
+version: 1.0.1

@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for Windows Security Events
-  Version: '1.1.1'
-  LastUpdated: Aug 8, 2021
+  Version: '0.2.1'
+  LastUpdated: Sept 18, 2023
 Product:
   Name: Windows Security Events
 Normalization:
@@ -15,6 +15,7 @@ References:
 Description: |
   This ASIM parser supports filtering and normalizing Windows Authentication events (4624, 4625, 4634, and 4647), collected either by the Log Analytics Agent or the Azure Monitor Agent, into either the WindowsEvent (WEF) or SecurityEvent tables, to the ASIM Authentication schema.
 ParserName: vimAuthenticationMicrosoftWindowsEvent
+EquivalentBuiltInParser: _Im_Authentication_MicrosoftWindowsEvent
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -131,7 +132,6 @@ ParserQuery: |
                   EventResult = iff(EventID == 4625, 'Failure', 'Success')
           | project-rename 
               TargetDvcHostname = Computer
-          // , TargetUserType=AccountType - no AccountType in windowsEvents
              , EventOriginalUid = EventOriginId
              , EventOriginalType=EventID
           | extend  EventCount=int(1)
@@ -146,6 +146,9 @@ ParserQuery: |
                   , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
                   , SrcDvcOs = 'Windows'
                   , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
+          | extend
+                  ActorUserType = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
+                  , TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
           | lookup LogonStatus on EventStatus
           | lookup LogonTypes on LogonType
               /// ** Aliases 
@@ -174,7 +177,6 @@ ParserQuery: |
        , TargetSessionId=TargetLogonId
        , ActorUserId=SubjectUserSid
        , TargetUserId =TargetUserSid
-       , TargetUserType=AccountType
        , SrcDvcHostname = WorkstationName
        , TargetDvcHostname = Computer
        , EventOriginalUid = EventOriginId
@@ -197,7 +199,10 @@ ParserQuery: |
       , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
       , SrcDvcOs = 'Windows'
       , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
-    | project-away TargetUserName
+    | project-away TargetUserName, AccountType
+    | extend
+        ActorUserType = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
+      , TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
     | lookup LogonStatus on EventStatus
     | lookup LogonTypes  on LogonType
     /// ** Aliases 

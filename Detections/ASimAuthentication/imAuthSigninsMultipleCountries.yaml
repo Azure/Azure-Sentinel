@@ -23,20 +23,39 @@ query: |
   let threshold = 2;
   imAuthentication
   | where TimeGenerated > timeframe
-  | where EventType=='Logon' and EventResult=='Success'
+  | where EventType == 'Logon'
+      and EventResult == 'Success'
   | where isnotempty(SrcGeoCountry)
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Vendors=make_set(EventVendor), Products=make_set(EventProduct)
-    , NumOfCountries = dcount(SrcGeoCountry)
-    by TargetUserId, TargetUsername, TargetUserType
+  | summarize
+      StartTime        = min(TimeGenerated)
+      , EndTime        = max(TimeGenerated)
+      , Vendors        = make_set(EventVendor, 128)
+      , Products       = make_set(EventProduct, 128)
+      , NumOfCountries = dcount(SrcGeoCountry)
+      , Countries      = make_set(SrcGeoCountry, 128)
+      by TargetUserId, TargetUsername, TargetUserType
   | where NumOfCountries >= threshold
-  | extend timestamp = StartTime, AccountCustomEntity = TargetUsername
-
+  | extend
+    Name = iif(
+        TargetUsername contains "@"
+            , tostring(split(TargetUsername, '@', 0)[0])
+            , TargetUsername
+        ),
+    UPNSuffix = iif(
+        TargetUsername contains "@"
+        , tostring(split(TargetUsername, '@', 1)[0])
+        , ""
+    )
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.2.2
+        columnName: TargetUserName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.2.4
 kind: Scheduled
 metadata:
     source:

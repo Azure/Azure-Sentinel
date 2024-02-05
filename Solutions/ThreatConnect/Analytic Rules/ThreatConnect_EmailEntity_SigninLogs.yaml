@@ -1,0 +1,81 @@
+id: ecb68ce7-c309-59a7-a8de-07ccf2a0ea4f
+name: ThreatConnect TI map Email entity to SigninLogs
+version: 1.2.4
+kind: Scheduled
+description: |
+  'Identifies a match in SigninLogs table from any Email IOC from ThreatConnect TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
+  let aadFunc = (tableName:string){
+  ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where ExpirationDateTime > now() and Active == true
+  // Filter out non ThreatConnect TI Sources
+  | where SourceSystem startswith "ThreatConnect-"
+  //Filtering the table for Email related IOCs
+  | where isnotempty(EmailSenderAddress)
+  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
+  | join kind=innerunique (
+      table(tableName) | where TimeGenerated >= ago(dt_lookBack) and isnotempty(UserPrincipalName)
+      //Normalizing the column to lower case for exact match with EmailSenderAddress column
+      | extend UserPrincipalName = tolower(UserPrincipalName)
+      | where UserPrincipalName matches regex emailregex
+      | extend Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
+      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+      | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
+      // renaming timestamp column so it is clear the log this came from SigninLogs table
+      | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type
+  )
+  on $left.EmailSenderAddress == $right.UserPrincipalName
+  | where SigninLogs_TimeGenerated < ExpirationDateTime
+  | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, UserPrincipalName
+  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
+  EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName,
+  StatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP, Type
+  | extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  | extend timestamp = SigninLogs_TimeGenerated
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url

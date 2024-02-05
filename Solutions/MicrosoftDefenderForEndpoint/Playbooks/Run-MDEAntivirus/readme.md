@@ -3,7 +3,7 @@ author: Nicholas DiCola
 
 This playbook will run a antivirus (full) scan on the machine in Microsoft Defender for Endpoint.  The AV scan only works on supported operating systems.  
 
-The template also deploys the permissions required to write comments to Microsoft Sentinel incidents.  The parameters will ask for the SubscriptionId and Resource Group name for where the Sentinel workspace resides. If they are left blank, it will use the Subscription Id and Resource Group where the playbook is being deployed.
+The template also deploys the permissions required to write comments to Microsoft Sentinel incidents.  The parameters will ask for the Subscription Id and Resource Group name for where the Sentinel workspace resides. If they are left blank, it will use the Subscription Id and Resource Group where the playbook is being deployed.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
@@ -51,7 +51,7 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 
 ## Screenshots
 **Incident Trigger**
-![Incident Trigger](./Run-MDEAntivirus/Run-MDEAntivirus-incident-trigger/images/designerLight.png)
+![Incident Trigger](./Run-MDEAntivirus-incident-trigger/images/designerDark.png)
 
 **Alert Trigger**
-![Alert Trigger](./Run-MDEAntivirus/Run-MDEAntivirus-alert-trigger/images/Run-MDEAntivirus_alert.png)
+![Alert Trigger](./Run-MDEAntivirus-alert-trigger/images/Run-MDEAntivirus_alert.png)

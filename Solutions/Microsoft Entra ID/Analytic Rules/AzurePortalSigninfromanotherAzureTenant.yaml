@@ -1,0 +1,75 @@
+id: 87210ca1-49a4-4a7d-bb4a-4988752f978c
+name: Azure Portal sign in from another Azure Tenant
+description: |
+  'This query looks for successful sign in attempts to the Azure Portal where the user who is signing in from another Azure tenant,
+   and the IP address the login attempt is from is an Azure IP. A threat actor who compromises an Azure tenant may look
+   to pivot to other tenants leveraging cross-tenant delegated access in this manner.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1199
+query: |
+  // Get details of current Azure Ranges (note this URL updates regularly so will need to be manually updated over time)
+  // You may find the name of the new JSON here: https://www.microsoft.com/download/details.aspx?id=56519
+  // On the downloads page, click the 'details' button, and then replace just the filename in the URL below
+  let azure_ranges = externaldata(changeNumber: string, cloud: string, values: dynamic)
+  ["https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MSFTIPRanges/ServiceTags_Public.json"] with(format='multijson')
+  | mv-expand values
+  | mv-expand values.properties.addressPrefixes
+  | mv-expand values_properties_addressPrefixes
+  | summarize by tostring(values_properties_addressPrefixes)
+  | extend isipv4 = parse_ipv4(values_properties_addressPrefixes)
+  | extend isipv6 = parse_ipv6(values_properties_addressPrefixes)
+  | extend ip_type = case(isnotnull(isipv4), "v4", "v6")
+  | summarize make_list(values_properties_addressPrefixes) by ip_type
+  ;
+  SigninLogs
+  // Limiting to Azure Portal really reduces false positives and helps focus on potential admin activity
+  | where ResultType == 0
+  | where AppDisplayName =~ "Azure Portal"
+  | extend isipv4 = parse_ipv4(IPAddress)
+  | extend ip_type = case(isnotnull(isipv4), "v4", "v6")
+   // Only get logons where the IP address is in an Azure range
+  | join kind=fullouter (azure_ranges) on ip_type
+  | extend ipv6_match = ipv6_is_in_any_range(IPAddress,  list_values_properties_addressPrefixes)
+  | extend ipv4_match = ipv4_is_in_any_range(IPAddress,  list_values_properties_addressPrefixes)
+  | where ipv4_match or ipv6_match 
+  // Limit to where the user is external to the tenant
+  | where HomeTenantId != ResourceTenantId
+  // Further limit it to just access to the current tenant (you can drop this if you wanted to look elsewhere as well but it helps reduce FPs)
+  | where ResourceTenantId == AADTenantId
+  | summarize FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated), make_set(ResourceDisplayName) by UserPrincipalName, IPAddress, UserAgent, Location, HomeTenantId, ResourceTenantId, UserId
+  | extend AccountName = split(UserPrincipalName, "@")[0]
+  | extend UPNSuffix = split(UserPrincipalName, "@")[1]
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+alertDetailsOverride:
+  alertDisplayNameFormat: Azure Portal sign in by {{UserPrincipalName}} from another Azure Tenant with IP Address {{IPAddress}}
+  alertDescriptionFormat: |
+    This query looks for successful sign in attempts to the Azure Portal where the user who is signing in from another Azure tenant,
+    and the IP address the login attempt is from is an Azure IP. A threat actor who compromises an Azure tenant may look
+    to pivot to other tenants leveraging cross-tenant delegated access in this manner.
+    In this instance {{UserPrincipalName}} logged in at {{FirstSeen}} from IP Address {{IPAddress}}.
+version: 2.0.1
+kind: Scheduled

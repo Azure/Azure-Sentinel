@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for AAD non-interactive sign-in logs
-  Version: '0.0'
-  LastUpdated: June 3, 2021
+  Version: '0.2.1'
+  LastUpdated: Sept 18, 2023
 Product:
   Name: AAD
 Normalization:
@@ -15,6 +15,7 @@ References:
 Description: |
     This ASIM parser supports filtering and normalizing Azure Active Directory Non Interactive sign in logs, stored in the AADNonInteractiveUserSignInLogs table, to the ASIM Authentication schema.
 ParserName: vimAuthenticationAADNonInteractiveUserSignInLogs
+EquivalentBuiltInParser: _Im_Authentication_AADNonInteractiveUserSignInLogs
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -29,6 +30,36 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
+  let FailedReason=datatable(ResultType:string, EventResultDetails:string)[
+    '0', 'Success',
+    '53003', 'Logon violates policy',
+    '50034', 'No such user or password',
+    '50059', 'No such user or password',
+    '50053', 'User locked',
+    '50055', 'Password expired',
+    '50056', 'Incorrect password',
+    '50057', 'User disabled',
+    '50058', 'Logon violates policy',
+    '50011', 'Logon violates policy', 
+    '50064', 'No such user or password',
+    '50076', 'Logon violates policy',
+    '50079', 'Logon violates policy',
+    '50105', 'Logon violates policy',
+    '50126', 'No such user or password',
+    '50132', 'Password expired',
+    '50133', 'Password expired',
+    '50144', 'Password expired',
+    '50173', 'Password expired',
+    '80012', 'Logon violates policy',
+    '51004', 'No such user or password',
+    '50072', 'Logon violates policy',
+    '50005', 'Logon violates policy',
+    '50020', 'Logon violates policy',
+    '50074', 'Logon violates policy', 
+    '70008', 'Password expired',
+    '700016',  'No such user or password', 
+    '500011', 'No such user or password' 
+    ];
   let AADNIAuthentication=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
     AADNonInteractiveUserSignInLogs | where not(disabled)
     // ************************************************************************* 
@@ -56,8 +87,8 @@ ParserQuery: |
         , SrcDvcOs=tostring(todynamic(DeviceDetail).operatingSystem)
         , Location = todynamic(LocationDetails)
         , TargetAppId = ResourceIdentity 
-        , TargetUserType='NonInteractive'
-        , TargetUsernameType='Upn'
+        , EventSubType = 'NonInteractive'
+        , TargetUsernameType='UPN'
         , TargetUserIdType='AADID'
         , TargetAppName=ResourceDisplayName
     | extend
@@ -73,30 +104,13 @@ ParserQuery: |
         , TargetUserId = UserId
         , TargetUsername=UserPrincipalName
         , SrcDvcIpAddr=IPAddress
-        | lookup ASIM_AADSTSErrorCodes on ResultType
-    | project-reorder
-        TimeGenerated
-        ,EventProduct
-        , EventOriginalUid
-        , EventResult
-        , EventOriginalResultDetails
-        , EventStartTime
-        , EventEndTime
-        , LogonMethod 
-        , TargetSessionId
-        , TargetUserId
-        , TargetUsername
-        , SrcDvcId
-        , SrcDvcHostname 
-        , SrcDvcOs
-        , HttpUserAgent 
-        , SrcGeoCountry
-        , SrcGeoCity
-        , TargetAppId
-        , TargetAppName
-        // ** Aliases
-        | extend 
+        | lookup FailedReason on ResultType
+    | extend
           User=TargetUsername
         , LogonTarget=ResourceIdentity
-        , Dvc=EventVendor};
+        , Dvc=EventVendor
+        // -- Entity identifier explicit aliases
+        , TargetUserUpn = TargetUsername
+        , TargetUserAadId = TargetUserId
+  };
   AADNIAuthentication(starttime, endtime, targetusername_has, disabled)

@@ -1,0 +1,34 @@
+id: 8c5bc38a-438d-48fb-ae3f-7f356d3e5ba9
+name: User detection added to privilege groups based in Watchlist 
+description: |
+  'Based on a Watchlist Detects when a user has been added to a privileged group/role. We can exclude from the wathclist the users for whom we do not want this alert to be triggered'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - Reconnaissance
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1548
+query: |
+   let PrivilegedUsers = (_GetWatchlist('Accounts') | project SearchKey);
+   let timeRange = 3d;
+   let lookBack = 7d;
+   AuditLogs
+   | where LoggedByService == 'Core Directory' or LoggedByService == 'PIM'
+   | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+   | where Identity !in (PrivilegedUsers)
+   | mv-expand TargetResources
+   | extend modProps = parse_json(TargetResources).modifiedProperties
+   | mv-expand bagexpansion=array modProps
+   | evaluate bag_unpack(modProps)
+   | extend displayName = column_ifexists("displayName", "NotAvailable"), newValue = column_ifexists("newValue", "NotAvailable")
+   //if you want only extract hig privilege Rol display or WellKnowObject
+   | where newValue contains "UserAccountAdmins" or newValue contains "User Administrator" or newValue contains "ApplicationAdministrators" or newValue contains "BuiltInRole"
+    //| project TimeGenerated, displayName, newValue, OperationName, Category, Identity, LoggedByService, Location, ResourceGroup 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Identity

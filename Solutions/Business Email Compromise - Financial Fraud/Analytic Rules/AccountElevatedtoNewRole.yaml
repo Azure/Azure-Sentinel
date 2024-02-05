@@ -1,0 +1,81 @@
+id: c1c66f0b-5531-4a3e-a619-9d2f770ef730
+name: Account Elevated to New Role
+description: |
+  'Detects an account that is elevated to a new role where that account has not had that role in the last 14 days.
+    Role elevations are a key mechanism for gaining permissions, monitoring which users have which roles, and for anomalies in those roles is useful for finding suspicious activity.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+    let auditList =
+    AuditLogs
+    | where TimeGenerated >= ago(14d)
+    | where OperationName =~ "Add member to role completed (PIM activation)"
+    | where Result =~ "success"
+    | extend TargetUserPrincipalName = tostring(TargetResources[2].userPrincipalName)
+    | extend displayName = tostring(TargetResources[0].displayName)
+    | extend displayName2 = tostring(TargetResources[3].displayName)
+    | extend ElevatedRole = iif(displayName =~ "Member", displayName2, displayName)
+    ;
+    let lookbackList = auditList
+    | where TimeGenerated between(ago(14d)..ago(1d))
+    ;
+    let recentList = auditList
+    | where TimeGenerated > ago(1d)
+    ;
+    let newlyElevated = recentList
+    | join kind = leftanti lookbackList on ElevatedRole, TargetUserPrincipalName
+    ;
+    newlyElevated | project Id, AdditionalDetails
+    | mv-expand bagexpansion=array AdditionalDetails
+    | evaluate bag_unpack(AdditionalDetails)
+    | evaluate pivot(key, make_set(value))
+    | extend ipaddr = todynamic(column_ifexists("ipaddr", ""))
+    | mv-expand ipaddr
+    | project Id, InitiatingIPAddress = tostring(ipaddr)
+    | join kind=rightouter newlyElevated on Id
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = iff(isnotempty(tostring(InitiatedBy.user.ipAddress)), tostring(InitiatedBy.user.ipAddress), InitiatingIPAddress)
+    | extend ElevatedBy = iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName)
+    | extend ElevatedUser = TargetUserPrincipalName
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | project-reorder ElevatedUser, ElevatedRole, ResultReason, ElevatedBy, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, TargetUserPrincipalName
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+version: 1.1.0
+kind: Scheduled

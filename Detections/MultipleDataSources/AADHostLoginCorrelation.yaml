@@ -1,7 +1,7 @@
 id:  8ee967a2-a645-4832-85f4-72b635bcb3a6
 name: Failed AzureAD logons but success logon to host
 description: |
-  'Identifies a list of IP addresses with a minimum number (default of 5) of failed logon attempts to Azure Active Directory.
+  'Identifies a list of IP addresses with a minimum number (default of 5) of failed logon attempts to Microsoft Entra ID.
   Uses that list to identify any successful remote logons to hosts from these IPs within the same timeframe.'
 severity: Medium
 requiredDataConnectors:
@@ -62,7 +62,7 @@ query: |
   | where IpAddress != "-"
   | where IpAddress in (suspicious_signins)
   | extend Reason = "Multiple failed AAD logins from IP address"
-  | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, LogonTypeName, TargetUserSid, Reason
+  | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, LogonTypeName, TargetUserSid, TargetUserName, TargetDomainName, _ResourceId, Reason
   ),
   (WindowsEvent
   | where EventID == 4624 and has_any_ipv4(EventData, toscalar(suspicious_signins))
@@ -73,16 +73,19 @@ query: |
   | where IpAddress in (suspicious_signins)
   | extend Reason = "Multiple failed AAD logins from IP address"
   | extend Activity = "4624 - An account was successfully logged on."
-  | extend Account =  strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
+  | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName)
+  | extend Account =  strcat(TargetDomainName,"\\", TargetUserName)
   | extend TargetUserSid = tostring(EventData.TargetUserSid)
   | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
   | extend AccountType =case(Account endswith "$" or TargetUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(TargetUserSid), "", "User")
   | extend LogonProcessName = tostring(EventData.LogonProcessName)
-  | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, TargetUserSid, Reason
+  | project TimeGenerated, Account, AccountType, Computer, Activity, EventID, LogonProcessName, IpAddress, TargetUserSid, TargetUserName, TargetDomainName, _ResourceId, Reason
   )
   );
   union isfuzzy=true linux_logons,win_logons
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, IPCustomEntity = IpAddress, HostCustomEntity = Computer
+  | extend timestamp = TimeGenerated
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex+1), Computer)
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
@@ -91,22 +94,34 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: TargetUserName
+      - identifier: NTDomain
+        columnName: TargetDomainName
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: AzureID
+        columnName: _ResourceId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.1.3
+        columnName: IpAddress
+version: 1.3.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Pete Bryan
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

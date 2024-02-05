@@ -1,0 +1,51 @@
+id: 6e813653-df72-4b14-954e-5619d1b6d586
+name: Detect threat information in web requests (ASIM Web Session)
+description: |
+  'This query identifies the presence of threat information in fields such as EventSeverity, ThreatName, and ThreatCategory'
+severity: High
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let lookback= 1d;
+  let exludeString = dynamic (["/", "None"]);
+  _Im_WebSession(starttime=ago(lookback))
+  | project EventSeverity, ThreatName, ThreatCategory, ThreatRiskLevel, ThreatOriginalConfidence, ThreatField, TimeGenerated, SrcIpAddr, SrcUsername, SrcHostname, Url
+  | where (ThreatName !in~ (exludeString) and isnotempty(ThreatName)) or (ThreatCategory !in~ (exludeString) and isnotempty(ThreatCategory)) or ThreatRiskLevel > 60 or toint(ThreatOriginalConfidence) > 0 or EventSeverity in ('Medium','High') or isnotempty(ThreatField)
+  | summarize EventCount = count(), EventStartTime=min(TimeGenerated), EvenEndTime=max(TimeGenerated) by SrcIpAddr, SrcUsername, SrcHostname, Url, ThreatName, ThreatCategory, ThreatRiskLevel, ThreatOriginalConfidence, ThreatField
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  | order by EventCount desc
+  | extend IP_0_Address = SrcIpAddr
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend Host_0_HostName = SrcHostname
+  | extend URL_0_Url = Url
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0

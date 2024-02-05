@@ -4,6 +4,8 @@ Microsoft Sentinel Solutions provide an in-product experience for central discov
 
 The packaging tool detailed below provides an easy way to generate your solution package of choice in an automated manner and enables validation of the package generated as well. You can package different types of Microsoft Sentinel content that includes a combination of data connectors, parsers or Kusto Functions, workbooks, analytic rules, hunting queries, Azure Logic apps custom connectors, playbooks and watchlists.
 
+## NOTE: Please use the latest version of packaging tool. For guidance on usage, refer to the ReadMe file [here](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md)
+
 ## Setup
 
 - Install PowerShell 7.1+

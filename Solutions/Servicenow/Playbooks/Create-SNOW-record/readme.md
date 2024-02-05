@@ -1,11 +1,11 @@
 # Create-SNOW-record
 author: Yaniv Shasha, Benjamin Kovacevic
 
-This playbook will open a Service Now incident when a new incident is opened in Azure Sentinel.<br>
+This playbook will open a Service Now incident when a new incident is opened in Microsoft Sentinel.<br>
 <br>
-High severity incident in Azure Sentinel will be synced with Critical priority to SNOW<br>
-Medium severity incident in Azure Sentinel will be synced with Moderate priority to SNOW<br>
-Low and Informational severity incident in Azure Sentinel will be synced with Planning priority to SNOW<br><br>
+High severity incident in Microsoft Sentinel will be synced with Critical priority to SNOW<br>
+Medium severity incident in Microsoft Sentinel will be synced with Moderate priority to SNOW<br>
+Low and Informational severity incident in Microsoft Sentinel will be synced with Planning priority to SNOW<br><br>
 ## Prerequisites
 
 We will need following data to make SNOW connector:<br>
@@ -36,10 +36,10 @@ Go to Playbook edit mode and fix SNOW connection with data from Prerequisite. <b
 <br>
 
 <strong>Note: This step is necessary only if you are deploying the Playbook using Alert trigger method from above</strong><br>
-We will need to assign Azure Sentinel Reader role to the Playbooks Managed Identity:<br>
+We will need to assign Microsoft Sentinel Reader role to the Playbooks Managed Identity:<br>
 1. Open Playbook and go to Settings > Identity
 2. Click on Azure Role Assignments and then on Add Role Assignment
-3. For Scope choose Resource group and make sure that subscription and resource group are where Azure Sentinel and Playbook are deployed. For Role choose Azure Sentinel Reader and click on Save.<br>
+3. For Scope choose Resource group and make sure that subscription and resource group are where Microsoft Sentinel and Playbook are deployed. For Role choose Microsoft Sentinel Reader and click on Save.<br>
 <br>
 ## Screenshots
 

@@ -1,0 +1,72 @@
+id: f50a26d7-ffdb-4471-90b9-3be78c60e4f2
+name: Office Mail Rule Creation with suspicious archive mail move activity
+description: |
+    'Hunting query to detect new inbox rule creation with activity of mail moved from inbox to archive folder within 12minutes.Though such activities could be legitimate some attackers may use these techniques to perform email diversion attack.'
+description_detailed: |
+  'Hunting query to detect new inbox rule creation with activity of mail moved from inbox to archive folder within 12minutes.Though such activities could be legitimate some attackers may use these techniques to perform email diversion attack.
+  Reference: https://redcanary.com/blog/email-payroll-diversion-attack/'
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Exchange)
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+    // New Inbox rule creation
+    let Inboxrulecreation=
+    OfficeActivity
+    | where Operation =~ "New-InboxRule"
+    | where ResultStatus =~ "Succeeded"
+    | extend Inboxrulecreationtime = TimeGenerated  
+    | project Operation, _ResourceId, _SubscriptionId, UserId, Inboxrulecreationtime, ActorIpAddress
+    ;
+    // Email Sent Succeeded
+    let Emailsent=
+    OfficeActivity
+    | extend Emailsenttime = TimeGenerated
+    | where Operation =~ "Send"
+    | where ResultStatus =~ "Succeeded"
+    | extend Subject = tostring(parse_json(Item).["Subject"])
+    | summarize count() by UserId, Emailsenttime, OriginatingServer, Subject, ActorIpAddress
+    ;
+    //Email moved from Sent to Archive folder
+    let Emailmoved=
+    OfficeActivity
+    | extend Emailmovedtime = TimeGenerated
+    | where Operation =~ "move"
+    | where OfficeWorkload =~ "Exchange"
+    | where ResultStatus =~ "Succeeded"
+    |  extend OriginFolderPath = tostring(parse_json(Folder).["Path"])
+    | extend DestFolderPath = tostring(parse_json(DestFolder).["Path"])
+    | extend Subject = tostring(parse_json(AffectedItems)[0].Subject)
+    | where OriginFolderPath contains "Sent"
+    | where DestFolderPath contains "Archive"
+    | project  OriginFolderPath, DestFolderPath, UserId, Emailmovedtime, OriginatingServer, Subject
+    ;
+    Inboxrulecreation
+    | join kind=inner Emailsent on UserId
+    | where abs(datetime_diff('minute',Inboxrulecreationtime, Emailsenttime)) <=12
+    | join kind=inner Emailmoved on UserId,Subject
+    | where abs(datetime_diff('minute', Emailsenttime, Emailmovedtime)) <=12
+    // Email is Sent before Moving to Archive Folder
+    | where Emailsenttime <= Emailmovedtime
+    | extend AccountCustomEntity = UserId
+    | extend IPCustomEntity = ActorIpAddress
+    | extend HostCustomEntity = OriginatingServer
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

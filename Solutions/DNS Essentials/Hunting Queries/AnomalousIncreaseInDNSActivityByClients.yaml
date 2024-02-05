@@ -1,0 +1,117 @@
+id: 50f0cdfb-8b01-4eca-823d-2bbe6b8a5b95
+name: '[Anomaly] Anomalous Increase in DNS activity by clients (ASIM DNS Solution)'
+description: |
+  'Checks for an anomalous increase in DNS activity per client in the last 24 hours as compared to the last 14 days. Please note: To enhance performance, this query uses summarized data if available.'
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+  - T1008
+  - T1048
+query: |
+  let threshold = 2.5;
+  let min_t = ago(14d);
+  let max_t = now();
+  let dt = 1d;
+  // calculate avg. eps(events per second)
+  let eps = materialize (_Im_Dns
+    | project TimeGenerated
+    | where TimeGenerated > ago(5m)
+    | count
+    | extend Count = Count / 300);
+  let maxSummarizedTime = toscalar (
+    union isfuzzy=true 
+        (
+        DNS_Summarized_Logs_ip_CL 
+        | where EventTime_t >= min_t
+        | summarize max_TimeGenerated=max(EventTime_t)
+        | extend max_TimeGenerated = datetime_add('hour', 1, max_TimeGenerated)
+        ),
+        (
+        print(min_t)
+        | project max_TimeGenerated = print_0
+        )
+    | summarize maxTimeGenerated = max(max_TimeGenerated) 
+    );
+  let summarizationexist = materialize(
+    union isfuzzy=true 
+        (
+        DNS_Summarized_Logs_ip_CL
+        | where EventTime_t > ago(1d) 
+        | project v = int(2)
+        ),
+        (
+        print int(1) 
+        | project v = print_0
+        )
+    | summarize maxv = max(v)
+    | extend sumexist = (maxv > 1)
+    );
+  let allData = union isfuzzy=true
+        (
+        (datatable(exists: int, sumexist: bool)[1, false]
+        | where toscalar(eps) > 1000
+        | join (summarizationexist) on sumexist)
+        | join (
+            _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())
+            | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)
+            | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
+            | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+            )
+            on exists
+        | project-away exists, maxv, sum*
+        ),
+        (
+        (datatable(exists: int, sumexist: bool)[1, false]
+        | where toscalar(eps) between (501 .. 1000)
+        | join (summarizationexist) on sumexist)
+        | join (
+            _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())
+            | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)
+            | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
+            | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+            )
+            on exists
+        | project-away exists, maxv, sum*
+        ),
+        (
+        (datatable(exists: int, sumexist: bool)[1, false]
+        | where toscalar(eps) <= 500
+        | join (summarizationexist) on sumexist)
+        | join (
+            _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())
+            | where TimeGenerated > maxSummarizedTime and isnotempty(SrcIpAddr)
+            | summarize Count=count() by SrcIpAddr, bin(TimeGenerated, 1h)
+            | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+            )
+            on exists
+        | project-away exists, maxv, sum*
+        ),
+        (
+        DNS_Summarized_Logs_ip_CL
+        | where EventTime_t > min_t and isnotempty(SrcIpAddr_s)
+        | summarize Count=toint(sum(count__d)) by SrcIpAddr=SrcIpAddr_s, bin(EventTime=EventTime_t, 1h)
+        );
+  allData
+  | make-series TotalEventCountPerDay= sum(Count) on EventTime from min_t to max_t step dt by SrcIpAddr
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalEventCountPerDay, threshold, -1, 'linefit')
+  | mv-expand anomalies, score, baseline, EventTime, TotalEventCountPerDay
+  | extend
+    anomalies = toint(anomalies),
+    score = toint(score),
+    baseline = toint(baseline),
+    EventTime = todatetime(EventTime),
+    TotalEvents = tolong(TotalEventCountPerDay)
+  | where EventTime >= ago(dt)
+  | where score >= threshold * 2
+  | order by score
+  | extend IP_0_Address = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr

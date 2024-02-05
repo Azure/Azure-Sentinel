@@ -1,0 +1,80 @@
+id: 50eb4cbd-188f-44f4-b964-bab84dcdec10
+name: Identify SysAid Server web shell creation 
+description: |
+  'This query looks for potential webshell creation by the threat actor Mercury after the sucessful exploitation of SysAid server. 
+  Reference:  https://www.microsoft.com/security/blog/2022/08/25/mercury-leveraging-log4j-2-vulnerabilities-in-unpatched-systems-to-target-israeli-organizations/'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent 
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - Mercury
+  - Schema: ASIMFileEvent
+    SchemaVersion: 0.1.0
+query: |
+  let timeframe = 1d;
+  let time_window = 5m;
+  (union isfuzzy=true
+  (SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4688
+  | where Process has_any ("java.exe", "javaw.exe") and CommandLine has "SysAidServer" 
+  | summarize by ParentProcessName,Process, Account, Computer, CommandLine, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId
+  | join kind=inner(
+  SecurityEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventID == 4663
+  | where Process has_any ("java.exe", "javaw.exe")
+  | where AccessMask in ('0x2','0x100', '0x10', '0x4')
+  | where ObjectName endswith ".jsp" 
+  | summarize by ParentProcessName, Account, Computer, ObjectName, ProcessName, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId)
+   on timekey, Computer, SubjectLogonId
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (DeviceFileEvents 
+  | where InitiatingProcessFileName has_any ("java.exe", "javaw.exe")  
+  | where InitiatingProcessCommandLine has "SysAidServer"  
+  | where FileName endswith ".jsp" 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  ),
+  (imFileEvent
+  | where TimeGenerated > ago(timeframe)
+  | where EventType == "FileCreated"
+  | where ActingProcessName has_any ("java.exe", "javaw.exe") 
+  | where ActingProcessCommandLine has "SysAidServer"  
+  | where FilePath endswith ".jsp" 
+  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = DvcHostname
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Scheduled
+    author:
+        name: Ajeet Prakash
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

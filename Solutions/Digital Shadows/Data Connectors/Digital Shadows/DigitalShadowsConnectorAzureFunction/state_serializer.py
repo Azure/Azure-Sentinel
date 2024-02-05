@@ -18,6 +18,7 @@ class State:
         self.share_cli = ShareClient.from_connection_string(conn_str=connection_string, share_name=share_name)
         self.file_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=constant.FILE_LAST_POLL_TIME)
         self.file_event_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=constant.FILE_LAST_EVENT_NUMBER)
+        self.file_triage_items_cli = ShareFileClient.from_connection_string(conn_str=connection_string, share_name=share_name, file_path=constant.FILE_LAST_TRIAGE_ITEMS)
 
     def post(self, marker_text: str):
         """ 
@@ -93,3 +94,36 @@ class State:
             event = self.get_last_polled_time(historical_days)
 
         return event
+    
+    def post_triage_items(self, marker_text: str):
+        """ 
+            posts the unique triage items to a file from which it will fetch only
+            150 items in next poll
+        """
+        try:
+            logger.info('post triage items:')
+            self.file_triage_items_cli.upload_file(marker_text)
+        except ResourceNotFoundError:
+            logger.info('triage file does not exist create one:')
+            self.share_cli.create_share()
+            self.file_triage_items_cli.upload_file(marker_text)
+
+    def get_triage_items(self):
+        """ 
+        gets the last unique triage items list from azure file share 
+        """
+        
+        try:
+            logger.info('fetch triage item file:')
+            return self.file_triage_items_cli.download_file().readall().decode()
+        except ResourceNotFoundError:
+            logger.info('triage item file does not exist')
+            return None
+        
+
+
+        
+
+
+
+    

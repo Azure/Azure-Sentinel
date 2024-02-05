@@ -1,0 +1,66 @@
+id: 2a09f8cb-deb7-4c40-b08b-9137667f1c0b
+name: User Added to Admin Role
+description: |
+  'Detects a user being added to a new privileged role. Monitor these additions to ensure the users are made eligible for these roles are intended to have these levels of access.
+    Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'
+severity: Low
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  AuditLogs
+    | where OperationName in ("Add eligible member (permanent)", "Add eligible member (eligible)", "Add member to role")
+    | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend Target = tostring(TargetResource.userPrincipalName),
+                 props = TargetResource.modifiedProperties
+    )
+    | mv-apply Property = props on 
+    (
+        where Property.displayName =~ "Role.DisplayName"
+        | extend RoleName = trim('"',tostring(Property.newValue))
+    )
+    | where RoleName contains "admin"
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend InitiatedBy = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
+    | extend TargetUserPrincipalName = iff(OperationName=="Add member to role",tostring(TargetResources[0].userPrincipalName),tostring(TargetResources[2].userPrincipalName))
+    | extend TargetAadUserId = iff(OperationName=="Add member to role", tostring(TargetResources[0].id), tostring(TargetResources[2].id))
+    | extend AddedUser = TargetUserPrincipalName
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, AddedUser, RoleName, InitiatedBy
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: TargetAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+version: 1.0.3
+kind: Scheduled

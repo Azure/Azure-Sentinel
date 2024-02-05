@@ -12,7 +12,9 @@
 This report template will give you an example how to use Microsoft 365 Defender Hunting API to build a custom report using Power BI. This way you can visualise Microsoft Defender for Office 365 (MDO) data based on your organisation needs. 
 
 * It is using Delegated model to connect to the M365D Hunting API. No need for app registration simply need an admin account which can run the underlying Hunting queries using the API. 
-* The built-in Security Reader or Security Administrator role is enough to have the report working for example. 
+* Access to the Advanced hunting feature in the M365 Defender portal is needed through appropriate permission and license. 
+  * The built-in Security Reader or Security Administrator role is enough to have the report working for example. 
+  * Defender for Office 365 Plan 2 standalone or included in Microsoft 365 A5/E5/F5/G5 Security
 * This is intended to be a template, we encourage everybody to modify queries, visualisations, bring in more data sets based on organisation needs. 
 * The “ReadMe” tab of the template files has more information about terminology used in the template.  
 * This not intended to be a permanent or complete solution rather show an example how to create custom Microsoft Defender for Office 365 (MDO) reports using the hunting API and Power BI. 

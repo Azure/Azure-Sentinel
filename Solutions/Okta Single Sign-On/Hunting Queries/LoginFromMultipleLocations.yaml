@@ -1,0 +1,68 @@
+id: 37381608-bcd7-46bc-954e-1fd418023c26
+name: Okta Login from multiple locations
+description: |
+  'This query identifies accounts associated with multiple authentications from different geographical locations in a short period of time.'
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+  - connectorId: OktaSSOv2  
+    dataTypes:
+      - OktaSSO
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+tags:
+  - Okta
+query: |
+  let starttime = ago(4d);
+  let endtime =  ago(2d);
+  let common_locations = (OktaSSO
+    | where TimeGenerated between(starttime..endtime)
+    //| where eventType_s =~ 'user.session.start'
+    | extend locationString= strcat(client_geographicalContext_country_s, "/",client_geographicalContext_state_s, "/", client_geographicalContext_city_s)
+    | where locationString != "//"
+    | summarize count() by locationString
+    //modify the most common location value(below) based on your enviornment 
+    | take 20
+    | project locationString);
+  let signIns = (OktaSSO
+    | where TimeGenerated between(starttime..endtime)
+   // | where eventType_s =~ 'user.session.start'
+    | extend locationString= strcat(client_geographicalContext_country_s, "/",client_geographicalContext_state_s, "/", client_geographicalContext_city_s)
+    | where locationString != "//" and locationString !endswith "/"
+    | where locationString !in (common_locations));
+   // Adjust these to tune your query
+  let lookupWindow = 10m;
+  let lookupBin = lookupWindow / 2.0; // lookup bin = equal to 1/2 of the lookup window
+  let threshold = 5;
+  let users = (signIns
+  | summarize dcount(locationString) by actor_displayName_s
+  | where dcount_locationString > threshold
+  | project actor_displayName_s);
+  signIns
+    | where actor_displayName_s in (users)
+    | project-rename Start=TimeGenerated
+    | extend TimeKey = bin(Start, lookupBin)
+    | join kind = inner (
+    signIns
+    | project-rename End=TimeGenerated, EndLocationString=locationString
+      // TimeKey on the right side of the join - emulates this authentication appearing several times
+      | extend TimeKey = range(bin(End - lookupWindow, lookupBin),
+      bin(End, lookupBin), lookupBin)
+      | mvexpand TimeKey to typeof(datetime) // translate TimeKey arrange range to a column
+    ) on actor_displayName_s, TimeKey
+    | where End > Start
+    | project tostring(Start), tostring(End), locationString, EndLocationString, timeSpan = End - Start, actor_displayName_s, client_ipAddress_s, client_userAgent_rawUserAgent_s, client_userAgent_browser_s, client_device_s, displayMessage_s, outcome_result_s, outcome_reason_s, column_ifexists('debugContext_debugData_logOnlySecurityData_s', ""), debugContext_debugData_threatSuspected_s, client_geographicalContext_geolocation_lat_d, client_geographicalContext_geolocation_lon_d, eventType_s
+    | where locationString != EndLocationString
+    | summarize ips=make_set(client_ipAddress_s,100), UAs=make_set(client_userAgent_rawUserAgent_s,100) by timeSpan, actor_displayName_s, locationString, EndLocationString, Start, End, client_userAgent_rawUserAgent_s, client_userAgent_browser_s, client_device_s
+    | extend Account_0_Name = actor_displayName_s
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+version: 1.0.0

@@ -1,0 +1,412 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Block-GitHub-User", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will look up the GitHub users associated with the Incident Account Entities and block them from your GitHub organization. If they are members of the GitHub organization, they will also be removed. A comment noting the affected GitHub users will be added to the Incident.",
+        "prerequisites": "1. Install 'AS-GitHub-Block-User' GitHub App for your organization. 2. A private key for the GitHub App Must be generated and encoded. 3. The GitHub App installation ID. 4. An Azure Key Vault Secret. 5. Deploy the 'CreateJWT' Azure Function.  Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Block-GitHub-User",
+        "postDeployment": ["Access to the Azure Key Vault must be granted to the playbook","The Microsoft Sentinel Contributor role must be applied to the playbook"],
+        "lastUpdateTime": "2023-06-23T12:11:33Z",
+        "entities": ["Account"], 
+        "tags": ["Microsoft Sentinel", "Incident", "GitHub", "Block User"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Block-GitHub-User",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App resource to be created"
+            }
+        },
+        "GitHubOrganizationName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the GitHub Organization to block users from"
+            }
+        },
+        "GitHubAppID": {
+            "type": "string",
+            "metadata" : {
+                "description" : "ID of the 'AS-GitHub-Block-User' GitHub App"
+            }
+        },
+        "GitHubAppInstallationID": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Installation ID of the 'AS-GitHub-Block-User' GitHub App installed in the GitHub Organization"
+            }
+        },
+        "FunctionAppName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Azure Function App housing the 'CreateJWT' Function"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Key Vault that stores the GitHub App's encoded private key"
+            }
+        },
+        "SecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault Secret that contains the GitHub App's encoded private key"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Incident_has_Account_Entities": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "For_each_-_Account_entity": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "[concat('<p><strong>Removed and Blocked GitHub User Accounts from ', parameters('GitHubOrganizationName'), ':</strong><br>\n@{variables(''User Accounts Blocked'')}</p>')]"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "CreateJWT": {
+                                    "runAfter": {
+                                        "Get_secret": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Function",
+                                    "inputs": {
+                                        "body": {
+                                            "app_id": "[parameters('GitHubAppID')]",
+                                            "private_key": "@decodeBase64(body('Get_secret')?['value'])"
+                                        },
+                                        "function": {
+                                            "id": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Web/sites/', parameters('FunctionAppName'), '/functions/CreateJWT')]"
+                                        }
+                                    }
+                                },
+                                "For_each_-_Account_entity": {
+                                    "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                                    "actions": {
+                                        "Condition": {
+                                            "actions": {
+                                                "Append_to_string_variable_-_Blocked_GitHub_Accounts": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "User Accounts Blocked",
+                                                        "value": "@{items('For_each_-_Account_entity')?['Name']}\n"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_Block_GitHub_user_from_organization": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@outputs('HTTP_-_Block_GitHub_user_from_organization')['statusCode']",
+                                                            204
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Delay_until_-_5_seconds": {
+                                            "runAfter": {
+                                                "HTTP_-_Remove_GitHub_user_as_a_member_from_organization": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Wait",
+                                            "inputs": {
+                                                "until": {
+                                                    "timestamp": "@addSeconds(utcNow(), 5)"
+                                                }
+                                            },
+                                            "description": "This is necessary because a GitHub user member cannot be blocked and there was an observed delay in the member removal taking effect."
+                                        },
+                                        "HTTP_-_Block_GitHub_user_from_organization": {
+                                            "runAfter": {
+                                                "Delay_until_-_5_seconds": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Accept": "application/vnd.github+json",
+                                                    "Authorization": "Bearer @{body('Parse_JSON')?['token']}"
+                                                },
+                                                "method": "PUT",
+                                                "uri": "[concat('https://api.github.com/orgs/', parameters('GitHubOrganizationName'), '/blocks/@{items(''For_each_-_Account_entity'')?[''Name'']}')]"
+                                            }
+                                        },
+                                        "HTTP_-_Remove_GitHub_user_as_a_member_from_organization": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Accept": "application/vnd.github+json",
+                                                    "Authorization": "Bearer @{body('Parse_JSON')?['token']}"
+                                                },
+                                                "method": "DELETE",
+                                                "uri": "[concat('https://api.github.com/orgs/', parameters('GitHubOrganizationName'),'/members/@{items(''For_each_-_Account_entity'')?[''Name'']}')]"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Get_secret": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName'), ''')}/value')]"
+                                    }
+                                },
+                                "HTTP_-_Authenticate_as_a_GitHub_App_installation": {
+                                    "runAfter": {
+                                        "CreateJWT": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Accept": "application/vnd.github+json",
+                                            "Authorization": "Bearer @{body('CreateJWT')}",
+                                            "X-GitHub-Api-Version": "2022-11-28"
+                                        },
+                                        "method": "POST",
+                                        "uri": "[concat('https://api.github.com/app/installations/', parameters('GitHubAppInstallationID'), '/access_tokens')]"
+                                    }
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {
+                                        "HTTP_-_Authenticate_as_a_GitHub_App_installation": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_-_Authenticate_as_a_GitHub_App_installation')",
+                                        "schema": {
+                                            "properties": {
+                                                "expires_at": {
+                                                    "type": "string"
+                                                },
+                                                "permissions": {
+                                                    "properties": {
+                                                        "organization_user_blocking": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "repository_selection": {
+                                                    "type": "string"
+                                                },
+                                                "token": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_Blocked_GitHub_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_Accounts')?['Accounts'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "Initialize_variable_-_Blocked_GitHub_Accounts": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "User Accounts Blocked",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

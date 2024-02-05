@@ -1,0 +1,47 @@
+name: Get New or Existing Solution Flag
+
+on:
+  workflow_call:
+    inputs:
+      solutionName:
+        required: true
+        type: string
+    outputs:
+      isNewSolution:
+        value: ${{ jobs.masterDetails.outputs.isNewSolution }}
+      solutionSupportedBy:
+        value: ${{ jobs.masterDetails.outputs.solutionSupportedBy }}
+      solutionOfferId:
+        value: ${{ jobs.masterDetails.outputs.solutionOfferId }}
+      solutionPublisherId:
+        value: ${{ jobs.masterDetails.outputs.solutionPublisherId }}
+
+env:
+  BRANCH_NAME: ${{ github.event.client_payload.pull_request.head.ref || github.event.client_payload.pullRequestBranchName }}
+  
+jobs:
+  masterDetails:
+    name: Generate output
+    runs-on: ubuntu-latest
+    outputs:
+      isNewSolution: ${{ steps.IdentifyNewOrExistingSolution.outputs.isNewSolution }}
+      solutionSupportedBy: "${{ steps.IdentifyNewOrExistingSolution.outputs.solutionSupportedBy }}"
+      solutionOfferId: "${{ steps.IdentifyNewOrExistingSolution.outputs.solutionOfferId }}"
+      solutionPublisherId: "${{ steps.IdentifyNewOrExistingSolution.outputs.solutionPublisherId }}"
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        with:
+          fetch-depth: 2
+          ref: ${{ env.BRANCH_NAME }}
+      - name: IdentifyNewOrExistingSolution
+        shell: pwsh
+        id: identifyNewOrExistingSolution
+        run: |
+          $instrumentationKey = "${{ vars.APPINSIGHTS }}"
+          $runId = ${{ github.run_id }}
+          $solutionName = "${{ inputs.solutionName }}"
+          $pullRequestNumber = "${{ github.event.client_payload.pull_request.number && github.event.pull_request.number || github.event.client_payload.pullRequestNumber }}"
+          $baseFolderPath = "/home/runner/work/Azure-Sentinel/Azure-Sentinel/"
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml
+          ./.script/package-automation/newOrExistingSolution.ps1 $solutionName $pullRequestNumber $runId $baseFolderPath $instrumentationKey

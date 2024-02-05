@@ -1,0 +1,96 @@
+id: bfacf634-c75e-4291-998c-ecbc0323d943
+name: Risky Sign-in with new MFA method
+description: |
+    'This query identifies new MFA methods added to an account within 6 hours of a medium or high risk sign-in session. It includes UEBA logs IdentityInfo and BehaviorAnalytics for context.'
+description_detailed: 
+  'Looks for a new MFA method added to an account that was preceded by medium or high risk
+  sign-in session for the same user within maximum 6h timeframe.  This query has also been updated 
+  to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - SigninLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.004
+query: |
+  let timeDelta = 6h;
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let mfaMethodAdded=AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where OperationName =~ "Update user" 
+  | where TargetResources has "StrongAuthenticationPhoneAppDetail"
+  | extend AccountUpn = tostring(TargetResources[0].userPrincipalName)
+  | extend AccountObjectId = tostring(TargetResources[0].id)
+  | project MfaAddedTimestamp=TimeGenerated,AccountUpn,AccountObjectId;
+  let usersWithNewMFAMethod=mfaMethodAdded
+  | distinct AccountObjectId;
+  let hasusersWithNewMFAMethod = isnotempty(toscalar(usersWithNewMFAMethod));
+  let riskySignins=SigninLogs
+  | where TimeGenerated between ((starttime-timeDelta) .. endtime)
+  | where hasusersWithNewMFAMethod
+  | where UserId in (usersWithNewMFAMethod) 
+  | where RiskLevelDuringSignIn has_any ('medium', 'high')
+  | where AppDisplayName in~ ("Office 365 Exchange Online", "OfficeHome") 
+  | where isnotempty(Id) 
+  | project SignInTimestamp=TimeGenerated, AppDisplayName, CorrelationId, AccountObjectId=UserId, IPAddress, RiskLevelDuringSignIn 
+  | summarize SignInTimestamp=argmin(SignInTimestamp,*) by AppDisplayName, CorrelationId, AccountObjectId, IPAddress, RiskLevelDuringSignIn;
+  mfaMethodAdded 
+  | join riskySignins on AccountObjectId 
+  | where  MfaAddedTimestamp - SignInTimestamp < timeDelta //Time delta between risky sign-in and device registration less than 6h 
+  | project-away AccountObjectId1
+  | extend timestamp = MfaAddedTimestamp, AccountCustomEntity = tolower(AccountUpn), IPCustomEntity = IPAddress
+  | join kind=leftouter (
+      IdentityInfo
+      | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
+      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | summarize
+          Tags = make_set(Tags, 1000),
+          GroupMembership = make_set(GroupMembership, 1000),
+          AssignedRoles = make_set(AssignedRoles, 1000),
+          BlastRadiusInt = sum(BlastRadiusInt),
+          UserType = make_set(UserType, 1000),
+          UserAccountControl = make_set(UserType, 1000)
+      by AccountUPN
+      | extend UserPrincipalName=tolower(AccountUPN)
+      | project-rename AccountCustomEntity = AccountUPN
+  ) on AccountCustomEntity
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where isnotempty(SourceIPAddress)
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
+      | project-rename IPAddress = SourceIPAddress
+      | summarize
+          UsersInsights = make_set(UsersInsights, 1000),
+          DevicesInsights = make_set(DevicesInsights, 1000),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPAddress)
+  on IPAddress
+  | extend Account_0_Name = AccountCustomEntity
+  | extend Account_0_AadUserId = AccountObjectId
+  | extend IP_0_Address = IPAddress
+  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | sort by UEBARiskScore desc 
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+      - identifier: AadUserId
+        columnName: AccountObjectId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 2.0.1

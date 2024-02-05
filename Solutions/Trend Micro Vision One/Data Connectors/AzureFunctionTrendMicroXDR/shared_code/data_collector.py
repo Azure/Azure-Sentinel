@@ -1,9 +1,21 @@
 import base64
+import datetime
 import hashlib
 import hmac
-import datetime
 import json
+import math
+
 import requests
+from retry import retry
+from shared_code.customized_logger.customized_json_logger import (
+    get_customized_json_logger,
+)
+from shared_code.trace_utils.trace import trace_manager
+
+logger = get_customized_json_logger()
+
+# limit 30 MB per api call.
+LOG_SIZE_LIMIT = 25 * 1024 * 1024
 
 
 class LogAnalytics:
@@ -34,7 +46,7 @@ class LogAnalytics:
         authorization = "SharedKey {}:{}".format(self.workspace_id, encoded_hash)
         return authorization
 
-    # Required Function to create and invoke an API POST request to the Azure Log Analytics Data Collector API. Reference: https://docs.microsoft.com/azure/azure-functions/functions-reference-python#environment-variables
+    @retry(tries=3, delay=60)
     def post_data(self, data):
         body = json.dumps(data, sort_keys=True)
         method = 'POST'
@@ -59,4 +71,22 @@ class LogAnalytics:
         }
 
         response = requests.post(uri, data=body, headers=headers)
-        response.raise_for_status()
+        if response.status_code == requests.codes.request_entity_too_large:
+            array_size = len(data)
+            logger.warning(
+                f'Get 413 error, retry with smaller array.\ndata count: {array_size}, content_length: {content_length}.'
+                f'Task id: {trace_manager.task_id}'
+            )
+            batch_count = math.ceil(content_length / LOG_SIZE_LIMIT)
+            batch_size = math.ceil(array_size / batch_count)
+            for i in range(batch_count):
+                batch_start = i * batch_size
+                batch_end = batch_start + batch_size
+                logger.warning(
+                    f'Start batch send log, batch: {i}.'
+                    f'Task id: {trace_manager.task_id}'
+                )
+                self.post_data(data[batch_start:batch_end])
+        else:
+            # raise error
+            response.raise_for_status()

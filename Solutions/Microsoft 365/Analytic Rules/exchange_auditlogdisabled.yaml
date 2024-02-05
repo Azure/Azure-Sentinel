@@ -1,5 +1,5 @@
 id: 194dd92e-d6e7-4249-85a5-273350a7f5ce
-name: Exchange AuditLog disabled
+name: Exchange AuditLog Disabled
 description: |
   'Identifies when the exchange audit logging has been disabled which may be an adversary attempt
   to evade detection or avoid other defenses.'
@@ -8,7 +8,7 @@ status: Available
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
-      - OfficeActivity
+      - OfficeActivity (Exchange)
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -19,21 +19,29 @@ relevantTechniques:
   - T1562
 query: |
   OfficeActivity
+  | where OfficeWorkload =~ "Exchange" 
   | where UserType in~ ("Admin","DcAdmin")
   // Only admin or global-admin can disable audit logging
   | where Operation =~ "Set-AdminAuditLogConfig"
   | extend AdminAuditLogEnabledValue = tostring(parse_json(tostring(parse_json(tostring(array_slice(parse_json(Parameters),3,3)))[0])).Value)
   | where AdminAuditLogEnabledValue =~ "False"
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP, ResultStatus, Parameters, AdminAuditLogEnabledValue
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP
+  | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
+  | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+  | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
+  | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '')
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 2.0.1
+        columnName: ClientIP
+version: 2.0.3
 kind: Scheduled

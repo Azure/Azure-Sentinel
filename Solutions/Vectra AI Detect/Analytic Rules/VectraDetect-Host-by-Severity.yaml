@@ -4,16 +4,18 @@ description: |
   'Create an incident when a Host is suspected to be compromised. 
   The higher the severity level is, the more immediate attention it requires as Vectra AI engine is more confident that this is a real threat. 
   Level of severity are: Low, Medium, High, Critical). Recommended configuration is to trigger an alert for at least High and Critical.'
-severity: High
+severity: Informational
 status: Available
 requiredDataConnectors:
   - connectorId: AIVectraDetect
     dataTypes:
       - CommonSecurityLog
-queryFrequency: 1h
-queryPeriod: 1h
+queryFrequency: 5m
+queryPeriod: 5m
 triggerOperator: gt
 triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
 tactics:
   - CredentialAccess
   - Discovery
@@ -24,8 +26,8 @@ tactics:
   - Impact
 relevantTechniques:
 query: |
-  // Edit this variable to only keep the Severity level where an incident needs to be created (Defaults are: "Low", "Medium", "High", "Critical" )   
-  let configured_level = dynamic(["Low", "Medium", "High", "Critical"]);
+  // Edit this variable to only keep the Severity level where an incident needs to be created (Defaults are: "High", "Critical" ). Possible values are: "Low", "Medium", "High", "Critical"
+  let configured_level = dynamic(["High", "Critical"]);
   CommonSecurityLog
   | where DeviceVendor == "Vectra Networks"
   | where DeviceProduct == "X Series"
@@ -36,37 +38,43 @@ query: |
   | project-rename detection_name = DeviceEventClassID
   | project-rename score_decreases = DeviceCustomString3
   | extend level = case( threat_score <  50 and certainty_score < 50, "Low",
-                         threat_score < 50 and certainty_score >= 50 , "Medium", 
-                         threat_score >= 50 and certainty_score <= 50, "High", 
-                         threat_score >= 50 and certainty_score >= 50, "Critical",
-                         "UNKNOWN")
-  | extend Severity = case( level == "Low", "Low",
-                            level == "Medium", "Medium",
-                            level == "High", "Medium",
-                            level == "Critical", "High",
-                            "UNKNOWN")
+                        threat_score < 50 and certainty_score >= 50 , "Medium", 
+                        threat_score >= 50 and certainty_score <= 50, "High", 
+                        threat_score >= 50 and certainty_score >= 50, "Critical",
+                        "UNKNOWN")
+  | extend Severity = case(level == "Info", "Informational",level == "Critical", "High", level)
   | where level in (configured_level) 
   //keep only the event with the highest threat score per Host
-  | summarize arg_max(threat_score, *) by SourceHostName
-  | project SourceHostName, level, Severity, TimeGenerated, SourceIP, threat_score, certainty_score, vectra_URL
-  | extend HostCustomEntity = SourceHostName, IPCustomEntity = SourceIP, URLCustomEntity = vectra_URL, timestamp = TimeGenerated
+  | summarize arg_max(TimeGenerated, *) by SourceHostName
+  | sort by TimeGenerated
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: HostCustomEntity
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: IPCustomEntity
-  - entityType: URL
-    fieldMappings:
-      - identifier: Url
-        columnName: URLCustomEntity
+        columnName: SourceHostName
 alertDetailsOverride:
   alertDisplayNameFormat: Vectra AI Detect - Host {{SourceHostName}} reaches {{level}} severity
-  alertDescriptionFormat: The host {{SourceHostName}} is in the {{level}} quadrant. Pivot to Detect UI with {{vectra_URL}}
-  alertTacticsColumnName: null
+  alertDescriptionFormat: |
+    The host {{SourceHostName}} has a Threat score of {{threat_score}} and a
+    certainty of {{certainty_score}}
   alertSeverityColumnName: Severity
-version: 1.0.2
+  alertDynamicProperties:
+    - alertProperty: AlertLink
+      value: vectra_URL
+    - alertProperty: ProductName
+      value: DeviceProduct
+    - alertProperty: ProviderName
+      value: DeviceVendor
+    - alertProperty: ConfidenceScore
+      value: certainty_score
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 7d
+    matchingMethod: AllEntities
+customDetails:
+  ScoreDecrease: score_decreases
+version: 1.0.5
 kind: Scheduled

@@ -1,0 +1,106 @@
+id: c99cf650-c53b-4c4c-9671-7d7500191a10
+name: Detect requests for an uncommon resources on the web (ASIM Web Session)
+description: |
+              'This detection mechanism examines connections made to a domain where only a single file is requested, 
+              which is considered unusual since most contemporary web applications require additional resources. 
+              Such activity is often associated with malware beaconing or tracking URLs delivered via emails. 
+              The query includes a sample set of popular web script extensions (scriptExtensions), 
+              which should be customized to align with the specific requirements of your environment'
+severity: Low
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+  - RuleReference: https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Zscaler%20Internet%20Access/Analytic%20Rules/Zscaler-LowVolumeDomainRequests.yaml
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1102
+  - T1071
+query: |
+  let lookback = 1d;
+  let scriptExtensions = dynamic([".php", ".aspx", ".asp", ".cfml", ".py", ".sh", ".bash", ".pl"]);
+  //The number of URI's seen to be suspicious, higher = less likely to be suspicious
+  let uriThreshold = 1;
+  let ReqestCountThreshold = 10; // set minimum requests count to confirm repetitive connections
+  // Only look at connections that were allowed through the web proxy
+  _Im_WebSession (starttime=ago(lookback), eventresult='Success')
+  | project
+      SrcBytes,
+      DstBytes,
+      Url,
+      TimeGenerated,
+      DstIpAddr,
+      SrcIpAddr,
+      HttpRequestMethod,
+      HttpReferrer
+  | where not(ipv4_is_private(DstIpAddr)) // Only take traffic going to internet
+  | extend DestHostName = tostring(parse_url(Url)["Host"])
+  // Only look at connections where some data was exchanged.
+  | where SrcBytes > 0 and DstBytes > 0
+  // Extract Domain
+  | extend Domain = iif(countof(DestHostName, '.') >= 2, strcat(split(DestHostName, '.')[-2], '.', split(DestHostName, '.')[-1]), DestHostName)
+  | extend GetData = iff(Url contains "?", 1, 0)
+  | summarize
+      EventStartTime = min(TimeGenerated),
+      EventEndTime = max(TimeGenerated),
+      make_set(Url, 100),
+      make_set(DstIpAddr, 100),
+      make_set(SrcIpAddr, 100),
+      EventCount = count(),
+      make_set(HttpRequestMethod, 10),
+      max(GetData),
+      max(HttpReferrer)
+      by Domain
+  // Determine the number of URIs that have been visited for the domain
+  | extend destinationURICount = array_length(set_Url)
+  | where destinationURICount <= uriThreshold and EventCount > ReqestCountThreshold // check for repetitive requests for single resource only.
+  | where tostring(set_Url) has_any(scriptExtensions)
+  //Remove matches with referer
+  | where max_HttpReferrer == ""
+  //Keep requests where data was transferred either in a GET with parameters or a POST
+  | where set_HttpRequestMethod in~ ("POST") or max_GetData == 1
+  //Defeat email click tracking, may increase FN's while decreasing FP's
+  | where set_Url !has "click" and set_HttpRequestMethod !has "GET"
+  | mv-expand set_Url, set_DstIpAddr, set_SrcIpAddr
+  | extend
+      RequestURL = tostring(set_Url),
+      DestinationIP = tostring(set_DstIpAddr),
+      SourceIP = tostring(set_SrcIpAddr)
+  | project
+      EventStartTime,
+      EventEndTime,
+      SourceIP,
+      DestinationIP,
+      EventCount,
+      RequestURL,
+      set_HttpRequestMethod
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+  EventCount: EventCount
+alertDetailsOverride:
+  alertDisplayNameFormat: "User with IP '{{SourceIP}}' has been observed making request for a rare resource"
+  alertDescriptionFormat: "User requested (TotalEvents='{{EventCount}}') for URL '{{RequestURL}}' which contains a known script extension. The domain associated with this URL has not been accessed by any other user. This activity could be a potential beaconing activity to maintain control over compromised systems, receive instructions, or exfiltrate data"
+version: 1.0.1
+kind: Scheduled

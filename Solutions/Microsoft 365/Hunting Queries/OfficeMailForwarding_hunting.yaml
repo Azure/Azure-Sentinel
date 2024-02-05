@@ -1,6 +1,8 @@
 id: d49fc965-aef3-49f6-89ad-10cc4697eb5b
 name: Office Mail Forwarding - Hunting Version
 description: |
+  'Adversaries often abuse email-forwarding rules to monitor victim activities, steal information, and gain intelligence on the victim or their organization. This query highlights cases where user mail is being forwarded, including to external domains.'
+description-detailed: |
   'Adversaries often abuse email-forwarding rules to monitor activities of a victim, steal information and further gain intelligence on
   victim or victim's organization.This query over Office Activity data highlights cases where user mail is being forwarded and shows if 
   it is being forwarded to external domains as well.'
@@ -15,8 +17,8 @@ relevantTechniques:
   - T1114
   - T1020
 query: |
-
   OfficeActivity
+  | where OfficeWorkload == "Exchange"
   | where (Operation =~ "Set-Mailbox" and Parameters contains 'ForwardingSmtpAddress') 
   or (Operation in~ ('New-InboxRule','Set-InboxRule') and (Parameters contains 'ForwardTo' or Parameters contains 'RedirectTo'))
   | extend parsed=parse_json(Parameters)
@@ -35,18 +37,30 @@ query: |
   ClientIP
   )
   | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, Port, OriginatingServer, OfficeObjectId, fwdingDestination
-  | extend timestamp = TimeGenerated, AccountCustomEntity = UserId, IPCustomEntity = ClientIPAddress, HostCustomEntity = OriginatingServer
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  | extend Host = tostring(split(OriginatingServer, " (")[0])
+  | extend HostName = tostring(split(Host, ".")[0])
+  | extend DnsDomain = tostring(strcat_array(array_slice(split(Host, '.'), 1, -1), '.'))
+  | extend Account_0_Name = AccountName
+  | extend Account_0_UPNSuffix = AccountUPNSuffix
+  | extend IP_0_Address = ClientIPAddress
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: ClientIPAddress
   - entityType: Host
     fieldMappings:
-      - identifier: FullName
-        columnName: HostCustomEntity
-version: 2.0.0
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 2.0.1

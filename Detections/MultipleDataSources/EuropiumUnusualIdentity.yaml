@@ -26,29 +26,41 @@ query: |
   (SecurityEvent
   | where EventID==4688
   | where CommandLine has_any ("New-Mailbox","Update-RoleGroupMember") and CommandLine has "HealthMailbox55x2yq"
-  | project TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  | project TimeGenerated, DeviceName = Computer, AccountName = SubjectUserName, AccountDomain = SubjectDomainName, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  | extend InitiatingProcessAccount = strcat(AccountDomain, "\\", AccountName)
   ),
   (DeviceProcessEvents
   | where ProcessCommandLine has_any ("New-Mailbox","Update-RoleGroupMember") and ProcessCommandLine has "HealthMailbox55x2yq"
-  | extend timestamp = TimeGenerated, AccountCustomEntity =  InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  | extend timestamp = TimeGenerated, AccountDomain = InitiatingProcessAccountDomain, AccountName = InitiatingProcessAccountName
+  | extend InitiatingProcessAccount = strcat(AccountDomain, "\\", AccountName)
   )
   )
+  | extend HostName = tostring(split(DeviceName, ".")[0]), DomainIndex = toint(indexof(DeviceName, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(DeviceName, DomainIndex + 1), DeviceName)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: InitiatingProcessAccount
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.0.1
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

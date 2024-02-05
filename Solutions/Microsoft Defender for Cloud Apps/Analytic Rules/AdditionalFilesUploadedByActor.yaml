@@ -1,7 +1,7 @@
 id: b9e3b9f8-a406-4151-9891-e5ff1ddd8c1d
 name: Linked Malicious Storage Artifacts
 description: |
-  'An IP address which uploaded malicious content to an Azure Blob or File Storage container (triggering a malware alert) also uploaded additional files.'
+  'This query identifies the additional files uploaded by the same IP address which triggered a malware alert for malicious content upload on Azure Blob or File Storage Container.'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -55,11 +55,11 @@ query: |
     | extend hexChar = tohex(toint(base64Char))
     | extend hexChar = iff(strlen(hexChar) < 2, strcat("0", hexChar), hexChar)
     | extend SourceTable = iff(OperationName has "range", "StorageFileLogs", "StorageBlobLogs")
-    | summarize make_list(hexChar) by CorrelationId, ResponseMd5, FileName, AccountName, TimeGenerated, RequestBodySize, ClientIP, SourceTable
+    | summarize make_list(hexChar, 1000) by CorrelationId, ResponseMd5, FileName, AccountName, TimeGenerated, RequestBodySize, ClientIP, SourceTable
     | extend Md5Hash = strcat_array(list_hexChar, "")
     //Pack the file information the summarise into a ClientIP row
     | extend p = pack("FileName", FileName, "FileSize", RequestBodySize, "Md5Hash", Md5Hash, "Time", TimeGenerated, "SourceTable", SourceTable)
-    | summarize UploadedFileInfo=make_list(p), FilesUploaded=count() by ClientIP
+    | summarize UploadedFileInfo=make_list(p, 10000), FilesUploaded=count() by ClientIP
         | join kind=leftouter (
           union
           StorageFileLogs,
@@ -69,24 +69,24 @@ query: |
           | extend FileName = extract(@"\/([\w\-. ]+)\?", 1, Uri)
           | extend SourceTable = iff(OperationName has "range", "StorageFileLogs", "StorageBlobLogs")
           | extend p = pack("FileName", FileName, "Time", TimeGenerated, "SourceTable", SourceTable)
-          | summarize DeletedFileInfo=make_list(p), FilesDeleted=count() by ClientIP
+          | summarize DeletedFileInfo=make_list(p, 10000), FilesDeleted=count() by ClientIP
           ) on ClientIP
     ) on $left.AttackerIP == $right.ClientIP
   | mvexpand UploadedFileInfo
-  | extend LinkedMaliciousFileName = UploadedFileInfo.FileName
-  | extend LinkedMaliciousFileHash = UploadedFileInfo.Md5Hash
-  | project AlertTimeGenerated = TimeGenerated, tostring(LinkedMaliciousFileName), tostring(LinkedMaliciousFileHash), AlertType, AttackerIP, AttackerCountry, MaliciousFileDirectory, MaliciousFileName, FilesUploaded, UploadedFileInfo
-  | extend FileHashCustomEntity = LinkedMaliciousFileName, HashAlgorithm = "MD5", IPCustomEntity = AttackerIP
+  | extend LinkedMaliciousFileName = tostring(UploadedFileInfo.FileName)
+  | extend LinkedMaliciousFileHash = tostring(UploadedFileInfo.Md5Hash)
+  | extend HashAlgorithm = "MD5"
+  | project AlertTimeGenerated = TimeGenerated, LinkedMaliciousFileName, LinkedMaliciousFileHash, HashAlgorithm, AlertType, AttackerIP, AttackerCountry, MaliciousFileDirectory, MaliciousFileName, FilesUploaded, UploadedFileInfo
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: AttackerIP
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
         columnName: HashAlgorithm
       - identifier: Value
-        columnName: FileHashCustomEntity
-version: 1.0.1
+        columnName: LinkedMaliciousFileHash
+version: 1.0.3
 kind: Scheduled

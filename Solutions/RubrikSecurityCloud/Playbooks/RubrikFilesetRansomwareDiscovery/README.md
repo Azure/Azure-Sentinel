@@ -10,6 +10,7 @@ This playbook queries Rubrik Security Cloud to enrich the incoming event with ad
 2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).
 3. To perform an IOC scan the IOC YARA rule should be available as a URL.
 4. Obtain Teams group id and channel id.
+5. Make sure that RubrikIOCScan playbook is deployed before deploying RubrikFilesetRansomwareDiscovery playbook.
 
 ### Deployment instructions
 
@@ -33,4 +34,3 @@ Once deployment is complete, authorize each connection.
 4. Sign in
 5. Click Save
 6. Repeat steps for other connections
-

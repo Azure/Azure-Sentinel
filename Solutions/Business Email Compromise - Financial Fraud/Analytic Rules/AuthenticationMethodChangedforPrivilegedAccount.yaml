@@ -1,0 +1,63 @@
+id: feb0a2fb-ae75-4343-8cbc-ed545f1da289
+name: Authentication Method Changed for Privileged Account
+description: |
+  'Identifies authentication methods being changed for a privileged account. This could be an indication of an attacker adding an auth method to the account so they can have continued access.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
+queryFrequency: 2h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+tags:
+  - AADSecOpsGuide
+query: |
+    let VIPUsers = (IdentityInfo
+    | where AssignedRoles contains "Admin"
+    | summarize by tolower(AccountUPN));
+    AuditLogs
+    | where TimeGenerated > ago(2h)
+    | where Category =~ "UserManagement"
+    | where ActivityDisplayName =~ "User registered security info"
+    | where LoggedByService =~ "Authentication Methods"
+    | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+    | where tolower(TargetUserPrincipalName) in (VIPUsers)
+    | extend TargetAadUserId = tostring(TargetResources[0].id)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: TargetAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
+version: 1.0.4
+kind: Scheduled

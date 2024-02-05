@@ -1,0 +1,40 @@
+# IF createPackage ATTRIBUTE IN DATA INPUT FILE IS SPECIFIED AS FALSE THEN SKIP PACKAGE CREATION ELSE DEFAULT IS CREATE PACKAGE
+name: Check if packaging need to be Skipped
+
+on:
+  workflow_call:
+    inputs:
+      solutionName:
+        required: true
+        type: string
+    outputs:
+      isPackagingRequired:
+        description: "Solution name for the current pr"
+        value: ${{ jobs.checkPackagingInfoStatus.outputs.isPackagingRequired }}
+
+env:
+  BRANCH_NAME: ${{ github.event.client_payload.pull_request.head.ref || github.event.client_payload.pullRequestBranchName }}
+
+jobs:
+  checkPackagingInfoStatus:
+    name: Check If Packaging Need to skip
+    runs-on: ubuntu-latest
+    outputs:
+      isPackagingRequired: ${{ steps.getPackagingSkipStatus.outputs.isPackagingRequired }}
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        with:
+          fetch-depth: 2
+          ref: "${{ env.BRANCH_NAME }}"
+      - name: Check Skip Packaging Status
+        shell: pwsh
+        id: getPackagingSkipStatus
+        run: |
+          $instrumentationKey = "${{ vars.APPINSIGHTS }}"
+          $runId = "${{ github.run_id }}"
+          $solutionName = "${{ inputs.solutionName }}"
+          $baseFolderPath = "/home/runner/work/Azure-Sentinel/Azure-Sentinel/"
+          $pullRequestNumber = "${{ github.event.client_payload.pull_request.number && github.event.client_payload.pull_request.number || github.event.client_payload.pullRequestNumber }}"
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml
+          ./.script/package-automation/checkSkipPackagingInfo.ps1 $solutionName $pullRequestNumber $runId $baseFolderPath $instrumentationKey

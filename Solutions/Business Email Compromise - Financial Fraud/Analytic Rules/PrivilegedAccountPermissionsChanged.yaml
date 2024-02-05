@@ -1,0 +1,71 @@
+id: 0433c8a3-9aa6-4577-beef-2ea23be41137
+name: Privileged Account Permissions Changed
+description: |
+  'Detects changes to permissions assigned to admin users. Threat actors may try and increase permission scope by adding additional roles to already privileged accounts.
+  Review any modifications to ensure they were made legitimately.
+  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
+queryFrequency: 1d
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  let admin_users = (IdentityInfo
+    | where TimeGenerated > ago(2d)
+    | summarize arg_max(TimeGenerated, *) by AccountUPN
+    | where AssignedRoles contains "admin" or GroupMembership has "Admin"
+    | summarize by tolower(AccountUPN));
+    AuditLogs
+    | where Category =~ "RoleManagement"
+    | where OperationName has "Add eligible member"
+    | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+    | where tolower(TargetUserPrincipalName) in (admin_users)
+    | extend TargetAadUserId = tostring(TargetResources[0].id)
+    | extend Group = tostring(TargetResources[0].displayName)
+    | extend RoleAddedTo = iif(isnotempty(TargetUserPrincipalName), TargetUserPrincipalName, Group)
+    | extend mod_props = TargetResources[0].modifiedProperties
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend RoleAddedBy = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
+    | mv-expand mod_props
+    | where mod_props.displayName == "Role.DisplayName"
+    | extend UserAgent = tostring(AdditionalDetails[0].value)
+    | extend RoleAdded = tostring(parse_json(tostring(mod_props.newValue)))
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, OperationName, TargetUserPrincipalName, RoleAddedTo, RoleAdded, RoleAddedBy, InitiatingUserPrincipalName, InitiatingAppName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: TargetAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+version: 1.0.5
+kind: Scheduled

@@ -1,0 +1,63 @@
+id: 813ccf3b-0321-4622-b0bc-63518fd14454
+name: Identify instances where a single source is observed using multiple user agents (ASIM Web Session)
+description: |
+  'This detection mechanism identifies requests originating from a single source within a brief time period
+    that exhibit multiple user agents. Such behavior could indicate unusual web browsing activities performed by unconventional processes'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+  - T1528
+query: |
+  let threshold = 5; // Please update threshold limit as per your environment
+  _Im_WebSession(starttime=ago(1h), eventresult="Success")
+  | where isnotempty(HttpUserAgent)
+  | summarize
+      EventCount=count(),
+      UserAgentList=make_set(HttpUserAgent, 100),
+      URL_List = make_set(Url, 100),
+      DestinationIPList = make_set(DstIpAddr, 100)
+      by SrcIpAddr, SrcUsername, SrcHostname, bin(TimeGenerated, 5min)
+  | extend UserAgentCount = array_length(UserAgentList)
+  | where UserAgentCount > threshold
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),""), Threshold=threshold
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  UserAgentCount: UserAgentCount
+  UserAgentArray: UserAgentList
+  UserAgentThreshold: Threshold
+  URLs: URL_List
+  DestinationIPList: DestinationIPList
+alertDetailsOverride:
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with IP '{{SrcIpAddr}}' has been observed using high number of User Agents within short timeframe"
+  alertDescriptionFormat: "The system has detected high User Agent count of '{{UserAgentCount}}' originating from '{{SrcUsername}}'. Further investigation is necessary to determine the reason behind the detection of multiple user agents associated with the SrcIpAddr in this incident. User Agent list include: '{{UserAgentList}}'"
+version: 1.0.0
+kind: Scheduled

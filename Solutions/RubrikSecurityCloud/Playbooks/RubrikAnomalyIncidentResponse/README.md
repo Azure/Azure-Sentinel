@@ -9,12 +9,19 @@ This playbook provides an end to end example of the collection of Ransomware Ano
 1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.
 2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).
 3. Obtain Teams group id and channel id.
+4. Make sure that below mentioned playbooks are deployed before deploying RubrikAnomalyIncidentResponse playbook:
+    * RubrikDataObjectDiscovery
+    * RubrikAnomalyAnalysis
+    * RubrikFilesetRansomwareDiscovery
+    * RubrikRansomwareDiscoveryAndFileRecovery
+    * RubrikRansomwareDiscoveryAndVMRecovery
 
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
-2. Fill in the required paramteres:
+2. Fill in the required parameters:
     * Playbook Name: Enter the playbook name here
+    * API Hostname: Hostname of the RubrikApi instance
     * Teams Group Id: Id of the Teams Group where the adaptive card will be posted
     * Teams Channel Id: Id of the Teams Channel where the adaptive card will be posted
 
