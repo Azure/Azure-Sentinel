@@ -47,7 +47,7 @@ Just click the button below and the deployment wizard will be opened. <br>
 This will open a new browser page containing a deployment wizard in Microsoft Azure.<br>
 Fill in all the required fields and select `create` on the last page.
 
-![Alt text](image.png)
+![Alt text](images/summary.png)
 
 The required resources for the deployment will now be created.
 
