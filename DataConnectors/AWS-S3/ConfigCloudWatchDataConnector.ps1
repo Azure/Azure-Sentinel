@@ -31,7 +31,7 @@ function Get-RoleAndCloudWatchS3Policy
                 'AWS': '$RoleArn'
             },
             'Action': ['s3:GetObject'],
-            'Resource': 'arn:aws:s3:::$BucketName/*'
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*'
         },
         {
             'Sid': 'Allow CloudWatch to upload objects to the bucket',
@@ -40,7 +40,7 @@ function Get-RoleAndCloudWatchS3Policy
                 'Service': 'logs.$regionConfiguration.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::$BucketName/*'
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*'
         },
 		{
             'Sid': 'AWSCloudWatchAclCheck',
@@ -49,14 +49,14 @@ function Get-RoleAndCloudWatchS3Policy
                 'Service': 'logs.$regionConfiguration.amazonaws.com'
             },
             'Action': 's3:GetBucketAcl',
-            'Resource': 'arn:aws:s3:::${bucketName}'
+            'Resource': '$($AwsCloudResource):s3:::${bucketName}'
         },
         {
             'Sid': 'Deny non-HTTPS access',
             'Effect': 'Deny',
             'Principal': '*',
             'Action': 's3:*',
-            'Resource': 'arn:aws:s3:::$BucketName/*',
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*',
             'Condition': {
                 'Bool': {
                     'aws:SecureTransport': 'false'
