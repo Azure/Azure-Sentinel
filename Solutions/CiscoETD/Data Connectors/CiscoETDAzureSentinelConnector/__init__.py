@@ -65,7 +65,7 @@ class ETD():
         self.apiKey = apiKey
         self.clientId = clientId
         self.clientSecret = clientSecret
-        self.messageFilter = verdicts
+        self.messageFilter = [v.strip() for v in verdicts]
         self.secretToken = ""
         self.region = region
         self.lastExecutedTime = lastExecutedTime
@@ -211,8 +211,8 @@ def setAndValidateEnvConfigurations():
     missingConfigurations = []
     invalidVerdicts = []
     verdicts = ['spam', 'malicious', 'phishing', 'graymail', 'neutral', 'bec', 'scam', 'noVerdict']
-    defaultValues = {"TableName":"CiscoETD", "Region": "us", "Verdicts":"malicious"}
-    requiredConfigurations = ['ApiKey', 'ClientId', 'ClientSecret', 'WorkspaceID', 'SharedKey', 'TableName', 'Region', 'Verdicts' ]
+    defaultValues = {"Region": "us", "Verdicts":"malicious"}
+    requiredConfigurations = ['ApiKey', 'ClientId', 'ClientSecret', 'WorkspaceID', 'SharedKey', 'Region', 'Verdicts' ]
     for config in requiredConfigurations:
         if os.environ.get(config) is None or len(os.environ.get(config)) == 0:
             if config not in defaultValues:
@@ -221,6 +221,7 @@ def setAndValidateEnvConfigurations():
                 logging.error(f"Configuration is not set for {config}, using default value {defaultValues[config]}" )
         if os.environ.get(config) and config == "Verdicts":
             verdictList = os.environ.get(config).split(",")
+            verdictList = [v.strip() for v in verdictList]
             for verdict in verdictList:
                 if verdict not in verdicts:
                     invalidVerdicts.append(verdict)
@@ -236,8 +237,6 @@ def setAndValidateEnvConfigurations():
 def ciscoEtdConnector(last_timestamp_utc, next_timestamp_utc):
     """
     Entry point of the code, responsible for fetching ETD messages and post it to Microsoft Sentinel
-    :param last_timestamp_utc: last execution time of the azure function
-    :param next_timestamp_utc: next execution time of the azure function
     """
     # Check if env variables are configured
     if not setAndValidateEnvConfigurations():
@@ -268,6 +267,7 @@ def main(mytimer: func.TimerRequest) -> None:
     # get last and next execution time
     last_timestamp_utc = mytimer.schedule_status[LAST].replace("+00:00", UTCZONE)
     next_timestamp_utc = mytimer.schedule_status[NEXT].replace("+00:00", UTCZONE)
+
     if mytimer.past_due:
         logging.info('The timer is past due!')
 
