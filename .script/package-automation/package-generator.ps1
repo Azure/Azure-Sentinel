@@ -7,7 +7,7 @@ function ErrorOutput {
     Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
     Write-Output "packageCreationPath=''" >> $env:GITHUB_OUTPUT
     Write-Output "blobName=''" >> $env:GITHUB_OUTPUT
-    #exit 1
+    exit 1
 }
 
 try {
@@ -49,11 +49,11 @@ try {
             $zipFileExist = $item -match ([regex]::Escape(".zip"))
             $pythonFileExist = $item -match ([regex]::Escape(".py"))
             $jsonFile = $item -match ([regex]::Escape(".json"))
-            $capsJsonFile = $item -match ([regex]::Escape(".JSON"))
+
             if ($hostFileExist -or $proxiesFileExist -or $azureDeployFileExist -or $functionFileExist -or $textFileExist -or $zipFileExist -or $pythonFileExist) 
             { }
             else { 
-                if ($jsonFile -or $capsJsonFile) {
+                if ($jsonFile) {
                     $newDataConnectorFilesWithoutExcludedFiles += $item
                 }
             }
@@ -88,8 +88,9 @@ try {
         foreach ($item in $datafolderFiles) {
             $paramterFileExist = $item -match ([regex]::Escape("parameters.json"))
             $paramtersFileExist = $item -match ([regex]::Escape("parameter.json"))
-            $paramtersFileExist = $item -match ([regex]::Escape("system_generated_metadata.json"))
-            if ($paramterFileExist -or $paramtersFileExist) 
+            $systemGeneratedFileExist = $item -match ([regex]::Escape("system_generated_metadata.json"))
+            $testParametersFileExist = $item -match ([regex]::Escape("testParameters.json"))
+            if ($paramterFileExist -or $paramtersFileExist -or $systemGeneratedFileExist -or $testParametersFileExist) 
             { } 
             else { 
                 $newDataFolderFilesWithoutExcludedFiles += $item 
@@ -171,7 +172,7 @@ try {
 
     $solutionFolderPath = 'Solutions/' + $solutionName + "/"
     $filesList = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
-    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
+    $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
     if ($dataFolderFiles.Count -gt 0) {
         $selectFirstdataFolderFile = $dataFolderFiles | Select-Object -first 1
         $filteredString = $selectFirstdataFolderFile.Replace("$solutionFolderPath", '', 'OrdinalIgnoreCase')
@@ -463,6 +464,7 @@ try {
             }
         }
     }
+
     if ($parserFolderResultLength -gt 0) {
         $parserFolderResultArray = $parserFolderResult | ConvertTo-Json -AsArray
         $parsersArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("Parsers")))
@@ -918,9 +920,6 @@ try {
             $property.Name.ToLower() -eq 'parsers' -or 
             $property.Name.ToLower() -eq 'dataconnectors' -or 
             $property.Name.ToLower() -eq 'data connectors') {
-            $gg = $property.Value.GetType()
-            $pp = $property.Name
-            Write-Host "type is $gg , $pp"
             if ($property.Value.GetType().FullName -eq 'System.String') {
                 $customProperties[$property.Name] = $property.Value | ConvertFrom-Json
             }
@@ -936,8 +935,14 @@ try {
     ./Tools/Create-Azure-Sentinel-Solution/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
-    $allFilesInCreatedPackage = Get-ChildItem $packageCreationPath 
-    $allFilesInCreatedPackageCount = $allFilesInCreatedPackage.Count
+    Write-Host "packageCreationPath $packageCreationPath"
+    if (Test-Path -Path "$packageCreationPath") {
+        $allFilesInCreatedPackage = Get-ChildItem "$packageCreationPath" 
+        $allFilesInCreatedPackageCount = $allFilesInCreatedPackage.Count
+    } else {
+        $allFilesInCreatedPackageCount = 0
+    }
+
     $blobName = "" + $solutionName + "_" + $pullRequestNumber + "_" + $packageVersion
     Write-Host "Blob name is $blobName"
     Write-Host "Package Files List are : $allFilesInCreatedPackage"

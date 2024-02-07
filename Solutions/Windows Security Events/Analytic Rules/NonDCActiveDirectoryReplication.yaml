@@ -3,7 +3,7 @@ name: Non Domain Controller Active Directory Replication
 description: |
   'This query detects potential attempts by non-computer accounts (non domain controllers) to retrieve/synchronize an active directory object leveraging directory replication services (DRS).
   A Domain Controller (computer account) would usually be performing these actions in a domain environment. Another detection rule can be created to cover domain controllers accounts doing at rare times.
-  A domain user with privileged permissions to use directory replication services is rare. Ref: https://threathunterplaybook.com/notebooks/windows/06_credential_access/WIN-180815210510.html'
+  A domain user with privileged permissions to use directory replication services is rare.'
 severity: High
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -42,19 +42,30 @@ query: |
   )
   on $left.SubjectLogonId == $right.TargetLogonId
   | project-reorder TimeGenerated, Computer, Account, IpAddress
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, SourceAddress = IpAddress 
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(Account, "\\")[0]), AccountNTDomain = tostring(split(Account, "\\")[1])
+
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix 
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceAddress
-version: 1.0.1
+        columnName: IpAddress
+version: 1.0.3
 kind: Scheduled

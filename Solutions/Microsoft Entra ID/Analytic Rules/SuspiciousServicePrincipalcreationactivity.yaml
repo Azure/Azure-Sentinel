@@ -29,8 +29,8 @@ query: |
     | where Result == "success"
     | extend AppID = tostring(AdditionalDetails[1].value)
     | extend creationTime = ActivityDateTime
-    | extend userPrincipalName_creator = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend ipAddress_creator = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress);
+    | extend CreatorUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend CreatorIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress);
   let account_activity =
     AADServicePrincipalSignInLogs
     | extend Activities = pack("ActivityTime", TimeGenerated ,"IpAddress", IPAddress, "ResourceDisplayName", ResourceDisplayName)
@@ -42,8 +42,8 @@ query: |
     | where Result == "success"
     | extend AppID = tostring(AdditionalDetails[1].value)
     | extend deletionTime = ActivityDateTime
-    | extend userPrincipalName_deleter = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend ipAddress_deleter = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress);
+    | extend DeleterUserPrincipalName = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+    | extend DeleterIPAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress);
   let account_credentials =
     AuditLogs
     | where OperationName has_all ("Update application", "Certificates and secrets management")
@@ -65,23 +65,33 @@ query: |
   | join kind= inner (roles_assigned) on AppID
   | where deletionTime - creationTime between (time(0s)..wait_for_deletion)
   | extend AliveTime = deletionTime - creationTime
-  | project AADTenantId, AppID, creationTime, deletionTime, userPrincipalName_creator, userPrincipalName_deleter, ipAddress_creator, ipAddress_deleter, list_Activities, list_AssignedRoles, AliveTime
+  | project AADTenantId, AppID, creationTime, deletionTime, CreatorUserPrincipalName, DeleterUserPrincipalName, CreatorIPAddress, DeleterIPAddress, list_Activities, list_AssignedRoles, AliveTime
+  | extend CreatorName = tostring(split(CreatorUserPrincipalName, "@")[0]), CreatorUPNSuffix = tostring(split(CreatorUserPrincipalName, "@")[1])
+  | extend DeleterName = tostring(split(DeleterUserPrincipalName, "@")[0]), DeleterSuffix = tostring(split(DeleterUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: userPrincipalName_creator
+        columnName: CreatorUserPrincipalName
+      - identifier: Name
+        columnName: CreatorName
+      - identifier: UPNSuffix
+        columnName: CreatorUPNSuffix
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: userPrincipalName_deleter
+        columnName: DeleterUserPrincipalName
+      - identifier: Name
+        columnName: DeleterName
+      - identifier: UPNSuffix
+        columnName: DeleterSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ipAddress_creator
+        columnName: CreatorIPAddress
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ipAddress_deleter
-version: 1.0.2
+        columnName: DeleterIPAddress
+version: 1.0.3
 kind: Scheduled
