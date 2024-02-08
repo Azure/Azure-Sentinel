@@ -2,8 +2,8 @@
 # ----------------------------------------------------------------------------
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # ----------------------------------------------------------------------------
-# This script is used to troubleshoot the process of sending CEF messages to the
-# workspace.
+# This script is used to troubleshoot the process of sending messages to the
+# workspace via Linux AMA.
 # In this script we check the configuration of the daemon and the AMA linux agent.
 # We send mock data to validate the correctness of the pipeline.
 # If using Python 3 make sure it's set as the default command on the machine, or run the script with the 'python3'
