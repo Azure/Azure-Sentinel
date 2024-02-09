@@ -86,7 +86,7 @@ class PrismaCloudConnector:
             alert_start_ts_ms = max_period
             logging.info('There is no info about last alert timestamp.')
         else:
-            alert_start_ts_ms = int(last_alert_ts_ms)
+            alert_start_ts_ms = int(last_alert_ts_ms) + 1
         logging.info('Starting searching alerts from {}'.format(alert_start_ts_ms))
 
         async for alert in self.get_alerts(start_time=alert_start_ts_ms):
