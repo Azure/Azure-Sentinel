@@ -70,7 +70,7 @@ namespace Kqlvalidations.Tests
             int prNumber = 0;
             int.TryParse(Environment.GetEnvironmentVariable("PRNUM"), out prNumber);
             //assign pr number to debug with a pr
-            //prNumber=8414;
+            prNumber=9943;
             var files = Directory.GetFiles(detectionPaths[0], "*.yaml", SearchOption.AllDirectories)
                 .Concat(Directory.GetFiles(detectionPaths[1], "*.yaml", SearchOption.AllDirectories)
                 .Where(s => s.Contains("Analytic Rules")));
