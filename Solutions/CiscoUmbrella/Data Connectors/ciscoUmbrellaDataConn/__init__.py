@@ -388,6 +388,7 @@ class UmbrellaClient:
                     event['EventType'] = 'proxylogs'
         except Exception as ex:
             logging.warn(ex)
+            logging.info(event)
         yield event
 
         def parse_csv_dns(self, csv_file):
