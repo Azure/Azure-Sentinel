@@ -3,9 +3,6 @@ param($runId, $pullRequestNumber, $instrumentationKey, $baseFolderPath)
 Write-Host "Inside of Validate Classic App Insights!"
 
 try {
-  $baseFolderPath = $baseFolderPath + "/"
-  $baseFolderPath = $baseFolderPath.replace("//", "/")
-
   function ReadFileContent($filePath) {
     try {
         if (!(Test-Path -Path "$filePath")) {
@@ -49,8 +46,8 @@ try {
   }
 
   # identify if changes are in dataConnectors folder which is at root of the repo
-  $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
-  Write-Host "List of files in PR: $diff"
+  $diff = git diff --diff-filter=A --name-only --first-parent HEAD^ HEAD
+  Write-Host "List of files changes in PR for Standalone DataConnectors: $diff"
   $standaloneDataConnectors = $diff | Where-Object { $_ -like 'DataConnectors/*' -and $_ -like '*azuredeploy*' }
   $hasStandaloneDataConnectors = ($null -ne $standaloneDataConnectors -and $standaloneDataConnectors.Count -gt 0) ? $true : $false
 
@@ -68,29 +65,20 @@ try {
     }
   }
 
-  # when changes are in Solution folder
-  . $PSScriptRoot/getSolutionName.ps1 $runId $pullRequestNumber $instrumentationKey $false
-  $hasSolutionName = $solutionName -eq '' ? $false : $true
-  if ($hasSolutionName) {
-    $solutionFolderPath = 'Solutions/' + $solutionName + "/"
-    $filesinSolutions = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
-    Write-Host "Solution files $filesinSolutions"
-    if ($null -ne $filesinSolutions -and $filesinSolutions.Count -gt 0) {
-      $filterSolutionFiles = $filesinSolutions | Where-Object { $_ -like '*azureDeploy*' }
+  # when changes are in solutions folder in azuredeploy file
+  $solutionFilesdiff = git diff --diff-filter=A --name-only --first-parent HEAD^ HEAD;
+  Write-Host "List of files changed in PR for Solution: $diff"
+  $solutionsAzureDeployFilesPath = $solutionFilesdiff | Where-Object { $_ -like 'Solutions/*' -and $_ -like '*azuredeploy*' }
 
-      if ($null -ne $filterSolutionFiles -and $filterSolutionFiles.Count -gt 0) {
-        $filterSolutionFilesCount = $filterSolutionFiles.Count
-        Write-Host "Number of azuredeploy files found in Solution $filterSolutionFilesCount"
-        
-        $appInsightResourceWithoutWorkspaceResourceList = @()
-        $appInsightResourceWithoutWorkspaceResourceList = GetFilesWithoutWorkspaceResourceIds -filesList $filterSolutionFiles
+  if ($solutionsAzureDeployFilesPath.Count -gt 0) {
+    # has some files of azuredeploy which are newly added in PR
+    $appInsightResourceWithoutWorkspaceResourceList = @()
+    $appInsightResourceWithoutWorkspaceResourceList = GetFilesWithoutWorkspaceResourceIds -filesList $solutionsAzureDeployFilesPath
 
-        if ($appInsightResourceWithoutWorkspaceResourceList.Count -gt 0) {
-          Write-Host "::error:: Please add property 'WorkspaceResourceId' for 'Microsoft.Insights/components' type in below given file(s)!"
-          foreach ($filePath in $appInsightResourceWithoutWorkspaceResourceList) {
-            Write-Host "::error:: --> $filePath"
-          }
-        }
+    if ($appInsightResourceWithoutWorkspaceResourceList.Count -gt 0) {
+      Write-Host "::error:: Please add property 'WorkspaceResourceId' for 'Microsoft.Insights/components' type in below given file(s)!"
+      foreach ($filePath in $appInsightResourceWithoutWorkspaceResourceList) {
+        Write-Host "::error:: --> $filePath"
       }
     }
   }
