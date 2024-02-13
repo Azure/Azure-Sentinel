@@ -47,7 +47,7 @@ try {
 
   # identify if changes are in dataConnectors folder which is at root of the repo
   $diff = git diff --diff-filter=A --name-only --first-parent HEAD^ HEAD
-  Write-Host "List of files changes in PR for Standalone DataConnectors: $diff"
+  Write-Host "List of new files added in PR for Standalone DataConnectors: $diff"
   $standaloneDataConnectors = $diff | Where-Object { $_ -like 'DataConnectors/*' -and $_ -like '*azuredeploy*' }
   $hasStandaloneDataConnectors = ($null -ne $standaloneDataConnectors -and $standaloneDataConnectors.Count -gt 0) ? $true : $false
 
@@ -63,11 +63,13 @@ try {
         Write-Host "::error:: --> $filePath"
       }
     }
+  } else {
+    Write-Host "Skipping as there are no new azuredeploy files for validation in standalone data connectors!"
   }
 
   # when changes are in solutions folder in azuredeploy file
   $solutionFilesdiff = git diff --diff-filter=A --name-only --first-parent HEAD^ HEAD;
-  Write-Host "List of files changed in PR for Solution: $diff"
+  Write-Host "List of new files added in PR for Solution: $diff"
   $solutionsAzureDeployFilesPath = $solutionFilesdiff | Where-Object { $_ -like 'Solutions/*' -and $_ -like '*azuredeploy*' }
 
   if ($solutionsAzureDeployFilesPath.Count -gt 0) {
@@ -81,6 +83,8 @@ try {
         Write-Host "::error:: --> $filePath"
       }
     }
+  } else {
+    Write-Host "Skipping as there are no new azuredeploy files for validation in Solutions!"
   }
 
   if (($null -ne $failedStandaloneDataConnectorsList -and 
