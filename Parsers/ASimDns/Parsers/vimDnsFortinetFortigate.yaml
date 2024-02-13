@@ -1,0 +1,273 @@
+Parser:
+  Title: DNS activity ASIM parser for Fortinet FortiGate
+  Version: '0.1.0'
+  LastUpdated: Nov 09 2023
+Product:
+  Name: Fortinet FortiGate
+Normalization:
+  Schema: Dns
+  Version: '0.1.7'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Fortinet FortiGate DNS log message reference
+  Link: https://docs.fortinet.com/document/fortigate/7.4.1/fortios-log-message-reference/229/dns
+Description: |
+  This ASIM parser supports filtering and normalizing Fortinet FortiGate logs ingested in 'CommonSecurityLogs' table produced by the Microsoft Sentinel Fortinet connector to the ASIM DNS normalized schema.
+ParserName: vimDnsFortinetFortiGate
+EquivalentBuiltInParser: _Im_Dns_FortinetFortiGate
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Parser = (
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      srcipaddr: string='*', 
+      domain_has_any: dynamic=dynamic([]),
+      responsecodename: string='*',
+      response_has_ipv4: string='*',
+      response_has_any_prefix: dynamic=dynamic([]),
+      eventtype: string='Query',
+      disabled: bool=false
+      ) {
+      let DeviceEventClassIDLookup = datatable(EventOriginalSubType:string,EventSubType:string, EventSeverity:string, DvcAction:string, ThreatCategory:string, ThreatField:string)[
+          "54000", "request", "Informational", "", "", "",
+          "54200", "response", "Low", "", "", "",
+          "54400", "response", "Low", "Blocked", "", "",
+          "54401", "response", "Informational", "", "", "",
+          "54600", "response", "Low", "Blocked", "Botnet", "DstIpAddr",
+          "54601", "response", "Low", "Blocked", "Botnet", "Domain",
+          "54800", "response", "Low", "", "", "",
+          "54801", "response", "Low", "", "", "",
+          "54802", "response", "Informational", "", "", "",
+          "54803", "response", "Low", "Blocked", "", "",
+          "54804", "response", "Informational", "", "", "",
+          "54805", "response", "Informational", "", "", "",
+      ];
+      let EventOriginalResultDetailsLookup = datatable(EventOriginalResultDetails:string, EventResultDetails:string, EventResult:string)[
+          "", "NOERROR", "Success",
+          "0", "NOERROR", "Success",
+          "1", "FORMERR", "Failure",
+          "2", "SERVFAIL", "Failure",
+          "3", "NXDOMAIN", "Failure",
+          "4", "NOTIMP", "Failure",
+          "5", "REFUSED", "Failure",
+          "6", "YXDOMAIN", "Failure",
+          "7", "YXRRSET", "Failure",
+          "8", "NXRRSET", "Failure",
+          "9", "NOTAUTH", "Failure",
+          "10", "NOTZONE", "Failure",
+          "11", "DSOTYPENI", "Failure",
+          "16", "BADVERS", "Failure",
+          "16", "BADSIG", "Failure",
+          "17", "BADKEY", "Failure",
+          "18", "BADTIME", "Failure",
+          "19", "BADMODE", "Failure",
+          "20", "BADNAME", "Failure",
+          "21", "BADALG", "Failure",
+          "22", "BADTRUNC", "Failure",
+          "23", "BADCOOKIE", "Failure"
+      ];
+      let DnsResponseCodeNameLookup = toscalar(
+          EventOriginalResultDetailsLookup
+          | where not(disabled)
+          | where (responsecodename == '*' or EventResultDetails =~ responsecodename)
+          | project EventOriginalResultDetails
+      );
+      let DnsQueryTypeLookup = datatable(DnsQueryType:int, DnsQueryTypeName:string)[
+          0, "Reserved",
+          1, "A",
+          2, "NS",
+          3, "MD",
+          4, "MF",
+          5, "CNAME",
+          6, "SOA",
+          7, "MB",
+          8, "MG",
+          9, "MR",
+          10, "NULL",
+          11, "WKS",
+          12, "PTR",
+          13, "HINFO",
+          14, "MINFO",
+          15, "MX",
+          16, "TXT",
+          17, "RP",
+          18, "AFSDB",
+          19, "X25",
+          20, "ISDN",
+          21, "RT",
+          22, "NSAP",
+          23, "NSAP-PTR",
+          24, "SIG",
+          25, "KEY",
+          26, "PX",
+          27, "GPOS",
+          28, "AAAA",
+          29, "LOC",
+          30, "NXT",
+          31, "EID",
+          32, "NIMLOC",
+          33, "SRV",
+          34, "ATMA",
+          35, "NAPTR",
+          36, "KX",
+          37, "CERT",
+          38, "A6",
+          39, "DNAME",
+          40, "SINK",
+          41, "OPT",
+          42, "APL",
+          43, "DS",
+          44, "SSHFP",
+          45, "IPSECKEY",
+          46, "RRSIG",
+          47, "NSEC",
+          48, "DNSKEY",
+          49, "DHCID",
+          50, "NSEC3",
+          51, "NSEC3PARAM",
+          52, "TLSA",
+          53, "SMIMEA",
+          55, "HIP",
+          56, "NINFO",
+          57, "RKEY",
+          58, "TALINK",
+          59, "CDS",
+          60, "CDNSKEY",
+          61, "OPENPGPKEY",
+          62, "CSYNC",
+          63, "ZONEMD",
+          64, "SVCB",
+          65, "HTTPS",
+          99, "SPF",
+          100, "UINFO",
+          101, "UID",
+          102, "GID",
+          103, "UNSPEC",
+          104, "NID",
+          105, "L32",
+          106, "L64",
+          107, "LP",
+          108, "EUI48",
+          109, "EUI64",
+          249, "TKEY",
+          250, "TSIG",
+          251, "IXFR",
+          252, "AXFR",
+          253, "MAILB",
+          254, "MAILA",
+          255, "*",
+          256, "URI",
+          257, "CAA",
+          258, "AVC",
+          259, "DOA",
+          32768, "TA",
+          32769, "DLV"
+      ];
+      CommonSecurityLog
+      | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime) and
+          (isnull(endtime) or TimeGenerated <= endtime)
+      | where DeviceVendor    == "Fortinet" and 
+          DeviceProduct       == "Fortigate"
+      | where DeviceEventClassID in(54000,54200,54400,54401,54600,54601,54800,54801,54802,54803,54804,54805)
+      | where (srcipaddr == "*" or SourceIP == srcipaddr) and
+          (array_length(domain_has_any) == 0 or AdditionalExtensions has_any (domain_has_any)) and
+          (responsecodename == '*' or AdditionalExtensions has DnsResponseCodeNameLookup) and
+          (response_has_ipv4 == '*' or has_ipv4(AdditionalExtensions, response_has_ipv4)) and 
+          (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(AdditionalExtensions, response_has_any_prefix)) and
+          (eventtype == '*' or eventtype == "Query")
+      | project TimeGenerated, EventOriginalSubType = DeviceEventClassID, AdditionalExtensions, EventUid = _ItemId, EventOriginalSeverity = LogSeverity, EventProductVersion = DeviceVersion ,Computer, Type, SrcIpAddr = SourceIP, SrcPortNumber = SourcePort, DstIpAddr = DestinationIP, DstPortNumber = DestinationPort, EventMessage = Message, NetworkProtocolNumber = Protocol, DvcId = DeviceExternalID, DnsSessionId = ExtID
+      | lookup DeviceEventClassIDLookup on EventOriginalSubType
+      | parse-kv  AdditionalExtensions as (FTNTFGTlogid:string, FTNTFGTsubtype:string, FTNTFGTsrccountry:string, FTNTFGTdstcountry:string,FTNTFGTsrcintfrole:string, FTNTFGTrcode:string, FTNTFGTqname:string, FTNTFGTqtype:string, FTNTFGTxid:string, FTNTFGTqtypeval:int, FTNTFGTqclass:string, FTNTFGTcatdesc:string, FTNTFGTipaddr:string, FTNTFGTunauthuser:string, FTNTFGTuser:string, FTNTFGTbotnetip:string) with (pair_delimiter=";", kv_delimiter="=")
+      | where (array_length(domain_has_any) == 0 or FTNTFGTqname has_any (domain_has_any)) and
+          (responsecodename == '*' or FTNTFGTrcode == DnsResponseCodeNameLookup) and
+          (response_has_ipv4 == '*' or has_ipv4(FTNTFGTipaddr, response_has_ipv4)) and
+          (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(FTNTFGTipaddr, response_has_any_prefix))
+      | project-rename 
+          EventOriginalResultDetails  = FTNTFGTrcode,
+          EventOriginalUid            = FTNTFGTlogid,
+          DvcZone                     = FTNTFGTsrcintfrole,
+          EventOriginalType           = FTNTFGTsubtype,
+          SrcGeoCountry               = FTNTFGTsrccountry,
+          DstGeoCountry               = FTNTFGTdstcountry,
+          DnsQuery                    = FTNTFGTqname,
+          DnsQueryTypeName            = FTNTFGTqtype,
+          TransactionIdHex            = FTNTFGTxid,
+          DnsQueryClass               = FTNTFGTqtypeval,
+          DnsQueryClassName           = FTNTFGTqclass,
+          UrlCategory                 = FTNTFGTcatdesc,
+          DnsResponseName             = FTNTFGTipaddr,
+          ThreatIpAddr                = FTNTFGTbotnetip
+      | extend 
+          DnsQueryTypeName = case(
+              DnsQueryTypeName == "Unknown","",
+              DnsQueryTypeName
+          )
+      | lookup EventOriginalResultDetailsLookup on EventOriginalResultDetails
+      | lookup DnsQueryTypeLookup on DnsQueryTypeName
+      | invoke _ASIM_ResolveDvcFQDN ("Computer")
+      | invoke _ASIM_ResolveNetworkProtocol("NetworkProtocolNumber")
+      | extend 
+          SrcUsername         = coalesce(FTNTFGTuser, FTNTFGTunauthuser),
+          IpAddr              = SrcIpAddr,
+          Src                 = SrcIpAddr,
+          Dst                 = DstIpAddr,
+          Dvc                 = DvcHostname,
+          DnsResponseCodeName = EventResultDetails,
+          EventType           = "Query",
+          EventSchemaVersion  = "0.1.7",
+          EventSchema         = "Dns",
+          EventCount          = int(1),
+          EventEndTime        = TimeGenerated,
+          EventStartTime      = TimeGenerated,
+          EventVendor         = "Fortinet",
+          EventProduct        = "FortiGate",
+          Domain              = DnsQuery,
+          DomainCategory      = UrlCategory
+      | extend 
+          User            = SrcUsername,
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          SrcUserType     = _ASIM_GetUserType(SrcUsername, "")
+      | project-away FTNTFGTuser, FTNTFGTunauthuser, AdditionalExtensions, Computer, NetworkProtocolNumber
+  };
+  Parser(
+      starttime               = starttime,
+      endtime                 = endtime,
+      srcipaddr               = srcipaddr,
+      domain_has_any          = domain_has_any,
+      responsecodename        = responsecodename, 
+      response_has_ipv4       = response_has_ipv4, 
+      response_has_any_prefix = response_has_any_prefix, 
+      eventtype               = eventtype, 
+      disabled                = disabled
+  )

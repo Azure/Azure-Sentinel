@@ -86,6 +86,10 @@ def main(myTimer: func.TimerRequest, oatTaskMsg: func.Out[List[str]]) -> None:
             clp_id = utils.get_clp_id(token)
             health_check_data['clpId'] = clp_id
 
+            if utils.check_token_is_expired(token):
+                logger.error(f"token is expired, clp: {clp_id}")
+                continue
+
             start_time, end_time = generate_time(clp_id, token)
             if start_time is None or end_time is None:
                 logger.warning(
