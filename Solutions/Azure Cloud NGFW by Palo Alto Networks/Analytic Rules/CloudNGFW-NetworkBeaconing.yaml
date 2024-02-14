@@ -32,17 +32,18 @@ query: |
   fluentbit_CL
   | where ident_s == "TRAFFIC"
   | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
-  | where ipv4_is_private(parse_json(Message).dst_ip) == false
-  | project TimeGenerated, FirewallName_s, parse_json(Message).src_ip, parse_json(Message).sport, parse_json(Message).dst_ip, parse_json(Message).dport
-  | sort by parse_json(Message).src_ip asc, TimeGenerated asc, parse_json(Message).dst_ip asc, parse_json(Message).dport asc
+  | where ipv4_is_private(tostring(parse_json(Message).dst_ip)) == false
+  | project TimeGenerated, FirewallName_s, parse_json(Message).src_ip, parse_json(Message).sport, parse_json(Message).dst_ip, parse_json(Message).dport,Message
+  | sort by tostring(parse_json(Message).src_ip) asc, TimeGenerated asc, tostring(parse_json(Message).dst_ip) asc, tostring(parse_json(Message).dport) asc
+  | extend src_ip=tostring(parse_json(Message).src_ip)
   | serialize
-  | extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(parse_json(Message).src_ip, 1)
+  | extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(src_ip, 1)
   | extend TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)
   | where parse_json(Message).src_ip == nextSourceIP
   | where TimeDeltainSeconds > TimeDeltaThreshold
-  | summarize count() by TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, parse_json(Message).src_ip, parse_json(Message).dst_ip, parse_json(Message).dport
+  | summarize count() by TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message
   | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)
-  by bin(TimeGenerated, 1h), FirewallName_s, parse_json(Message).src_ip, parse_json(Message).dst_ip, parse_json(Message).dport
+  by bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message
   | where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold
   | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
   | where BeaconPercent > PercentBeaconThreshold
