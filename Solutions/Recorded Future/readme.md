@@ -16,7 +16,7 @@ Recorded Future also provide standalone Playbooks in this repository for EntraID
 - [Recorded Future Identity](../Recorded%20Future%20Identity/Playbooks/readme.md)
 
 # Best practices / quick start
-[Enrichment quick start guide](Playbooks/Enrichment/bestpractices.md).
+[Enrichment quick start guide](Playbooks/Enrichment/quickstart.md).
 
 # About Recorded Future
 
