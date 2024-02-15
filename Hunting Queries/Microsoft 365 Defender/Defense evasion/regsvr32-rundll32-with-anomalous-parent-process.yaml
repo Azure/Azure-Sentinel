@@ -1,0 +1,30 @@
+id: bef2bd1b-885a-40f4-b48f-6f5564cd81f3
+name: regsvr32-rundll32-with-anomalous-parent-process
+description: |
+  This query looks for rundll32.exe or regsvr32.exe being spawned by abnormal processes: wscript.exe, powershell.exe, cmd.exe, pwsh.exe, cscript.exe.
+  Blog:
+  https://threathunt.blog/running-live-malware-for-threat-hunting-purposes/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceNetworkEvents
+tactics:
+- Defense evasion
+relevantTechniques:
+  - T1218.010
+  - T1218.011
+query: |
+  DeviceProcessEvents
+  | where Timestamp > ago(30d)
+  | where FileName has_any ("rundll32.exe","regsvr32.exe")
+  | where InitiatingProcessFileName has_any ("wscript.exe","powershell.exe","cmd.exe","pwsh.exe","cscript.exe")
+  | project Timestamp,DeviceName, InvestigatedProcessName=FileName, InvestigatedProcessCommandLine = ProcessCommandLine,InvestigatedProcessStartTime = ProcessCreationTime, InvestigatedProcessId = ProcessId, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessParentFileName
+  | join (
+  DeviceNetworkEvents
+  | where Timestamp > ago(30d)
+  | where InitiatingProcessFileName has_any ("rundll32.exe","regsvr32.exe")
+  | where RemoteIPType == "Public"
+  | project DeviceName, InvestigatedProcessName=InitiatingProcessFileName, InvestigatedProcessCommandLine = InitiatingProcessCommandLine,InvestigatedProcessStartTime = InitiatingProcessCreationTime, InvestigatedProcessId = InitiatingProcessId, RemoteIP, RemoteUrl
+  ) on DeviceName, InvestigatedProcessCommandLine, InvestigatedProcessId, InvestigatedProcessName, InvestigatedProcessStartTime
+  | project-away DeviceName1, InvestigatedProcessCommandLine1, InvestigatedProcessId1, InvestigatedProcessName1, InvestigatedProcessStartTime1
