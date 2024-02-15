@@ -547,7 +547,7 @@
                 "eTag": "*",
                 "displayName": "Palo Alto - potential beaconing detected",
                 "category": "Hunting Queries",
-                "query": "let starttime = 2d;\nlet endtime = 1d;\nlet TimeDeltaThreshold = 25;\nlet TotalEventsThreshold = 30;\nlet MostFrequentTimeDeltaThreshold = 25;\nlet PercentBeaconThreshold = 80;\nfluentbit_CL\n| where isnotempty(FirewallName_s) and ident_s == \"TRAFFIC\"\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| extend DestinationIP = extractjson(\"$.dst_ip\", Message)\n| where ipv4_is_private(DestinationIP) == false\n| project TimeGenerated, FirewallName_s, SourceIP=extractjson(\"$.src_ip\", Message), SourcePort=extractjson(\"$.sport\", Message), DestinationIP, DestinationPort=extractjson(\"$.dport\", Message), ReceivedBytes=extractjson(\"$.bytes_recv\", Message), SentBytes=extractjson(\"$.bytes_sent\", Message)\n| sort by SourceIP asc, TimeGenerated asc, DestinationIP asc, DestinationPort asc\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(SourceIP, 1)\n| extend TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)\n| where SourceIP == nextSourceIP\n// Whitelisting criteria/ threshold criteria\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| summarize count(), sum(ReceivedBytes), sum(SentBytes)\nby TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, SourceIP, DestinationIP, DestinationPort\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SentBytes), TotalReceivedBytes = sum(sum_ReceivedBytes)\nby bin(TimeGenerated, 1h), FirewallName_s, SourceIP, DestinationIP, DestinationPort\n| where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP, HostCustomEntity = FirewallName_s\n",
+                "query": "let starttime = 2d;\nlet endtime = 1d;\nlet TimeDeltaThreshold = 25;\nlet TotalEventsThreshold = 30;\nlet MostFrequentTimeDeltaThreshold = 25;\nlet PercentBeaconThreshold = 80;\nfluentbit_CL\n| where isnotempty(FirewallName_s) and ident_s == \"TRAFFIC\"\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| extend DestinationIP = extractjson(\"$.dst_ip\", Message)\n| where ipv4_is_private(DestinationIP) == false\n| project TimeGenerated, FirewallName_s, SourceIP=extractjson(\"$.src_ip\", Message), SourcePort=extractjson(\"$.sport\", Message), DestinationIP, DestinationPort=extractjson(\"$.dport\", Message), ReceivedBytes=tolong(extractjson(\"$.bytes_recv\", Message)), SentBytes=tolong(extractjson(\"$.bytes_sent\", Message))\n| sort by SourceIP asc, TimeGenerated asc, DestinationIP asc, DestinationPort asc\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(SourceIP, 1)\n| extend TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)\n| where SourceIP == nextSourceIP\n// Whitelisting criteria/ threshold criteria\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| summarize count(), sum(ReceivedBytes), sum(SentBytes)\nby TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, SourceIP, DestinationIP, DestinationPort\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_), TotalSentBytes = sum(sum_SentBytes), TotalReceivedBytes = sum(sum_ReceivedBytes)\nby bin(TimeGenerated, 1h), FirewallName_s, SourceIP, DestinationIP, DestinationPort\n| where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIP, HostCustomEntity = FirewallName_s\n",
                 "version": 2,
                 "tags": [
                   {
@@ -809,7 +809,7 @@
                 "description": "Identifies Palo Alto Threat signatures from unusual IP addresses which are not historically seen. \nThis detection is also leveraged and required for MDE and PAN Fusion scenario\nhttps://docs.microsoft.com/Azure/sentinel/fusion-scenario-reference#network-request-to-tor-anonymization-service-followed-by-anomalous-traffic-flagged-by-palo-alto-networks-firewall",
                 "displayName": "CloudNGFW By Palo Alto Networks - Threat signatures from Unusual IP addresses",
                 "enabled": false,
-                "query": "let starttime = 7d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet HistThreshold = 25; \nlet CurrThreshold = 10; \nlet HistoricalThreats = fluentbit_CL\n| where ident_s == \"THREAT\"\n| where isnotempty(parse_json(Message).src_ip)\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where parse_json(Message).threat_content_type in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')\n| summarize TotalEvents = count(), ThreatTypes = make_set(parse_json(Message).threat_content_type), DestinationIpList = make_set(parse_json(Message).dst), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by parse_json(Message).src_ip, parse_json(Message).action, FirewallName_s;\nlet CurrentHourThreats = fluentbit_CL\n| where ident_s == \"THREAT\"\n| where isnotempty(parse_json(Message).src_ip)\n| where TimeGenerated > ago(timeframe)\n| where parse_json(Message).threat_content_type in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')\n| summarize TotalEvents = count(), ThreatTypes = make_set(parse_json(Message).threat_content_type), DestinationIpList = make_set(parse_json(Message).dst), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by parse_json(Message).src_ip, parse_json(Message).action, FirewallName_s;\nCurrentHourThreats \n| where TotalEvents < CurrThreshold\n| join kind = leftanti (HistoricalThreats \n| where TotalEvents > HistThreshold) on parse_json(Message).src_ip\n",
+                "query": "let starttime = 7d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet HistThreshold = 25; \nlet CurrThreshold = 10; \nlet HistoricalThreats = fluentbit_CL\n| where ident_s == \"THREAT\"\n| where isnotempty(parse_json(Message).src_ip)\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where parse_json(Message).threat_content_type in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')\n| extend src_ip = tostring(parse_json(Message).src_ip)\n| summarize TotalEvents = count(), ThreatTypes = make_set(parse_json(Message).threat_content_type), DestinationIpList = make_set(parse_json(Message).dst), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by src_ip, parse_json(Message).action, FirewallName_s;\nlet CurrentHourThreats = fluentbit_CL\n| where ident_s == \"THREAT\"\n| where isnotempty(parse_json(Message).src_ip)\n| where TimeGenerated > ago(timeframe)\n| where parse_json(Message).threat_content_type in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')\n| extend src_ip = tostring(parse_json(Message).src_ip)\n| summarize TotalEvents = count(), ThreatTypes = make_set(parse_json(Message).threat_content_type), DestinationIpList = make_set(parse_json(Message).dst), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by src_ip, parse_json(Message).action, FirewallName_s;\nCurrentHourThreats \n| where TotalEvents < CurrThreshold\n| join kind = leftanti (HistoricalThreats \n| where TotalEvents > HistThreshold) on src_ip\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "P7D",
                 "severity": "Medium",
@@ -841,13 +841,13 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "src_ip"
+                        "columnName": "src_ip",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -920,7 +920,7 @@
                 "description": "Identifies beaconing patterns from Palo Alto Network traffic logs based on recurrent timedelta patterns.\nThe query leverages various KQL functions to calculate time deltas and then compares it with total events observed in a day to find percentage of beaconing.\nThis outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.\nReference Blog:\nhttp://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/\nhttps://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/detect-network-beaconing-via-intra-request-time-delta-patterns/ba-p/779586",
                 "displayName": "Palo Alto - potential beaconing detected",
                 "enabled": false,
-                "query": "let starttime = 2d;\nlet endtime = 1d;\nlet TimeDeltaThreshold = 25;\nlet TotalEventsThreshold = 30;\nlet MostFrequentTimeDeltaThreshold = 25;\nlet PercentBeaconThreshold = 80;\nfluentbit_CL\n| where ident_s == \"TRAFFIC\"\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where ipv4_is_private(parse_json(Message).dst_ip) == false\n| project TimeGenerated, FirewallName_s, parse_json(Message).src_ip, parse_json(Message).sport, parse_json(Message).dst_ip, parse_json(Message).dport\n| sort by parse_json(Message).src_ip asc, TimeGenerated asc, parse_json(Message).dst_ip asc, parse_json(Message).dport asc\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(parse_json(Message).src_ip, 1)\n| extend TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)\n| where parse_json(Message).src_ip == nextSourceIP\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| summarize count() by TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, parse_json(Message).src_ip, parse_json(Message).dst_ip, parse_json(Message).dport\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)\nby bin(TimeGenerated, 1h), FirewallName_s, parse_json(Message).src_ip, parse_json(Message).dst_ip, parse_json(Message).dport\n| where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| extend timestamp = TimeGenerated, IPCustomEntity = parse_json(Message).dst_ip, HostCustomEntity = FirewallName_s\n",
+                "query": "let starttime = 2d;\nlet endtime = 1d;\nlet TimeDeltaThreshold = 25;\nlet TotalEventsThreshold = 30;\nlet MostFrequentTimeDeltaThreshold = 25;\nlet PercentBeaconThreshold = 80;\nfluentbit_CL\n| where ident_s == \"TRAFFIC\"\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where ipv4_is_private(tostring(parse_json(Message).dst_ip)) == false\n| project TimeGenerated, FirewallName_s, parse_json(Message).src_ip, parse_json(Message).sport, parse_json(Message).dst_ip, parse_json(Message).dport,Message\n| sort by tostring(parse_json(Message).src_ip) asc, TimeGenerated asc, tostring(parse_json(Message).dst_ip) asc, tostring(parse_json(Message).dport) asc\n| extend src_ip=tostring(parse_json(Message).src_ip)\n| serialize\n| extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(src_ip, 1)\n| extend TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)\n| where parse_json(Message).src_ip == nextSourceIP\n| where TimeDeltainSeconds > TimeDeltaThreshold\n| summarize count() by TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message\n| summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)\nby bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message\n| where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold\n| extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100\n| where BeaconPercent > PercentBeaconThreshold\n| extend timestamp = TimeGenerated, IPCustomEntity = parse_json(Message).dst_ip, HostCustomEntity = FirewallName_s\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P2D",
                 "severity": "Low",
@@ -946,22 +946,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "identifier": "FullName",
-                        "columnName": "HostCustomEntity"
+                        "columnName": "HostCustomEntity",
+                        "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "IPCustomEntity"
+                        "columnName": "IPCustomEntity",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
@@ -1034,7 +1034,7 @@
                 "description": "Identifies a list of internal Source IPs (10.x.x.x Hosts) that have triggered 10 or more non-graceful tcp server resets from one or more Destination IPs which\nresults in an \"app = incomplete\" designation. The server resets coupled with an \"Incomplete\" app designation can be an indication\nof internal to external port scanning or probing attack.\nReferences: https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClUvCAK and\nhttps://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA10g000000ClTaCAK",
                 "displayName": "CloudNGFW By Palo Alto Networks - possible internal to external port scanning",
                 "enabled": false,
-                "query": "fluentbit_CL\n| where ident_s == \"TRAFFIC\"\n| extend DestinationPort = tostring(parse_json(Message).dport)\n| where isnotempty(DestinationPort) and parse_json(Message).action !in (\"reset-both\", \"deny\")\n| where DestinationPort !in (\"443\", \"53\", \"389\", \"80\", \"0\", \"880\", \"8888\", \"8080\")\n| where parse_json(Message).app == \"incomplete\"\n| where toint(DestinationPort) !between (49512 .. 65535)\n| where isnotempty(FirewallName_s)\n| where parse_json(Message).dst_ip !startswith \"10.\"\n| extend Reason = coalesce(\n                              column_ifexists(\"Reason\", \"\"),\n                              parse_json(Message).session_end_reason,\n                              \"\"\n                          )\n| where Reason !has \"aged-out\"\n| where Reason !has \"tcp-fin\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by FirewallName_s, parse_json(Message).src_ip, parse_json(Message).app, Reason, DestinationPort, parse_json(Message).proto, ident_s, parse_json(Message).action, parse_json(Message).dst_ip\n| where count_ >= 10\n| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), makeset(parse_json(Message).dst_ip), totalcount = sum(count_) by FirewallName_s, parse_json(Message).src_ip, parse_json(Message).app, Reason, DestinationPort, parse_json(Message).proto, ident_s, parse_json(Message).action\n| extend timestamp = StartTimeUtc, IPCustomEntity = parse_json(Message).src_ip, HostCustomEntity = FirewallName_s\n",
+                "query": "fluentbit_CL\n| where ident_s == \"TRAFFIC\"\n| extend DestinationPort = tostring(parse_json(Message).dport)\n| where isnotempty(DestinationPort) and parse_json(Message).action !in (\"reset-both\", \"deny\")\n| where DestinationPort !in (\"443\", \"53\", \"389\", \"80\", \"0\", \"880\", \"8888\", \"8080\")\n| where parse_json(Message).app == \"incomplete\"\n| where toint(DestinationPort) !between (49512 .. 65535)\n| where isnotempty(FirewallName_s)\n| where parse_json(Message).dst_ip !startswith \"10.\"\n| extend Reason = coalesce(\n                              column_ifexists(\"Reason\", \"\"),\n                              parse_json(Message).session_end_reason,\n                              \"\"\n                          )\n| where Reason !has \"aged-out\"\n| where Reason !has \"tcp-fin\"\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), count() by FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).app), Reason, DestinationPort, tostring(parse_json(Message).proto), ident_s, tostring(parse_json(Message).action), tostring(parse_json(Message).dst_ip),Message\n| where count_ >= 10\n| summarize StartTimeUtc = min(StartTimeUtc), EndTimeUtc = max(EndTimeUtc), makeset(parse_json(Message).dst_ip), totalcount = sum(count_) by FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).app), Reason, DestinationPort, tostring(parse_json(Message).proto), ident_s, tostring(parse_json(Message).action),Message\n| extend timestamp = StartTimeUtc, IPCustomEntity = parse_json(Message).src_ip, HostCustomEntity = FirewallName_s\n",
                 "queryFrequency": "PT1H",
                 "queryPeriod": "PT1H",
                 "severity": "Low",
@@ -1059,22 +1059,22 @@
                 ],
                 "entityMappings": [
                   {
-                    "entityType": "Host",
                     "fieldMappings": [
                       {
-                        "identifier": "FullName",
-                        "columnName": "HostCustomEntity"
+                        "columnName": "HostCustomEntity",
+                        "identifier": "FullName"
                       }
-                    ]
+                    ],
+                    "entityType": "Host"
                   },
                   {
-                    "entityType": "IP",
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "IPCustomEntity"
+                        "columnName": "IPCustomEntity",
+                        "identifier": "Address"
                       }
-                    ]
+                    ],
+                    "entityType": "IP"
                   }
                 ]
               }
