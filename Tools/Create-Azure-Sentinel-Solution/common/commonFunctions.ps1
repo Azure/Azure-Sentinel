@@ -2547,11 +2547,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         else
                         {
-                            $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue "[variables('TemplateEmptyArray')]";
-                            if (!$global:baseMainTemplate.variables.TemplateEmptyArray) 
-                            {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
-                            }
+                            $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue @();
                         }
 
                         if (!$yaml.severity) {
