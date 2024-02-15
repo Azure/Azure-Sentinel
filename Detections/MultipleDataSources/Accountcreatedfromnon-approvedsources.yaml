@@ -36,37 +36,41 @@ query: |
     AuditLogs
     | where TimeGenerated > ago(1d)
     | where OperationName =~ "Add User"
-    | extend AddingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
-    | extend AddingSPN = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalName)
-    | extend AddedBy = iif(isnotempty(AddingUser), AddingUser, AddingSPN)
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
     | extend UserAdded = tostring(TargetResources[0].userPrincipalName)
-    | extend AddedByUserId = tostring(parse_json(tostring(InitiatedBy.user)).id)
-    | extend AddedBySPNId = tostring(parse_json(tostring(InitiatedBy.app)).servicePrincipalId)
-    | extend AddedByAzureId = iif(isnotempty(AddedByUserId), AddedByUserId, AddedBySPNId)
     | extend UserAddedDomain = case(
     UserAdded has "#EXT#", tostring(split(tostring(split(UserAdded, "#EXT#")[0]), "_")[1]),
-    UserAdded !has "#EXT#" and AddedBy has "@", tostring(split(UserAdded, "@")[1]),
+    UserAdded !has "#EXT#", tostring(split(UserAdded, "@")[1]),
     UserAdded)
     | where UserAddedDomain !in (core_domains) and UserAddedDomain !in (alternative_domains)
-    | project-away AddingUser
     | extend AddedByName = case(
-    AddedBy has "#EXT#", tostring(split(tostring(split(AddedBy, "#EXT#")[0]), "_")[0]),
-    AddedBy !has "#EXT#" and AddedBy has "@", tostring(split(AddedBy, "@")[0]),
-    AddedBy)
+    InitiatingUserPrincipalName has "#EXT#", tostring(split(tostring(split(InitiatingUserPrincipalName, "#EXT#")[0]), "_")[0]),
+    InitiatingUserPrincipalName !has "#EXT#", tostring(split(InitiatingUserPrincipalName, "@")[0]),
+    InitiatingUserPrincipalName)
     | extend AddedByUPNSuffix = case(
-    AddedBy has "#EXT#", tostring(split(tostring(split(AddedBy, "#EXT#")[0]), "_")[1]),
-    AddedBy !has "#EXT#" and AddedBy has "@", tostring(split(AddedBy, "@")[1]),
-    AddedBy)
+    InitiatingUserPrincipalName has "#EXT#", tostring(split(tostring(split(InitiatingUserPrincipalName, "#EXT#")[0]), "_")[1]),
+    InitiatingUserPrincipalName !has "#EXT#", tostring(split(InitiatingUserPrincipalName, "@")[1]),
+    InitiatingUserPrincipalName)
     | extend UserAddedName = case(
     UserAdded has "#EXT#", tostring(split(tostring(split(UserAdded, "#EXT#")[0]), "_")[0]),
-    UserAdded !has "#EXT#" and AddedBy has "@", tostring(split(UserAdded, "@")[0]),
+    UserAdded !has "#EXT#", tostring(split(UserAdded, "@")[0]),
     UserAdded)
-    | project-reorder TimeGenerated, UserAdded, UserAddedDomain, AddedBy
+
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: Account
+    fieldMappings:
       - identifier: FullName
-        columnName: AddingUser
+        columnName: InitiatingUserPrincipalName
       - identifier: Name
         columnName: AddedByName
       - identifier: UPNSuffix
@@ -74,7 +78,11 @@ entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: AadUserId
-        columnName: AddedByAzureId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
   - entityType: Account
     fieldMappings:
       - identifier: FullName
@@ -83,7 +91,7 @@ entityMappings:
         columnName: UserAddedName
       - identifier: UPNSuffix
         columnName: UserAddedDomain
-version: 1.1.1
+version: 1.2.1
 kind: Scheduled
 metadata:
     source:

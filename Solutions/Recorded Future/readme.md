@@ -1,9 +1,9 @@
-[<img alt="Recorded Future" src="Playbooks\RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
+[<img alt="Recorded Future" src="Playbooks/Enrichment/RecordedFuture-IOC_Enrichment/images/RecordedFuture.png"  />](https://www.recordedfuture.com/)
 # Recorded Future Intelligence for Microsoft Sentinel
 
-Instructions how to install and use Recorded Future Solution for Microsoft Sentinel or how to install individual playbooks kan be found in the main [readme.md](Playbooks/readme.md) in the Playbook subdirectory in this repository.
+Instructions how to install and use Recorded Future Solution for Microsoft Sentinel or how to install individual playbooks kan be found in the main [readme.md](Playbooks/readme.md) in the Playbook sub directory in this repository.
 
-Recorded Future also provide standalone Playbooks in this repository for EntraID (identity) and Defender for endpoints:
+Recorded Future also provide standalone Playbooks in this repository for EntraID (identity) and Defender for endpoints.
 
 **Recorded Future Intelligence Solution**
 - [Installation guide](Playbooks/readme.md)
@@ -15,7 +15,8 @@ Recorded Future also provide standalone Playbooks in this repository for EntraID
 **Recorded Future for Identity**
 - [Recorded Future Identity](../Recorded%20Future%20Identity/Playbooks/readme.md)
 
-This guide provides instructions on how to install, update and configure Recorded Future Intelligence for Microsoft Sentinel.
+# Best practices / quick start
+[Enrichment quick start guide](Playbooks/Enrichment/quickstart.md).
 
 # About Recorded Future
 
@@ -66,3 +67,11 @@ Risk Lists are curated lists that contain Indicators of Compromise (IOCs), such 
 * [Manage Risk Lists](https://www.recordedfuture.com/support/install-configure-manage-risk-lists)
 * [About Risk Lists](https://support.recordedfuture.com/hc/en-us/articles/115000897248-Recorded-Future-Risk-Lists) (requires login)
 * [Risk List Download Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (requires login)
+
+## Automatic Threat Hunt
+
+Threat hunting is the proactive and iterative process of searching for and detecting cyber threats that have evaded traditional security measures, such as firewalls, antivirus software, and intrusion detection systems. It involves using a combination of manual and automated techniques to identify and investigate potential security breaches and intrusions within an organization's network.
+
+* [More about Automated threat hunt](https://support.recordedfuture.com/hc/en-us/articles/20849290045203-Automated-Threat-Hunting-with-Recorded-Future) (requires login)
+* [ThreatHunting](Playbooks/ThreatHunting/readme.md)
+
