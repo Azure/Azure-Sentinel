@@ -73,10 +73,10 @@ To set up automatic enrichment, map alerts to a [custom analytic rule](https://l
 ## Automate Incident Enrichment
 After enrichment playbooks is installed and all connections are configured. Create an automation rule to automate enrichment of known entities with Recorded Future intelligence in all incidents. 
 
-![](../Enrichment/RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRuleMenu.png)<br/>
+![](../Enrichment/RecordedFuture-IOC_Enrichment/images/CreateAutomationRuleMenu.png)<br/>
 
-In Microsoft Sentinel, go to Automation and create **Automation rule**. Give the new rule a name, select the trigger **When incident is created**, select the action **Run playbook** and finally select **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** or **RecordedFuture-Sandbox_Enrichment-Url** as the playbook. 
+In Microsoft Sentinel, go to Automation and create **Automation rule**. Give the new rule a name, select the trigger **When incident is created**, select the action **Run playbook** and finally select **RecordedFuture-IOC_Enrichment** or **RecordedFuture-Sandbox_Enrichment-Url** as the playbook. 
 
-![](../Enrichment/RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png)<br/>
+![](../Enrichment/RecordedFuture-IOC_Enrichment/images/CreateAutomationRule.png)<br/>
 
 This will trigger the Recorded Future playbook to run when any incident is created. Recorded future will then enrich the incident if it contains entities of types IP, Domain, Url or FileHash. 
