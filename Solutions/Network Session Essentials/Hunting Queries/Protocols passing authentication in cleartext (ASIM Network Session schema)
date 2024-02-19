@@ -1,0 +1,80 @@
+id: 96f9fdd1-bb5b-4d32-8790-666457dc00c0
+name: Protocols passing authentication in cleartext (ASIM Network Session schema)
+description: |
+  'This hunting query identifies cleartext protocols like telnet, POP3, IMAP, and non-anonymous FTP that could leak sensitive information. These protocols may use SSL, but usually on different ports.'
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSVPCFlow
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight_CL
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoMeraki
+    dataTypes:
+      - Syslog
+      - CiscoMerakiNativePoller
+
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+
+query: |
+  _Im_NetworkSession
+  // Filter events from last 1 day and not failed
+  | where TimeGenerated > ago(1d) and EventResult != "Failure"
+  // Filter for private source IP and public destination IP
+  | where ipv4_is_private(SrcIpAddr) and not(ipv4_is_private(DstIpAddr))
+  // Filter for specific destination ports or non-anonymous FTP
+  | where tostring(DstPortNumber) has_any ("23", "143", "110") or (tostring(DstPortNumber) == "21" and SrcUsername != "anonymous")
+  // Summarize data by session parameters
+  | summarize Starttime= min(TimeGenerated),EndTime= max(TimeGenerated),Eventscount=sum(EventCount), EventVendors=make_set(EventVendor,10) by SrcIpAddr,DstIpAddr,DstPortNumber,NetworkProtocol,EventResult
+  | extend PortUsage = case(
+      DstPortNumber == 23, "Telnet",
+      DstPortNumber == 143, "IMAP",
+      DstPortNumber == 110, "POP3",
+      DstPortNumber == 21, "FTP",
+      "Other"
+  )
