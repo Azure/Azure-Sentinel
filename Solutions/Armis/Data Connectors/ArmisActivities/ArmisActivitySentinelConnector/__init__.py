@@ -205,7 +205,7 @@ class ArmisActivity:
         try:
             self._get_access_token_activity("/access_token/")
             if is_table_not_exist:
-                aql_data = '''{} timeFrame:"1 Days" alert:(status:Unhandled,Suppressed,Resolved)'''.format(
+                aql_data = '''{} timeFrame:"1 Days" alert:(status:Unhandled,Suppressed,Resolved timeFrame:"1 Days")'''.format(
                     type_data["aql"]
                 )
             else:
