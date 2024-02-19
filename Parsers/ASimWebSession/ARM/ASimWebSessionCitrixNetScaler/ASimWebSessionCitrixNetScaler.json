@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimWebSessionCitrixNetScaler",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM parser for Citrix NetScaler(Web App Firewall)",
+            "category": "ASIM",
+            "FunctionAlias": "ASimWebSessionCitrixNetScaler",
+            "query": "let EventSeverityLookup = datatable (DeviceCustomString4: string, EventSeverity: string)\n[\n    \"EMERGENCY\", \"High\",\n    \"ALERT\", \"High\",\n    \"CRITICAL\", \"High\",\n    \"ERROR\", \"Medium\",\n    \"WARNING\", \"Low\",\n    \"NOTICE\", \"Low\",\n    \"INFORMATIONAL\", \"Informational\",\n    \"DEBUG\", \"Informational\",\n    \"INFO\", \"Informationl\",\n    \"WARN\", \"Low\",\n    \"ERR\", \"Medium\"\n];\nlet EventFieldsLookup = datatable(\n    DeviceAction: string,\n    DvcAction: string,\n    EventResult: string\n)\n[\n    \"blocked\", \"Deny\", \"Failure\",\n    \"not blocked\", \"Allow\", \"Success\",\n    \"transformed\", \"Allow\", \"Success\"\n];\nlet parser = (disabled: bool=false) {\n    CommonSecurityLog\n    | where not(disabled)\n    | where DeviceVendor == \"Citrix\" and DeviceProduct == \"NetScaler\"\n    | where DeviceEventClassID == \"APPFW\" and Activity has_any (\"APPFW_STARTURL\", \"APPFW_XML_cross-site scripting\", \"APPFW_SAFECOMMERCE\", \"APPFW_SAFECOMMERCE_XFORM\", \"APPFW_SIGNATURE_MATCH\", \"APPFW_XML_ERR_NOT_WELLFORMED\", \"APPFW_FIELDCONSISTENCY\", \"APPFW_SQL\", \"APPFW_BUFFEROVERFLOW_URL\", \"APPFW_BUFFEROVERFLOW_COOKIE\", \"APPFW_cross-site scripting\", \"APPFW_FIELDFORMAT\", \"APPFW_REFERER_HEADER\", \"APPFW_XSS\")\n    | parse-kv AdditionalExtensions as (method: string, geolocation: string, script: string) with (pair_delimiter=\";\", kv_delimiter=\"=\")\n    | parse RequestURL with * \"://\" host: string \"/\" *\n    | extend\n        DeviceAction = trim(\"[*]+\", DeviceAction),\n        Ip_host = iff(host matches regex \"(([0-9]{1,3})\\\\.([0-9]{1,3})\\\\.([0-9]{1,3})\\\\.(([0-9]{1,3})))\", host, \"\"),\n        Ip_computer = iff(Computer matches regex \"(([0-9]{1,3})\\\\.([0-9]{1,3})\\\\.([0-9]{1,3})\\\\.(([0-9]{1,3})))\", Computer, \"\"),\n        HttpHost = host\n    | lookup EventFieldsLookup on DeviceAction\n    | lookup EventSeverityLookup on DeviceCustomString4\n    | extend\n        host = iff(isempty(Ip_host), host, \"\"),\n        Computer = iff(isempty(Ip_computer), Computer, \"\"),\n        AdditionalFields = bag_pack(\n                      \"Script\", script,\n                      \"Event ID\", FieldDeviceCustomNumber1,\n                      \"HTTP Transaction ID\", FieldDeviceCustomNumber2,\n                      \"Profile Name\", DeviceCustomString1,\n                      \"PPE ID\", DeviceCustomString2,\n                      \"Signature Violation Category\", DeviceCustomString6\n                  )\n    | invoke _ASIM_ResolveDvcFQDN('Computer')\n    | invoke _ASIM_ResolveDstFQDN('host')\n    | extend\n        DstIpAddr = tostring(split(Ip_host, \":\")[0]),\n        DstPortNumber = toint(split(Ip_host, \":\")[1]),\n        DvcIpAddr = tostring(split(Ip_computer, \":\")[0])\n    | extend \n        DstHostname = coalesce(DstIpAddr, DstHostname)\n    | extend\n        EventProduct = \"NetScaler\",\n        EventVendor = \"Citrix\",\n        EventCount = int(1),\n        EventStartTime = TimeGenerated,\n        EventSchema = \"WebSession\",\n        EventSchemaVersion = \"0.2.6\",\n        EventType = \"HTTPsession\"\n    | project-rename\n        EventUid = _ItemId,\n        SrcIpAddr = SourceIP,\n        DvcOriginalAction = DeviceAction,\n        EventMessage = Message,\n        EventOriginalSeverity = DeviceCustomString4,\n        EventProductVersion = DeviceVersion,\n        HttpRequestMethod = method,\n        NetworkSessionId = DeviceCustomString3,\n        SrcPortNumber = SourcePort,\n        Url = RequestURL,\n        EventOriginalType = DeviceEventClassID,\n        EventOriginalSubType = Activity,\n        SrcGeoCountry = geolocation\n    | extend\n        EventEndTime = EventStartTime,\n        Dvc = coalesce(DvcFQDN, DvcHostname, DvcIpAddr),\n        Src = SrcIpAddr,\n        Dst = DstHostname,\n        Hostname = DstHostname,\n        IpAddr = SrcIpAddr,\n        SessionId = NetworkSessionId\n    | project-away\n        Source*,\n        Destination*,\n        Device*,\n        AdditionalExtensions,\n        CommunicationDirection,\n        Computer,\n        EndTime,\n        EventOutcome,\n        FieldDevice*,\n        Flex*,\n        File*,\n        Old*,\n        MaliciousIP*,\n        OriginalLogSeverity,\n        Process*,\n        Protocol,\n        ReceivedBytes,\n        SentBytes,\n        Remote*,\n        Request*,\n        SimplifiedDeviceAction,\n        StartTime,\n        TenantId,\n        Threat*,\n        ExternalID,\n        ReportReferenceLink,\n        ReceiptTime,\n        Reason,\n        ApplicationProtocol,\n        Indicator*,\n        Ip_*,\n        LogSeverity,\n        _ResourceId,\n        host,\n        script,\n        ExtID\n};\nparser(disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
