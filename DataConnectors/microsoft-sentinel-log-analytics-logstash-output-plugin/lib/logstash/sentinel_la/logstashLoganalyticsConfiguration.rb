@@ -1,7 +1,7 @@
 # encoding: utf-8
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogstashLoganalyticsOutputConfiguration
-    def initialize(client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, dcr_immutable_id, dcr_stream_name, compress_data, create_sample_file, sample_file_path, logger)
+    def initialize(client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, dcr_immutable_id, dcr_stream_name, compress_data, create_sample_file, sample_file_path, logger, managed_identity, arc_managed_identity)
 		@client_app_Id = client_app_Id
         @client_app_secret = client_app_secret
         @tenant_id = tenant_id
@@ -12,12 +12,15 @@ class LogstashLoganalyticsOutputConfiguration
 	    @compress_data = compress_data
 	    @create_sample_file = create_sample_file
 	    @sample_file_path = sample_file_path
+      @managed_identity = managed_identity
+      @arc_managed_identity = arc_managed_identity
+
 
 	# Delay between each resending of a message
         @RETRANSMISSION_DELAY = 2
         @MIN_MESSAGE_AMOUNT = 100
-        # Maximum of 1 MB per post to Log Analytics Data Collector API V2. 
-        # This is a size limit for a single post. 
+        # Maximum of 1 MB per post to Log Analytics Data Collector API V2.
+        # This is a size limit for a single post.
         # If the data from a single post that exceeds 1 MB, you should split it.
         @loganalytics_api_data_limit = 1 * 1024 * 1024
 
@@ -30,7 +33,7 @@ class LogstashLoganalyticsOutputConfiguration
             "AzureUSGovernment" => {"aad" => "https://login.microsoftonline.us", "monitor" => "https://monitor.azure.us"}
         }.freeze
     end
-	
+
 	def validate_configuration()
       if @create_sample_file
           begin
@@ -50,12 +53,18 @@ class LogstashLoganalyticsOutputConfiguration
               end
           end
       else
-          required_configs = { "client_app_Id" => @client_app_Id,
+            if @managed_identity || @arc_managed_identity
+              required_configs = { "data_collection_endpoint" => @data_collection_endpoint,
+                                "dcr_immutable_id" => @dcr_immutable_id,
+                                "dcr_stream_name" => @dcr_stream_name }
+          else
+            required_configs = { "client_app_Id" => @client_app_Id,
                               "client_app_secret" => @client_app_secret,
                               "tenant_id" => @tenant_id,
                               "data_collection_endpoint" => @data_collection_endpoint,
                               "dcr_immutable_id" => @dcr_immutable_id,
                               "dcr_stream_name" => @dcr_stream_name }
+          end
           required_configs.each { |name, conf|
               if conf.nil?
                   print_missing_parameter_message_and_raise(name)
@@ -127,8 +136,16 @@ class LogstashLoganalyticsOutputConfiguration
     def decrease_factor
         @decrease_factor
     end
-	
-	def client_app_Id
+
+    def managed_identity
+      @managed_identity
+    end
+
+    def arc_managed_identity
+      @arc_managed_identity
+    end
+
+	  def client_app_Id
         @client_app_Id
     end
 
@@ -167,7 +184,7 @@ class LogstashLoganalyticsOutputConfiguration
     def MIN_MESSAGE_AMOUNT
         @MIN_MESSAGE_AMOUNT
     end
-    
+
     def key_names=(new_key_names)
         @key_names = new_key_names
     end
@@ -175,7 +192,7 @@ class LogstashLoganalyticsOutputConfiguration
     def plugin_flush_interval=(new_plugin_flush_interval)
         @plugin_flush_interval = new_plugin_flush_interval
     end
-    
+
     def decrease_factor=(new_decrease_factor)
         @decrease_factor = new_decrease_factor
     end
@@ -187,7 +204,7 @@ class LogstashLoganalyticsOutputConfiguration
     def max_items=(new_max_items)
         @max_items = new_max_items
     end
-    
+
     def proxy_aad=(new_proxy_aad)
         @proxy_aad = new_proxy_aad
     end
@@ -235,9 +252,10 @@ class LogstashLoganalyticsOutputConfiguration
     def get_aad_endpoint
         @azure_clouds[@azure_cloud]["aad"]
     end
-    
+
     def get_monitor_endpoint
         @azure_clouds[@azure_cloud]["monitor"]
     end
+
 end
-end ;end ;end 
+end ;end ;end

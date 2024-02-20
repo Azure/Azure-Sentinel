@@ -7,12 +7,10 @@ require 'base64'
 require 'time'
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
-class LogAnalyticsAadTokenProvider
+class LogAnalyticsMiTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
-    scope = CGI.escape("#{logstashLoganalyticsConfiguration.get_monitor_endpoint}//.default")
-    @aad_uri = logstashLoganalyticsConfiguration.get_aad_endpoint
-    @token_request_body = sprintf("client_id=%s&scope=%s&client_secret=%s&grant_type=client_credentials", logstashLoganalyticsConfiguration.client_app_Id, scope, logstashLoganalyticsConfiguration.client_app_secret)
-    @token_request_uri = sprintf("%s/%s/oauth2/v2.0/token",@aad_uri, logstashLoganalyticsConfiguration.tenant_id)
+    scope = CGI.escape("#{logstashLoganalyticsConfiguration.get_monitor_endpoint}")
+    @token_request_uri = sprintf("http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=%s", scope)
     @token_state = {
       :access_token => nil,
       :expiry_time => nil,
@@ -42,11 +40,11 @@ class LogAnalyticsAadTokenProvider
   end # def is_saved_token_need_refresh
 
   def refresh_saved_token()
-    @logger.info("aad token expired - refreshing token.")
+    @logger.info("MI token expired - refreshing token.")
 
     token_response = post_token_request()
     @token_state[:access_token] = token_response["access_token"]
-    @token_state[:expiry_time] = get_token_expiry_time(token_response["expires_in"])
+    @token_state[:expiry_time] = get_token_expiry_time(token_response["expires_in"].to_i)
 
   end # def refresh_saved_token
 
@@ -64,9 +62,13 @@ class LogAnalyticsAadTokenProvider
     headers = get_header()
     while true
       begin
-        # Post REST request
-        response = RestClient::Request.execute(method: :post, url: @token_request_uri, payload: @token_request_body, headers: headers,
-                                              proxy: @logstashLoganalyticsConfiguration.proxy_aad)
+        # GET REST request
+        response = RestClient::Request.execute(
+          method: :get,
+          url: @token_request_uri,
+          headers: headers,
+          proxy: @logstashLoganalyticsConfiguration.proxy_aad
+        )
 
         if (response.code == 200 || response.code == 201)
           return JSON.parse(response.body)
@@ -76,7 +78,7 @@ class LogAnalyticsAadTokenProvider
       rescue Exception => ex
         @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
       end
-      @logger.error("Error while authenticating with AAD ('#{@aad_uri}'), retrying in 10 seconds.")
+      @logger.error("Error while authenticating with AAD ('#{@token_request_uri}'), retrying in 10 seconds.")
       sleep 10
     end
   end # def post_token_request
@@ -84,7 +86,8 @@ class LogAnalyticsAadTokenProvider
   # Create a header
   def get_header()
     return {
-      'Content-Type' => 'application/x-www-form-urlencoded',
+      # 'Content-Type' => 'application/x-www-form-urlencoded',
+      'Metadata' => 'true',
     }
   end # def get_header
 

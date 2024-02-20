@@ -5,14 +5,14 @@ require 'json'
 require 'openssl'
 require 'base64'
 require 'time'
+require 'open3'
+
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
-class LogAnalyticsAadTokenProvider
+class LogAnalyticsArcTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
-    scope = CGI.escape("#{logstashLoganalyticsConfiguration.get_monitor_endpoint}//.default")
-    @aad_uri = logstashLoganalyticsConfiguration.get_aad_endpoint
-    @token_request_body = sprintf("client_id=%s&scope=%s&client_secret=%s&grant_type=client_credentials", logstashLoganalyticsConfiguration.client_app_Id, scope, logstashLoganalyticsConfiguration.client_app_secret)
-    @token_request_uri = sprintf("%s/%s/oauth2/v2.0/token",@aad_uri, logstashLoganalyticsConfiguration.tenant_id)
+    scope = CGI.escape("#{logstashLoganalyticsConfiguration.get_monitor_endpoint}")
+    @token_request_uri = sprintf("http://127.0.0.1:40342/metadata/identity/oauth2/token?api-version=2019-11-01&resource=%s", scope)
     @token_state = {
       :access_token => nil,
       :expiry_time => nil,
@@ -24,6 +24,22 @@ class LogAnalyticsAadTokenProvider
 
   # Public methods
   public
+
+  def get_challange_token()
+    challenge_script = <<~SCRIPT
+      CHALLENGE_TOKEN_PATH=$(curl -s -D - -H Metadata:true "http://127.0.0.1:40342/metadata/identity/oauth2/token?api-version=2019-11-01&resource=https%3A%2F%2Fmonitor.azure.com" | grep Www-Authenticate | cut -d "=" -f 2 | tr -d "[:cntrl:]")
+      echo -n $(cat $CHALLENGE_TOKEN_PATH)
+    SCRIPT
+
+    stdout, stderr, status = Open3.capture3('bash', '-c', challenge_script)
+
+    if status.success?
+      puts stdout
+      return stdout
+    else
+      puts "Error: #{stderr}"
+    end
+  end # def get_challange_token
 
   def get_aad_token_bearer()
     @token_state[:token_details_mutex].synchronize do
@@ -42,11 +58,14 @@ class LogAnalyticsAadTokenProvider
   end # def is_saved_token_need_refresh
 
   def refresh_saved_token()
-    @logger.info("aad token expired - refreshing token.")
+    @logger.info("MI token expired - refreshing token.")
 
     token_response = post_token_request()
     @token_state[:access_token] = token_response["access_token"]
-    @token_state[:expiry_time] = get_token_expiry_time(token_response["expires_in"])
+    @token_state[:expiry_time] = get_token_expiry_time(token_response["expires_in"].to_i)
+
+    @logger.info("token: #{@token_state[:access_token]}")
+    @logger.info("expiry time: #{@token_state[:expiry_time]}")
 
   end # def refresh_saved_token
 
@@ -62,11 +81,18 @@ class LogAnalyticsAadTokenProvider
   def post_token_request()
     # Create REST request header
     headers = get_header()
+
+    @logger.info("headers: #{headers}")
+
     while true
       begin
-        # Post REST request
-        response = RestClient::Request.execute(method: :post, url: @token_request_uri, payload: @token_request_body, headers: headers,
-                                              proxy: @logstashLoganalyticsConfiguration.proxy_aad)
+        # GET REST request
+        response = RestClient::Request.execute(
+          method: :get,
+          url: @token_request_uri,
+          headers: headers,
+          proxy: @logstashLoganalyticsConfiguration.proxy_aad
+        )
 
         if (response.code == 200 || response.code == 201)
           return JSON.parse(response.body)
@@ -76,7 +102,7 @@ class LogAnalyticsAadTokenProvider
       rescue Exception => ex
         @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
       end
-      @logger.error("Error while authenticating with AAD ('#{@aad_uri}'), retrying in 10 seconds.")
+      @logger.error("Error while authenticating with AAD ('#{@token_request_uri}'), retrying in 10 seconds.")
       sleep 10
     end
   end # def post_token_request
@@ -84,7 +110,9 @@ class LogAnalyticsAadTokenProvider
   # Create a header
   def get_header()
     return {
-      'Content-Type' => 'application/x-www-form-urlencoded',
+      # 'Content-Type' => 'application/x-www-form-urlencoded',
+      'Metadata' => 'true',
+      'Authorization' => "Basic #{get_challange_token()}"
     }
   end # def get_header
 
