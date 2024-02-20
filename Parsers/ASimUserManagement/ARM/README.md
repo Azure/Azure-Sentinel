@@ -8,7 +8,7 @@ For more information, see:
 
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
-- [ASIM User Management normalization schema reference](https://aka.ms/ASimUserManagementDoc)
+- [ASIM UserManagement normalization schema reference](https://aka.ms/ASimUserManagementDoc)
 
 <br>
 
