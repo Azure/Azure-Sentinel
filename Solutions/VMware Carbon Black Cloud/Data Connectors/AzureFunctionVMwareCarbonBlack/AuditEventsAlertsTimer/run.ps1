@@ -291,29 +291,6 @@ function CarbonBlackAPI()
                 Write-Host "$($alerts.count) new Carbon Black Alerts as of $([DateTime]::UtcNow)were found and pushed."
             }
         }
-        elseif(-not([string]::IsNullOrWhiteSpace($SIEMapiKey)) -and -not([string]::IsNullOrWhiteSpace($SIEMapiId)))
-        {
-            $authHeaders = @{"X-Auth-Token" = "$($SIEMapiKey)/$($SIEMapiId)"}
-            $notifications = Invoke-RestMethod -Headers $authHeaders -Uri ([System.Uri]::new("$($hostName)/integrationServices/v3/notification"))
-            if ($notifications.success -eq $true)
-            {
-                $NotifLogJson = $notifications.notifications | ConvertTo-Json -Depth 5
-                if (-not([string]::IsNullOrWhiteSpace($NotifLogJson)))
-                {
-                    $responseObj = (ConvertFrom-Json $NotifLogJson)
-                    $status = Post-LogAnalyticsData -customerId $workspaceId -sharedKey $workspaceSharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($NotifLogJson)) -logType $NotificationTable;
-                    Write-Host("$($responseObj.count) new Carbon Black Notifications as of $([DateTime]::UtcNow). Pushed data to Azure sentinel Status code:$($status)")
-                }
-                else
-                {
-                        Write-Host "No new Carbon Black Notifications as of $([DateTime]::UtcNow)"
-                }
-            }
-            else
-            {
-                Write-Host "Notifications API status failed , Please check."
-            }
-        }
         else
         {
             Write-Warning "No SIEM API ID and/or Key or S3Bucket value was defined, therefore alert logs will not to ingested to workspace."
