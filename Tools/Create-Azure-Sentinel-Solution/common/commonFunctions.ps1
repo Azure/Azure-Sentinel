@@ -1861,7 +1861,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                             {
                                                 foreach ($desc in $instructionItem.parameters.instructionSteps)
                                                 {
-                                                    if ($desc.description && $desc.description.IndexOf('Deploy To Azure') -gt 0)
+                                                    if ($desc.description -and $desc.description.IndexOf('Deploy To Azure') -gt 0)
                                                     {
                                                         $existingFunctionApp = $true
                                                         break
@@ -2547,11 +2547,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         else
                         {
-                            $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue "[variables('TemplateEmptyArray')]";
-                            if (!$global:baseMainTemplate.variables.TemplateEmptyArray) 
-                            {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
-                            }
+                            $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue @();
                         }
 
                         if (!$yaml.severity) {
@@ -2980,6 +2976,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     {
         if ($contentToImport.Description) {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", $contentToImport.Description
+
+            $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionName}}", $solutionName
         }
         else {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", ""
