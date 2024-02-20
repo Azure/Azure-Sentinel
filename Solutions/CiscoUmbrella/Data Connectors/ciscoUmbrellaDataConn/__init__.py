@@ -55,8 +55,13 @@ def main(mytimer: func.TimerRequest) -> None:
     state_manager_cu = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
     
     ts_from = state_manager_cu.get()
+
+    if (datetime.datetime.utcnow() - datetime.timedelta(days=7)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
+        ts_to = datetime.datetime.utcnow() +  datetime.timedelta(days=1)
+    else:
+        ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+
     ts_from = parse_date_from(ts_from)
-    ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
     ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
         
     cli = UmbrellaClient(aws_access_key_id, aws_secret_acces_key, aws_s3_bucket)
