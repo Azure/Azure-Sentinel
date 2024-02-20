@@ -47,7 +47,7 @@ Recorded Futures risk lists are generated at different cadences as described in 
 
 # Installation
 
-If this document is overwhelming follow [enrichment quick start guide](Enrichment/bestpractices.md) to get started with enrichments as a first step.
+If this document is overwhelming follow [enrichment quick start guide](Enrichment/quickstart.md) to get started with enrichments as a first step.
 
 There are two options for installing playbooks and starting automate threat response:
 

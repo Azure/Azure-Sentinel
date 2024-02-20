@@ -5,6 +5,9 @@
 # This script is used to install the AMA on a linux machine and configure the
 # Syslog daemon on the linux machine for a data forwarding connector scenario.
 # For more information please check the Azure Monitoring Agent documentation.
+# If using Python 3 make sure it's set as the default command on the machine, or run the script with the 'python3'
+# command instead of 'python'.
+
 import subprocess
 import time
 
