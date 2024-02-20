@@ -15,7 +15,7 @@ import time
 import re
 from .state_manager import AzureStorageQueueHelper
 from datetime import datetime, timedelta
-
+from google.oauth2.credentials import Credentials
 
 customer_id = os.environ['WorkspaceID']
 fetchDelay = os.getenv('FetchDelay',10)
@@ -44,14 +44,18 @@ if(not match):
 
 def get_credentials():
     creds = None
-    if pickle_string:
+    if is_json(pickle_string):
+        try:
+            creds = Credentials.from_authorized_user_info(json.loads(pickle_string), SCOPES)
+        except Exception as pickle_read_exception:
+            logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
+    else:
         try:
             creds = pickle.loads(pickle_string)
         except Exception as pickle_read_exception:
             logging.error('Error while loading pickle string: {}'.format(pickle_read_exception))
-    else:
-        raise Exception("Google Workspace Reports: Pickle_string is empty. Exit.")
     return creds
+
 
 
 
