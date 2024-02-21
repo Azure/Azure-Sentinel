@@ -3,8 +3,8 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.1.0  
-Released on: 2023-07-23
+Plugin version: v1.1.2 
+Released on: 2024-02-21
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -26,6 +26,16 @@ Microsoft Sentinel's Logstash output plugin supports the following versions
 - 7.0 - 7.17.13
 - 8.0 - 8.9
 - 8.11
+
+```
+sudo apt-get install logstash=1:8.8.1-1
+```
+
+To make sure Logstash isn't automatically updated to a newer version, make sure its package is on hold for automatic updates:
+
+```
+sudo apt-mark hold logstash
+```
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
@@ -118,6 +128,8 @@ output {
 
 ```
 ### Optional configuration 
+- **managed_identity** - Boolean, false by default. Set to `true` if you'd whish to authenticate using a Managed Identity. Managed Identities provide a "passwordless" authentication. This means providing `client_app_id`, `client_app_secret` and `tenant_id` is no longer requird. [Learn more about using anaged Identities](<https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview>). If your machine resides outside of Azure user `arc_managed_identity` instead.
+- **arc_managed_identity** - Boolean, false by default. Set to `true` is you'd which to authenticate using a Managed Identity, but the machine resides outside of Azure. On-boarding the machine into Azure Arc is mandatory for this to work. [Learn more about Azure Arc](<https://learn.microsoft.com/en-us/azure/azure-arc/servers/overview#next-steps>)
 - **key_names** – Array of strings, if you wish to send a subset of the columns to Log Analytics.
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
@@ -126,6 +138,32 @@ output {
 - **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service. Overrides the proxy setting.
 - **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint. Overrides the proxy setting.
 - **azure_cloud** - String, Empty by default. Used to specify the name of the Azure cloud that is being used, AzureCloud is set as default. Available values are: AzureCloud, AzureChinaCloud and AzureUSGovernment.
+
+Here is an example for the output plugin configuration section using a Managed Identity on an Azure VM:
+```
+output {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
+        managed_identity => true
+        data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
+        dcr_immutable_id => "<enter your DCR immutableId here>"
+        dcr_stream_name => "<enter your stream name here>"
+    }
+}
+
+```
+
+And a slightly different on for when using an Azure Arc connected machine:
+```
+output {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
+        arc_managed_identity => true
+        data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
+        dcr_immutable_id => "<enter your DCR immutableId here>"
+        dcr_stream_name => "<enter your stream name here>"
+    }
+}
+
+```
 
 #### Note: When setting an empty string as a value for a proxy setting, it will unset any system wide proxy setting.
 
