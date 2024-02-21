@@ -1,0 +1,140 @@
+{
+  "id": "AIVectraDetectAma",
+  "title": "[Recommended] Vectra AI Detect via AMA",
+  "publisher": "Vectra AI",
+  "descriptionMarkdown": "The AI Vectra Detect connector allows users to connect Vectra Detect logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation. This gives users more insight into their organization's network and improves their security operation capabilities.",
+  "graphQueries": [
+    {
+      "metricName": "Total data received",
+      "legend": "AIVectraDetect",
+      "baseQuery": "CommonSecurityLog\n |where DeviceVendor =~ 'Vectra Networks' \n |where DeviceProduct=~ 'X Series'\n |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "All logs",
+      "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct  == \"X Series\"\n| sort by TimeGenerated \n"
+    },
+    {
+      "description": "Host Count by Severity",
+      "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\" and DeviceEventClassID == \"hsc\"\n| extend src = coalesce(SourceHostName, SourceIP)\n| summarize arg_max(TimeGenerated, *) by src\n| extend status = case(FlexNumber1>=50 and FlexNumber2<50, \"High\",  FlexNumber1>=50 and FlexNumber2>=50, \"Critical\",  FlexNumber1<50 and FlexNumber2>=50, \"Medium\",  FlexNumber1>0 and FlexNumber1<50 and FlexNumber2>0 and FlexNumber2<50,\"Low\",  \"Other\")\n| where status != \"Other\"\n| summarize Count = count() by status"
+    },
+    {
+      "description": "List of worst offenders",
+      "query": "\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\" and DeviceEventClassID == \"hsc\"\n| extend src = coalesce(SourceHostName, SourceIP)\n| summarize arg_max(TimeGenerated, *) by src\n| sort by FlexNumber1 desc, FlexNumber2 desc\n| limit 10\n| project row_number(), src, SourceIP, FlexNumber1 , FlexNumber2, TimeGenerated\n| project-rename Sr_No = Column1, Source = src, Source_IP = SourceIP, Threat = FlexNumber1, Certainty = FlexNumber2, Latest_Detection = TimeGenerated"
+    },
+    {
+      "description": "Top 10 Detection Types",
+      "query": "CommonSecurityLog\r\n| extend ExternalID = coalesce(column_ifexists(\"ExtID\", \"\"), tostring(ExternalID), \"\")\r\n| where DeviceVendor == \"Vectra Networks\" and DeviceEventClassID !in (\"health\", \"audit\", \"campaigns\", \"hsc\", \"asc\") and isnotnull(ExternalID)\r\n| summarize Count = count() by DeviceEventClassID\r\n| top 10 by Count desc"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "CommonSecurityLog (AIVectraDetect)",
+      "lastDataReceivedQuery": "CommonSecurityLog\n |where DeviceVendor =~ 'Vectra Networks' \n |where DeviceProduct=~ 'X Series'\n |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "CommonSecurityLog\n |where DeviceVendor =~ 'Vectra Networks' \n |where DeviceProduct=~ 'X Series'\n |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "read": true,
+          "write": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ],
+	"customs": [
+      {
+        "description": "To collect data from non-Azure VMs, they must have Azure Arc installed and enabled. [Learn more](https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-install?tabs=ARMAgentPowerShell,PowerShellWindows,PowerShellWindowsArc,CLIWindows,CLIWindowsArc)"
+      },
+      {
+        "description": "Common Event Format (CEF) via AMA and Syslog via AMA data connectors must be installed [Learn more](https://learn.microsoft.com/azure/sentinel/connect-cef-ama#open-the-connector-page-and-create-the-dcr)"
+      }	  
+    ]
+  },
+  "instructionSteps": [
+  {
+     "title": "",
+            "description": "",
+          "instructions": [
+                   {
+                    "parameters": {
+                        "title": "1. Kindly follow the steps to configure the data connector",
+                        "instructionSteps": [
+                            {
+                                "title": "Step A. Configure the Common Event Format (CEF) via AMA data connector",
+                                "description": "_Note:- CEF logs are collected only from Linux Agents_\n\n1. Navigate to Microsoft Sentinel workspace ---> configuration ---> Data connector blade .\n\n2. Search for 'Common Event Format (CEF) via AMA' data connector and open it.\n\n3. Check If there is no existing DCR configured to collect required facility of logs, Create a new DCR (Data Collection Rule)\n\n\t_Note:- It is recommended to install minimum 1.27 version of AMA agent [Learn more](https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=azure-portal ) and ensure there is no duplicate DCR as it can cause log duplicacy_\n\n4. Run the command provided in the CEF via AMA data connector page to configure the CEF collector on the machine"
+                               
+                            },
+                            {
+                                "title": "Step B. Forward AI Vectra Detect logs to Syslog agent in CEF format",
+                                "description": "Configure Vectra (X Series) Agent to forward Syslog messages in CEF format to your Microsoft Sentinel workspace via the Syslog agent.\n\nFrom the Vectra UI, navigate to Settings > Notifications and Edit Syslog configuration. Follow below instructions to set up the connection:\n\n- Add a new Destination (which is the host where the Microsoft Sentinel Syslog Agent is running)\n\n- Set the Port as **514**\n\n- Set the Protocol as **UDP**\n\n- Set the format to **CEF**\n\n- Set Log types (Select all log types available)\n\n- Click on **Save**\n\nUser can click the **Test** button to force send some test events.\n\n For more information, refer to Cognito Detect Syslog Guide which can be downloaded from the ressource page in Detect UI."
+                                
+                            },
+                            {
+                             "title": "Step C. Validate connection",
+                             "description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\nIt may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n 1. Make sure that you have Python on your machine using the following command: python -version\n\n2. You must have elevated permissions (sudo) on your machine",
+                              "instructions": [
+                                        {
+                                        "parameters": {
+                                        "label": "Run the following command to validate your connectivity:",
+                                         "value": "sudo wget -O Sentinel_AMA_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Syslog/Sentinel_AMA_troubleshoot.py&&sudo python Sentinel_AMA_troubleshoot.py --cef"
+                                         },
+                                         "type": "CopyableLabel"
+                                         }
+                                         ]
+                           }
+                        ]
+                    },
+                    "type": "InstructionStepsGroup"
+                }
+            ] 
+        },
+        {
+            "title": "2. Secure your machine ",
+            "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
+        }
+  ],
+  "metadata": {
+    "id": "2de7b355-5f0b-4eb1-a264-629314ef86e5",
+    "version": "1.0.0",
+    "kind": "dataConnector",
+    "source": {
+      "kind": "community"
+    },
+    "author": {
+      "name": "Vectra AI"
+    },
+    "support": {
+      "name": "Vectra AI",
+      "link": "https://www.vectra.ai/support",
+      "tier": "developer"
+    }
+  }
+}

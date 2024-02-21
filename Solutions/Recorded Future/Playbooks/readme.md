@@ -1,11 +1,14 @@
-[<img alt="Recorded Future" src="Enrichment\RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
+[<img alt="Recorded Future" src="Enrichment\RecordedFuture-IOC_Enrichment\images\RecordedFuture.png"  />](https://www.recordedfuture.com/)
 # Recorded Future Intelligence for Microsoft Sentinel
 
 ## Roles and Permissions
 
 Microsoft article that describes roles and permissions in Microsoft Sentinel [Roles and permissions in Microsoft Sentinel](https://learn.microsoft.com/en-us/azure/sentinel/roles).
 
-Following permissions are required on the resource group level [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) and [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
+
+During installation, permissions are required on the resource group level to use and authorize the playbooks. [Microsoft Sentinel Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor) and [Logic App Contributor](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor).
+
+Alternative use [managed identity](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview) authorization for playbook. The user performing the installation needs to have the role of **Owner** or **Role Based Access Control Administrator** on resource group level.
 
 ## Prerequisites  
 
@@ -44,15 +47,17 @@ Recorded Futures risk lists are generated at different cadences as described in 
 
 # Installation
 
+If this document is overwhelming follow [enrichment quick start guide](Enrichment/quickstart.md) to get started with enrichments as a first step.
+
 There are two options for installing playbooks and starting automate threat response:
 
 1. Installing the solution from [Content Hub](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/dontDiscardJourney~/true/id/recordedfuture1605638642586.recorded_future_sentinel_solution). (Recommended)
 
-1. Installing the playbooks one by one by from this Readme further down in this document.
+2. Its possible to install some of the playbooks one by one by directly from this Readme further down.
 
 ## 1. Content Hub Installation
 
-1. Locate the Recorded Future Solution in the Content Hub.
+1. Locate the Recorded Future Intelligence Solution in the Content Hub.
 ![](Images/2023-04-18-08-39-58.png)
 1. Press **Install** and then **Create** and continue to configure the solution. 
 ![](Images/2023-04-18-08-43-42.png)
@@ -61,13 +66,13 @@ There are two options for installing playbooks and starting automate threat resp
 Note that the solution  install templates and you have to use the templates to install workbooks, playbooks and analytic rules. 
 ![](Images/2023-11-20-12-13-25.png)
 
-When installing playbooks from templates, read the description and lookout for dependencies that might have to be installed
+When installing playbooks from templates, read the description and look for dependencies that have to be installed. Example, install a custom connector that is included in the solution together with the playbook.
 ![](Images/2023-11-20-12-34-15.png)
 
-## 2. Playbooks one by one installation
-To install individual playbooks one by one, use the buttons next to the descriptions of the individual playbooks further down in this document.
+## 2. Individual Playbook installation
+To install individual playbooks, use the buttons next to the descriptions of the playbooks further down in this document.
 
-> **Due to internal dependencies, please deploy and activate the ThreatIntelligenceImport playbook before any of the \*-IndicatorImport playbooks.**
+> **Due to internal dependencies, always deploy and activate the ThreatIntelligenceImport playbook before any of the \*-IndicatorImport playbooks.**
 
 # Upgrade from previous versions
 Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.  
@@ -81,7 +86,7 @@ Our support will end when Microsoft shut down the underlying API. More informati
 If you have a version 1 installation you need to first acquire a V2 APi key from Recorded Future. Install the new all IndicatorImport and enrichment -playbooks. Select a different name than the once already installed and reauthenticate them. Configure the IndicatorImport playbooks to pull your selection of risk lists. After validating that the new playbooks works as expected you can deactivate the V1 versions. 
 
 # Configuration 
-## Risk list configuration 
+## Risk list activation and configuration 
 Verify that the **ThreatIntelligenceImport** logic app is installed and active in your environment before installing the TIProcessing risk lists.
 
 From ```Automation -> Playbook Template```  Select any Recorded Future playbook that ends with IndicatorImport, like **RecordedFuture-IP-IndicatorImport**, press create playbook.
@@ -107,19 +112,19 @@ Change the Risk List to download and modify the description in the ```RecordedFu
 ## Configure Cadence of Risk List Ingestion 
 Its possible to adjust the cadence of Risk List download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
 
-The first step of all IndicatorImport Playbooks is a recurrence step, it is possible to adjust the cadence by modifying the interval and frequency parameters.\
+The first step of IndicatorImport Playbooks is a recurrence step, adjust the cadence by modifying the interval and frequency parameters.\
 <img src="Images/2023-12-12-10-00-53.png" width="500">
 
-If you do so however, it is critical that you also adjust the expirationDateTime parameter in the final block of that logic app to be synchronized with the recurrence timing. Failure to do so can result in either:
+It is critical that you also adjust the expirationDateTime parameter in the final block of that logic app to be synchronized with the recurrence timing. Failure to do so can result in either:
 * Duplication of indicators.
 * Having no active Recorded Future indicators the majority of the time. 
 
-If you are unsure of how to do this, please consult Recorded Future Professional Services.
+If you are unsure of how to do this, please consult Recorded Future.
 
 ![](Images/2023-12-12-10-02-11.png)
 
 ## Automate Incident Enrichment
-After one of the enrichment playbooks is installed and all connections are configured. Create an automation rule to automate the enrichment process. This will automate enrichment of Recorded Future intelligence to known entities in all incidents. 
+After enrichment playbooks is installed and all connections are configured. Create an automation rule to automate the enrichment process. This will automate enrichment of Recorded Future intelligence to known entities in all incidents. 
 
 1. Open Microsoft Sentinel.
 2. Go to Automation and select **Create Automation rule**
@@ -128,21 +133,21 @@ After one of the enrichment playbooks is installed and all connections are confi
    * Trigger: **When an incident is created**
    * Action: **Run playbook**
    * Playbook (must first be successfully configured): 
-     - [**RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash**](Enrichment/readme.md#recordedfuture-ioc_enrichment-ip_domain_url_hash) or
+     - [**RecordedFuture-IOC_Enrichment**](Enrichment/readme.md#recordedfuture-ioc_enrichment) or
      - [**RecordedFuture-Sandbox_Enrichment-Url**](Sandboxing/readme.md#recordedfuture-sandbox_enrichment-url)
 5. Done
 
 The enrichment is now configured to run when incidents are triggered, and it will post comments for the following IOC types: IP, Domain, URL, or Hash.
 
-<img src="Enrichment/RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/CreateAutomationRule.png" width="500"><br/>
+<img src="Enrichment/RecordedFuture-IOC_Enrichment/images/CreateAutomationRule.png" width="500"><br/>
 
 ## Recorded Future Collective Insights Configuration
-Recorded Future Collective Insights aggregates data related to Sigma Rules and other indicators, driving collective insights to better identify threats. Anonymized, unattributable data is collected for analytical purposes to identify trends and insights with the Collective Insights. The **RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash** playbook contributes to collective insights. 
+Recorded Future Collective Insights aggregates data related to Sigma Rules and other indicators, driving collective insights to better identify threats. Anonymized, unattributable data is collected for analytical purposes to identify trends and insights with the Collective Insights. The **RecordedFuture-IOC_Enrichment** playbook contributes to collective insights. 
 [Click here to learn more](https://support.recordedfuture.com/hc/en-us/articles/19308547864339) (Require Recorded Future Login)
 
 To opt-out from Collective insights by setting the CollectiveInsights parameter to [false]
 
-<img src="Enrichment/RecordedFuture-IOC_Enrichment-IP_Domain_URL_Hash/images/IntelligenceCloudParameter.png" width="500"><br/>
+<img src="Enrichment/RecordedFuture-IOC_Enrichment/images/IntelligenceCloudParameter.png" width="500"><br/>
 
 ## Query Risk Lists
 After successfully running and importing one or more Risk Lists it is possible to query the imported data in your Log Analytics Workspace. 
