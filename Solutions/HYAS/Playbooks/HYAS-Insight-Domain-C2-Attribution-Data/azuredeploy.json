@@ -1,0 +1,504 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "HYASInsight Enrich Incident By C2Attribution Info", 
+        "description": "This playbook enriches hosts asscociated with an incident with C2Attribution information.",
+        "prerequisites": "https://www.hyas.com/contact to request a trial key.",       
+        "prerequisitesDeployTemplateFile": "",
+        "postDeploymentSteps": ["None"],      
+        "lastUpdateTime": "2023-02-21T00:00:00.000Z", 
+        "entities": ["Host"], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Paul van Gool, HYAS Infosec"
+        }
+    },
+     "parameters": {
+        "PlaybookName": {
+            "defaultValue": "HYASInsight-Domain-C2Attribution",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        }
+    },
+    "variables": {
+		"HYASInsightConnectionName": "[concat('hyasinsight-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('HYASInsightConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('HYASInsightConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/hyasinsight')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('HYASInsightConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "DNSname_Variable": {
+                            "runAfter": {
+                                "Hostname_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dns_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Domain_name_variable": {
+                            "runAfter": {
+                                "DNSname_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "domain_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {
+                                "Link_Text": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Foreach_Hosts": {
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions": {
+                                "Check_DNSname_is_not_Empty": {
+                                    "actions": {
+                                        "Set_Domainname": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "domain_name",
+                                                "value": "@{variables('host_name')}.@{variables('dns_name')}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_DNSname": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_Domainname_2": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "domain_name",
+                                                    "value": "@variables('host_name')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@variables('dns_name')",
+                                                        ""
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Check_records_exists": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Condition": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><span style=\"font-size: 16px\"><strong>C2 Attribution Information for Domain: </strong></span><span style=\"font-size: 16px\"></span><span style=\"font-size: 16px\">@{variables('domain_name')}</span><span style=\"font-size: 16px\"><br>\n</span><span style=\"font-size: 16px\">@{body('Create_HTML_table')}</span><span style=\"font-size: 16px\"><br>\n</span><span style=\"font-size: 16px\">@{variables('link_text')}</span><span style=\"font-size: 16px\"></span></p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Condition": {
+                                            "actions": {
+                                                "Set_LinkText": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "link_text",
+                                                        "value": "<p><span style=\"font-size: 12px\">Showing <strong>3</strong> records out of total<strong>@{variables('RecordsLength')} </strong> records</strong></span>\n<span style=\"font-size: 14px\"><strong>For detailed information, see https://insight.hyas.com/static/details?domain=@{variables('domain_name')}</strong></span></p>"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Create_HTML_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_LinkText_2": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "link_text",
+                                                            "value": " "
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@variables('RecordsLength')",
+                                                            3
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Create_HTML_table": {
+                                            "runAfter": {
+                                                "For_each": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('Json Output')"
+                                            }
+                                        },
+                                        "For_each": {
+                                            "foreach": "@take(body('Get_C2_Attribution_Information'),3)",
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Json Output",
+                                                        "value": {
+                                                            "Actor IPv4": "@items('For_each')?['actor_ipv4']",
+                                                            "C2 Domain": "@items('For_each')?['c2_domain']",
+                                                            "C2 IPv4": "@items('For_each')?['c2_ip']",
+                                                            "C2 URL": "@items('For_each')?['c2_url']",
+                                                            "DateTime": "@items('For_each')?['datetime']",
+                                                            "Email": "@items('For_each')?['email']",
+                                                            "Email Domain": "@items('For_each')?['email_domain']",
+                                                            "Referrer Domain": "@items('For_each')?['referrer_domain']",
+                                                            "Referrer IPv4": "@items('For_each')?['referrer_ipv4']",
+                                                            "Referrer URL": "@items('For_each')?['referrer_url']",
+                                                            "SHA256": "@items('For_each')?['sha256']"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_JSon_Output_to_empty": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Set_JSon_Output_to_empty": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Json Output",
+                                                "value": []
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_records_length": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p><span style=\"font-size: 16px\"><strong>C2 Attribution Information for Domain: </strong></span><span style=\"font-size: 16px\"><strong>@{variables('domain_name')}</strong></span><span style=\"font-size: 16px\"><strong><br>\n</strong></span><span style=\"font-size: 14px\">No records found.</span></p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@variables('RecordsLength')",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_C2_Attribution_Information": {
+                                    "runAfter": {
+                                        "Check_DNSname_is_not_Empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['hyasinsight']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/c2attribution",
+                                        "queries": {
+                                            "indicator_type": "domain",
+                                            "indicator_value": "@variables('domain_name')"
+                                        }
+                                    }
+                                },
+                                "Set_DNSname": {
+                                    "runAfter": {
+                                        "Set_Hostname": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "dns_name",
+                                        "value": "@items('Foreach_Hosts')?['DnsDomain']"
+                                    }
+                                },
+                                "Set_Hostname": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "host_name",
+                                        "value": "@items('Foreach_Hosts')?['HostName']"
+                                    }
+                                },
+                                "Set_records_length": {
+                                    "runAfter": {
+                                        "Get_C2_Attribution_Information": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "RecordsLength",
+                                        "value": "@length(body('Get_C2_Attribution_Information'))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Hostname_Variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "host_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "JSON_Output_Variable": {
+                            "runAfter": {
+                                "Domain_name_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Json Output",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Link_Text": {
+                            "runAfter": {
+                                "Response_Length_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "link_text",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response_Length_Variable": {
+                            "runAfter": {
+                                "JSON_Output_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RecordsLength",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            },
+                            "hyasinsight": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('HYASInsightConnectionName'))]",
+                                "connectionName": "[variables('HYASInsightConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/hyasinsight')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

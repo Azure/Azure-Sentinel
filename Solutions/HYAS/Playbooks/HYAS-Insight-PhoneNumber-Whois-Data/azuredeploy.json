@@ -1,0 +1,765 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "HYASInsight Enrich Incident By WHOIS Info", 
+        "description": "This playbook enriches phone numbers asscociated with an incident with WHOIS information.",
+        "prerequisites": "https://www.hyas.com/contact to request a trial key.",       
+        "prerequisitesDeployTemplateFile": "",
+        "postDeploymentSteps": ["None"],      
+        "lastUpdateTime": "2023-02-21T00:00:00.000Z",
+        "entities": ["Account"], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Paul van Gool, HYAS Infosec"
+        }
+    },
+     "parameters": {
+        "PlaybookName": {
+            "defaultValue": "HYASInsight-Phonenumber-Whois",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        }
+    },
+    "variables": {
+		"HYASInsightConnectionName": "[concat('hyasinsight-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('HYASInsightConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('HYASInsightConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/hyasinsight')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('HYASInsightConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Address_details_variable": {
+                            "runAfter": {
+                                "Link_Text": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "address_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "City_details_variable": {
+                            "runAfter": {
+                                "Address_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "city_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Country_details_variable": {
+                            "runAfter": {
+                                "City_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "country_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Email_details_varibale": {
+                            "runAfter": {
+                                "Country_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "emails",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "phone_geo_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "Foreach_Accounts": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Check_records_exists": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Condition": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><span style=\"font-size: 16px\"><strong>Whois Information for Phone Number: </strong></span><span style=\"font-size: 16px\"></span><span style=\"font-size: 16px\">@{items('Foreach_Accounts')?['Name']}</span><span style=\"font-size: 16px\"><br>\n</span><span style=\"font-size: 16px\">@{body('Create_HTML_table')}</span><span style=\"font-size: 16px\"><br>\n</span><span style=\"font-size: 16px\">@{body('Create_HTML_table_2')}</span><span style=\"font-size: 16px\"><br>\n</span><span style=\"font-size: 16px\">@{variables('link_text')}</span><span style=\"font-size: 16px\"></span></p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Condition": {
+                                            "actions": {
+                                                "Set_LinkText": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "link_text",
+                                                        "value": "<p><span style=\"font-size: 12px\">Showing <strong>3</strong> records out of total<strong>@{variables('RecordsLength')} </strong> records</strong></span>\n<span style=\"font-size: 14px\"><strong>For detailed information, see https://insight.hyas.com/static/details?phone=@{items('Foreach_Accounts')?['Name']}</strong></span></p>"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Create_HTML_table_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_LinkText_2": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "link_text",
+                                                            "value": " "
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@variables('RecordsLength')",
+                                                            3
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Create_HTML_table": {
+                                            "runAfter": {
+                                                "loop_through_the_reponse_object": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('Json_Output_01')"
+                                            }
+                                        },
+                                        "Create_HTML_table_2": {
+                                            "runAfter": {
+                                                "Create_HTML_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('Json_Output_02')"
+                                            }
+                                        },
+                                        "Set_jsonoutput_to_empty": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Json_Output_01",
+                                                "value": []
+                                            }
+                                        },
+                                        "loop_through_the_reponse_object": {
+                                            "foreach": "@take(body('Get_Whois_Information'),3)",
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "runAfter": {
+                                                        "check_phone_object_length": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Json_Output_01",
+                                                        "value": {
+                                                            "Domain": "@items('loop_through_the_reponse_object')?['domain']",
+                                                            "Domain 2TLD": "@items('loop_through_the_reponse_object')?['domain_2tld']",
+                                                            "Domain Created Datetime": "@items('loop_through_the_reponse_object')?['domain_created_datetime']",
+                                                            "Domain Expires Datetime": "@items('loop_through_the_reponse_object')?['domain_expires_datetime']",
+                                                            "Domain Updated Datetime": "@items('loop_through_the_reponse_object')?['domain_updated_datetime']",
+                                                            "Idn Name": "@items('loop_through_the_reponse_object')?['idn_name']",
+                                                            "Privacy Punch": "@items('loop_through_the_reponse_object')?['privacy_punch']",
+                                                            "Registrar": "@items('loop_through_the_reponse_object')?['registrar']"
+                                                        }
+                                                    }
+                                                },
+                                                "Append_to_array_variable_2": {
+                                                    "runAfter": {
+                                                        "Append_to_array_variable": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Json_Output_02",
+                                                        "value": {
+                                                            "Address": "@join(variables('address_details'),',')",
+                                                            "City": "@join(variables('city_details'),',')",
+                                                            "Country": "@join(variables('country_details'),',')",
+                                                            "Email": "@join(variables('emails'),',')",
+                                                            "Nameserver": "@join(variables('nameserver_details'),',')",
+                                                            "Phone": "@variables('phone_number')",
+                                                            "Phone Carrier": "@variables('phone_carrier')",
+                                                            "Phone Country": "@variables('phone_country')",
+                                                            "Phone Geo": "@variables('phone_geo')"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_city": {
+                                                    "runAfter": {
+                                                        "set_address": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "city_details",
+                                                        "value": "@items('loop_through_the_reponse_object')?['city']"
+                                                    }
+                                                },
+                                                "Set_country": {
+                                                    "runAfter": {
+                                                        "Set_city": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "country_details",
+                                                        "value": "@items('loop_through_the_reponse_object')?['country']"
+                                                    }
+                                                },
+                                                "Set_emails": {
+                                                    "runAfter": {
+                                                        "Set_country": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "emails",
+                                                        "value": "@items('loop_through_the_reponse_object')?['email']"
+                                                    }
+                                                },
+                                                "Set_nameserver": {
+                                                    "runAfter": {
+                                                        "Set_emails": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "nameserver_details",
+                                                        "value": "@items('loop_through_the_reponse_object')?['nameserver']"
+                                                    }
+                                                },
+                                                "check_phone_object_length": {
+                                                    "actions": {
+                                                        "Set_phone": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "phone_number",
+                                                                "value": "@{items('loop_through_the_reponse_object')?['phone'][0]?['phone']}"
+                                                            }
+                                                        },
+                                                        "Set_phone_carrier": {
+                                                            "runAfter": {
+                                                                "Set_phone": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "phone_carrier",
+                                                                "value": "@{items('loop_through_the_reponse_object')?['phone'][0]?['phone_info']?['carrier']}"
+                                                            }
+                                                        },
+                                                        "Set_phone_country": {
+                                                            "runAfter": {
+                                                                "Set_phone_carrier": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "phone_country",
+                                                                "value": "@{items('loop_through_the_reponse_object')?['phone'][0]?['phone_info']?['country']}"
+                                                            }
+                                                        },
+                                                        "Set_phone_geo": {
+                                                            "runAfter": {
+                                                                "Set_phone_country": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "phone_geo",
+                                                                "value": "@items('loop_through_the_reponse_object')?['phone'][0]?['phone_info']?['geo']"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_nameserver": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "greater": [
+                                                                    "@length(items('loop_through_the_reponse_object')?['phone'])",
+                                                                    0
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "set_address": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "address_details",
+                                                        "value": "@items('loop_through_the_reponse_object')?['address']"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "set_json_outout_2_to_empty": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "set_json_outout_2_to_empty": {
+                                            "runAfter": {
+                                                "Set_jsonoutput_to_empty": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Json_Output_02",
+                                                "value": []
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_records_length": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p><span style=\"font-size: 16px\"><strong>Whois Information for Phone:</strong></span><span style=\"font-size: 16px\"><strong>@{items('Foreach_Accounts')?['Name']}</strong></span><span style=\"font-size: 16px\"><strong><br>\n</strong></span><span style=\"font-size: 14px\">No records found.</span></p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@variables('RecordsLength')",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_Whois_Information": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['hyasinsight']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/whois",
+                                        "queries": {
+                                            "indicator_type": "phone",
+                                            "indicator_value": "@items('Foreach_Accounts')?['Name']"
+                                        }
+                                    }
+                                },
+                                "Set_records_length": {
+                                    "runAfter": {
+                                        "Get_Whois_Information": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "RecordsLength",
+                                        "value": "@length(body('Get_Whois_Information'))"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "JSON_Output_Variable": {
+                            "runAfter": {
+                                "take_records": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Json_Output_01",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "JSON_Output_Variable_2": {
+                            "runAfter": {
+                                "JSON_Output_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Json_Output_02",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Link_Text": {
+                            "runAfter": {
+                                "Response_Length_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "link_text",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Nameserver_details_variable": {
+                            "runAfter": {
+                                "Email_details_varibale": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "nameserver_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Organization_details_variable": {
+                            "runAfter": {
+                                "Nameserver_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "organization_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Phone_number_variable": {
+                            "runAfter": {
+                                "State_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "phone_number",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response_Length_Variable": {
+                            "runAfter": {
+                                "JSON_Output_Variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RecordsLength",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "State_details_variable": {
+                            "runAfter": {
+                                "Organization_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "state_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "phone_carrier_variable": {
+                            "runAfter": {
+                                "Phone_number_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "phone_carrier",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "phone_country_variable": {
+                            "runAfter": {
+                                "phone_carrier_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "phone_country",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "phone_geo_variable": {
+                            "runAfter": {
+                                "phone_country_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "phone_geo",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "take_records": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "take_records",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            },
+                            "hyasinsight": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('HYASInsightConnectionName'))]",
+                                "connectionName": "[variables('HYASInsightConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/hyasinsight')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
