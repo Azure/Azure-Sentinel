@@ -9,8 +9,8 @@ The key function of this solution is to retrieve data provided by the 1Password 
 ### Required
 
 - [1Password API key](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens)
-- [Microsoft Azure](https://azure.microsoft.com/en-us/free)
-- [Microsoft Sentinel](https://azure.microsoft.com/en-us/products/microsoft-sentinel/)
+- [Microsoft Azure](https://azure.microsoft.com/free)
+- [Microsoft Sentinel](https://azure.microsoft.com/products/microsoft-sentinel/)
 - Contributor role with User Access Administrator role on the Microsoft Sentinel Resource Group <br>
 **or**
 - Owner on the Microsoft Sentinel Resource Group 
