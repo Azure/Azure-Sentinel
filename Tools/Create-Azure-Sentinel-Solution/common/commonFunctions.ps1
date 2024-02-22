@@ -1861,7 +1861,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                             {
                                                 foreach ($desc in $instructionItem.parameters.instructionSteps)
                                                 {
-                                                    if ($desc.description && $desc.description.IndexOf('Deploy To Azure') -gt 0)
+                                                    if ($desc.description -and $desc.description.IndexOf('Deploy To Azure') -gt 0)
                                                     {
                                                         $existingFunctionApp = $true
                                                         break
@@ -2547,11 +2547,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         else
                         {
-                            $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue "[variables('TemplateEmptyArray')]";
-                            if (!$global:baseMainTemplate.variables.TemplateEmptyArray) 
-                            {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
-                            }
+                            $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue @();
                         }
 
                         if (!$yaml.severity) {
@@ -2980,6 +2976,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     {
         if ($contentToImport.Description) {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", $contentToImport.Description
+
+            $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionName}}", $solutionName
         }
         else {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", ""
@@ -3518,10 +3516,10 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     }
     
     $displayDetails = getParserDetails $global:solutionId $yaml $isyaml
+    $parserName = $fileName + " Data Parser"
+    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($parserName)')]"
 
-    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($displayDetails.name)')]"
-
-    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
+    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($parserName)')]"
 
     $functionAlias = ($null -ne $yaml -and $yaml.Count -gt 0) ? $yaml.FunctionName : "$($displayDetails.functionAlias)"
     $parserContentIdValue = "$($functionAlias)-Parser"
