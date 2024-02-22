@@ -5,8 +5,6 @@ require 'json'
 require 'openssl'
 require 'base64'
 require 'time'
-require 'open3'
-
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsArcTokenProvider
@@ -25,19 +23,35 @@ class LogAnalyticsArcTokenProvider
   # Public methods
   public
 
+  def get_challange_token_path()
+    # Create REST request header
+    headers = get_header1()
+    begin
+      response = RestClient::Request.execute(
+        method: :get,
+        url: @token_request_uri,
+        headers: headers
+      )
+    rescue RestClient::ExceptionWithResponse => e
+      response = e.response
+    end
+
+    www_authenticate = response.headers[:www_authenticate]
+    path = www_authenticate.split(' ')[1].gsub('realm=', '')
+    return path
+  end # def get_challange_token_path
+
   def get_challange_token()
-    challenge_script = <<~SCRIPT
-      CHALLENGE_TOKEN_PATH=$(curl -s -D - -H Metadata:true "http://127.0.0.1:40342/metadata/identity/oauth2/token?api-version=2019-11-01&resource=https%3A%2F%2Fmonitor.azure.com" | grep Www-Authenticate | cut -d "=" -f 2 | tr -d "[:cntrl:]")
-      echo -n $(cat $CHALLENGE_TOKEN_PATH)
-    SCRIPT
+    @logger.info("start getting key from key file")
 
-    stdout, stderr, status = Open3.capture3('bash', '-c', challenge_script)
-
-    if status.success?
-      puts stdout
-      return stdout
+    path = get_challange_token_path()
+    # Check if the file is readable
+    if ::File.readable?(path)
+      # Read the content of the key file
+      key_content = ::File.read(path)
+      return key_content
     else
-      puts "Error: #{stderr}"
+      @logger.error("The file at #{path} is not readable by the current user. Please run the script as root.")
     end
   end # def get_challange_token
 
@@ -58,14 +72,11 @@ class LogAnalyticsArcTokenProvider
   end # def is_saved_token_need_refresh
 
   def refresh_saved_token()
-    @logger.info("MI token expired - refreshing token.")
+    @logger.info("ARC MI token expired - refreshing token.")
 
     token_response = post_token_request()
     @token_state[:access_token] = token_response["access_token"]
     @token_state[:expiry_time] = get_token_expiry_time(token_response["expires_in"].to_i)
-
-    @logger.info("token: #{@token_state[:access_token]}")
-    @logger.info("expiry time: #{@token_state[:expiry_time]}")
 
   end # def refresh_saved_token
 
@@ -81,9 +92,6 @@ class LogAnalyticsArcTokenProvider
   def post_token_request()
     # Create REST request header
     headers = get_header()
-
-    @logger.info("headers: #{headers}")
-
     while true
       begin
         # GET REST request
@@ -110,11 +118,17 @@ class LogAnalyticsArcTokenProvider
   # Create a header
   def get_header()
     return {
-      # 'Content-Type' => 'application/x-www-form-urlencoded',
       'Metadata' => 'true',
       'Authorization' => "Basic #{get_challange_token()}"
     }
   end # def get_header
+
+  # Create a header
+  def get_header1()
+    return {
+      'Metadata' => 'true',
+    }
+  end # def get_header1
 
 end # end of class
 end ;end ;end
