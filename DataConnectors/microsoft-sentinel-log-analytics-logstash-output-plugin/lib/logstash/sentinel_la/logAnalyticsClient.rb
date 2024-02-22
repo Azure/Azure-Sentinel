@@ -15,6 +15,9 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
 require "logstash/sentinel_la/logAnalyticsMiTokenProvider"
 require "logstash/sentinel_la/logAnalyticsArcTokenProvider"
 
+  def azcmagent_running?
+    system('azcmagent > /dev/null')
+  end # def azcmagent_running?
 
   def initialize(logstashLoganalyticsConfiguration)
     @logstashLoganalyticsConfiguration = logstashLoganalyticsConfiguration
@@ -24,9 +27,13 @@ require "logstash/sentinel_la/logAnalyticsArcTokenProvider"
     @uri = sprintf("%s/dataCollectionRules/%s/streams/%s?api-version=%s",@logstashLoganalyticsConfiguration.data_collection_endpoint, @logstashLoganalyticsConfiguration.dcr_immutable_id, logstashLoganalyticsConfiguration.dcr_stream_name, la_api_version)
 
     if @logstashLoganalyticsConfiguration.managed_identity
-      @aadTokenProvider=LogAnalyticsMiTokenProvider::new(logstashLoganalyticsConfiguration)
-    elsif @logstashLoganalyticsConfiguration.arc_managed_identity
-      @aadTokenProvider=LogAnalyticsArcTokenProvider::new(logstashLoganalyticsConfiguration)
+      if azcmagent_running?
+        @logger.info("going for arc")
+        @aadTokenProvider=LogAnalyticsArcTokenProvider::new(logstashLoganalyticsConfiguration)
+      else
+        @logger.info("going for MI")
+        @aadTokenProvider=LogAnalyticsMiTokenProvider::new(logstashLoganalyticsConfiguration)
+      end
     else
       @aadTokenProvider=LogAnalyticsAadTokenProvider::new(logstashLoganalyticsConfiguration)
     end
