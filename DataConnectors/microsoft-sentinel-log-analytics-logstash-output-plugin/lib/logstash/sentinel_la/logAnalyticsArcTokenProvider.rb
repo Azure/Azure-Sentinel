@@ -42,8 +42,6 @@ class LogAnalyticsArcTokenProvider
   end # def get_challange_token_path
 
   def get_challange_token()
-    @logger.info("start getting key from key file")
-
     path = get_challange_token_path()
     # Check if the file is readable
     if ::File.readable?(path)
