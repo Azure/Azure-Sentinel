@@ -47,6 +47,12 @@ sudo /usr/share/logstash/bin/logstash-plugin install microsoft-sentinel-log-anal
 
 If your machine doesn't has an active Internet connection, or you want to install the plugin manually, you can download the plugin files and perform an 'offline' installation. [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).
 
+If you already have the plugin installed, you can check which version you have by running:
+
+```
+sudo /usr/share/logstash/bin/logstash-plugin list --verbose microsoft-sentinel-log-analytics-logstash-output-plugin
+```
+
 ## 2. Create a sample file
 To create a sample file, follow the following steps:
 1)	Copy the output plugin configuration below to your Logstash configuration file:
