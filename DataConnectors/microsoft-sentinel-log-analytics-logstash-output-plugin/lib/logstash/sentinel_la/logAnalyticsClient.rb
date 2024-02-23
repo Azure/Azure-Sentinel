@@ -15,8 +15,8 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
 require "logstash/sentinel_la/logAnalyticsMiTokenProvider"
 require "logstash/sentinel_la/logAnalyticsArcTokenProvider"
 
-  def azcmagent_running?
-    system('azcmagent > /dev/null')
+  def azcmagent_running? # AZure Connected Machine AGENT is running outside of Azure and onboarded into Azure Arc
+    system('azcmagent > /dev/null', [:out, :err] => IO::NULL)
   end # def azcmagent_running?
 
   def initialize(logstashLoganalyticsConfiguration)
@@ -28,10 +28,10 @@ require "logstash/sentinel_la/logAnalyticsArcTokenProvider"
 
     if @logstashLoganalyticsConfiguration.managed_identity
       if azcmagent_running?
-        @logger.info("going for arc")
+        @logger.info("Machine is Azure Arc-enabled server. Retrieving bearer token via azcmagent...")
         @aadTokenProvider=LogAnalyticsArcTokenProvider::new(logstashLoganalyticsConfiguration)
       else
-        @logger.info("going for MI")
+        @logger.info("Using Managed Identity configuration. Retrieving bearer token for Managed Identity...")
         @aadTokenProvider=LogAnalyticsMiTokenProvider::new(logstashLoganalyticsConfiguration)
       end
     else
