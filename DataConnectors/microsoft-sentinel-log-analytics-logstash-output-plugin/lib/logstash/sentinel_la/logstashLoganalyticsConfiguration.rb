@@ -9,11 +9,11 @@ class LogstashLoganalyticsOutputConfiguration
         @dcr_immutable_id = dcr_immutable_id
         @dcr_stream_name = dcr_stream_name
         @logger = logger
-	    @compress_data = compress_data
-	    @create_sample_file = create_sample_file
-	    @sample_file_path = sample_file_path
-      @managed_identity = managed_identity
-      @arc_managed_identity = arc_managed_identity
+        @compress_data = compress_data
+        @create_sample_file = create_sample_file
+        @sample_file_path = sample_file_path
+        @managed_identity = managed_identity
+        @arc_managed_identity = arc_managed_identity
 
 
 	# Delay between each resending of a message
@@ -35,58 +35,58 @@ class LogstashLoganalyticsOutputConfiguration
     end
 
 	def validate_configuration()
-      if @create_sample_file
-          begin
-              if @sample_file_path.nil?
-                  print_missing_parameter_message_and_raise("sample_file_path")
-              end
-              if @sample_file_path.strip == ""
-                  raise ArgumentError, "The setting sample_file_path cannot be empty"
-              end
-              begin
-                  file = java.io.File.new(@sample_file_path)
-                  if !file.exists
-                      raise "Path not exists"
-                  end
-              rescue Exception
-                  raise ArgumentError, "The path #{@sample_file_path} does not exist."
-              end
-          end
-      else
+        if @create_sample_file
+        begin
+            if @sample_file_path.nil?
+                print_missing_parameter_message_and_raise("sample_file_path")
+            end
+            if @sample_file_path.strip == ""
+                raise ArgumentError, "The setting sample_file_path cannot be empty"
+            end
+            begin
+                file = java.io.File.new(@sample_file_path)
+                if !file.exists
+                    raise "Path not exists"
+                end
+                rescue Exception
+                    raise ArgumentError, "The path #{@sample_file_path} does not exist."
+                end
+            end
+        else
             if @managed_identity || @arc_managed_identity
-              required_configs = { "data_collection_endpoint" => @data_collection_endpoint,
-                                "dcr_immutable_id" => @dcr_immutable_id,
-                                "dcr_stream_name" => @dcr_stream_name }
-          else
-            required_configs = { "client_app_Id" => @client_app_Id,
-                              "client_app_secret" => @client_app_secret,
-                              "tenant_id" => @tenant_id,
-                              "data_collection_endpoint" => @data_collection_endpoint,
-                              "dcr_immutable_id" => @dcr_immutable_id,
-                              "dcr_stream_name" => @dcr_stream_name }
-          end
-          required_configs.each { |name, conf|
-              if conf.nil?
-                  print_missing_parameter_message_and_raise(name)
-              end
-              if conf.empty?
-                  raise ArgumentError, "Malformed configuration , the following arguments can not be null or empty.[client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, dcr_immutable_id, dcr_stream_name]"
-              end
-          }
+                required_configs = { "data_collection_endpoint" => @data_collection_endpoint,
+                                    "dcr_immutable_id" => @dcr_immutable_id,
+                                    "dcr_stream_name" => @dcr_stream_name }
+            else
+                required_configs = { "client_app_Id" => @client_app_Id,
+                                    "client_app_secret" => @client_app_secret,
+                                    "tenant_id" => @tenant_id,
+                                    "data_collection_endpoint" => @data_collection_endpoint,
+                                    "dcr_immutable_id" => @dcr_immutable_id,
+                                    "dcr_stream_name" => @dcr_stream_name }
+            end
+        required_configs.each { |name, conf|
+            if conf.nil?
+                print_missing_parameter_message_and_raise(name)
+            end
+            if conf.empty?
+                raise ArgumentError, "Malformed configuration , the following arguments can not be null or empty.[client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, dcr_immutable_id, dcr_stream_name]"
+            end
+        }
 
-          if @retransmission_time < 0
-              raise ArgumentError, "retransmission_time must be a positive integer."
-          end
-          if @max_items < @MIN_MESSAGE_AMOUNT
-              raise ArgumentError, "Setting max_items to value must be greater then #{@MIN_MESSAGE_AMOUNT}."
-          end
-          if @key_names.length > 500
-              raise ArgumentError, 'There are over 500 key names listed to be included in the events sent to Azure Loganalytics, which exceeds the limit of columns that can be define in each table in log analytics.'
-          end
-          if !@azure_clouds.key?(@azure_cloud)
+        if @retransmission_time < 0
+            raise ArgumentError, "retransmission_time must be a positive integer."
+        end
+        if @max_items < @MIN_MESSAGE_AMOUNT
+            raise ArgumentError, "Setting max_items to value must be greater then #{@MIN_MESSAGE_AMOUNT}."
+        end
+        if @key_names.length > 500
+            raise ArgumentError, 'There are over 500 key names listed to be included in the events sent to Azure Loganalytics, which exceeds the limit of columns that can be define in each table in log analytics.'
+        end
+        if !@azure_clouds.key?(@azure_cloud)
             raise ArgumentError, "The specified Azure cloud #{@azure_cloud} is not supported. Supported clouds are: #{@azure_clouds.keys.join(", ")}."
-          end
-      end
+        end
+    end
         @logger.info("Azure Loganalytics configuration was found valid.")
         # If all validation pass then configuration is valid
         return  true
@@ -95,12 +95,12 @@ class LogstashLoganalyticsOutputConfiguration
 
     def print_missing_parameter_message_and_raise(param_name)
         @logger.error("Missing a required setting for the microsoft-sentinel-log-analytics-logstash-output-plugin output plugin:
-  output {
-    microsoft-sentinel-log-analytics-logstash-output-plugin {
-      #{param_name} => # SETTING MISSING
-      ...
+    output {
+        microsoft-sentinel-log-analytics-logstash-output-plugin {
+            #{param_name} => # SETTING MISSING
+            ...
+        }
     }
-  }
 ")
         raise ArgumentError, "The setting #{param_name} is required."
     end
@@ -138,14 +138,14 @@ class LogstashLoganalyticsOutputConfiguration
     end
 
     def managed_identity
-      @managed_identity
+        @managed_identity
     end
 
     def arc_managed_identity
-      @arc_managed_identity
+        @arc_managed_identity
     end
 
-	  def client_app_Id
+	def client_app_Id
         @client_app_Id
     end
 
