@@ -11,6 +11,7 @@ class LogAnalyticsMiTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
     scope = CGI.escape("#{logstashLoganalyticsConfiguration.get_monitor_endpoint}")
     @token_request_uri = sprintf("http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=%s", scope)
+    # https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/how-to-use-vm-token
     @token_state = {
       :access_token => nil,
       :expiry_time => nil,
@@ -40,7 +41,7 @@ class LogAnalyticsMiTokenProvider
   end # def is_saved_token_need_refresh
 
   def refresh_saved_token()
-    @logger.info("MI token expired - refreshing token.")
+    @logger.info("Managed Identity token expired - refreshing token.")
 
     token_response = post_token_request()
     @token_state[:access_token] = token_response["access_token"]
@@ -74,11 +75,11 @@ class LogAnalyticsMiTokenProvider
           return JSON.parse(response.body)
         end
       rescue RestClient::ExceptionWithResponse => ewr
-        @logger.error("Exception while authenticating with AAD API ['#{ewr.response}']")
+        @logger.error("Exception while authenticating with Microsoft Entra ID API ['#{ewr.response}']")
       rescue Exception => ex
-        @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
+        @logger.trace("Exception while authenticating with Microsoft Entra ID API ['#{ex}']")
       end
-      @logger.error("Error while authenticating with AAD ('#{@token_request_uri}'), retrying in 10 seconds.")
+      @logger.error("Error while authenticating with Microsoft Entra ID - check if Managed Identity configuration is correct. ('#{@token_request_uri}'), retrying in 10 seconds.")
       sleep 10
     end
   end # def post_token_request

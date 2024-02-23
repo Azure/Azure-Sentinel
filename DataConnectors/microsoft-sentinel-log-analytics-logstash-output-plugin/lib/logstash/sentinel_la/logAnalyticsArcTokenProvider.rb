@@ -11,6 +11,7 @@ class LogAnalyticsArcTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
     scope = CGI.escape("#{logstashLoganalyticsConfiguration.get_monitor_endpoint}")
     @token_request_uri = sprintf("http://127.0.0.1:40342/metadata/identity/oauth2/token?api-version=2019-11-01&resource=%s", scope)
+    # https://learn.microsoft.com/en-us/azure/azure-arc/servers/managed-identity-authentication
     @token_state = {
       :access_token => nil,
       :expiry_time => nil,
@@ -23,6 +24,7 @@ class LogAnalyticsArcTokenProvider
   # Public methods
   public
 
+  # Bearer token needs to be fetch via azcmagent. But first we need to find the path to the authentication token for azcmagent
   def get_challange_token_path()
     # Create REST request header
     headers = get_header1()
@@ -36,11 +38,13 @@ class LogAnalyticsArcTokenProvider
       response = e.response
     end
 
+    # Path to .KEY file is stripped from response
     www_authenticate = response.headers[:www_authenticate]
     path = www_authenticate.split(' ')[1].gsub('realm=', '')
     return path
   end # def get_challange_token_path
 
+  # With path to .KEY file we can authenticate to azcmagent and retrieve Bearer token
   def get_challange_token()
     path = get_challange_token_path()
     # Check if the file is readable
@@ -49,6 +53,7 @@ class LogAnalyticsArcTokenProvider
       key_content = ::File.read(path)
       return key_content
     else
+      # User must be a member of the himds group to be able to retrieve contents of .KEY file
       @logger.error("The file at #{path} is not readable by the current user. Please run the script as root.")
     end
   end # def get_challange_token
@@ -70,7 +75,7 @@ class LogAnalyticsArcTokenProvider
   end # def is_saved_token_need_refresh
 
   def refresh_saved_token()
-    @logger.info("ARC MI token expired - refreshing token.")
+    @logger.info("Azure Arc Managed Identity token expired - refreshing token.")
 
     token_response = post_token_request()
     @token_state[:access_token] = token_response["access_token"]
@@ -104,11 +109,11 @@ class LogAnalyticsArcTokenProvider
           return JSON.parse(response.body)
         end
       rescue RestClient::ExceptionWithResponse => ewr
-        @logger.error("Exception while authenticating with AAD API ['#{ewr.response}']")
+        @logger.error("Exception while authenticating with Azure Arc Connected Machine Agent (azcmagent) API ['#{ewr.response}']")
       rescue Exception => ex
-        @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
+        @logger.trace("Exception while authenticating with Azure Arc Connected Machine Agent (azcmagent) API ['#{ex}']")
       end
-      @logger.error("Error while authenticating with AAD ('#{@token_request_uri}'), retrying in 10 seconds.")
+      @logger.error("Error while authenticating with Azure Arc Connected Machine Agent (azcmagent) ('#{@token_request_uri}'), retrying in 10 seconds.")
       sleep 10
     end
   end # def post_token_request
