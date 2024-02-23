@@ -1,0 +1,39 @@
+id: 25669099-4e7e-414a-837f-659d1edb5801
+name: drive-by-compromise-by-seo-poisoning
+description: |
+  This query looks for anomalous executable downloads from websites. Look for downloads from anomalous URLs.
+  Author: Jouni Mikkola
+  References:
+  https://threathunt.blog/hunt-seo-poisoning/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceFileEvents
+tactics:
+  - Initial Access
+relevantTechniques:
+  - T1189
+query: |
+  let LookupTime = 30d;
+  let BrowserApps = pack_array(
+  "opera.exe",
+  "chrome.exe",
+  "firefox.exe",
+  "msedge.exe",
+  "iexplore.exe"
+  );
+  DeviceFileEvents 
+  | where isnotempty(FileOriginUrl)
+  | where Timestamp > ago(LookupTime)
+  | where InitiatingProcessFileName in~ (BrowserApps)
+  | where FileName endswith ".exe" or FileName endswith ".msi" or FileName endswith ".zip"
+  // Remove noise by removing FileNames containing ChromeSetup.
+  // Some apps (like Chrome installer) seems to have a "polymorphic" installers where the SHA1 hash is always different when the app is installed. Some Adobe products seem to behave similarly.
+  | where FileName !contains "ChromeSetup"
+  // The following filter can be used to look for files with certain names. However, this can be hard as there is such a large number of files being mimicked in SEO poisoning attacks.
+  //| where FileName contains "teamview" or FileName contains "windirstat"
+  | project DeviceName, Timestamp, ActionType, FileName, SHA1, FileOriginReferrerUrl, FileOriginUrl
+  | summarize count() by FileName, SHA1, FileOriginReferrerUrl, FileOriginUrl
+  | where count_ < 4
+  | invoke FileProfile(SHA1, 1000) 
+  | project-reorder  FileName, SHA1, FileOriginReferrerUrl, FileOriginUrl, count_, GlobalPrevalence, GlobalFirstSeen, GlobalLastSeen
