@@ -13,5 +13,5 @@
 * Support China and US Government Azure sovereign clouds.
 * Increase timeout for read/open connections to 240 seconds.
 
-## 1.1.2
-* Added support for Managed Identity authentication on Azure VMs and Azure Arc connected machines.
+## 1.2.0
+* Added support for Managed Identity authentication on both Azure VMs and Azure Arc connected machines.
