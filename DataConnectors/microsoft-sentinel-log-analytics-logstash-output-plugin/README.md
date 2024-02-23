@@ -3,8 +3,8 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.1.2 
-Released on: 2024-02-21
+Plugin version: v1.2.0 
+Released on: 2024-02-23
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -104,7 +104,7 @@ To configure Microsoft Sentinel Logstash plugin you first need to create the DCR
 Use the tutorial from the previous section to retrieve the following attributes: 
 - **client_app_Id** - String, The 'Application (client) ID' value created in step #3 of the "Configure Application" section of the tutorial you used in the previous step.
 - **client_app_secret** -String, The value of the client secret created in step #5 of the "Configure Application" section of the tutorial you used in the previous step.
-- **tenant_id** - String, Your subscription's tenant id. You can find in the following path: Home -> Azure Active Directory -> Overview Under 'Basic Information'.
+- **tenant_id** - String, Your subscription's tenant id. You can find in the following path: Home -> Microsoft Entra ID -> Overview Under 'Basic Information'.
 - **data_collection_endpoint** - String, - The value of the logsIngestion URI (see step #3 of the "Create data collection endpoint" section in Tutorial [Tutorial - Send custom logs to Azure Monitor Logs using resource manager templates - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs-api#create-data-collection-endpoint>).
 - **dcr_immutable_id** - String, The value of the DCR immutableId (see the "Collect information from DCR" section in [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs#collect-information-from-dcr>).
 - **dcr_stream_name** - String, The name of the data stream (Go to the json view of the DCR as explained in the "Collect information from DCR" section in [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs#collect-information-from-dcr>) and copy the value of the "dataFlows -> streams" property (see circled in red in the below example).
@@ -112,6 +112,7 @@ Use the tutorial from the previous section to retrieve the following attributes:
 After retrieving the required values replace the output section of the Logstash configuration file created in the previous steps with the example below. Then, replace the strings in the brackets below with the corresponding values. Make sure you change the "create_sample_file" attribute to false.
 
 Here is an example for the output plugin configuration section:
+
 ```
 output {
     microsoft-sentinel-log-analytics-logstash-output-plugin {
@@ -125,21 +126,26 @@ output {
         sample_file_path => "c:\\temp"
     }
 }
-
 ```
+
 ### Optional configuration 
-- **managed_identity** - Boolean, false by default. Set to `true` if you'd whish to authenticate using a Managed Identity. Managed Identities provide a "passwordless" authentication. This means providing `client_app_id`, `client_app_secret` and `tenant_id` is no longer requird. [Learn more about using anaged Identities](<https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview>). If your machine resides outside of Azure user `arc_managed_identity` instead.
-- **arc_managed_identity** - Boolean, false by default. Set to `true` is you'd which to authenticate using a Managed Identity, but the machine resides outside of Azure. On-boarding the machine into Azure Arc is mandatory for this to work. [Learn more about Azure Arc](<https://learn.microsoft.com/en-us/azure/azure-arc/servers/overview#next-steps>)
+
+- **managed_identity** - Boolean, false by default. Set to `true` if you'd whish to authenticate using a Managed Identity. Managed Identities provide a "passwordless" authentication solution. This means providing `client_app_id`, `client_app_secret` and `tenant_id` is no longer requird. [Learn more about using anaged Identities](<https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview>).
+  
+    **Using Managed Identities over app registrations is highly recommended!**  
+
+    If your machine resides outside of Azure, please make sure the machine is onboarded into Azure Arc. [Learn more about Azure Arc](<https://learn.microsoft.com/en-us/azure/azure-arc/servers/overview#next-steps>)
 - **key_names** – Array of strings, if you wish to send a subset of the columns to Log Analytics.
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
 - **proxy** - String, Empty by default. Specify which proxy URL to use for API calls for all of the communications with Azure.
-- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service. Overrides the proxy setting.
+- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls to the Microsoft Entra ID service. Overrides the proxy setting.
 - **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint. Overrides the proxy setting.
 - **azure_cloud** - String, Empty by default. Used to specify the name of the Azure cloud that is being used, AzureCloud is set as default. Available values are: AzureCloud, AzureChinaCloud and AzureUSGovernment.
 
-Here is an example for the output plugin configuration section using a Managed Identity on an Azure VM:
+Here is an example for the output plugin configuration section using a Managed Identity:
+
 ```
 output {
     microsoft-sentinel-log-analytics-logstash-output-plugin {
@@ -149,20 +155,6 @@ output {
         dcr_stream_name => "<enter your stream name here>"
     }
 }
-
-```
-
-And a slightly different on for when using an Azure Arc connected machine:
-```
-output {
-    microsoft-sentinel-log-analytics-logstash-output-plugin {
-        arc_managed_identity => true
-        data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
-        dcr_immutable_id => "<enter your DCR immutableId here>"
-        dcr_stream_name => "<enter your stream name here>"
-    }
-}
-
 ```
 
 #### Note: When setting an empty string as a value for a proxy setting, it will unset any system wide proxy setting.
