@@ -139,7 +139,7 @@ class LogstashLoganalyticsOutputConfiguration
         @managed_identity
     end
 
-	def client_app_Id
+    def client_app_Id
         @client_app_Id
     end
 

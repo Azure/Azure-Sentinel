@@ -24,7 +24,7 @@ class LogAnalyticsArcTokenProvider
   # Public methods
   public
 
-  # Bearer token needs to be fetch via azcmagent. But first we need to find the path to the authentication token for azcmagent
+  # Find the path to the authentication token
   def get_challange_token_path()
     # Create REST request header
     headers = get_header1()
@@ -44,7 +44,7 @@ class LogAnalyticsArcTokenProvider
     return path
   end # def get_challange_token_path
 
-  # With path to .KEY file we can authenticate to azcmagent and retrieve Bearer token
+  # With path to .KEY file we can retrieve Bearer token
   def get_challange_token()
     path = get_challange_token_path()
     # Check if the file is readable
@@ -109,11 +109,11 @@ class LogAnalyticsArcTokenProvider
           return JSON.parse(response.body)
         end
       rescue RestClient::ExceptionWithResponse => ewr
-        @logger.error("Exception while authenticating with Azure Arc Connected Machine Agent (azcmagent) API ['#{ewr.response}']")
+        @logger.error("Exception while authenticating with Azure Arc Connected Machine API ['#{ewr.response}']")
       rescue Exception => ex
-        @logger.trace("Exception while authenticating with Azure Arc Connected Machine Agent (azcmagent) API ['#{ex}']")
+        @logger.trace("Exception while authenticating with Azure Arc Connected Machine API ['#{ex}']")
       end
-      @logger.error("Error while authenticating with Azure Arc Connected Machine Agent (azcmagent) ('#{@token_request_uri}'), retrying in 10 seconds.")
+      @logger.error("Error while authenticating with Azure Arc Connected Machine ('#{@token_request_uri}'), retrying in 10 seconds.")
       sleep 10
     end
   end # def post_token_request
