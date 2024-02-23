@@ -42,7 +42,7 @@ class LogAnalyticsAadTokenProvider
   end # def is_saved_token_need_refresh
 
   def refresh_saved_token()
-    @logger.info("aad token expired - refreshing token.")
+    @logger.info("Entra ID token expired - refreshing token.")
 
     token_response = post_token_request()
     @token_state[:access_token] = token_response["access_token"]
@@ -72,11 +72,11 @@ class LogAnalyticsAadTokenProvider
           return JSON.parse(response.body)
         end
       rescue RestClient::ExceptionWithResponse => ewr
-        @logger.error("Exception while authenticating with AAD API ['#{ewr.response}']")
+        @logger.error("Exception while authenticating with Microsoft Entra ID API ['#{ewr.response}']")
       rescue Exception => ex
-        @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
+        @logger.trace("Exception while authenticating with Microsoft Entra ID API ['#{ex}']")
       end
-      @logger.error("Error while authenticating with AAD ('#{@aad_uri}'), retrying in 10 seconds.")
+      @logger.error("Error while authenticating with Microsoft Entra ID ('#{@aad_uri}'), retrying in 10 seconds.")
       sleep 10
     end
   end # def post_token_request
