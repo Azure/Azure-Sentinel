@@ -16,11 +16,9 @@ This plugin is currently in development and is free to use. We welcome contribut
 4) Configure Logstash configuration file
 5) Basic logs transmission
 
-
-## 1. Install the plugin
+## 1. Install Logstash and the plugin
 
 Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API. 
-Install the microsoft-sentinel-log-analytics-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - 7.0 - 7.17.13
@@ -28,7 +26,9 @@ Microsoft Sentinel's Logstash output plugin supports the following versions
 - 8.11
 
 ```
-sudo apt-get install logstash=1:8.8.1-1
+wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/elastic.gpg >/dev/null
+echo "deb https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-8.x.list >/dev/null
+sudo apt-get update && sudo apt-get install logstash=1:8.8.1-1
 ```
 
 To make sure Logstash isn't automatically updated to a newer version, make sure its package is on hold for automatic updates:
@@ -39,6 +39,13 @@ sudo apt-mark hold logstash
 
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
+To install the microsoft-sentinel-log-analytics-logstash-output-plugin, you can make use of the published gem at rubygems.com:
+
+```
+sudo /usr/share/logstash/bin/logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin
+```
+
+If your machine doesn't has an active Internet connection, or you want to install the plugin manually, you can download the plugin files and perform an 'offline' installation. [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).
 
 ## 2. Create a sample file
 To create a sample file, follow the following steps:
