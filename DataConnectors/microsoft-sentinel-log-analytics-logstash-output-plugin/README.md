@@ -147,7 +147,7 @@ output {
   
     **Using Managed Identities over app registrations is highly recommended!**  
 
-    If your machine resides outside of Azure, please make sure the machine is onboarded into Azure Arc. [Learn more about Azure Arc](<https://learn.microsoft.com/en-us/azure/azure-arc/servers/overview#next-steps>)
+    If your machine resides outside of Azure, please make sure the machine is onboarded into Azure Arc. [Learn more about Azure Arc](<https://learn.microsoft.com/en-us/azure/azure-arc/servers/overview#next-steps>) Also, the 'logstash' user needs to be member of the `himds` group in order for Logstash to retrieve a bearer token while running as a system service.
 - **key_names** – Array of strings, if you wish to send a subset of the columns to Log Analytics.
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
@@ -169,6 +169,14 @@ output {
     }
 }
 ```
+
+> **IMPORTANT** when using `managed_identity` on a non-Azure machine
+>
+> If your machine resides outside of Azure, please make sure the machine is onboarded into Azure Arc. [Learn more about Azure Arc](<https://learn.microsoft.com/en-us/azure/azure-arc/servers/overview#next-steps>)
+>
+> Also, the `logstash` user needs to be member of the `himds` group in order for Logstash to retrieve a bearer token while running as a system service:
+>
+> `sudo usermod -a -G himds logstash`
 
 #### Note: When setting an empty string as a value for a proxy setting, it will unset any system wide proxy setting.
 
