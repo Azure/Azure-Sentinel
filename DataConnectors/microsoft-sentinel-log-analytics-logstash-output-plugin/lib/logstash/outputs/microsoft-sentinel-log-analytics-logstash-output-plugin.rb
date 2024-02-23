@@ -13,10 +13,8 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # Stating that the output plugin will run in concurrent mode
   concurrency :shared
 
-  # If managed Identity is used, the plugin will use the managed identity to authenticate with Azure Active Directory
+  # If managed Identity is used, the plugin will use the managed identity to authenticate with Microsoft Entra ID
   config :managed_identity, :validate => :boolean, :default => false
-
-  config :arc_managed_identity, :validate => :boolean, :default => false
 
   # Your registered app ID
   config :client_app_Id, :validate => :string
@@ -55,7 +53,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # Setting default proxy to be used for all communication with azure
   config :proxy, :validate => :string
 
-  # Setting proxy_aad to be used for communicating with azure active directory service
+  # Setting proxy_aad to be used for communicating with the Microsoft Entra ID service
   config :proxy_aad, :validate => :string
 
   # Setting proxy to be used for the LogAnalytics endpoint REST client
@@ -104,7 +102,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # Building the logstash object configuration from the output configuration provided by the user
   # Return LogstashLoganalyticsOutputConfiguration populated with the configuration values
   def build_logstash_configuration()
-    logstash_configuration= LogStash::Outputs::MicrosoftSentinelOutputInternal::LogstashLoganalyticsOutputConfiguration::new(@client_app_Id, @client_app_secret, @tenant_id, @data_collection_endpoint, @dcr_immutable_id, @dcr_stream_name, @compress_data, @create_sample_file, @sample_file_path, @logger, @managed_identity, @arc_managed_identity)
+    logstash_configuration= LogStash::Outputs::MicrosoftSentinelOutputInternal::LogstashLoganalyticsOutputConfiguration::new(@client_app_Id, @client_app_secret, @tenant_id, @data_collection_endpoint, @dcr_immutable_id, @dcr_stream_name, @compress_data, @create_sample_file, @sample_file_path, @logger, @managed_identity)
     logstash_configuration.key_names = @key_names
     logstash_configuration.plugin_flush_interval = @plugin_flush_interval
     logstash_configuration.decrease_factor = @decrease_factor

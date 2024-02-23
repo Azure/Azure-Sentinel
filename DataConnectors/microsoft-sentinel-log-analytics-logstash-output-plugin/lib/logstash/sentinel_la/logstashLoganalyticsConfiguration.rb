@@ -1,7 +1,7 @@
 # encoding: utf-8
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogstashLoganalyticsOutputConfiguration
-    def initialize(client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, dcr_immutable_id, dcr_stream_name, compress_data, create_sample_file, sample_file_path, logger, managed_identity, arc_managed_identity)
+    def initialize(client_app_Id, client_app_secret, tenant_id, data_collection_endpoint, dcr_immutable_id, dcr_stream_name, compress_data, create_sample_file, sample_file_path, logger, managed_identity)
 		@client_app_Id = client_app_Id
         @client_app_secret = client_app_secret
         @tenant_id = tenant_id
@@ -13,8 +13,6 @@ class LogstashLoganalyticsOutputConfiguration
         @create_sample_file = create_sample_file
         @sample_file_path = sample_file_path
         @managed_identity = managed_identity
-        @arc_managed_identity = arc_managed_identity
-
 
 	# Delay between each resending of a message
         @RETRANSMISSION_DELAY = 2
@@ -53,7 +51,7 @@ class LogstashLoganalyticsOutputConfiguration
                 end
             end
         else
-            if @managed_identity || @arc_managed_identity
+            if @managed_identity
                 required_configs = { "data_collection_endpoint" => @data_collection_endpoint,
                                     "dcr_immutable_id" => @dcr_immutable_id,
                                     "dcr_stream_name" => @dcr_stream_name }
@@ -139,10 +137,6 @@ class LogstashLoganalyticsOutputConfiguration
 
     def managed_identity
         @managed_identity
-    end
-
-    def arc_managed_identity
-        @arc_managed_identity
     end
 
 	def client_app_Id
