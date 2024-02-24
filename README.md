@@ -126,7 +126,7 @@ Copyright (c) Microsoft Corporation.  All rights reserved.
 
 Starting test execution, please wait...
 
-A total of 1 test files matched the specified pattern.
+A total of 1 test files matched the specified patterns.
 
 Test Run Successful.
 Total tests: 171
