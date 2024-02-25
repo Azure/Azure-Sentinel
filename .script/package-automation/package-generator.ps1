@@ -7,7 +7,7 @@ function ErrorOutput {
     Write-Output "isCreatePackage=$false" >> $env:GITHUB_OUTPUT
     Write-Output "packageCreationPath=''" >> $env:GITHUB_OUTPUT
     Write-Output "blobName=''" >> $env:GITHUB_OUTPUT
-    #exit 1
+    exit 1
 }
 
 try {
@@ -464,6 +464,7 @@ try {
             }
         }
     }
+
     if ($parserFolderResultLength -gt 0) {
         $parserFolderResultArray = $parserFolderResult | ConvertTo-Json -AsArray
         $parsersArrayAttributeExist = [bool]($dataFileContentObject.PSobject.Properties.name -match ([regex]::Escape("Parsers")))
@@ -919,9 +920,6 @@ try {
             $property.Name.ToLower() -eq 'parsers' -or 
             $property.Name.ToLower() -eq 'dataconnectors' -or 
             $property.Name.ToLower() -eq 'data connectors') {
-            $gg = $property.Value.GetType()
-            $pp = $property.Name
-            Write-Host "type is $gg , $pp"
             if ($property.Value.GetType().FullName -eq 'System.String') {
                 $customProperties[$property.Name] = $property.Value | ConvertFrom-Json
             }
@@ -937,8 +935,14 @@ try {
     ./Tools/Create-Azure-Sentinel-Solution/pipeline/createSolutionV4.ps1 $baseFolderPath $solutionName $dataFileContentObject $dataFolderFile $dataConnectorFolderName $dataFolderActualName $instrumentationKey $pullRequestNumber $runId $packageVersion $defaultPackageVersion $isWatchListInsideOfWorkbooksFolder
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
-    $allFilesInCreatedPackage = Get-ChildItem $packageCreationPath 
-    $allFilesInCreatedPackageCount = $allFilesInCreatedPackage.Count
+    Write-Host "packageCreationPath $packageCreationPath"
+    if (Test-Path -Path "$packageCreationPath") {
+        $allFilesInCreatedPackage = Get-ChildItem "$packageCreationPath" 
+        $allFilesInCreatedPackageCount = $allFilesInCreatedPackage.Count
+    } else {
+        $allFilesInCreatedPackageCount = 0
+    }
+
     $blobName = "" + $solutionName + "_" + $pullRequestNumber + "_" + $packageVersion
     Write-Host "Blob name is $blobName"
     Write-Host "Package Files List are : $allFilesInCreatedPackage"
