@@ -31,7 +31,12 @@ query: |
   AuditLogs
   | where TimeGenerated > ago(queryperiod)
   | where OperationName in ("Invite external user", "Bulk invite users - started (bulk)", "Invite external user with reset invitation status")
-  | extend InitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatedBy = iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName)
   // Uncomment the following line to filter events where the inviting user was a guest user
   //| where InitiatedBy has_any ("live.com#", "#EXT#")
   | mv-apply TargetResource = TargetResources on 
@@ -68,25 +73,37 @@ query: |
           SigninTime = TimeGenerated
       )
       on parsedUser
-  | project InvitationTime, InitiatedBy, OperationName, InvitedUser, SigninTime, SigninCategory = Category1, SigninUserPrincipalName = UserPrincipalName, IPAddress, AppDisplayName, ResourceDisplayName, UserAgent, InvitationAdditionalDetails = AdditionalDetails, InvitationTargetResources = TargetResources
+  | project InvitationTime, InitiatedBy, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, OperationName, InvitedUser, SigninTime, SigninCategory = Category1, SigninUserPrincipalName = UserPrincipalName, AppDisplayName, ResourceDisplayName, UserAgent, InvitationAdditionalDetails = AdditionalDetails, InvitationTargetResources = TargetResources
   | extend InvitedUserName = tostring(split(InvitedUser,'@',0)[0]), InvitedUserUPNSuffix = tostring(split(InvitedUser,'@',1)[0]), 
-           InitiatedByName = tostring(split(InitiatedBy,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatedBy,'@',1)[0])
+           InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InvitedUser
       - identifier: Name
         columnName: InvitedUserName
       - identifier: UPNSuffix
         columnName: InvitedUserUPNSuffix
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
       - identifier: Name
         columnName: InitiatedByName
       - identifier: UPNSuffix
         columnName: InitiatedByUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPAddress
-version: 1.0.8
+        columnName: InitiatingIpAddress
+version: 1.0.1
 kind: Scheduled

@@ -125,6 +125,7 @@ output {
 - **proxy** - String, Empty by default. Specify which proxy URL to use for API calls for all of the communications with Azure.
 - **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service. Overrides the proxy setting.
 - **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint. Overrides the proxy setting.
+- **azure_cloud** - String, Empty by default. Used to specify the name of the Azure cloud that is being used, AzureCloud is set as default. Available values are: AzureCloud, AzureChinaCloud and AzureUSGovernment.
 
 #### Note: When setting an empty string as a value for a proxy setting, it will unset any system wide proxy setting.
 
