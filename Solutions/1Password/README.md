@@ -2,12 +2,13 @@
 
 ## Overview
 
-The key function of this solution is to retrieve events data from your 1Password Business account using 1Password Events API and store it in a Log Analytics workspace using cloud-native solutions.
+The key function of this Solution is to retrieve sign-in attempts, item usage, and audit events logs from your 1Password Business account using the 1Password Events Reporting API, and store it in an Azure Log Analytics Workspace using Microsoft cloud native features.
 
 ## Azure services needed
 
 ### Required
 
+- [1Password Business account](https://1password.com/business)
 - [1Password Events API key](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens)
 - [Microsoft Azure](https://azure.microsoft.com/en-us/free)
 - [Microsoft Sentinel](https://azure.microsoft.com/en-us/products/microsoft-sentinel/)
@@ -67,7 +68,7 @@ The 1Password Solution for Microsoft Sentinel is comprised of following Azure re
 ### **Resource Group**
 
 The Azure resource group is used as a container to group a set of Azure resources that share the same lifecycle.
-> NOTE: Known limitation is that the solution can only be deployed within the same `resourcegroup` as where Microsoft Sentinel is hosted.
+> NOTE: Known limitation is that the Solution can only be deployed within the same `resourcegroup` as where Microsoft Sentinel is hosted.
 
 </details>
 
@@ -94,7 +95,7 @@ The Azure FunctionApp runs on top of an Azure App Service and is used to host th
 
 The ```HelperFunctions.psm1``` module is used to simplify the FunctionApp code and handles security related tasks like:
 
-- Query the 1Password API endpoint
+- Query the 1Password Events API endpoint
 - Send the data to the Data Collection Rule endpoint
 - Set and retrieve the cursor and timestamp to a storage account
 
@@ -178,7 +179,7 @@ The identity used to send the data to the Data Collection Endpoint needs to have
 ## Implementation resources
 
 The 1Password Solution for Microsoft Sentinel is deployed from the Data Connector in sentinel. You must create the Data Connector in order to deploy the 1Password Solution. 
-> Note: In the 1Password (Preview) solution the installation in done using an ARM (Azure Resource Manager) template.<br>Once the solution is GA (general available) it will be installed from the Microsoft Sentinel content hub.
+> Note: In the 1Password (Preview) Solution the installation in done using an ARM (Azure Resource Manager) template.<br>Once the Solution is in GA (general availability) it will be installed from the Microsoft Sentinel content hub.
 
 
 ## Post Deployment steps
