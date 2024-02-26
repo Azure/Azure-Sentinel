@@ -1,4 +1,4 @@
-# RubrikUserAccessAnalysis
+# Rubrik User Access Analysis
 ## Summary
 This playbook queries Rubrik Security Cloud to get user sensitive data and update sevrity of incident accordingly. This playbook calls the RubrikUserRiskPolicyDetails playbook internally to get user risk details and policyhits details to enrich the incident
 ### Prerequisites
@@ -17,7 +17,7 @@ This playbook queries Rubrik Security Cloud to get user sensitive data and updat
 * BaseUrl: Baseurl of the RubrikApi instance.
 * RiskPolicyHitsPlaybookName: Playbook name which is deployed as part of prerequisites
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserContext%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserContext%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserAccessAnalysis%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserAccessAnalysis%2Fazuredeploy.json)
 ### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, authorize each connection like keyvault, azureloganalytics.

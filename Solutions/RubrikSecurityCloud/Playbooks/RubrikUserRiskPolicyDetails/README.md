@@ -7,12 +7,12 @@ This playbook queries Rubrik Security Cloud to get risk detail and policy hits d
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
 * PlaybookName: Enter the playbook name here.
-* LogAnalyticsWorkspaceId: Id of the log analytics workspace where you want to ingest data in Sentinel.
-* LogAnalyticsWorkspaceKey: PrimaryKey of log analytics workspace where you want to ingest data in Sentinel.
+* LogAnalyticsWorkspaceId: Id of the log analytics workspace where you want to ingest data in Microsoft Sentinel.
+* LogAnalyticsWorkspaceKey: PrimaryKey of log analytics workspace where you want to ingest data in Microsoft Sentinel.
 * UserDetailsTableName: Table name to store userdetails in Log Analytics Workspace.
 * UserPolicyHitsTableName: Table name to store user policy hits data into Log Analytics Workspace.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserContext%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserContext%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserRiskPolicyDetails%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserRiskPolicyDetails%2Fazuredeploy.json)
 ### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, authorize each connection like keyvault, azureloganalytics.

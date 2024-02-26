@@ -1,4 +1,4 @@
-# RubrikFileObjectContextAnalysis
+# Rubrik File Object Context Analysis
 
 ## Summary
 
@@ -27,11 +27,11 @@ This playbook will retrieve policy hits from Rubrik Secuirty Cloud for given Fil
     * Keyvault Name: Name of keyvault where secrets are stored.
     * Tenant Id: TenantId where keyvault is located.
     * BaseUrl: BaseUrl of the RubrikApi instance.
-    * LogAnalyticsWorkspaceId: Id of log analytics workspace where you want to ingest data in Sentinel.
-    * LogAnalyticsWorkspaceKey: PrimaryKey of log analytics workspace where you want to ingest data in Sentinel.
+    * LogAnalyticsWorkspaceId: Id of log analytics workspace where you want to ingest data in Microsoft Sentinel.
+    * LogAnalyticsWorkspaceKey: PrimaryKey of log analytics workspace where you want to ingest data in Microsoft Sentinel.
     * PolicyHitsTableName: Tablename to store policyhits data of file object in Log Analytics Workspace.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikObjectContextImprovement%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikObjectContextImprovement%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikFileObjectContextAnalysis%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikFileObjectContextAnalysis%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
