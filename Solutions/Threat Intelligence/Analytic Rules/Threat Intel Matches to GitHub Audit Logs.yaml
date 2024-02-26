@@ -14,26 +14,31 @@ requiredDataConnectors:
     dataTypes:
       - ThreatIntelligenceIndicator
 queryFrequency: 1h
-queryPeriod: 1d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Impact
 query: |
+  let dt_lookBack = 1h; // Look back 1 hour for VMConnection events
+  let ioc_lookBack = 14d; // Look back 14 days for threat intelligence indicators
   ThreatIntelligenceIndicator
-  | where Action == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  | where Action == true
+  | where TimeGenerated >= ago(ioc_lookBack)
   // Taking the first non-empty value based on potential IOC match availability
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
   | join (
     GitHubAudit
+    | where TimeGenerated >= ago(dt_lookBack)
     | extend GitHubAudit_TimeGenerated = TimeGenerated
   )
   on $left.TI_ipEntity == $right.IPaddress
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, GitHubAudit_TimeGenerated, TI_ipEntity, IPaddress, Actor, Action, Country, OperationType, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress
   | extend timestamp = GitHubAudit_TimeGenerated, IPCustomEntity = IPaddress, AccountCustomEntity = Actor
 entityMappings:
@@ -45,5 +50,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 1.0.2
+version: 1.0.3
 kind: Scheduled

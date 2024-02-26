@@ -1,0 +1,65 @@
+id: a0038239-72f4-4f7b-90ff-37f89f7881e0
+name: TI Map URL Entity to EmailUrlInfo
+description: |
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in EmailUrlInfo.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EmailUrlInfo
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let EmailUrlInfo_ = materialize(EmailUrlInfo
+      | where isnotempty(Url)
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend Url = tolower(Url)
+      | extend EmailUrlInfo_TimeGenerated = TimeGenerated);
+  let EmailUrls = EmailUrlInfo_ | distinct Url | summarize make_list(Url);
+  let EmailUrlDomains = EmailUrlInfo_ | distinct UrlDomain | summarize make_list(UrlDomain);
+  let EmailEvents_ = materialize(EmailEvents
+      | where TimeGenerated >= ago(dt_lookBack));
+  let TI = materialize(ThreatIntelligenceIndicator
+      | where TimeGenerated >= ago(ioc_lookBack)
+      | where (isnotempty(Url) or isnotempty(DomainName)) 
+      | where tolower(Url) in (EmailUrls) or tolower(DomainName) in (EmailUrlDomains)
+      | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+      | where Active == true and ExpirationDateTime > now());
+  (union
+      (TI | join kind=innerunique (EmailUrlInfo_) on Url),
+      (TI | join kind=innerunique (EmailUrlInfo_) on $left.DomainName == $right.UrlDomain))
+  | where EmailUrlInfo_TimeGenerated < ExpirationDateTime
+  | summarize EmailUrlInfo_TimeGenerated = arg_max(EmailUrlInfo_TimeGenerated, *) by IndicatorId, Url
+  | project EmailUrlInfo_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, UrlDomain, UrlLocation, NetworkMessageId
+  | extend timestamp = EmailUrlInfo_TimeGenerated
+  | join kind=inner (EmailEvents_) on NetworkMessageId
+  | where DeliveryAction !has "Blocked"
+  | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0
+kind: Scheduled

@@ -61,7 +61,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
  *
  * - NOTE: Playbooks field can take standard Playbooks, Custom Connectors, and Function Apps. Sequence of Playbooks should be FunctionApps, Custom Connector and then rest of the Playbooks. If FunctionApps and Custom Connector are not present then just specify Playbooks.
  * BasePath: Optional base path to use. Either Internet URL or File Path. Default is repo root (https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/)
- * Version: Version to be used during package creation. Default version will be 3.0.0. This tool supports package creation for 2.x.x(Template Spec) and 3.x.x(contentPackages). Based on variable 'defaultPackageVersion' and given Version input. If the defaultPackageVersion is 3.0.0 and Data file input version is 2.0.1 then it package generated is of 3.0.0 i.e which ever is higher takes precedence. Here we are also verifying the catelogAPI to check version deployed in PartnerCenter. If 'defaultPackageVersion' is 2.0.0 and data input file version is 2.0.4 but in PartnerCenter catelogAPI version installed is 2.0.2 then package generated is of 2.0.3 i.e it will increment the package version based on catelogAPI.
+ * Version: Version to be used during package creation. Default version will be 3.0.0. This tool supports package creation for 2.x.x(Template Spec) and 3.x.x(contentPackages). Based on variable 'defaultPackageVersion' and given Version input. If the defaultPackageVersion is 3.0.0 and Data file input version is 2.0.1 then it package generated is of 3.0.0 i.e which ever is higher takes precedence. Here we are also verifying the catalogAPI to check version deployed in PartnerCenter. If 'defaultPackageVersion' is 2.0.0 and data input file version is 2.0.4 but in PartnerCenter catalogAPI version installed is 2.0.2 then package generated is of 2.0.3 i.e it will increment the package version based on catalogAPI.
  * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
  * TemplateSpec: Boolean value used to determine whether the package should be generated as a template spec
  */
@@ -248,6 +248,8 @@ The package consists of the following files:
 These files will be created in the solution's `Package` folder with respect to the resources provided in the given input file. For every new modification to the files after the initial version of package, a new zip file should be created with an updated version name (3.0.0, 3.0.1 etc.) containing modified `createUIDefinition.json` and `mainTemplate.json` files.
 
 Upon package creation, the automation will automatically import and run validation on the generated files using the Azure Toolkit / TTK CLI tool.
+
+#### *<span style="color:blue">Note:</span> <span style="color:green"> To create a CCP based connector refer [link](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCP_README.md).</span>*
 
 ### Azure Toolkit Validation
 

@@ -31,11 +31,11 @@ try {
         return $newDataConnectorFilesWithoutExcludedFiles;
     }
 
-    $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+    $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
     Write-Host "List of files in Pull Request: $diff"
 
     # FILTER OUT FILES AND CHECK IF THERE ARE ANY CHNAGES IN FILES BY WHICH USER CAN CREATE PACKAGE.
-    $filterDataFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) } | Where-Object { $_ -notlike '*system_generated_metadata.json' }
+    $filterDataFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Data/*" } | Where-Object { $_ -match ([regex]::Escape(".json")) } | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
 
     $filterAnalyticRuleFiles = $diff | Where-Object { $_ -like "Solutions/$solutionName/Analytic Rules/*" } | Where-Object { $_ -match ([regex]::Escape(".yaml") -or ([regex]::Escape(".yml"))) }
 

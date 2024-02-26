@@ -23,6 +23,12 @@ class LogstashLoganalyticsOutputConfiguration
 
         # Taking 4K safety buffer
         @MAX_SIZE_BYTES = @loganalytics_api_data_limit - 10000
+
+        @azure_clouds = {
+            "AzureCloud" => {"aad" => "https://login.microsoftonline.com", "monitor" => "https://monitor.azure.com"},
+            "AzureChinaCloud" => {"aad" => "https://login.chinacloudapi.cn", "monitor" => "https://monitor.azure.cn"},
+            "AzureUSGovernment" => {"aad" => "https://login.microsoftonline.us", "monitor" => "https://monitor.azure.us"}
+        }.freeze
     end
 	
 	def validate_configuration()
@@ -67,6 +73,9 @@ class LogstashLoganalyticsOutputConfiguration
           end
           if @key_names.length > 500
               raise ArgumentError, 'There are over 500 key names listed to be included in the events sent to Azure Loganalytics, which exceeds the limit of columns that can be define in each table in log analytics.'
+          end
+          if !@azure_clouds.key?(@azure_cloud)
+            raise ArgumentError, "The specified Azure cloud #{@azure_cloud} is not supported. Supported clouds are: #{@azure_clouds.keys.join(", ")}."
           end
       end
         @logger.info("Azure Loganalytics configuration was found valid.")
@@ -159,10 +168,6 @@ class LogstashLoganalyticsOutputConfiguration
         @MIN_MESSAGE_AMOUNT
     end
     
-    def max_items=(new_max_items)
-        @max_items = new_max_items
-    end
-
     def key_names=(new_key_names)
         @key_names = new_key_names
     end
@@ -217,6 +222,22 @@ class LogstashLoganalyticsOutputConfiguration
 
     def sample_file_path=(new_sample_file_path)
         @sample_file_path = new_sample_file_path
+    end
+
+    def azure_cloud
+        @azure_cloud
+    end
+
+    def azure_cloud=(new_azure_cloud)
+        @azure_cloud = new_azure_cloud
+    end
+
+    def get_aad_endpoint
+        @azure_clouds[@azure_cloud]["aad"]
+    end
+    
+    def get_monitor_endpoint
+        @azure_clouds[@azure_cloud]["monitor"]
     end
 end
 end ;end ;end 

@@ -17,14 +17,15 @@ relevantTechniques:
   - T1569
   - T1003
 query: | 
-   let files1 = dynamic(["C:\\Windows\\TAPI\\lsa.exe", "C:\\Windows\\TAPI\\pa.exe", "C:\\Windows\\TAPI\\pc.exe", "C:\\Windows\\TAPI\\Rar.exe"]);
-    let files2 = dynamic(["svchost.exe","wdmsvc.exe"]);
-    let FileHash1 = dynamic(["43109fbe8b752f7a9076eaafa417d9ae5c6e827cd5374b866672263fdebd5ec3", "ab50d8d707b97712178a92bbac74ccc2a5699eb41c17aa77f713ff3e568dcedb", "010e32be0f86545e116a8bc3381a8428933eb8789f32c261c81fd5e7857d4a77",     "56cd102b9fc7f3523dad01d632525ff673259dbc9a091be0feff333c931574f7"]);
-    let FileHash2 = dynamic(["2a1044e9e6e87a032f80c6d9ea6ae61bbbb053c0a21b186ecb3b812b49eb03b7", "9ab7e99ed84f94a7b6409b87e56dc6e1143b05034a5e4455e8c555dbbcd0d2dd", "18a072ccfab239e140d8f682e2874e8ff19d94311fc8bb9564043d3e0deda54b"]);
-    imProcessCreate
-    | where ((Process has_any (files1)) and (ActingProcessSHA256 has_any (FileHash1))) or ((Process has_any (files2)) and (ActingProcessSHA256 has_any (FileHash2)))
-    // Increase risk score if recent alerts for the host
-    | join kind=leftouter (SecurityAlert
+  let files1 = dynamic(["C:\\Windows\\TAPI\\lsa.exe", "C:\\Windows\\TAPI\\pa.exe", "C:\\Windows\\TAPI\\pc.exe", "C:\\Windows\\TAPI\\Rar.exe"]);
+  let files2 = dynamic(["svchost.exe","wdmsvc.exe"]);
+  let FileHash1 = dynamic(["43109fbe8b752f7a9076eaafa417d9ae5c6e827cd5374b866672263fdebd5ec3", "ab50d8d707b97712178a92bbac74ccc2a5699eb41c17aa77f713ff3e568dcedb", "010e32be0f86545e116a8bc3381a8428933eb8789f32c261c81fd5e7857d4a77",     "56cd102b9fc7f3523dad01d632525ff673259dbc9a091be0feff333c931574f7"]);
+  let FileHash2 = dynamic(["2a1044e9e6e87a032f80c6d9ea6ae61bbbb053c0a21b186ecb3b812b49eb03b7", "9ab7e99ed84f94a7b6409b87e56dc6e1143b05034a5e4455e8c555dbbcd0d2dd", "18a072ccfab239e140d8f682e2874e8ff19d94311fc8bb9564043d3e0deda54b"]);
+  imProcessCreate
+  | where ((Process has_any (files1)) and (ActingProcessSHA256 has_any (FileHash1))) or ((Process has_any (files2)) and (ActingProcessSHA256 has_any (FileHash2)))
+  // Increase risk score if recent alerts for the host
+  | join kind=leftouter (
+    SecurityAlert
     | where ProviderName =~ "MDATP"
     | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
     | mv-expand todynamic(Entities)
@@ -32,29 +33,41 @@ query: |
     | where isnotempty(DvcId)
     // Higher risk score are for Defender alerts related to threat actor
     | extend AlertRiskScore = iif(ThreatName has_any ("Backdoor:MSIL/ShellClient.A", "Backdoor:MSIL/ShellClient.A!dll", "Trojan:MSIL/Mimikatz.BA!MTB"), 1.0, 0.5)
-    | project DvcId, AlertRiskScore) on DvcId
-    | extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0, AlertRiskScore)
-    | extend timestamp = TimeGenerated, HostCustomEntity = Dvc, AccountCustomEntity = ActorUsername
+    | project DvcId, AlertRiskScore) 
+    on DvcId
+  | extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0, AlertRiskScore)
+  | extend AccountName = tostring(split(ActorUsername, @'\')[1]), AccountNTDomain = tostring(split(ActorUsername, @'\')[0])
+  | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
+  | project-away DomainIndex
 entityMappings:
-  - entityType: Host
-    fieldMappings:
-      - identifier: HostName
-        columnName: HostCustomEntity
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: ActorUsername
       - identifier: Name
-        columnName: AccountCustomEntity
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Dvc
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: File
     fieldMappings:
       - identifier: Name
         columnName: FileName
-version: 1.2.0
+version: 1.2.2
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

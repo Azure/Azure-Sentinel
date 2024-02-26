@@ -39,8 +39,9 @@ query: |
   | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
   // Exclude Remote Desktop Users group: S-1-5-32-555
   | where TargetSid !in ("S-1-5-32-555")
-  | extend SimpleMemberName = substring(MemberName, 3, indexof_regex(MemberName, @",OU|,CN") - 3)
-  | project TimeGenerated, EventID, Activity, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid
+  | extend SimpleMemberName = iff(MemberName == "-", MemberName, substring(MemberName, 3, indexof_regex(MemberName, @",OU|,CN") - 3))
+  | project TimeGenerated, EventID, Activity, Computer, SimpleMemberName, MemberName, MemberSid, TargetAccount, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, 
+  SubjectAccount, SubjectUserName, SubjectDomainName, SubjectUserSid
   ),
   (
   WindowsEvent
@@ -57,30 +58,55 @@ query: |
   | where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID
   // Exclude Remote Desktop Users group: S-1-5-32-555
   | where TargetSid !in ("S-1-5-32-555")
-  | extend SimpleMemberName = substring(MemberName, 3, indexof_regex(MemberName, @",OU|,CN") - 3)
+  | extend SimpleMemberName = iff(MemberName == "-", MemberName, substring(MemberName, 3, indexof_regex(MemberName, @",OU|,CN") - 3))
   | extend MemberSid = tostring(EventData.MemberSid)
-  | extend TargetUserName = tostring(EventData.TargetUserName)
-  | extend TargetDomainName = tostring(EventData.TargetDomainName)
+  | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName), 
+  TargetAccount = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
   | extend UserPrincipalName = tostring(EventData.UserPrincipalName)
-  | extend SubjectUserName = tostring(EventData.SubjectUserName)
-  | project TimeGenerated, EventID, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid
+  | extend SubjectUserName = tostring(EventData.SubjectUserName), SubjectDomainName = tostring(EventData.SubjectDomainName), 
+  SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | project TimeGenerated, EventID, Computer, SimpleMemberName, MemberName, MemberSid, TargetAccount, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, 
+  SubjectAccount, SubjectUserName, SubjectDomainName, SubjectUserSid
   )
+  | extend GroupAddedMemberTo = TargetAccount, AddedByAccount = SubjectAccount, AddedByAccountName = SubjectUserName, AddedByAccountDomainName = SubjectDomainName, 
+  AddedByAccountSid = SubjectUserSid, AddedMemberName = SimpleMemberName, AddedMemberSid = MemberSid
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: SimpleMemberName
+        columnName: SubjectAccount
+      - identifier: Name
+        columnName: SubjectUserName
+      - identifier: NTDomain
+        columnName: SubjectDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: SubjectUserSid
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AddedMemberName
+      - identifier: Sid
+        columnName: AddedMemberSid
   - entityType: Host
     fieldMappings:
       - identifier: FullName
         columnName: Computer
-version: 1.3.5
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+version: 1.3.7
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Shain
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

@@ -1,3 +1,14 @@
+#! /usr/local/bin/python3
+# ----------------------------------------------------------------------------
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# ----------------------------------------------------------------------------
+# This script is used to troubleshoot the process of sending messages to the
+# workspace via Linux AMA.
+# In this script we check the configuration of the daemon and the AMA linux agent.
+# We send mock data to validate the correctness of the pipeline.
+# If using Python 3 make sure it's set as the default command on the machine, or run the script with the 'python3'
+# command instead of 'python'.
+
 import subprocess
 import time
 import select
@@ -6,7 +17,7 @@ import argparse
 import sys
 from distutils.version import StrictVersion
 
-SCRIPT_VERSION = 2.4
+SCRIPT_VERSION = 2.51
 PY3 = sys.version_info.major == 3
 
 # GENERAL SCRIPT CONSTANTS
@@ -337,7 +348,8 @@ class DCRConfigurationVerifications:
     DCRA_DOC = "https://docs.microsoft.com/rest/api/monitor/data-collection-rule-associations"
     CEF_STREAM_NAME = "SECURITY_CEF_BLOB"
     CISCO_STREAM_NAME = "SECURITY_CISCO_ASA_BLOB"
-    STREAM_NAME = {"cef": CEF_STREAM_NAME, "asa": CISCO_STREAM_NAME}
+    SYSLOG_STREAM_NAME = "LINUX_SYSLOGS_BLOB"
+    STREAM_NAME = {"cef": CEF_STREAM_NAME, "asa": CISCO_STREAM_NAME, "syslog": SYSLOG_STREAM_NAME}
     DCR_MISSING_ERR = "Could not detect any data collection rule on the machine. The data reaching this server will not be forwarded to any workspace." \
                       " For explanation on how to install a Data collection rule please browse- {} \n " \
                       "In order to read about how to associate a DCR to a machine please review- {}".format(DCR_DOC,
@@ -645,8 +657,9 @@ class IncomingEventsVerifications:
     FIXED_CEF_MESSAGE = "0|TestCommonEventFormat|MOCK|common=event-format-test|end|TRAFFIC|1|rt=$common=event-formatted-receive_time deviceExternalId=0002D01655 src=1.1.1.1 dst=2.2.2.2 sourceTranslatedAddress=1.1.1.1 destinationTranslatedAddress=3.3.3.3 cs1Label=Rule cs1=CEF_TEST_InternetDNS"
     FIXED_CISCO_MESSAGE = "Deny inbound TCP src inet:1.1.1.1 dst inet:2.2.2.2"
     FIXED_FTD_MESSAGE = "Teardown dynamic UDP translation from inside:10.51.100.1/54453 to outside:10.0.2.3/54453 duration 0:00:00"
-    STREAM_MESSAGE = {"cef": FIXED_CEF_MESSAGE, "asa": FIXED_CISCO_MESSAGE, "ftd": FIXED_FTD_MESSAGE}
-    IDENT_NAME = {"cef": "CEF", "asa": "%ASA-7-106010", 'ftd': "%FTD-6-305012"}
+    FIXED_SYSLOG_MESSAGE = "Started Daily apt upgrade and clean activities"
+    STREAM_MESSAGE = {"cef": FIXED_CEF_MESSAGE, "asa": FIXED_CISCO_MESSAGE, "ftd": FIXED_FTD_MESSAGE, "syslog": FIXED_SYSLOG_MESSAGE}
+    IDENT_NAME = {"cef": "CEF", "asa": "%ASA-7-106010", 'ftd': "%FTD-6-305012", 'syslog': "systemd"}
     TCPDUMP_NOT_INSTALLED_ERROR_MESSAGE = "Notice that \'tcpdump\' is not installed in your Linux machine.\nWe cannot monitor traffic without it.\nPlease install \'tcpdump\'."
     LOGGER_NOT_INSTALLED_ERROR_MESSAGE = "Warning: Could not execute \'logger\' command. This means that no mock message was sent to your workspace."
     LINUX_HARDENING_DOC = "https://learn.microsoft.com/he-il/azure/azure-monitor/agents/agents-overview#linux-hardening-standards"
@@ -872,11 +885,15 @@ def getargs():
                         help='run the troubleshooting script for the Cisco ASA scenario.')
     parser.add_argument('--FTD', '--ftd', action='store_true', default=False,
                         help='run the troubleshooting script for the Cisco FTD scenario.')
+    parser.add_argument('--SYSLOG', '--syslog', action='store_true', default=False,
+                        help='run the troubleshooting script for the Syslog scenario.')
     args = parser.parse_args()
     if args.ASA:
         STREAM_SCENARIO = "asa"
     elif args.FTD:
         STREAM_SCENARIO = "ftd"
+    elif args.SYSLOG:
+        STREAM_SCENARIO = "syslog"
     else:
         STREAM_SCENARIO = "cef"
     return args

@@ -29,37 +29,31 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   let emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$';
-  let aadFunc = (tableName:string){
+  let Signins = materialize(union isfuzzy=true
+  ( SigninLogs | where TimeGenerated >= ago(dt_lookBack)),
+  ( AADNonInteractiveUserSignInLogs | where TimeGenerated >= ago(dt_lookBack)
+      | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails))
+  | where isnotempty(UserPrincipalName) and UserPrincipalName matches regex emailregex
+  | extend UserPrincipalName = tolower(UserPrincipalName)
+  | extend Status = todynamic(Status), LocationDetails = todynamic(LocationDetails)
+  | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+  | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
+  | extend SigninLogs_TimeGenerated = TimeGenerated);
+  let SigninUPNs = Signins | distinct UserPrincipalName | summarize make_list(UserPrincipalName);
   ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
   //Filtering the table for Email related IOCs
   | where isnotempty(EmailSenderAddress)
-  // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
-  | join kind=innerunique (
-      table(tableName) | where TimeGenerated >= ago(dt_lookBack) and isnotempty(UserPrincipalName)
-      //Normalizing the column to lower case for exact match with EmailSenderAddress column
-      | extend UserPrincipalName = tolower(UserPrincipalName)
-      | where UserPrincipalName matches regex emailregex
-      | extend Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)
-      | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
-      | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)
-      // renaming timestamp column so it is clear the log this came from SigninLogs table
-      | extend SigninLogs_TimeGenerated = TimeGenerated, Type = Type
-  )
-  on $left.EmailSenderAddress == $right.UserPrincipalName
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | where EmailSenderAddress in (SigninUPNs)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | join kind=innerunique (Signins) on $left.EmailSenderAddress == $right.UserPrincipalName
   | where SigninLogs_TimeGenerated < ExpirationDateTime
   | summarize SigninLogs_TimeGenerated = arg_max(SigninLogs_TimeGenerated, *) by IndicatorId, UserPrincipalName
-  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore,
-  EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName,
-  StatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP, Type
+  | project SigninLogs_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, EmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, IPAddress, UserPrincipalName, AppDisplayName, StatusCode, StatusDetails, NetworkIP, NetworkDestinationIP, NetworkSourceIP, Type
   | extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
   | extend timestamp = SigninLogs_TimeGenerated
-  };
-  let aadSignin = aadFunc("SigninLogs");
-  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-  union isfuzzy=true aadSignin, aadNonInt
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -75,5 +69,5 @@ entityMappings:
     fieldMappings:
       - identifier: Url
         columnName: Url
-version: 1.2.4
+version: 1.2.5
 kind: Scheduled

@@ -1,0 +1,54 @@
+id: 11f7c6e3-f066-4b3c-9a81-b487ec0a6873
+name: TI map Email entity to EmailEvents
+description: |
+  'Identifies a match in EmailEvents table from any Email IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - EmailEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let EmailEvents_ = materialize(EmailEvents | where isnotempty(RecipientEmailAddress) and isnotempty(SenderFromAddress) and TimeGenerated >= ago(dt_lookBack) and DeliveryAction !has "Blocked" | project-rename  EmailEvents_TimeGenerated = TimeGenerated | extend SenderFromAddress = tolower(SenderFromAddress) | extend RecipientEmailAddress = tolower(RecipientEmailAddress));
+  let SenderAddresses = EmailEvents_ | distinct  SenderFromAddress | summarize make_list(SenderFromAddress);
+  let RecipientAddresses = EmailEvents_ | distinct  RecipientEmailAddress | summarize make_list(RecipientEmailAddress);
+  let TI = materialize(ThreatIntelligenceIndicator
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | where isnotempty(EmailSenderAddress)
+  | extend TI_EmailAddress = tolower(EmailSenderAddress)
+  | where TI_EmailAddress in (SenderAddresses) or TI_EmailAddress in (RecipientAddresses)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now());
+  (union
+    (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.SenderFromAddress),
+    (TI | join kind=innerunique (EmailEvents_) on $left.TI_EmailAddress == $right.RecipientEmailAddress))
+  | where EmailEvents_TimeGenerated < ExpirationDateTime
+  | summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by IndicatorId, TI_EmailAddress
+  | project EmailEvents_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, DomainName, RecipientEmailAddress, SenderFromAddress, Subject, ConfidenceLevel, Url, Type, TI_EmailAddress, TrafficLightProtocolLevel, DeliveryAction, DeliveryLocation, EmailDirection
+  | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])
+  | extend timestamp = EmailEvents_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.0
+kind: Scheduled

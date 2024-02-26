@@ -23,25 +23,28 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-  let aadFunc = (tableName:string){ 
-    table(tableName) 
-    | where ResultType == 500121 
-    | where Status has "MFA Denied; user declined the authentication" or Status has "MFA denied; Phone App Reported Fraud" 
-    | extend timestamp = TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0]) 
-  }; 
-  let aadSignin = aadFunc("SigninLogs"); 
+  let aadFunc = (tableName: string) {
+      table(tableName)
+      | where ResultType == 500121
+      | where Status has "MFA Denied; user declined the authentication" or Status has "MFA denied; Phone App Reported Fraud"
+      | extend Type = Type, PublicIP = IPAddress
+      | extend
+          Name = tostring(split(UserPrincipalName, '@', 0)[0]),
+          UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  };
+  let aadSignin = aadFunc("SigninLogs");
   let dvcInfo = DeviceInfo
-    | extend SensorHealthState = column_ifexists("SensorHealthState", "")
-    | where OnboardingStatus == "Onboarded" and SensorHealthState == "Active" 
-    | project PublicIP, AadDeviceId; 
-  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs"); 
-  union isfuzzy=true aadSignin, aadNonInt 
-  | project-rename PublicIP = IPAddress   
+      | extend SensorHealthState = column_ifexists("SensorHealthState", "")
+      | where OnboardingStatus == "Onboarded" and SensorHealthState == "Active"
+      | project PublicIP, AadDeviceId;
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
   | join kind=leftouter dvcInfo on PublicIP
-  | extend Host=tostring(DeviceDetail_dynamic.displayName), OS=tostring(DeviceDetail_dynamic.operatingSystem)
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
       - identifier: Name
         columnName: Name
       - identifier: UPNSuffix
@@ -58,11 +61,5 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: AppDisplayName
-  - entityType: Host
-    fieldMappings:
-      - identifier: HostName
-        columnName: Host
-      - identifier: OSFamily
-        columnName: OS
-version: 1.0.4
+version: 1.0.6
 kind: Scheduled

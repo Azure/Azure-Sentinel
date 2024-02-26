@@ -39,7 +39,8 @@ query: |
   | extend Key = tostring(column_ifexists('@Name', "")), Value = column_ifexists('#text', "")
   | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, MG, ManagementGroupName, _ResourceId)
   | extend PipeName = column_ifexists("PipeName", "")
-  | extend Account = UserName
+  | extend Account = User
+  | extend AccountName = tostring(split(User, @"\")[1]), AccountNTDomain = tostring(split(User, @"\")[0])
   ),
   (
   SecurityEvent
@@ -47,6 +48,7 @@ query: |
   // %%4418 looks for presence of CreatePipeInstance value
   | where AccessList has '%%4418'
   | where RelativeTargetName has '583da945-62af-10e8-4902-a8f205c72b2e'
+  | extend AccountName = SubjectUserName, AccountNTDomain = SubjectDomainName
   ),
   (
   WindowsEvent
@@ -57,26 +59,36 @@ query: |
   | extend RelativeTargetName= tostring(EventData.RelativeTargetName)
   | where RelativeTargetName has '583da945-62af-10e8-4902-a8f205c72b2e'
   | extend Account =  strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+  | extend AccountName = tostring(EventData.SubjectUserName), AccountNTDomain = tostring(EventData.SubjectDomainName)
   )
   )
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer
-
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.2.3
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+version: 1.2.5
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

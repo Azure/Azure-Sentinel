@@ -9,8 +9,8 @@ require 'time'
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsAadTokenProvider
   def initialize (logstashLoganalyticsConfiguration)
-    scope = CGI.escape("https://monitor.azure.com//.default")
-    @aad_uri = "https://login.microsoftonline.com"
+    scope = CGI.escape("#{logstashLoganalyticsConfiguration.get_monitor_endpoint}//.default")
+    @aad_uri = logstashLoganalyticsConfiguration.get_aad_endpoint
     @token_request_body = sprintf("client_id=%s&scope=%s&client_secret=%s&grant_type=client_credentials", logstashLoganalyticsConfiguration.client_app_Id, scope, logstashLoganalyticsConfiguration.client_app_secret)
     @token_request_uri = sprintf("%s/%s/oauth2/v2.0/token",@aad_uri, logstashLoganalyticsConfiguration.tenant_id)
     @token_state = {

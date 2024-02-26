@@ -41,11 +41,14 @@ query: |
   | mv-apply AdditionalDetail = AdditionalDetails on 
     (
         where AdditionalDetail.key =~ "User-Agent"
-        | extend UserAgent = tostring(AdditionalDetail.value)
+        | extend InitiatingUserAgent = tostring(AdditionalDetail.value)
     )
-  | extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName)
-  | extend UserIPAddress = tostring(InitiatedBy.user.ipAddress)  
-  | project-away props, TargetResource*, AdditionalDetail*, Property, InitiatedBy
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | project-away props, TargetResource, AdditionalDetail, Property
   | join kind=leftouter(
     AuditLogs
     | where ActivityDisplayName has "Consent to application"
@@ -55,19 +58,30 @@ query: |
             | extend AppName = tostring(TargetResource.displayName),
                      AppId = tostring(TargetResource.id)
         )
-    | project AppName, AppId, CorrelationId) on CorrelationId
-  | project-reorder TimeGenerated, OperationName, InitiatingUser, UserIPAddress, UserAgent, PermissionsAddedTo, Permissions, AppName, AppId, CorrelationId
-  | extend timestamp = TimeGenerated, Name = tostring(split(InitiatingUser,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUser,'@',1)[0])
+  | project AppName, AppId, CorrelationId) on CorrelationId
+  | project-away CorrelationId1
+  | project-reorder TimeGenerated, OperationName, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, InitiatingUserAgent, PermissionsAddedTo, Permissions, AppName, AppId, CorrelationId
+  | extend Name = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
       - identifier: Name
         columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: UserIPAddress
-version: 1.0.3
+        columnName: InitiatingIpAddress
+version: 1.0.4
 kind: Scheduled
