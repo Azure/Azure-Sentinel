@@ -372,11 +372,24 @@ function GetBucketFiles($prefixFolder)
                     $path = split-path $items.Key -Parent
                     $keyValuePairs = $path -split '\\'
                 $s3Dict = @{}
+                $mainPath=$null
                 foreach ($pair in $keyValuePairs) {
                     $key, $value = $pair -split '='
                     $s3Dict[$key] = $value
+                    if($null -eq $value)
+                    {
+                        if([string]::IsNullOrWhiteSpace($mainPath))
+                        {
+                            $mainPath=$key
+                        }
+                        else {
+                            <# Action when all if and elseif conditions are false #>
+                            $mainPath=$mainPath+"/"+$key
+                        }
+                       
+                    }
                 }
-                if(("$($keyValuePairs[0])/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])") -eq $keyPrefix)
+                if(("$($mainPath)/org_key=$OrgKey/year=$($s3Dict["year"])/month=$($s3Dict["month"])/day=$($s3Dict["day"])/hour=$($s3Dict["hour"])/minute=$($s3Dict["minute"])") -eq $keyPrefix)
                 {
                     $paths += $items.Key
                     if($items.Key.Contains($EventprefixFolder))
