@@ -2,27 +2,27 @@
 
 ## Overview
 
-The key function of this solution is to retrieve data provided by the 1Password API and store this is a Log Analytics workspace using the cloud-native solutions.
+The key function of this solution is to retrieve events data from your 1Password Business account using 1Password Events API and store it in a Log Analytics workspace using cloud-native solutions.
 
 ## Azure services needed
 
 ### Required
 
-- [1Password API key](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens)
-- [Microsoft Azure](https://azure.microsoft.com/free)
-- [Microsoft Sentinel](https://azure.microsoft.com/products/microsoft-sentinel/)
+- [1Password Events API key](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens)
+- [Microsoft Azure](https://azure.microsoft.com/en-us/free)
+- [Microsoft Sentinel](https://azure.microsoft.com/en-us/products/microsoft-sentinel/)
 - Contributor role with User Access Administrator role on the Microsoft Sentinel Resource Group <br>
 **or**
 - Owner on the Microsoft Sentinel Resource Group 
 
 ## Automated Installation
 
-The installation of the 1Password Solution for Microsoft Sentinel is very straight forward.  
-Just click the button below and the deployment wizard will be opened. <br>
+Installing the 1Password Solution for Microsoft Sentinel is easy and can be completed in only a few minutes. 
+Just click the button below to get started with the deployment wizard. <br>
 
 [![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fazurekid%2FAzure-Sentinel%2Ffeature%2F1password%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fazuredeploy_1Password_API_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fazurekid%2FAzure-Sentinel%2Ffeature%2F1password%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fdeployment%2FUiDefinition.json)
 
-> NOTE: To deploy the solution, the user account executing the deployment needs to have `Owner` permissions on the Microsoft Sentinel `Resource Group` in Azure.<br>
+> NOTE: To deploy the solution, the Azure user account executing the deployment needs to have `Owner` permissions on the Microsoft Sentinel `Resource Group` in Azure.<br>
 > This is required to assign the correct RBAC role to the managed identity of the FunctionApp!  
 
 ## Manual Installation using the ARM template
@@ -55,7 +55,7 @@ The required resources for the deployment will now be created.
 
 ## Deployed Resources
 
-The 1Password solution exists out of the following resources:
+The 1Password Solution for Microsoft Sentinel is comprised of following Azure resources:
 
 > Click on the topics below to fold them out.
 
@@ -66,7 +66,7 @@ The 1Password solution exists out of the following resources:
 
 ### **Resource Group**
 
-The Azure resource group is used as a container to group a set of resources that share the same lifecycle.
+The Azure resource group is used as a container to group a set of Azure resources that share the same lifecycle.
 > NOTE: Known limitation is that the solution can only be deployed within the same `resourcegroup` as where Microsoft Sentinel is hosted.
 
 </details>
@@ -107,8 +107,8 @@ The ```HelperFunctions.psm1``` module is used to simplify the FunctionApp code a
 
 ### **Key Vault**
 
-The Azure Key Vault resource is currently used to protect secure settings that are used in the 1Password API solution.
-Because of the sensitivity of the secrets in the Key Vault, the access is restricted to the Managed Identity (MSI) of the FunctionApp.
+The Azure Key Vault resource is used to securely store certain sensitive or secret values used in the 1Password Solution for Microsoft Sentinel. 
+Because of the sensitivity of the secrets in the Key Vault, access is restricted to the Managed Identity (MSI) of the FunctionApp.
 Secrets that reside in the vault are:
 
 - APIKey (1password)
@@ -124,7 +124,7 @@ Secrets that reside in the vault are:
 
 ### **Storage Account**
 
-For the storage of logs and properties of the Azure FunctionApp a storage account is used.
+The Storage Account resources is used to store logs and properties of the Azure FunctionApp.
 
 </details>
 
@@ -136,7 +136,7 @@ For the storage of logs and properties of the Azure FunctionApp a storage accoun
 ### **Application Insights**
 
 The Application Insights instance is used for collecting telemetry of the Azure FunctionApp.
-It is used to give a view of the application including availability, performance, and usage patterns
+This provides visibility into the availability, performance, and usage patterns of the FunctionApp.
 
 </details>
 
@@ -147,8 +147,8 @@ It is used to give a view of the application including availability, performance
 
 ### **Data Collection Rule (DCR)**
 
-The Data Collection Rule including is attached to a _data collection endpoint_ and a Log Analytics table table
-For the authentication against the data collection endpoint the MI (managed identity) of the FunctionApp is used.
+The Data Collection Rule is attached to a _data collection endpoint_ and a Log Analytics table.
+The Managed Identity (MSI) of the FunctionApp is used to authenticate against the data collection endpoint.
 
 </details>
 
@@ -159,7 +159,7 @@ For the authentication against the data collection endpoint the MI (managed iden
 
 ## **Custom Table**
 
-During deployment a custom table with the name OnePasswordEventLogs_CL is created in the Log Analytics workspace.
+During deployment, a custom table with the name "OnePasswordEventLogs_CL" is created in the Log Analytics workspace.
 
 </details>
 
@@ -170,14 +170,14 @@ During deployment a custom table with the name OnePasswordEventLogs_CL is create
 
 ### **Role Assignment**
 
-The identity used to send the data to the Data Collection Endpoint needs to have _Monitoring Metrics Publisher_ role on the Data Collection Rule (DCR)
+The identity used to send the data to the Data Collection Endpoint needs to have the _Monitoring Metrics Publisher_ role on the Data Collection Rule (DCR). 
 > NOTE: I can take up to 30 minutes after deployment before the first data is received by the table. <br>
 
 </details>
 
 ## Implementation resources
 
-The 1Password solution for Microsoft Sentinel is deployed from the data connector which needs to be created first.
+The 1Password Solution for Microsoft Sentinel is deployed from the Data Connector in sentinel. You must create the Data Connector in order to deploy the 1Password Solution. 
 > Note: In the 1Password (Preview) solution the installation in done using an ARM (Azure Resource Manager) template.<br>Once the solution is GA (general available) it will be installed from the Microsoft Sentinel content hub.
 
 
