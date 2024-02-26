@@ -55,7 +55,6 @@ def main(mytimer: func.TimerRequest) -> None:
     state_manager_cu = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
     
     ts_from = state_manager_cu.get()
-    ts_from = datetime.datetime.strftime(ts_from, "%Y-%m-%dT%H:%M:%S.%fZ")
 
     if (datetime.datetime.utcnow() - datetime.timedelta(days=7)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
         ts_to = datetime.datetime.utcnow() +  datetime.timedelta(days=1)
