@@ -56,8 +56,9 @@ def main(mytimer: func.TimerRequest) -> None:
     
     ts_from = state_manager_cu.get()
 
-    if (datetime.datetime.utcnow() - datetime.timedelta(days=7)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
-        ts_to = datetime.datetime.utcnow() +  datetime.timedelta(days=1)
+    if (datetime.datetime.utcnow() - datetime.timedelta(days=3)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
+        ts_from = parse_date_from(ts_from)
+        ts_to = ts_from +  datetime.timedelta(days=1)
     else:
         ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
 
