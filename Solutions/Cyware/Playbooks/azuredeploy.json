@@ -1,0 +1,167 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workflows_Send_Incident_To_Cyware_Orchestrate_name": {
+      "defaultValue": "Send-Incident-To-Cyware-Orchestrate",
+      "type": "String"
+    },
+    "LogicAppLocation": {
+      "defaultValue": "eastus",
+      "type": "String"
+    },
+    "COWebHookURL": {
+      "defaultValue": "<Your-Cyware-Webhook-URL>",
+      "type": "String"
+    },
+    "connections_azuresentinel_connectionId": {
+      "defaultValue": "<Placeholder for Azure Sentinel to Cyware Orchestrate connection string>",
+      "type": "String"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('workflows_Send_Incident_To_Cyware_Orchestrate_name')]",
+      "location": "[parameters('LogicAppLocation')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "COWebHookURL": {
+              "defaultValue": "[parameters('COWebHookURL')]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "HTTP": {
+              "runAfter": {
+                "Parse_JSON": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "body": "@triggerBody()",
+                "method": "POST",
+                "uri": "@{parameters('COWebHookURL')}"
+              }
+            },
+            "Parse_JSON": {
+              "runAfter": {},
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@triggerBody()",
+                "schema": {
+                  "properties": {
+                    "properties": {
+                      "properties": {
+                        "body": {
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "description": {
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "firstActivityTimeUtc": {
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "incidentNumber": {
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "severity": {
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "title": {
+                          "properties": {
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[parameters('connections_azuresentinel_connectionId')]",
+                "connectionName": "[concat('azuresentinel-', parameters('workflows_Send_Incident_To_Cyware_Orchestrate_name'))]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                },
+                "id": "[concat('/providers/Microsoft.Web/locations/', parameters('LogicAppLocation'), '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
