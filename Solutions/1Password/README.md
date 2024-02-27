@@ -37,18 +37,18 @@ Just click the button below to get started with the deployment wizard. <br>
 
 1. Install the data connector using the ARM template or use this link to skip the steps below
 
-![Alt text](images/image.png)
+![Alt text](https://github.com/Azure/Azure-Sentinel/blob/f3655ba6a4891acdda67c3c3bf2414401de323b6/Solutions/1Password/images/image.png)
 
 2. After the deployment of the template has completed open the Microsoft Sentinel portal and select the data connector
 
-![Alt text](images/dataconnector.png)
+![Alt text](https://github.com/Azure/Azure-Sentinel/blob/f3655ba6a4891acdda67c3c3bf2414401de323b6/Solutions/1Password/images/dataconnector.png)
 
 3. Select the `Open connector page` button to open the data connector configuration
 4. click on the `Deploy to Azure` button<br>
 This will open a new browser page containing a deployment wizard in Microsoft Azure.<br>
 Fill in all the required fields and select `create` on the last page.
 
-![Alt text](images/summary.png)
+![Alt text](https://github.com/Azure/Azure-Sentinel/blob/fd9527ab432fa3e4e6115e4ee823ed5c2a92c163/Solutions/1Password/images/summary.png)
 
 The required resources for the deployment will now be created.
 
