@@ -1,0 +1,46 @@
+id: a1adce9c-5945-4a20-984e-d95b6071a791
+name: 
+description: |
+  "MDCA allows us to automatically apply sensitivity labels from Purview. We can apply encryption for protection and scan files for Microsoft Information Protection sensitivity labels. 
+  We allow users to apply sensitivity labels and search for any policy description with the word "confidential."
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+  - connectorId: 
+    dataTypes:
+      - SecurityAlert
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Privilege Escalation
+query: |
+  SecurityAlert
+    | where TimeGenerated >= ago(30d)
+    | extend EntitiesDynamicArray = parse_json(Entities) 
+    | mv-expand EntitiesDynamicArray
+    | extend Entitytype = tostring(parse_json(EntitiesDynamicArray).Type), EntityName = tostring(parse_json(EntitiesDynamicArray).Name),
+    EntityUPNSuffix = tostring(parse_json(EntitiesDynamicArray).UPNSuffix)
+    | where Entitytype =~ "file" and EntityName != ""
+    | join kind=inner(CloudAppEvents
+    | extend ActivityObjectsDynamicArray = parse_json(ActivityObjects) 
+    | mv-expand ActivityObjectsDynamicArray
+    | extend Entitytype = tostring(parse_json(ActivityObjectsDynamicArray).Type), EntityName = tostring(RawEventData.SourceFileName),
+    EntityUPNSuffix = tostring(parse_json(ActivityObjectsDynamicArray).UPNSuffix)
+    | where Entitytype =~ "file") on $left.EntityName == $right.EntityName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: DisplayName
+        columnName: EntityName
+      - identifier: UPNSuffix
+        columnName: EntityUPNSuffix
+      - identifier: DisplayName
+        columnName: DisplayName
+      - identifier: IPAddress
+        columnName: IPAddress
+version: 1.0.0
+kind: Scheduled
