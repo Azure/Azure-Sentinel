@@ -205,7 +205,7 @@ function Get-ContentTemplateResource($contentResourceDetails, $TemplateCounter, 
             contentProductId = "[concat(take(variables('_solutionId'), 50),'-','$resoureKindTag','-', uniqueString(concat(variables('_solutionId'),'-','$resoureKind','-',$contentId,'-', $contentVersion)))]";
             packageId = "[variables('_solutionId')]";
             contentSchemaVersion = $contentResourceDetails.contentSchemaVersion;
-            version = "[variables('_solutionVersion')]";
+            version = "[variables('dataConnectorCCPVersion')]";
         }
     }
 }
