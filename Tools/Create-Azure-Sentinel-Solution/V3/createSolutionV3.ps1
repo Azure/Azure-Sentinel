@@ -68,11 +68,11 @@ Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName"
 $isPipelineRun = $false
 
 $commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
-$catelogAPIFilePath = $repositoryBasePath + ".script/package-automation/catelogAPI.ps1"
+$catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
 $getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1"
 
 . $commonFunctionsFilePath # load common functions
-. $catelogAPIFilePath # load catelog api functions
+. $catalogAPIFilePath # load catalog api functions
 . $getccpDetailsFilePath # load ccp functions
 
 try {
@@ -104,7 +104,7 @@ try {
         #================START: IDENTIFY PACKAGE VERSION=============
         $solutionOfferId = $baseMetadata.offerId
         $offerId = "$solutionOfferId"
-        $offerDetails = GetCatelogDetails $offerId
+        $offerDetails = GetCatalogDetails $offerId
         $userInputPackageVersion = $contentToImport.version
         $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
         if ($packageVersion -ne $contentToImport.version) {
