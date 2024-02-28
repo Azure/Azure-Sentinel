@@ -135,6 +135,10 @@ class ETD():
                     if messageResponse.status_code == HTTPStatus.OK:
                         logging.info("Message search API call successful")
                         return messageResponse.json()
+                else:
+                    return {}
+            else:
+                return {}
         else:
             logging.error("Message search API call failed")
             return {}
