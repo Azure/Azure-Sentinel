@@ -28,7 +28,7 @@ class Connector:
         # it will get the same old timestamp every execution
         # maybe limit of that can be greater if execution happens every 5 minutes instead of every minute
         self._ingestion_client.upload_events(
-            list(map(lambda event: self.to_sentinel_format(event), all_events))
+            [self.to_sentinel_format(event) for event in all_events]
         )
 
         self._storage_client.save_start_timestamp(new_last_timestamp)
