@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for SonicWall firewalls
   Version: '0.1.0'
-  LastUpdated: Feb 15, 2024
+  LastUpdated: Feb 28, 2024
 Product:
   Name: SonicWall
 Normalization:
@@ -71,15 +71,6 @@ ParserQuery: |
                                 , tolong(LogSeverity) > 8, "High"
                                 , ""
                                 )
-  | extend HttpRequestMethod = case(tolong(RequestMethod) == 0, "NO OPERATION"
-                                    , tolong(RequestMethod) == 1, "GET"
-                                    , tolong(RequestMethod) == 2, "POST"
-                                    , tolong(RequestMethod) == 3, "HEAD"
-                                    , tolong(RequestMethod) == 4, "PUT"
-                                    , tolong(RequestMethod) == 5, "CONNECT"
-                                    , tolong(RequestMethod) == 6, "OTHER"
-                                    , ""
-                                    )
   | extend NetworkProtocolVersion = case(DestinationIP has ".", "IPv4"
                                         , DestinationIP has ":", "IPv6"
                                         , ""
@@ -177,7 +168,6 @@ ParserQuery: |
   | extend
       EventVendor = "SonicWall"
     , EventProduct = "Firewall"
-    , sosDeviceModel = DeviceProduct
     , DvcOs = "SonicOS"
     , DvcOsVersion = EventProductVersion
     , DvcIdType = "Other"
@@ -189,16 +179,11 @@ ParserQuery: |
     , NetworkIcmpCode = toint(NetworkIcmpCode)
     , Rule = NetworkRuleName
     , NetworkBytes = tolong(coalesce(toint(ReceivedBytes), 0) + coalesce(toint(SentBytes), 0))
-    , sosAppCategoryName = extract(@'^["]([a-zA-Z-]+)', 1, appcat) // Application Category from App Control
-    , sosAppIDName = extract(@' (.*) --', 1, appcat) // Application Name from App Control
-    , sosAppSignatureName = trim('"', extract(@'.*-- (.*\S)', 1, appcat)) // Application Signature Name from App Control
     , sosIPSFullString = ipscat
     , ipscat = extract(@'^"?([a-zA-Z-\/]+)', 1, ipscat) // IPS Category/Signature
     , sosIPSSignatureName = extract(@'[ ](.*)\S', 1, ipscat) // IPS Signature name
     , FileSize = tolong(coalesce(FileSize, long(null)))
     , sosAppControlFileName = extract(@'.*Filename: (.*)\"', 1, sosEventMessageDetail) // App Control Filename Logging
-    , sosHttpReferrer = extract(@'Referer: (.*)\"$', 1, coalesce(sosLogMsgNote, ""))
-    , sosHttpRequestMethod_ = extract(@'Command: (.\w+)', 1, coalesce(sosLogMsgNote, ""))
     , sosCaptureATPVerdict = extract(@'Gateway Anti-Virus Status: (.*)\. ', 1, sosEventMessageDetail)
     , sosGAVSignatureName = extract(@'Gateway Anti-Virus Alert: (.*) blocked\.', 1, sosEventMessageDetail)
     , sosASWSignatureName = extract(@'Anti-Spyware Detection Alert: (.*)\. ', 1, sosEventMessageDetail)
@@ -222,8 +207,7 @@ ParserQuery: |
     , EventResultDetails = "NA"
     , ThreatConfidence = coalesce(toint(ThreatOriginalConfidence), int(null))
   | extend
-      HttpRequestMethod = coalesce(HttpRequestMethod, sosHttpRequestMethod_)
-      , SrcUsername = coalesce(susr, SrcUsername)
+      SrcUsername = coalesce(susr, SrcUsername)
       , FileName = coalesce(FileName, sosAppControlFileName)
       , NetworkDirection = case(SrcZone == "" and DstZone == "", "NA"
                                 , SrcZone == "WAN" and (DstZone == "WAN" and DstIpAddr !has ".255"), "Inbound"
@@ -266,9 +250,19 @@ ParserQuery: |
     , DstAppType = case(isempty(DstAppName), ""
                       , DstAppName contains "\'General " or DstAppName contains "\'Service ", "Service", "Other")
   | project-rename
-    sosReceivedPackets = DeviceCustomNumber1Label // DeviceCustomNumberXLabel (cnXLabel=)
+      sosReceivedPackets = DeviceCustomNumber1Label // DeviceCustomNumberXLabel (cnXLabel=)
     , sosSentPackets = DeviceCustomNumber2Label // DeviceCustomNumberXLabel (cnXLabel=)
-    , sosConnectionDuration = DeviceCustomNumber3Label
+  | extend
+      DstPackets = case(NetworkDirection == "Outbound", tolong(sosReceivedPackets)
+                    , NetworkDirection == "Inbound", tolong(sosSentPackets)
+                    , tolong(long(null))
+                    )
+    , SrcPackets = case(NetworkDirection == "Outbound", tolong(sosSentPackets)
+                    , NetworkDirection == "Inbound", tolong(sosReceivedPackets)
+                    , tolong(long(null))
+                    )
+  | project-rename
+      sosConnectionDuration = DeviceCustomNumber3Label // Applies to "Connection Closed"
     , sosUser = susr // Logged-in username associated with the log event.
     , sosAppRulePolicyId = af_polid // App Rule Policy ID.
     , sosAppRulePolicyName = af_policy // App Rule Policy Name.
@@ -293,7 +287,6 @@ ParserQuery: |
     , SrcNatPortNumber = snpt
     , sosBladeID = bid // Blade ID
     , sosUUID = uuid
-    , sosHttpRequestMethod = HttpRequestMethod
     , sosFileName = FileName
     , DvcOriginalAction = fw_action
   | extend
@@ -303,41 +296,28 @@ ParserQuery: |
     , DstNatPortNumber = toint(DstNatPortNumber)
     , SrcNatPortNumber = toint(SrcNatPortNumber)
   | extend AdditionalFields = bag_pack(
-    "ReceivedPackets", sosReceivedPackets
-    , "SentPackets", sosSentPackets
-    , "ConnectionDuration", sosConnectionDuration
-    , "AppRulePolicyId", sosAppRulePolicyId
+    "AppRulePolicyId", sosAppRulePolicyId
     , "AppRulePolicyName", sosAppRulePolicyName
     , "AppRuleService", sosAppRuleService
     , "AppRuleType", sosAppRuleType
     , "AppRuleObject", sosAppRuleObject
     , "AppRuleObjectContent", sosAppRuleObjectContent
     , "AppRuleAction", sosAppRuleAction
-    , "AppIDNumber", sosAppIDNumber
     , "AppID", sosAppID
     , "AppCategoryID", sosAppCategoryID
-    , "AppSignatureID", sosAppSignatureID
     , "IPSCategoryName", sosIPSCategoryName
     , "AntiSpywareCategory", sosAntiSpywareCategory
-    , "URLPathName", sosURLPathName
     , "FileIdentifier", sosFileIdentifier
     , "DPIInspectedFlow", sosDPIInspectedFlow
     , "BladeID", sosBladeID
     , "UUID", sosUUID
-    , "HttpRequestMethod", sosHttpRequestMethod
     , "FileName", sosFileName
     , "FileSize", FileSize
-    , "HttpReferrer", sosHttpReferrer
-    , "HttpUserAgent", HttpUserAgent
     , "CaptureATPVerdict", sosCaptureATPVerdict
-    , "ApplicationID", sosApplicationID
     , "CFSCategoryID", sosCFSCategoryID
     , "CFSCategoryName", sosCFSCategoryName
     , "CFSPolicyName", sosCFSPolicyName
     , "AppControlFileName", sosAppControlFileName
-    , "AppCategoryName", sosAppCategoryName
-    , "AppIDName", sosAppIDName
-    , "AppSignatureName", sosAppSignatureName
     , "IPSFullString", sosIPSFullString
     , "IPSSignatureName", sosIPSSignatureName
     , "LegacyMessageCategory", sosLegacyMessageCategory
@@ -346,14 +326,9 @@ ParserQuery: |
     , "LogMsgSeverity", sosLogMsgSeverity
     , "SourceVPNPolicyName", sosSourceVPNPolicyName
     , "DestinationVPNPolicyName", sosDestinationVPNPolicyName
-    , "SerialNumber", sosSerialNumber
-    , "DeviceModel", sosDeviceModel
     , "LogMsgID", sosLogMsgID
-    , "RequestURL", RequestURL
-    , "Activity", EventMessage
     , "EventMessageDetail", sosEventMessageDetail
     , "UserSessionType", sosUserSessionType
-    , "UserSessionDuration", sosUserSessionDuration
     )
   | project-away
       DeviceEventCategory
