@@ -1,5 +1,7 @@
 import time
-from pydantic import BaseModel
+from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class TokenModel(BaseModel):
@@ -23,3 +25,21 @@ class QueryModel(BaseModel):
     def get_file_name() -> str:
         return 'query.json'
 
+
+class DCREventModel(BaseModel):
+    CyberArkTenantId: str = Field(alias='tenantId')  # tenantId is a reserved name in Log Analytics Workspace
+    timestamp: int = 0,
+    username: Optional[str] = ''
+    applicationCode: Optional[str] = ''
+    auditCode: Optional[str] = ''
+    auditType: Optional[str] = ''
+    action: Optional[str] = ''
+    userId: Optional[str] = ''
+    source: Optional[str] = ''
+    actionType: Optional[str] = ''
+    component: Optional[str] = ''
+    serviceName: Optional[str] = ''
+    target: Optional[str] = ''
+    command: Optional[str] = ''
+    sessionId: Optional[str] = ''
+    message: Optional[str] = ''
