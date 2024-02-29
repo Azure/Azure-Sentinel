@@ -41,8 +41,8 @@ class WithSecureClient:
 
         data = {"grant_type": "client_credentials", "scope": "connect.api.read"}
 
-        headers_to_log = dict(headers)
-        headers_to_log["Authorization"] = "REDACTED"
+        header_keys_to_log = ["Content-type", "Accept", "User-Agent"]
+        headers_to_log = {key: headers[key] for key in header_keys_to_log}
         log.info(
             f"Executing authorization request to Elements API... "
             f"headers={headers_to_log}, "
