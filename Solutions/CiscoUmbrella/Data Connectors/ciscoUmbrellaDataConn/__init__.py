@@ -58,7 +58,7 @@ def main(mytimer: func.TimerRequest) -> None:
 
     if (datetime.datetime.utcnow() - datetime.timedelta(days=3)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
         ts_from = parse_date_from(ts_from)
-        ts_to = ts_from +  datetime.timedelta(hours=1)
+        ts_to = ts_from +  datetime.timedelta(minutes=30)
     else:
         ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
 
