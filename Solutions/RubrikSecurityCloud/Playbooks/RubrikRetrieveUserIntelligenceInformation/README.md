@@ -1,4 +1,4 @@
-# Rubrik User Risk Policy Details
+# Rubrik Retrieve User Intelligence Information
 ## Summary
 This playbook queries Rubrik Security Cloud to get risk detail and policy hits details for user and enrich the incident by adding incident comment
 ### Prerequisites
@@ -12,7 +12,7 @@ This playbook queries Rubrik Security Cloud to get risk detail and policy hits d
 * UserDetailsTableName: Table name to store userdetails in Log Analytics Workspace.
 * UserPolicyHitsTableName: Table name to store user policy hits data into Log Analytics Workspace.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserRiskPolicyDetails%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikUserRiskPolicyDetails%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikRetrieveUserIntelligenceInformation%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRubrikSecurityCloud%2FPlaybooks%2FRubrikRetrieveUserIntelligenceInformation%2Fazuredeploy.json)
 ### Post-Deployment instructions
 #### a. Authorize connections
 Once deployment is complete, authorize each connection like keyvault, azureloganalytics.
