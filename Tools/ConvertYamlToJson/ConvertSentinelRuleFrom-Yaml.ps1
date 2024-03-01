@@ -99,7 +99,7 @@ function ConvertSentinelRuleFrom-Yaml {
             $template = [PSCustomObject]@{
                 '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
                 contentVersion = "1.0.0.0"
-                Parameters     = @{
+                parameters     = @{
                     Workspace = @{
                         type = "string"
                     }
@@ -110,7 +110,7 @@ function ConvertSentinelRuleFrom-Yaml {
                         name       = ""
                         type       = "Microsoft.OperationalInsights/workspaces/providers/alertRules"
                         kind       = "Scheduled"
-                        apiVersion = "2021-03-01-preview"
+                        apiVersion = "2023-02-01-preview"
                         properties = [PSCustomObject]@{}
                     }
                 )
