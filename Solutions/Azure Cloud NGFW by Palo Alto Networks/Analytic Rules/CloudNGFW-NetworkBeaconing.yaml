@@ -1,0 +1,61 @@
+id: f0be259a-34ac-4946-aa15-ca2b115d5feb
+name: Palo Alto - potential beaconing detected
+description: |
+  'Identifies beaconing patterns from Palo Alto Network traffic logs based on recurrent timedelta patterns.
+  The query leverages various KQL functions to calculate time deltas and then compares it with total events observed in a day to find percentage of beaconing.
+  This outbound beaconing pattern to untrusted public networks should be investigated for any malware callbacks or data exfiltration attempts.
+  Reference Blog:
+  http://www.austintaylor.io/detect/beaconing/intrusion/detection/system/command/control/flare/elastic/stack/2017/06/10/detect-beaconing-with-flare-elasticsearch-and-intrusion-detection-systems/
+  https://techcommunity.microsoft.com/t5/microsoft-sentinel-blog/detect-network-beaconing-via-intra-request-time-delta-patterns/ba-p/779586'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: CloudNgfwByPAN
+    dataTypes:
+      - fluentbit_CL
+queryFrequency: 1d
+queryPeriod: 2d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+  - T1571
+query: |
+  let starttime = 2d;
+  let endtime = 1d;
+  let TimeDeltaThreshold = 25;
+  let TotalEventsThreshold = 30;
+  let MostFrequentTimeDeltaThreshold = 25;
+  let PercentBeaconThreshold = 80;
+  fluentbit_CL
+  | where ident_s == "TRAFFIC"
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where ipv4_is_private(tostring(parse_json(Message).dst_ip)) == false
+  | project TimeGenerated, FirewallName_s, parse_json(Message).src_ip, parse_json(Message).sport, parse_json(Message).dst_ip, parse_json(Message).dport,Message
+  | sort by tostring(parse_json(Message).src_ip) asc, TimeGenerated asc, tostring(parse_json(Message).dst_ip) asc, tostring(parse_json(Message).dport) asc
+  | extend src_ip=tostring(parse_json(Message).src_ip)
+  | serialize
+  | extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(src_ip, 1)
+  | extend TimeDeltainSeconds = datetime_diff('second', nextTimeGenerated, TimeGenerated)
+  | where parse_json(Message).src_ip == nextSourceIP
+  | where TimeDeltainSeconds > TimeDeltaThreshold
+  | summarize count() by TimeDeltainSeconds, bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message
+  | summarize (MostFrequentTimeDeltaCount, MostFrequentTimeDeltainSeconds) = arg_max(count_, TimeDeltainSeconds), TotalEvents=sum(count_)
+  by bin(TimeGenerated, 1h), FirewallName_s, tostring(parse_json(Message).src_ip), tostring(parse_json(Message).dst_ip), tostring(parse_json(Message).dport),Message
+  | where TotalEvents > TotalEventsThreshold and MostFrequentTimeDeltaCount > MostFrequentTimeDeltaThreshold
+  | extend BeaconPercent = MostFrequentTimeDeltaCount/toreal(TotalEvents) * 100
+  | where BeaconPercent > PercentBeaconThreshold
+  | extend timestamp = TimeGenerated, IPCustomEntity = parse_json(Message).dst_ip, HostCustomEntity = FirewallName_s
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled
