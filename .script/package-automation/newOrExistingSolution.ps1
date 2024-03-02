@@ -115,8 +115,8 @@ else {
                 }
             }
             else {
-                . ./.script/package-automation/catelogAPI.ps1
-                $offerDetails = GetCatelogDetails $offerId
+                . ./.script/package-automation/catalogAPI.ps1
+                $offerDetails = GetCatalogDetails $offerId
                 if ($null -eq $offerDetails) {
                     Write-Host "OfferDetails not found for provided offerId $offerDetails"
                     $solutionSupportedBy = 'partner-supported-solution'
