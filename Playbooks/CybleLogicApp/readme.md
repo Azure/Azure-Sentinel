@@ -14,17 +14,13 @@ A Cyble Alerts Token and Cyble Alerts Endpoint is required for authentication. O
 
 Read and Write Access to your Sentinel Workspace is required.
 
-## Screenshots
-![Cyble-Threat-Intel-App](./Images/Cyble-Threat-Intel-Logic-App.png)
 
 ### Deploy Logic App
-
-
 
 1. Select the preferred **Subscription**, **Resource Group**, and **Location**.
    > **Note:** Best practice: Create a new Resource Group while deploying; all the resources of your custom Data logic app will reside in the newly created Resource Group.
 
-3. Enter the following values in the ARM template deployment:
+2. Enter the following values in the ARM template deployment:
     - **Cyble Endpoint:** Specify the endpoint to establish the correct API endpoint.
     - **Cyble Alerts Token:** Provide your unique access token for authentication.
     - **Frequency Minutes:** Determine how often the workflow should run.
