@@ -762,27 +762,39 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
 
-            $baseDataConnectorTextElement = [PSCustomObject] @{
-                name    = "dataconnectors$global:connectorCounter-text";
-                type    = "Microsoft.Common.TextBlock";
-                options = [PSCustomObject] @{
-                    text = $connectorDescriptionText;
-                }
-            }
-
-            $currentStepNum = $global:baseCreateUiDefinition.parameters.steps.Count - 1
-            $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $baseDataConnectorTextElement
-            $connectDataSourcesLink = [PSCustomObject] @{
-                name    = "dataconnectors-link2";
-                type    = "Microsoft.Common.TextBlock";
-                options = [PSCustomObject] @{
-                    link = [PSCustomObject] @{
-                        label = "Learn more about connecting data sources";
-                        uri   = "https://docs.microsoft.com/azure/sentinel/connect-data-sources";
+            $hasDataConnectorDetails = $false
+            foreach($item in $global:baseCreateUiDefinition.parameters.steps.elements) {
+                if ($item.name -like "*dataconnectors-text*") {
+                    $optionText = $item.options.text;
+                    if ($optionText -eq $connectorDescriptionText) {
+                        $hasDataConnectorDetails = $true
                     }
                 }
             }
-            $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
+            
+            if (!$hasDataConnectorDetails) {
+                $baseDataConnectorTextElement = [PSCustomObject] @{
+                    name    = "dataconnectors-text$global:connectorCounter";
+                    type    = "Microsoft.Common.TextBlock";
+                    options = [PSCustomObject] @{
+                        text = $connectorDescriptionText;
+                    }
+                }
+
+                $currentStepNum = $global:baseCreateUiDefinition.parameters.steps.Count - 1
+                $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $baseDataConnectorTextElement
+                $connectDataSourcesLink = [PSCustomObject] @{
+                    name    = "dataconnectors-link$global:connectorCounter";
+                    type    = "Microsoft.Common.TextBlock";
+                    options = [PSCustomObject] @{
+                        link = [PSCustomObject] @{
+                            label = "Learn more about connecting data sources";
+                            uri   = "https://docs.microsoft.com/azure/sentinel/connect-data-sources";
+                        }
+                    }
+                }
+                $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
+            }
 
             $global:connectorCounter += 1
         }
