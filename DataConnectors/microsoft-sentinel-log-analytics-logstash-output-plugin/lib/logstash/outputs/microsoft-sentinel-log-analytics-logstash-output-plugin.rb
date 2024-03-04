@@ -9,9 +9,12 @@ require "logstash/sentinel_la/logsSender"
 class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
 
   config_name "microsoft-sentinel-log-analytics-logstash-output-plugin"
-  
+
   # Stating that the output plugin will run in concurrent mode
   concurrency :shared
+
+  # If managed Identity is used, the plugin will use the managed identity to authenticate with Microsoft Entra ID
+  config :managed_identity, :validate => :boolean, :default => false
 
   # Your registered app ID
   config :client_app_Id, :validate => :string
@@ -43,16 +46,16 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # This will trigger message amount resizing in a REST request to LA
   config :amount_resizing, :validate => :boolean, :default => true
 
-  # Setting the default amount of messages sent                                                                                                    
+  # Setting the default amount of messages sent
   # it this is set with amount_resizing=false --> each message will have max_items
   config :max_items, :validate => :number, :default => 2000
 
   # Setting default proxy to be used for all communication with azure
   config :proxy, :validate => :string
-  
-  # Setting proxy_aad to be used for communicating with azure active directory service
+
+  # Setting proxy_aad to be used for communicating with the Microsoft Entra ID service
   config :proxy_aad, :validate => :string
-  
+
   # Setting proxy to be used for the LogAnalytics endpoint REST client
   config :proxy_endpoint, :validate => :string
 
@@ -76,8 +79,8 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   public
   def register
     @logstash_configuration= build_logstash_configuration()
-	
-    # Validate configuration correctness 
+
+    # Validate configuration correctness
     @logstash_configuration.validate_configuration()
 
     @events_handler = @logstash_configuration.create_sample_file ?
@@ -93,13 +96,13 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
     @events_handler.close
   end
 
-  #private 
+  #private
   private
 
   # Building the logstash object configuration from the output configuration provided by the user
   # Return LogstashLoganalyticsOutputConfiguration populated with the configuration values
   def build_logstash_configuration()
-    logstash_configuration= LogStash::Outputs::MicrosoftSentinelOutputInternal::LogstashLoganalyticsOutputConfiguration::new(@client_app_Id, @client_app_secret, @tenant_id, @data_collection_endpoint, @dcr_immutable_id, @dcr_stream_name, @compress_data, @create_sample_file, @sample_file_path, @logger)
+    logstash_configuration= LogStash::Outputs::MicrosoftSentinelOutputInternal::LogstashLoganalyticsOutputConfiguration::new(@client_app_Id, @client_app_secret, @tenant_id, @data_collection_endpoint, @dcr_immutable_id, @dcr_stream_name, @compress_data, @create_sample_file, @sample_file_path, @logger, @managed_identity)
     logstash_configuration.key_names = @key_names
     logstash_configuration.plugin_flush_interval = @plugin_flush_interval
     logstash_configuration.decrease_factor = @decrease_factor
@@ -109,7 +112,7 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
     logstash_configuration.proxy_endpoint = @proxy_endpoint || @proxy || ENV['http_proxy']
     logstash_configuration.retransmission_time = @retransmission_time
     logstash_configuration.azure_cloud = @azure_cloud || "AzureCloud"
-    
+
     return logstash_configuration
   end # def build_logstash_configuration
 
