@@ -167,7 +167,7 @@ Select the "**Microsoft Sentinel Contributor**" role, then click "**Next**".
 
 ![BlockHashInDefender_Add_Contributor_Role_2](Images/BlockHashInDefender_Add_Contributor_Role_2.png)
 
-Select the "**Managed identity**" option, then click "**Select Members**". Under the subscription the Logic App is located, set the value of "**Managed identity**" to "**Logic app**". Next, enter "**AS-Sign-Out-Google-User**", or the alternative playbook name used during deployment, in the field labeled "**Select**". Select the playbook, then click "**Select**".
+Select the "**Managed identity**" option, then click "**Select Members**". Under the subscription the Logic App is located, set the value of "**Managed identity**" to "**Logic app**". Next, enter "**AS-Block-Hash-in-Defender**", or the alternative playbook name used during deployment, in the field labeled "**Select**". Select the playbook, then click "**Select**".
 
 ![BlockHashInDefender_Add_Contributor_Role_3](Images/BlockHashInDefender_Add_Contributor_Role_3.png)
 

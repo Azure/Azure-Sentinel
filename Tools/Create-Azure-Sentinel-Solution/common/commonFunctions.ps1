@@ -2976,8 +2976,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     {
         if ($contentToImport.Description) {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", $contentToImport.Description
-
-            $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionName}}", $solutionName
+            
+            $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionName}}", [URI]::EscapeUriString($solutionName)
         }
         else {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", ""
@@ -3172,7 +3172,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                 $dict.Add('huntingOperationalInsightsWorkspacesApiVersion', '2021-06-01')
                 $dict.Add('parserOperationalInsightsWorkspacesApiVersion', '2020-08-01')
                 $dict.Add('savedSearchesApiVersion', '2022-10-01')
-                $dict.Add('alertRuleApiVersion', '2022-04-01-preview')
+                $dict.Add('alertRuleApiVersion', '2023-02-01-preview')
                 $dict.Add('commonResourceMetadataApiVersion', '2022-01-01-preview')
                 $dict.Add('insightsWorkbookApiVersion', '2021-08-01')
             }
