@@ -15,8 +15,8 @@ A Cyble Alerts Token and Cyble Alerts Endpoint is required for authentication. O
 Read and Write Access to your Sentinel Workspace is required.
 
 ## Screenshots
-![Cyble-Threat-Intel-App](./images/Cyble-Threat-Intel-Logic-App.png)
-![Cyble-Threat-Connector](./images/Cyble-Threat-Intel-Connector.png)
+![Cyble-Threat-Intel-App](./Images/Cyble-Threat-Intel-Logic-App.png)
+![Cyble-Threat-Connector](./Images/Cyble-Threat-Intel-Connector.png)
 
 ### Deploy Logic App
 
