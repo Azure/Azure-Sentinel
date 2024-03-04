@@ -37,11 +37,11 @@
     "solutionId": "azuresentinel.azure-sentinel-solution-bec_financialfraud",
     "_solutionId": "[variables('solutionId')]",
     "analyticRuleObject1": {
-      "analyticRuleVersion1": "1.1.0",
+      "analyticRuleVersion1": "1.1.1",
       "_analyticRulecontentId1": "c1c66f0b-5531-4a3e-a619-9d2f770ef730",
       "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', 'c1c66f0b-5531-4a3e-a619-9d2f770ef730')]",
       "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('c1c66f0b-5531-4a3e-a619-9d2f770ef730')))]",
-      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','c1c66f0b-5531-4a3e-a619-9d2f770ef730','-', '1.1.0')))]"
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','c1c66f0b-5531-4a3e-a619-9d2f770ef730','-', '1.1.1')))]"
     },
     "analyticRuleObject2": {
       "analyticRuleVersion2": "1.0.4",
@@ -172,14 +172,14 @@
             {
               "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
               "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
-              "apiVersion": "2022-04-01-preview",
+              "apiVersion": "2023-02-01-preview",
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "Detects an account that is elevated to a new role where that account has not had that role in the last 14 days.\n  Role elevations are a key mechanism for gaining permissions, monitoring which users have which roles, and for anomalies in those roles is useful for finding suspicious activity.\n  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#changes-to-privileged-accounts",
                 "displayName": "Account Elevated to New Role",
                 "enabled": false,
-                "query": "let auditList =\nAuditLogs\n| where TimeGenerated >= ago(14d)\n| where OperationName =~ \"Add member to role completed (PIM activation)\"\n| where Result =~ \"success\"\n| extend TargetUserPrincipalName = tostring(TargetResources[2].userPrincipalName)\n| extend displayName = tostring(TargetResources[0].displayName)\n| extend displayName2 = tostring(TargetResources[3].displayName)\n| extend ElevatedRole = iif(displayName =~ \"Member\", displayName2, displayName)\n;\nlet lookbackList = auditList\n| where TimeGenerated between(ago(14d)..ago(1d))\n;\nlet recentList = auditList\n| where TimeGenerated > ago(1d)\n;\nlet newlyElevated = recentList\n| join kind = leftanti lookbackList on ElevatedRole, TargetUserPrincipalName\n;\nnewlyElevated | project Id, AdditionalDetails\n| mv-expand bagexpansion=array AdditionalDetails\n| evaluate bag_unpack(AdditionalDetails)\n| evaluate pivot(key, make_set(value))\n| extend ipaddr = todynamic(column_ifexists(\"ipaddr\", \"\"))\n| mv-expand ipaddr\n| project Id, InitiatingIPAddress = tostring(ipaddr)\n| join kind=rightouter newlyElevated on Id\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = iff(isnotempty(tostring(InitiatedBy.user.ipAddress)), tostring(InitiatedBy.user.ipAddress), InitiatingIPAddress)\n| extend ElevatedBy = iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName)\n| extend ElevatedUser = TargetUserPrincipalName\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n| extend TargetAccountName = tostring(split(TargetUserPrincipalName, \"@\")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, \"@\")[1])\n| project-reorder ElevatedUser, ElevatedRole, ResultReason, ElevatedBy, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, TargetUserPrincipalName\n",
+                "query": "let auditList =\nAuditLogs\n| where TimeGenerated >= ago(14d)\n| where OperationName =~ \"Add member to role completed (PIM activation)\"\n| where Result =~ \"success\"\n| extend TargetUserPrincipalName = tostring(TargetResources[2].userPrincipalName)\n| extend displayName = tostring(TargetResources[0].displayName)\n| extend displayName2 = tostring(TargetResources[3].displayName)\n| extend ElevatedRole = iif(displayName =~ \"Member\", displayName2, displayName)\n;\nlet lookbackList = auditList\n| where TimeGenerated between(ago(14d)..ago(1d))\n;\nlet recentList = auditList\n| where TimeGenerated > ago(1d)\n;\nlet newlyElevated = recentList\n| join kind = leftanti lookbackList on ElevatedRole, TargetUserPrincipalName\n;\nnewlyElevated | project Id, AdditionalDetails\n| mv-expand bagexpansion=array AdditionalDetails\n| evaluate bag_unpack(AdditionalDetails)\n| extend key = column_ifexists(\"key\", ''), value = column_ifexists(\"value\", '')\n| evaluate pivot(key, make_set(value))\n| extend ipaddr = todynamic(column_ifexists(\"ipaddr\", \"\"))\n| mv-expand ipaddr\n| project Id, InitiatingIPAddress = tostring(ipaddr)\n| join kind=rightouter newlyElevated on Id\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIPAddress = iff(isnotempty(tostring(InitiatedBy.user.ipAddress)), tostring(InitiatedBy.user.ipAddress), InitiatingIPAddress)\n| extend ElevatedBy = iff(isnotempty(InitiatingUserPrincipalName), InitiatingUserPrincipalName, InitiatingAppName)\n| extend ElevatedUser = TargetUserPrincipalName\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n| extend TargetAccountName = tostring(split(TargetUserPrincipalName, \"@\")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, \"@\")[1])\n| project-reorder ElevatedUser, ElevatedRole, ResultReason, ElevatedBy, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIPAddress, TargetUserPrincipalName\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P14D",
                 "severity": "Medium",
@@ -207,6 +207,7 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -220,10 +221,10 @@
                         "identifier": "AadUserId",
                         "columnName": "InitiatingAadUserId"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -233,17 +234,16 @@
                         "identifier": "UPNSuffix",
                         "columnName": "TargetAccountUPNSuffix"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "InitiatingIPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -309,7 +309,7 @@
             {
               "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
               "name": "[variables('analyticRuleObject2')._analyticRulecontentId2]",
-              "apiVersion": "2022-04-01-preview",
+              "apiVersion": "2023-02-01-preview",
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -347,6 +347,7 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -360,10 +361,10 @@
                         "identifier": "AadUserId",
                         "columnName": "TargetAadUserId"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -377,17 +378,16 @@
                         "identifier": "AadUserId",
                         "columnName": "InitiatingAadUserId"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "InitiatingIPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -453,7 +453,7 @@
             {
               "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
               "name": "[variables('analyticRuleObject3')._analyticRulecontentId3]",
-              "apiVersion": "2022-04-01-preview",
+              "apiVersion": "2023-02-01-preview",
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -487,6 +487,7 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -496,17 +497,16 @@
                         "identifier": "UPNSuffix",
                         "columnName": "DomainName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "ClientIPAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   }
                 ]
               }
@@ -572,7 +572,7 @@
             {
               "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
               "name": "[variables('analyticRuleObject4')._analyticRulecontentId4]",
-              "apiVersion": "2022-04-01-preview",
+              "apiVersion": "2023-02-01-preview",
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -613,6 +613,7 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -626,10 +627,10 @@
                         "identifier": "AadUserId",
                         "columnName": "TargetAadUserId"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -643,8 +644,7 @@
                         "identifier": "AadUserId",
                         "columnName": "InitiatingAadUserId"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -710,7 +710,7 @@
             {
               "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
               "name": "[variables('analyticRuleObject5')._analyticRulecontentId5]",
-              "apiVersion": "2022-04-01-preview",
+              "apiVersion": "2023-02-01-preview",
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -735,6 +735,7 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -748,40 +749,39 @@
                         "identifier": "AadUserId",
                         "columnName": "User"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "IpAddr"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "File",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
                         "columnName": "FilePath"
                       }
-                    ],
-                    "entityType": "File"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
+                  "UserAgent": "HttpUserAgent",
                   "Type": "EventType",
                   "Result": "EventResult",
-                  "Product": "EventProduct",
-                  "UserAgent": "HttpUserAgent"
+                  "Product": "EventProduct"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Suspicious access of {{number_of_files_accessed}} BEC related documents by {{User}}",
-                  "alertDescriptionFormat": "This query looks for users (in this case {{User}}) with suspicious spikes in the number of files accessed (in this case {{number_of_files_accessed}} events) that relate to topics commonly accessed as part of Business Email Compromise (BEC) attacks. The query looks for access to files in storage that relate to topics such as invoices or payments, and then looks for users accessing these files in significantly higher numbers than in the previous 14 days. Incidents raised by this analytic should be investigated to see if the user accessing these files should be accessing them, and if the volume they accessed them at was related to a legitimate business need. \nThis query contains thresholds to reduce the chance of false positives, these can be adjusted to suit individual environments. In addition false positives could be generated by legitimate, scheduled actions that occur less often than every 14 days, additional exclusions can be added for these actions on username or IP address entities. This query uses the imFileEvent schema from ASIM, you will first need to ensure you have ASIM deployed in your environment. Ref https://learn.microsoft.com/azure/sentinel/normalization-about-parsers\n"
+                  "alertDescriptionFormat": "This query looks for users (in this case {{User}}) with suspicious spikes in the number of files accessed (in this case {{number_of_files_accessed}} events) that relate to topics commonly accessed as part of Business Email Compromise (BEC) attacks. The query looks for access to files in storage that relate to topics such as invoices or payments, and then looks for users accessing these files in significantly higher numbers than in the previous 14 days. Incidents raised by this analytic should be investigated to see if the user accessing these files should be accessing them, and if the volume they accessed them at was related to a legitimate business need. \nThis query contains thresholds to reduce the chance of false positives, these can be adjusted to suit individual environments. In addition false positives could be generated by legitimate, scheduled actions that occur less often than every 14 days, additional exclusions can be added for these actions on username or IP address entities. This query uses the imFileEvent schema from ASIM, you will first need to ensure you have ASIM deployed in your environment. Ref https://learn.microsoft.com/azure/sentinel/normalization-about-parsers\n",
+                  "alertDisplayNameFormat": "Suspicious access of {{number_of_files_accessed}} BEC related documents by {{User}}"
                 }
               }
             },
@@ -846,7 +846,7 @@
             {
               "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
               "name": "[variables('analyticRuleObject6')._analyticRulecontentId6]",
-              "apiVersion": "2022-04-01-preview",
+              "apiVersion": "2023-02-01-preview",
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -878,44 +878,44 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
                         "columnName": "UserIdentityUserName"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "IP",
                     "fieldMappings": [
                       {
                         "identifier": "Address",
                         "columnName": "SourceIpAddress"
                       }
-                    ],
-                    "entityType": "IP"
+                    ]
                   },
                   {
+                    "entityType": "File",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
                         "columnName": "FilePath"
                       }
-                    ],
-                    "entityType": "File"
+                    ]
                   }
                 ],
                 "eventGroupingSettings": {
                   "aggregationKind": "SingleAlert"
                 },
                 "customDetails": {
-                  "Event": "EventName",
+                  "UserType": "UserIdentityType",
                   "UserAgent": "UserAgent",
-                  "UserType": "UserIdentityType"
+                  "Event": "EventName"
                 },
                 "alertDetailsOverride": {
-                  "alertDisplayNameFormat": "Suspicious access of {{CountOfDocs}} BEC related documents in AWS S3 buckets by {{UserIdentityUserName}}",
-                  "alertDescriptionFormat": "This query looks for users (in this case {{UserIdentityUserName}}) with suspicious spikes in the number of files accessed (in this case {{CountOfDocs}})that relate to topics commonly accessed as part of Business Email Compromise (BEC) attacks. The query looks for access to files in AWS S3 storage that relate to topics such as invoices or payments, and then looks for users accessing these files in significantly higher numbers than in the previous 14 days. Incidents raised by this analytic should be investigated to see if the user accessing these files should be accessing them, and if the volume they accessed them at was related to a legitimate business need. \nThis query contains thresholds to reduce the chance of false positives, these can be adjusted to suit individual environments. In addition false positives could be generated by legitimate, scheduled actions that occur less often than every 14 days, additional exclusions can be added for these actions on username or IP address entities.\n"
+                  "alertDescriptionFormat": "This query looks for users (in this case {{UserIdentityUserName}}) with suspicious spikes in the number of files accessed (in this case {{CountOfDocs}})that relate to topics commonly accessed as part of Business Email Compromise (BEC) attacks. The query looks for access to files in AWS S3 storage that relate to topics such as invoices or payments, and then looks for users accessing these files in significantly higher numbers than in the previous 14 days. Incidents raised by this analytic should be investigated to see if the user accessing these files should be accessing them, and if the volume they accessed them at was related to a legitimate business need. \nThis query contains thresholds to reduce the chance of false positives, these can be adjusted to suit individual environments. In addition false positives could be generated by legitimate, scheduled actions that occur less often than every 14 days, additional exclusions can be added for these actions on username or IP address entities.\n",
+                  "alertDisplayNameFormat": "Suspicious access of {{CountOfDocs}} BEC related documents in AWS S3 buckets by {{UserIdentityUserName}}"
                 }
               }
             },
@@ -980,7 +980,7 @@
             {
               "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
               "name": "[variables('analyticRuleObject7')._analyticRulecontentId7]",
-              "apiVersion": "2022-04-01-preview",
+              "apiVersion": "2023-02-01-preview",
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
@@ -1015,6 +1015,7 @@
                 ],
                 "entityMappings": [
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -1028,10 +1029,10 @@
                         "identifier": "AadUserId",
                         "columnName": "TargetAadUserId"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   },
                   {
+                    "entityType": "Account",
                     "fieldMappings": [
                       {
                         "identifier": "Name",
@@ -1045,8 +1046,7 @@
                         "identifier": "AadUserId",
                         "columnName": "InitiatingAadUserId"
                       }
-                    ],
-                    "entityType": "Account"
+                    ]
                   }
                 ]
               }
@@ -2208,7 +2208,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Business Email Compromise - Financial Fraud",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution [Release Notes](<a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Business\">https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Business</a> Email Compromise - Financial Fraud/ReleaseNotes.md)</p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p><a href=\"https://www.microsoft.com/en-in/security/business/security-101/what-is-business-email-compromise-bec?rtc=1\">Business Email Compromise (BEC)</a> attacks often aim to commit financial fraud by locating sensitive payment or invoice details and using these to hijack legitimate transactions. This solution, in combination with other solutions listed below, provide a range of content to help detect and investigate BEC attacks at different stages of the attack cycle, and across multiple data sources including AWS, SAP, Okta, Dynamics 365, Microsoft Entra ID, Microsoft 365 and network logs.</p>\n<p>This content covers all stages of the attack chain from an initial phishing attack vector, establishing persistence to an environment, locating and collecting sensitive financial information from data stores, and then perpetrating and hiding their fraud. This range of content complements the coverage <a href=\"https://learn.microsoft.com/microsoft-365/security/defender/automatic-attack-disruption\">Microsoft Defender XDR provides across Microsoft Defender products</a>.</p>\n<p>In order to gain the most comprehensive coverage possible customers should deploy the content included in this solution as well as content from the following solutions:<ul></p>\n<li> Microsoft Entra ID solution for Sentinel\n</li><li>Microsoft 365 solution for Sentinel\n</li><li>Amazon Web Services\n</li><li>Microsoft Defender XDR\n</li><li>Okta Single Sign On\n</li></ul>\n<p><strong>Analytic Rules:</strong> 7, <strong>Hunting Queries:</strong> 13</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Business%20Email%20Compromise%20-%20Financial%20Fraud/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p><a href=\"https://www.microsoft.com/en-in/security/business/security-101/what-is-business-email-compromise-bec?rtc=1\">Business Email Compromise (BEC)</a> attacks often aim to commit financial fraud by locating sensitive payment or invoice details and using these to hijack legitimate transactions. This solution, in combination with other solutions listed below, provide a range of content to help detect and investigate BEC attacks at different stages of the attack cycle, and across multiple data sources including AWS, SAP, Okta, Dynamics 365, Microsoft Entra ID, Microsoft 365 and network logs.</p>\n<p>This content covers all stages of the attack chain from an initial phishing attack vector, establishing persistence to an environment, locating and collecting sensitive financial information from data stores, and then perpetrating and hiding their fraud. This range of content complements the coverage <a href=\"https://learn.microsoft.com/microsoft-365/security/defender/automatic-attack-disruption\">Microsoft Defender XDR provides across Microsoft Defender products</a>.</p>\n<p>In order to gain the most comprehensive coverage possible customers should deploy the content included in this solution as well as content from the following solutions:</p>\n<ol>\n<li><p>Microsoft Entra ID solution for Sentinel</p>\n</li>\n<li><p>Microsoft 365 solution for Sentinel</p>\n</li>\n<li><p>Amazon Web Services</p>\n</li>\n<li><p>Microsoft Defender XDR</p>\n</li>\n<li><p>Okta Single Sign On</p>\n</li>\n</ol>\n<p><strong>Analytic Rules:</strong> 7, <strong>Hunting Queries:</strong> 13</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -2231,6 +2231,7 @@
           "link": "https://support.microsoft.com/"
         },
         "dependencies": {
+          "operator": "AND",
           "criteria": [
             {
               "kind": "AnalyticsRule",
@@ -2331,26 +2332,6 @@
               "kind": "HuntingQuery",
               "contentId": "[variables('huntingQueryObject13')._huntingQuerycontentId13]",
               "version": "[variables('huntingQueryObject13').huntingQueryVersion13]"
-            },
-            {
-              "kind": "Solution",
-              "contentId": "azuresentinel.azure-sentinel-solution-azureactivedirectory"
-            },
-            {
-              "kind": "Solution",
-              "contentId": "azuresentinel.azure-sentinel-solution-office365"
-            },
-            {
-              "kind": "Solution",
-              "contentId": "azuresentinel.azure-sentinel-solution-amazonwebservices"
-            },
-            {
-              "kind": "Solution",
-              "contentId": "azuresentinel.azure-sentinel-solution-microsoft365defender"
-            },
-            {
-              "kind": "Solution",
-              "contentId": "azuresentinel.azure-sentinel-solution-okta"
             }
           ]
         },
