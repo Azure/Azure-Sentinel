@@ -14,14 +14,14 @@ A Cyble Alerts Token and Cyble Alerts Endpoint is required for authentication. O
 
 Read and Write Access to your Sentinel Workspace is required.
 
-
+## Screenshots
+![Cyble-Threat-Intel-App](./Images/Cyble-Threat-Intel-Logic-App.png)
 
 ### Deploy Logic App
 
-1. Click on Deploy to Azure
-   - [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCybleLogicApp%2Fazuredeploy.json)
 
-2. Select the preferred **Subscription**, **Resource Group**, and **Location**.
+
+1. Select the preferred **Subscription**, **Resource Group**, and **Location**.
    > **Note:** Best practice: Create a new Resource Group while deploying; all the resources of your custom Data logic app will reside in the newly created Resource Group.
 
 3. Enter the following values in the ARM template deployment:
