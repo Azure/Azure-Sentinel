@@ -218,14 +218,18 @@ function Get-ArmResource($name, $type, $kind, $properties){
         "Microsoft.Insights/dataCollectionRules" = "2022-06-01";
     }
 
-    return [PSCustomObject]@{
+    $resource = [PSCustomObject]@{
         name       = $name;
         apiVersion = $apiVersion[$type]
         type       = $type;
         location   = "[parameters('workspace-location')]";
-        kind       = $kind;
         properties = $properties;
     }
+    if ($null -ne $kind) {
+        $resource | Add-Member -MemberType NoteProperty -Name "kind" -Value $kind
+    }
+
+    return $resource
 }
 
 function addNewParameter($templateResourceObj, $parameterName, $isSecret = $false) {

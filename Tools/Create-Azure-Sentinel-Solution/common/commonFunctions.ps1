@@ -2109,7 +2109,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         elements   = @();
                     }
                     $baseDataConnectorTextElement = [PSCustomObject] @{
-                        name    = "dataconnectors$global:connectorCounter-text";
+                        name    = "dataconnectors-text$global:connectorCounter";
                         type    = "Microsoft.Common.TextBlock";
                         options = [PSCustomObject] @{
                             text = $connectorDescriptionText;
