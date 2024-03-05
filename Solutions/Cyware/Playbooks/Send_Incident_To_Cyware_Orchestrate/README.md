@@ -47,6 +47,18 @@ Refer to the `azuredeploy.parameters.json` as an example. Ensure to replace the 
 
 Once deployed and configured, the Logic App listens for Microsoft Sentinel alerts based on the triggers defined in the `azuredeploy.json`. When an alert triggers, it automatically sends the incident details to the specified Cyware Orchestrate Webhook URL for further action.
 
+## Internal Workings
+
+This logic app is designed to trigger on Microsoft Sentinel Incident Creation.
+
+Once the rule is triggered, the logic app begins to restructure the payload  body to enable easy actioning on Cyware Orchestrate.
+
+![Data Reformatting](images/Microsoft%20Sentinel%20-%20Configure%20Data%20Transformations.png "Data Reformatting")
+
+This reformatted payload is forwarded to the Cyware Orchestrate Webhook URL, that is taken from the variable defined
+
+![Send to Cyware Orchestrate](images/Microsoft%20Sentinel%20-%20Send%20Data%20To%20Cyware%20Orcehstrate.png "Send to Cyware Orchestrate")
+
 ## Customization
 
 You can customize the Logic App workflow by editing the `azuredeploy.json` definition, tailoring actions, and triggers to specific needs.
