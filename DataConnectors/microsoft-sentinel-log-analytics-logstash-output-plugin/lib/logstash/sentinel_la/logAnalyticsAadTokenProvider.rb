@@ -36,17 +36,18 @@ class LogAnalyticsAadTokenProvider
 
   # Private  methods
   private
-  
+
   def is_saved_token_need_refresh()
     return @token_state[:access_token].nil? || @token_state[:expiry_time].nil? || @token_state[:expiry_time] <= Time.now
   end # def is_saved_token_need_refresh
 
   def refresh_saved_token()
-    @logger.info("aad token expired - refreshing token.")
+    @logger.info("Entra ID token expired - refreshing token.")
 
     token_response = post_token_request()
     @token_state[:access_token] = token_response["access_token"]
     @token_state[:expiry_time] = get_token_expiry_time(token_response["expires_in"])
+
   end # def refresh_saved_token
 
   def get_token_expiry_time (expires_in_seconds)
@@ -63,19 +64,19 @@ class LogAnalyticsAadTokenProvider
     headers = get_header()
     while true
       begin
-        # Post REST request 
+        # Post REST request
         response = RestClient::Request.execute(method: :post, url: @token_request_uri, payload: @token_request_body, headers: headers,
                                               proxy: @logstashLoganalyticsConfiguration.proxy_aad)
-                    
+
         if (response.code == 200 || response.code == 201)
           return JSON.parse(response.body)
         end
       rescue RestClient::ExceptionWithResponse => ewr
-        @logger.error("Exception while authenticating with AAD API ['#{ewr.response}']")          
-      rescue Exception => ex          
-        @logger.trace("Exception while authenticating with AAD API ['#{ex}']")
+        @logger.error("Exception while authenticating with Microsoft Entra ID API ['#{ewr.response}']")
+      rescue Exception => ex
+        @logger.trace("Exception while authenticating with Microsoft Entra ID API ['#{ex}']")
       end
-      @logger.error("Error while authenticating with AAD ('#{@aad_uri}'), retrying in 10 seconds.")
+      @logger.error("Error while authenticating with Microsoft Entra ID ('#{@aad_uri}'), retrying in 10 seconds.")
       sleep 10
     end
   end # def post_token_request
@@ -88,4 +89,4 @@ class LogAnalyticsAadTokenProvider
   end # def get_header
 
 end # end of class
-end ;end ;end 
+end ;end ;end

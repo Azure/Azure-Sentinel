@@ -7,12 +7,17 @@ require 'base64'
 require 'time'
 require 'rbconfig'
 
-module LogStash; module Outputs; class MicrosoftSentinelOutputInternal 
+module LogStash; module Outputs; class MicrosoftSentinelOutputInternal
 class LogAnalyticsClient
 
 require "logstash/sentinel_la/logstashLoganalyticsConfiguration"
 require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
+require "logstash/sentinel_la/logAnalyticsMiTokenProvider"
+require "logstash/sentinel_la/logAnalyticsArcTokenProvider"
 
+  def azcmagent_running? # AZure Connected Machine AGENT is running outside of Azure and onboarded into Azure Arc
+    system('azcmagent > /dev/null', [:out, :err] => IO::NULL)
+  end # def azcmagent_running?
 
   def initialize(logstashLoganalyticsConfiguration)
     @logstashLoganalyticsConfiguration = logstashLoganalyticsConfiguration
@@ -20,7 +25,19 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
 
     la_api_version = "2023-01-01"
     @uri = sprintf("%s/dataCollectionRules/%s/streams/%s?api-version=%s",@logstashLoganalyticsConfiguration.data_collection_endpoint, @logstashLoganalyticsConfiguration.dcr_immutable_id, logstashLoganalyticsConfiguration.dcr_stream_name, la_api_version)
-    @aadTokenProvider=LogAnalyticsAadTokenProvider::new(logstashLoganalyticsConfiguration)
+
+    if @logstashLoganalyticsConfiguration.managed_identity
+      if azcmagent_running?
+        @logger.info("Machine is Azure Arc-enabled server. Retrieving bearer token via azcmagent...")
+        @aadTokenProvider=LogAnalyticsArcTokenProvider::new(logstashLoganalyticsConfiguration)
+      else
+        @logger.info("Using Managed Identity configuration. Retrieving bearer token for Managed Identity...")
+        @aadTokenProvider=LogAnalyticsMiTokenProvider::new(logstashLoganalyticsConfiguration)
+      end
+    else
+      @aadTokenProvider=LogAnalyticsAadTokenProvider::new(logstashLoganalyticsConfiguration)
+    end
+
     @userAgent = getUserAgent()
   end # def initialize
 
@@ -32,7 +49,6 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
     headers = get_header()
 
     # Post REST request
-
     return RestClient::Request.execute(method: :post, url: @uri, payload: body, headers: headers,
                                         proxy: @logstashLoganalyticsConfiguration.proxy_endpoint, timeout: 240)
   end # def post_data
@@ -42,9 +58,9 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
     return (response.code >= 200 && response.code < 300 ) ? true : false
   end # def self.is_successfully_posted
 
-  private 
+  private
 
-  # Create a header for the given length 
+  # Create a header for the given length
   def get_header()
     # Getting an authorization token bearer (if the token is expired, the method will post a request to get a new authorization token)
     token_bearer = @aadTokenProvider.get_aad_token_bearer()
@@ -82,4 +98,4 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
   end #getUserAgent
 
 end # end of class
-end ;end ;end 
+end ;end ;end
