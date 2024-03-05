@@ -1,0 +1,41 @@
+id: 846bf25e-3d2d-4122-9b60-adfadd2fc616
+name: Imminent Ransomware
+description: |
+  Before deploying Macaw ransomware in an organization, the attacker will run several commands designed to disable security tools and system recovery tools.
+description-detailed: |
+  This query checks for a series of commands that are commonly used by attackers to disable security tools and system recovery tools before deploying Macaw ransomware in an organization.
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - DefenseEvasion
+query: |
+  DeviceProcessEvents 
+  // Pivot on specific commands 
+  | where ProcessCommandLine has_any("-ExclusionPath", "Set-MpPreference", "advfirewall", "-ExclusionExtension", 
+  "-EnableControlledFolderAccess", "windefend", "onstart", "bcdedit", "Startup") 
+  // Making list of found commands 
+  | summarize ProcessCommandLine = make_set(ProcessCommandLine, 10000) by DeviceId, bin(TimeGenerated, 6h) 
+  // Extending columns for later aggregration, based on TTP 
+  | extend StartUpExclusionPath = iff(ProcessCommandLine has_all("-ExclusionPath", "Startup"), 1, 0) 
+  | extend DefenderTamp = iff(ProcessCommandLine has "Set-MpPreference" 
+  and ProcessCommandLine has_any( 
+  "-SevereThreatDefaultAction 6" 
+  "-HighThreatDefaultAction 6", 
+  "-ModerateThreatDefaultAction 6", 
+  "-LowThreatDefaultAction 6" 
+  "-ScanScheduleDay 8"), 1, 0) 
+  | extend NetshFirewallTampering = iff(ProcessCommandLine has_all( "netsh", "advfirewall", "allprofiles state off"), 1, 0) 
+  | extend BatExclusion = iff(ProcessCommandLine has_all("-ExclusionExtension", ".bat"), 1, 0) 
+  | extend ExeExclusion = iff(ProcessCommandLine has_all("-ExclusionExtension", ".exe"), 1, 0) 
+  | extend DisableControlledFolderAccess = iff(ProcessCommandLine has_all("-EnableControlledFolderAccess", "Disabled"), 1, 0) 
+  | extend ScDeleteDefend = iff(ProcessCommandLine has_all("sc", "delete", "windefend"), 1, 0) 
+  | extend BootTampering = iff(ProcessCommandLine has_all("bcdedit", "default") and ProcessCommandLine has_any ("recoveryenabled No", "bootstatuspolicy ignoreallfailures"), 1, 0) 
+  | extend SchTasks = iff(ProcessCommandLine has_all("/sc", "onstart", "system", "/create", "/delay"), 1, 0) 
+  // Summarizing found commands 
+  | summarize by NetshFirewallTampering ,BatExclusion, ExeExclusion, DisableControlledFolderAccess, ScDeleteDefend, SchTasks, BootTampering, DefenderTamp, StartUpExclusionPath, DeviceId, TimeGenerated 
+  // Adding up each piece of evidence 
+  | extend EvidenceCount = NetshFirewallTampering + BatExclusion + ExeExclusion + DisableControlledFolderAccess + ScDeleteDefend + SchTasks + BootTampering + DefenderTamp + StartUpExclusionPath 
+  | where EvidenceCount > 4
+version: 1.0.0
