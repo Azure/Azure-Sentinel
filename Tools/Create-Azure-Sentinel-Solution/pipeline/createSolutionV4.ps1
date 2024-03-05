@@ -1,7 +1,8 @@
 # this is only for build pipeline not for local use
 param ($pipelineBasePath, $pipelineSolutionName, $pipelineDataFileRawContent, $dataFileName, $dataConnectorFolderName, $dataFolderActualName, $instrumentationKey, $pullRequestNumber, $runId, $calculatedPackageVersion, $defaultPackageVersion, $isWatchListInsideOfWorkbooksFolder = $false)
 . ./Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1 # load common functions
-. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load app insights functions
+. ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1 # load log analytics functions
+. ./Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1 # load ccp functions
 
 try 
 {
@@ -14,7 +15,8 @@ try
 	Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateSolutionV4: Starting execution for Solution $pipelineSolutionName." -Severity Information -CustomProperties $customProperties
 
 	$path = ("" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName + "/" + $dataFolderActualName + "/" + $dataFileName + "")
-
+	$solutionFolderBasePath = "" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName;
+	
 	foreach ($inputFile in $(Get-ChildItem $path)) {
 		$contentToImport = $pipelineDataFileRawContent
 		$basePath = "" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName + "/"
@@ -49,8 +51,13 @@ try
 			Write-Host "Not able to identify content resource details based on Version. Please verify if Version in data input file is correct!"
 			return;
 		}
-		
-		foreach ($objectProperties in $contentToImport.PsObject.Properties) {
+
+		$ccpDict = @();
+		$ccpTablesFilePaths = @()
+		$ccpTablesCounter = 1; 
+    $isCCPConnector = $false;
+		foreach ($objectProperties in $contentToImport.PsObject.Properties) 
+		{
 			# Access the value of the property
 				if ($objectProperties.Name.ToLower() -eq "name" -or 
 					$objectProperties.Name.ToLower() -eq "author" -or
@@ -96,10 +103,32 @@ try
 						$filesList = $propertyValue
 					}
 
+					# =============start: ccp connector code===============
+					$solutionBasePath = ($pipelineBasePath + "/Solutions/").Replace("//", "/");
+
+					$solutionMetadataPath = $solutionBasePath + "$($pipelineDataFileRawContent.Name)/$($pipelineDataFileRawContent.Metadata)"
+					$solutionBaseMetadata = Get-Content -Raw $solutionMetadataPath | Out-String | ConvertFrom-Json
+					if ($null -eq $solutionBaseMetadata) {
+							Write-Host "Please verify if the given path $solutionMetadataPath is correct and/or Solution folder name and Data file Name attribute value is correct!"
+							exit 1
+					}
+
+					if ($isCCPConnector -eq $false) {            
+            [array]$ccpDict = Get-CCP-Dict -dataFileMetadata $pipelineDataFileRawContent -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataConnectorFolderName
+
+            if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
+							$isCCPConnector = $true
+							[array]$ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $dataConnectorFolderName
+						}
+					}
+					Write-Host "isCCPConnector $isCCPConnector"
+					$ccpConnectorCodeExecutionCounter = 1;
+					# =============end: ccp connector code===============
+
 					foreach ($file in $filesList) 
 					{
-						Write-Host "Current file is $file"
 						$fileExtension = $file -split '\.' | Select-Object -Last 1
+						Write-Host "Current file is $file, File extension is $fileExtension"
 
 						if ($objectProperties.Name.ToLower() -eq "parsers") {
 							$finalPath = "" + $pipelineBasePath + "Solutions/" + $pipelineSolutionName + "/Parsers/" + $file.Replace("Parsers/", "")
@@ -135,12 +164,14 @@ try
 							}
 						}
 						
+						$finalPath = $finalPath.Replace("//", "/")
 						Write-Host "Final Path is $finalPath"
 						$rawData = $null
 						Send-AppInsightsTraceTelemetry -InstrumentationKey "$instrumentationKey" -Message "CreateSolutionV4: For Solution $pipelineSolutionName, Current file path is $finalPath" -Severity Information -CustomProperties $customProperties
 
 						try {
 							Write-Host "Downloading $finalPath"
+
 							$isFilePathPresent = Test-Path -Path "$finalPath"
 							Write-Host "Is $finalPath file path present $isFilePathPresent"
 							if ($isFilePathPresent) {
@@ -181,10 +212,34 @@ try
 								GetWorkbookDataMetadata -file $file -isPipelineRun $isPipelineRun -contentResourceDetails $contentResourceDetails -baseFolderPath $pipelineBasePath -contentToImport $contentToImport
 							}
 							elseif ($objectKeyLowercase -eq "playbooks") {
-								GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $isPipelineRun
+								GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $true
 							}
-							elseif ($objectKeyLowercase -eq "data connectors") {
-								GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails
+							elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
+
+								if ($ccpDict.Count -gt 0) {
+									$isCCPConnectorFile = $false;
+									foreach($item in $ccpDict) {
+											if ($item.DCDefinitionFullPath -eq $finalPath) {
+													$isCCPConnectorFile = $true
+													break;
+											}
+									}
+
+									if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
+											# current file is a ccp connector
+											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
+									} 
+									elseif ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -gt 1) {
+										continue;
+									}
+									else {
+											# current file is a normal connector
+											GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
+									}
+								}
+								else {
+									GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $pipelineDataFileRawContent -solutionFileMetadata $solutionBaseMetadata -dcFolderName $dataConnectorFolderName -ccpDict $null -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
+								}
 							}
 							elseif ($objectKeyLowercase -eq "savedsearches") {
 								GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails

@@ -5,7 +5,7 @@
         "title": "Revoke Entra ID SignIn Sessions - incident trigger",
         "description": "This playbook will revoke all signin sessions for the user using Graph API.  It will send an email to the user's manager.",
         "prerequisites": "1. You will need to grant User.ReadWrite.All permissions to the managed identity.",
-        "lastUpdateTime": "2021-07-14T00:00:00.000Z",
+        "lastUpdateTime": "2024-01-08T00:00:00.000Z",
         "entities": [
             "Account"
         ],
@@ -99,22 +99,9 @@
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "actions": {
-                        "Alert_-_Get_incident": {
-                            "inputs": {
-                                "host": {
-                                    "connection": {
-                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                                    }
-                                },
-                                "method": "get",
-                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
-                            },
-                            "runAfter": {},
-                            "type": "ApiConnection"
-                        },
                         "Entities_-_Get_Accounts": {
                             "inputs": {
-                                "body": "@triggerBody()?['Entities']",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuresentinel']['connectionId']"
@@ -123,11 +110,7 @@
                                 "method": "post",
                                 "path": "/entities/account"
                             },
-                            "runAfter": {
-                                "Alert_-_Get_incident": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "ApiConnection"
                         },
                         "For_each": {
@@ -135,7 +118,7 @@
                                 "Add_comment_to_incident_(V3)": {
                                     "inputs": {
                                         "body": {
-                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
                                             "message": "<p>User @{concat(items('For_each')?['Name'], '@', items('for_each')?['UPNSuffix'])} singin sessions were revoked in AAD and their manager @{body('Get_manager_(V2)')?['displayName']} was contacted using playbook.</p>"
                                         },
                                         "host": {
@@ -230,7 +213,7 @@
                                 },
                                 "host": {
                                     "connection": {
-                                        "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                                     }
                                 },
                                 "path": "/incident-creation"

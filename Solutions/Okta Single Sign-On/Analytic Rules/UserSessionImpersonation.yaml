@@ -1,0 +1,46 @@
+id: 35846296-4052-4de2-8098-beb6bb5f2203
+name: User Session Impersonation(Okta)
+description: |
+    'A user has started a session impersonation, gaining access with the impersonated users permissions. This typically signifies Okta admin access and should only happen if anticipated and requested.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+  - connectorId: OktaSSOv2
+    dataTypes:
+      - OktaSSO
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1134
+  - T1134.003
+query: |
+  Okta_CL
+  | where eventType_s == "user.session.impersonation.initiate" and outcome_result_s == "SUCCESS"
+  // Expand the JSON array in 'target_s' field to extract detailed information about the event
+  | mv-expand parsed_json = todynamic(target_s) // Unpack and understand the details from the 'target_s' JSON array
+  // Enhance visibility by extending columns with extracted details for better analysis
+  | extend TargetUser_id = tostring(parsed_json.id), 
+           TargetUser_type = tostring(parsed_json.type), 
+           TargetUser_alternateId = tostring(parsed_json.alternateId), 
+           TargetUser_displayName = tostring(parsed_json.displayName), 
+           Target_detailEntry = tostring(parsed_json.detailEntry) 
+  // Project event details to gain insights into the security context, including actor and target user information
+  | project TimeGenerated, actor_alternateId_s, actor_displayName_s, TargetUser_alternateId, 
+                 TargetUser_displayName, TargetUser_type, TargetUser_id, 
+                 eventType_s, outcome_result_s
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+version: 1.0.0
+kind: Scheduled

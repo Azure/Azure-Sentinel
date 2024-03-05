@@ -68,12 +68,18 @@ Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName"
 $isPipelineRun = $false
 
 $commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
-$catelogAPIFilePath = $repositoryBasePath + ".script/package-automation/catelogAPI.ps1"
+$catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
+$getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1"
 
 . $commonFunctionsFilePath # load common functions
-. $catelogAPIFilePath
+. $catalogAPIFilePath # load catalog api functions
+. $getccpDetailsFilePath # load ccp functions
 
 try {
+    $ccpDict = @();
+    $ccpTablesFilePaths = @();
+    $ccpTablesCounter = 1; 
+    $isCCPConnector = $false;
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
         #$inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
         $contentToImport = Get-Content -Raw $inputFile | Out-String | ConvertFrom-Json
@@ -98,7 +104,7 @@ try {
         #================START: IDENTIFY PACKAGE VERSION=============
         $solutionOfferId = $baseMetadata.offerId
         $offerId = "$solutionOfferId"
-        $offerDetails = GetCatelogDetails $offerId
+        $offerDetails = GetCatalogDetails $offerId
         $userInputPackageVersion = $contentToImport.version
         $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
         if ($packageVersion -ne $contentToImport.version) {
@@ -139,11 +145,30 @@ try {
             exit 1;
         }
 
+        $dcWithoutSpace = ($baseFolderPath + $solutionName + "/DataConnectors/").Replace("//", "/")
+        $hasDCWithoutSpace = Test-Path -Path $dcWithoutSpace
+
+        if ($hasDCWithoutSpace) {
+            $DCFolderName = "DataConnectors"
+        }
+
+        if ($isCCPConnector -eq $false) {
+            $DCFolderName = "Data Connectors"
+            
+            $ccpDict = Get-CCP-Dict -dataFileMetadata $contentToImport -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $DCFolderName
+
+            if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
+                $isCCPConnector = $true
+                [array]$ccpTablesFilePaths = GetCCPTableFilePaths -existingCCPDict $ccpDict -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $DCFolderName
+            }
+        }
+        Write-Host "isCCPConnector $isCCPConnector"
+        $ccpConnectorCodeExecutionCounter = 1;
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
             if ($objectProperties.Value -is [System.Array]) {
                 foreach ($file in $objectProperties.Value) {
                     $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
-                    $finalPath = $basePath + $solutionName + "/" + $file
+                    $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")
                     $rawData = $null
                     try {
                         Write-Host "Downloading $finalPath"
@@ -172,7 +197,33 @@ try {
                             GetPlaybookDataMetadata -file $file -contentToImport $contentToImport -contentResourceDetails $contentResourceDetails -json $json -isPipelineRun $isPipelineRun
                         }
                         elseif ($objectKeyLowercase -eq "data connectors" -or $objectKeyLowercase -eq "dataconnectors") {
-                            GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails
+                            if ($ccpDict.Count -gt 0) {
+                                $isCCPConnectorFile = $false;
+                                foreach($item in $ccpDict) {
+                                    if ($item.DCDefinitionFullPath -eq $finalPath) {
+                                        $isCCPConnectorFile = $true
+                                        break;
+                                    }
+                                }
+
+                                if ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -eq 1) {
+                                    # current file is a ccp connector
+                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
+
+                                    $ccpConnectorCodeExecutionCounter += 1
+                                } 
+                                elseif ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -gt 1) {
+                                    continue;
+                                }
+                                else {
+                                    # current file is a normal connector
+                                    GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
+                                }
+                            }
+                            else {
+                                # current file is a normal connector
+                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter 
+                            }
                         }
                         elseif ($objectKeyLowercase -eq "savedsearches") {
                             GenerateSavedSearches -json $json -contentResourceDetails $contentResourceDetails
@@ -233,7 +284,7 @@ try {
                 }
             }
         }
-        
+
         $global:analyticRuleCounter -= 1
 		$global:workbookCounter -= 1
 		$global:playbookCounter -= 1
