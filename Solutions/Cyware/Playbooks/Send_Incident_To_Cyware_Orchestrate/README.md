@@ -1,13 +1,13 @@
 # Send Incident to Cyware Orchestrate
 
-This Azure Logic App template is designed to integrate Azure Sentinel incidents with Cyware Orchestrate, enabling automated incident response actions. When an Azure Sentinel alert triggers, this Logic App automatically sends the incident details to Cyware Orchestrate.
+This Azure Logic App template is designed to integrate Microsoft Sentinel incidents with Cyware Orchestrate, enabling automated incident response actions. When an Microsoft Sentinel alert triggers, this Logic App automatically sends the incident details to Cyware Orchestrate.
 
 ## Prerequisites
 
 Before deploying this template, you should have:
 
 1. An Azure account with active subscriptions.
-2. Azure Sentinel setup in your Azure environment.
+2. Microsoft Sentinel setup in your Azure environment.
 3. Access to Cyware Orchestrate and a configured Webhook URL for incident intake.
 
 ## Deployment Guide
@@ -39,13 +39,13 @@ After deployment, ensure to configure the following parameters appropriately:
 
 - `LogicAppLocation`: The location of your Logic App instance.
 - `COWebHookURL`: The Webhook URL provided by Cyware Orchestrate for incident intake.
-- `connections_azuresentinel_connectionId`: The connection string for Azure Sentinel. This requires creating a connection resource in your Azure environment.
+- `connections_azuresentinel_connectionId`: The connection string for Microsoft Sentinel. This requires creating a connection resource in your Azure environment.
 
 Refer to the `azuredeploy.parameters.json` as an example. Ensure to replace the placeholders with actual values relevant to your setup.
 
 ## Usage
 
-Once deployed and configured, the Logic App listens for Azure Sentinel alerts based on the triggers defined in the `azuredeploy.json`. When an alert triggers, it automatically sends the incident details to the specified Cyware Orchestrate Webhook URL for further action.
+Once deployed and configured, the Logic App listens for Microsoft Sentinel alerts based on the triggers defined in the `azuredeploy.json`. When an alert triggers, it automatically sends the incident details to the specified Cyware Orchestrate Webhook URL for further action.
 
 ## Customization
 
