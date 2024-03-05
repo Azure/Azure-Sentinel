@@ -251,10 +251,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
     $solutionId = $solutionFileMetadata.publisherId + "." + $solutionFileMetadata.offerId
     $placeHolderPatternMatches = '\{{[a-zA-Z0-9]+\}}'
 
-    if (!$global:baseMainTemplate.variables.workspaceResourceId) {
-        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-    }
-
     if (!$global:baseMainTemplate.variables._solutionName) {
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionName" -NotePropertyValue $dataFileMetadata.Name
     }
@@ -579,7 +575,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 Write-Host "Processing for CCP DCR file path: $ccpDCRFilePath"
                 foreach ($logAnalyticDestination in $fileContent.properties.destinations.logAnalytics)
                 {
-                    $logAnalyticDestination.workspaceResourceId = "[variables('workspaceResourceId')]"
+                    $logAnalyticDestination.workspaceResourceId = "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
                 }
 
                 $dcrPlaceHolderMatched = $fileContent.name | Select-String $placeHolderPatternMatches -AllMatches
