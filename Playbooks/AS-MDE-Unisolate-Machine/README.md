@@ -4,8 +4,8 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-MDE-Unisolate-Machine%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-MDE-Unisolate-Machine%2Fmain%2Fazuredeploy.json)       
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-MDE-Unisolate-Machine%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-MDE-Unisolate-Machine%2Fazuredeploy.json)       
 
 This playbook is intended to be run from a Microsoft Sentinel incident. It will match the hosts from a Microsoft Sentinel incident with Microsoft Defender machines and free them from isolation in Defender. A comment noting the affected machines will be added to the Microsoft Sentinel incident.
                                                                                                                                      
@@ -17,8 +17,8 @@ This playbook is intended to be run from a Microsoft Sentinel incident. It will 
                                                                                                                                      
 The following items are required under the template settings during deployment: 
 
-* A Microsoft Azure Active Directory [app registration](https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine#create-an-app-registration) with admin consent granted for "**Machine.Isolate**" in the "**WindowsDefenderATP**" API
-* An [Azure key vault secret](https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine#create-an-azure-key-vault-secret) containing your app registration client secret
+* A Microsoft Azure Active Directory [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-MDE-Unisolate-Machine#create-an-app-registration) with admin consent granted for "**Machine.Isolate**" in the "**WindowsDefenderATP**" API
+* An [Azure key vault secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-MDE-Unisolate-Machine#create-an-azure-key-vault-secret) containing your app registration client secret
 
 
 > **Note**
@@ -64,7 +64,7 @@ Lastly, a client secret will need to be generated for the app registration. From
 
 ![UnisolateMachine_App_Registration_8](Images/UnisolateMachine_App_Registration_8.png)
 
-Copy the value of the secret that is generated, as this will be needed for [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine#create-an-azure-key-vault-secret).
+Copy the value of the secret that is generated, as this will be needed for [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-MDE-Unisolate-Machine#create-an-azure-key-vault-secret).
 
 ![UnisolateMachine_App_Registration_9](Images/UnisolateMachine_App_Registration_9.png)
 
@@ -77,11 +77,11 @@ Navigate to an existing key vault or create a new one. From the key vault overvi
 
 ![UnisolateMachine_Key_Vault_1](Images/UnisolateMachine_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**AS-MDE-Isolate-Machine--AR-Client-Secret**", and enter the client secret copied in the [previous section](https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**AS-MDE-Isolate-Machine--AR-Client-Secret**", and enter the client secret copied in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-MDE-Unisolate-Machine#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
 
 ![UnisolateMachine_Key_Vault_2](Images/UnisolateMachine_Key_Vault_2.png)
 
-Once your secret has been added to the vault, navigate to the "**Access policies**" menu option. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine#granting-access-to-azure-key-vault).
+Once your secret has been added to the vault, navigate to the "**Access policies**" menu option. Leave this page open, as you will need to return to it once the playbook has been deployed. See [Granting Access to Azure Key Vault](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-MDE-Unisolate-Machine#granting-access-to-azure-key-vault).
 
 ![UnisolateMachine_Key_Vault_3](Images/UnisolateMachine_Key_Vault_3.png)
 
@@ -95,8 +95,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-MDE-Unisolate-Machine%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-MDE-Unisolate-Machine%2Fmain%2Fazuredeploy.json)                                             
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-MDE-Unisolate-Machine%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-MDE-Unisolate-Machine%2Fazuredeploy.json)                                             
 
 Click the "**Deploy to Azure**" button at the bottom and it will bring you to the custom deployment template.
 
@@ -108,11 +108,11 @@ In the **Instance Details** section:
 
 * **Playbook Name**: This can be left as "**AS-MDE-Unisolate-Machine**" or you may change it.
 
-* **Client ID**: Enter the Application (client) ID of your app registration referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine#create-an-app-registration).
+* **Client ID**: Enter the Application (client) ID of your app registration referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-MDE-Unisolate-Machine#create-an-app-registration).
 
-* **Key Vault Name**: Enter the name of the key vault referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the key vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-MDE-Unisolate-Machine#create-an-azure-key-vault-secret).
 
-* **Secret Name**: Enter the name of the key vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-MDE-Unisolate-Machine#create-an-azure-key-vault-secret).
+* **Secret Name**: Enter the name of the key vault Secret created in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-MDE-Unisolate-Machine#create-an-azure-key-vault-secret).
 
 Towards the bottom, click on "**Review + create**". 
 
