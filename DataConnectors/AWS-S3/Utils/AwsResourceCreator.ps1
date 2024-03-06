@@ -80,7 +80,6 @@ function New-ArnRole
    Set-RetryAction({
 
         $script:roleName = Read-ValidatedHost -Prompt 'Please enter role name. If you have already configured an assume role for Azure Sentinel, use the same role name'
-        Write-Log -Message "Using role name: $roleName" -LogFileName $LogFileName -Severity Information -Indent 2
         
         # Determine if this role already exists before continuing
         Write-Log "Executing: aws iam get-role --role-name $roleName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
@@ -90,22 +89,18 @@ function New-ArnRole
         $isRuleNotExist = $lastexitcode -ne 0
         if ($isRuleNotExist)
         {
+            $script:roleName = "OIDC_$roleName"
+            Write-Log -Message "Using role name: $roleName with OIDC prefix because OpenID Connect authentication is being used." -LogFileName $LogFileName -Severity Information -Indent 2
+
             Write-Output "`n`n"
             Write-Log "You must specify the the Azure Sentinel Workspace ID. This is found in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 1
             
             $workspaceId = Read-ValidatedHost -Prompt "Please enter your Azure Sentinel External ID (Workspace ID)"
             Write-Log "Using Azure Sentinel Workspace ID: $workspaceId" -LogFileName $LogFileName -Severity Information -Indent 2
 
-            if($CloudEnv -eq "Gov")
-            {
-
-                $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
-                $rolePolicy = Get-OIDCRoleArnPolicy -WorkspaceId $workspaceId -CustomerAWSAccountId $CustomerAWSAccountId
-            }
-            else
-            {
-                $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
-            }
+            $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
+            $rolePolicy = Get-OIDCRoleArnPolicy -WorkspaceId $workspaceId -CustomerAWSAccountId $CustomerAWSAccountId
+            # $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
             
             Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(Get-SentinelTagInJsonFormat) 2>&1" -LogFileName $LogFileName -Severity Verbose
             $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags [$(Get-SentinelTagInJsonFormat)] 2>&1
