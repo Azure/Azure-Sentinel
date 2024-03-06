@@ -238,7 +238,9 @@ Write-Log -Message "This script creates an Assume Role with minimal permissions 
 Write-ScriptNotes
 
 # Add an Identity Provider
-New-OidcProvider
+if($CloudEnv -eq "Gov"){
+    New-OidcProvider
+}
 New-ArnRole
 
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
