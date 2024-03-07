@@ -14,7 +14,7 @@ There are multiple ways to install the playbooks. You can either...
 This solution installs several playbooks.
 
 ## Infoblox-SOC-Get-Open-Insights-API
-This playbook uses the Infoblox SOC Insights REST API to ingest all Open/Active SOC Insights at time of run into the custom **InfobloxInsight** table. 
+This playbook uses the Infoblox SOC Insights REST API to ingest all Open/Active SOC Insights at time of run into the custom ```InfobloxInsight``` table. 
 
 This playbook is an alternative to using the **Infoblox SOC Insight Data Connectors via the Microsoft forwarding agent**, which require the **Infoblox Cloud Data Connector (CDC)**. Instead, this playbook **ingests the same type of data via REST API**. This way, you do not need to set up and deploy and Infoblox CDC in your environment. 
 
@@ -36,7 +36,7 @@ Find instructions [here](https://docs.infoblox.com/space/BloxOneThreatDefense/23
 ## Infoblox-SOC-Get-Insight-Details
 This playbook uses the Infoblox SOC Insights API to **get all the details** about an SOC Insight Incident. These Incidents are triggered by the **Infoblox - SOC Insight Detected** analytic queries packaged as part of this solution. These queries will read your data for insights and create an Incident when one is found, hereby known as a **SOC Insight Incident**.
 
-Then, you can run this playbook on those incidents to **ingest many details about the Insight**, placed in several custom tables prefixed with **InfobloxInsight**. This data also builds the **Infoblox SOC Insight Workbook** you can use to richly visualize and drilldown your Insights.
+Then, you can run this playbook on those incidents to **ingest many details about the Insight**, placed in several custom tables prefixed with ```InfobloxInsight```. This data also builds the **Infoblox SOC Insight Workbook** you can use to richly visualize and drilldown your Insights.
 
 It will also add **several tags** to the SOC Insight Incident.
 
@@ -54,7 +54,7 @@ Find instructions [here](https://learn.microsoft.com/en-us/azure/sentinel/roles)
 Find instructions [here](https://docs.infoblox.com/space/BloxOneThreatDefense/230394187).
 
 ## Infoblox-SOC-Import-Indicators-TI
-This playbook imports each Indicator of an SOC Insight Incident into the ThreatIntelligenceIndicator table you can use as **threat intelligence**. 
+This playbook imports each Indicator of an SOC Insight Incident into the ```ThreatIntelligenceIndicator``` table you can use as **threat intelligence**. 
 
 *You must run the **Infoblox-SOC-Get-Insight-Details** playbook on the SOC Insight Incident before running this playbook.*
 
