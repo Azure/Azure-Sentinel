@@ -9,6 +9,8 @@
 
 Varonis SaaS provides the capability to ingest [Varonis Alerts](https://www.varonis.com/products/datalert) into Microsoft Sentinel.
 
+Varonis prioritizes deep data visibility, classification capabilities, and automated remediation for data access. Varonis builds a single prioritized view of risk for your data, so you can proactively and systematically eliminate risk from insider threats and cyberattacks.
+
 ## Connector Attributes
 | Connector attribute           | Description                                   |
 | ----------------------------- | --------------------------------------------- |

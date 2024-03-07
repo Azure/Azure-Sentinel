@@ -44,6 +44,7 @@ namespace Varonis.Sentinel.Functions.DatAlert
             client.BaseAddress = _baseUri;
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue { NoCache = true };
+            client.DefaultRequestHeaders.Add(Constants.IntegrationHeader, Constants.IntegrationType);
 
             var severities = CustomParser.ParseArrayFromCSV(parameters.Severities);
             var ruleIds = await GetRuleIdsAsync(client, parameters.ThreatModel)
@@ -76,12 +77,12 @@ namespace Varonis.Sentinel.Functions.DatAlert
             using var client = new HttpClient { BaseAddress = baseUri  };
             var payload = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                { "grant_type", "varonis_custom" },
-                //{ "x-api-key", apikey }
+                { "grant_type", "varonis_custom" }
             });
             var content = await payload.ReadAsByteArrayAsync().ConfigureAwait(false);
             client.DefaultRequestHeaders.Add("x-api-key", apikey);
             client.DefaultRequestHeaders.Host = baseUri.Host;
+            client.DefaultRequestHeaders.Add(Constants.IntegrationHeader, Constants.IntegrationType);
             using var response = await client.PostAsync("api/authentication/api_keys/token", payload)
                 .ConfigureAwait(false);
 
