@@ -26,12 +26,13 @@ The Analytic Query **Infoblox - SOC Insight Detected - API Source** will read th
 
 This playbook is scheduled to run on a daily basis. You can increase or decrease recurrence.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2520SOC%2520Insights%2FPlaybooks%2FInfoblox-SOC-Get-Open-Insights-API%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2520SOC%2520Insights%2FPlaybooks%2FInfoblox-SOC-Get-Open-Insights-API%2Fazuredeploy.json)
+
+
 ### Prerequisites
 1. Create and copy an **Infoblox API key** into the playbook parameters. 
 Find instructions [here](https://docs.infoblox.com/space/BloxOneThreatDefense/230394187).
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2520SOC%2520Insights%2FPlaybooks%2FInfoblox-SOC-Get-Open-Insights-API%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2520SOC%2520Insights%2FPlaybooks%2FInfoblox-SOC-Get-Open-Insights-API%2Fazuredeploy.json)
 
 ## Infoblox-SOC-Get-Insight-Details
 This playbook uses the Infoblox SOC Insights API to **get all the details** about an SOC Insight Incident. These Incidents are triggered by the **Infoblox - SOC Insight Detected** analytic queries packaged as part of this solution. These queries will read your data for insights and create an Incident when one is found, hereby known as a **SOC Insight Incident**.
@@ -60,6 +61,9 @@ This playbook imports each Indicator of an SOC Insight Incident into the ```Thre
 
 This playbook can be configured to run automatically when a SOC Insight Incident occurs or run on demand.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2520SOC%2520Insights%2FPlaybooks%2FInfoblox-SOC-Import-Indicators-TI%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2520SOC%2520Insights%2FPlaybooks%2FInfoblox-SOC-Import-Indicators-TI%2Fazuredeploy.json)
+
 ### Prerequisites
 1. Register an app with Microsoft Entra ID and apply appropriate permissions, and enable the Threat Intelligence data connector. 
 Find instructions [here](https://learn.microsoft.com/en-us/azure/sentinel/connect-threat-intelligence-tip). 
@@ -67,8 +71,5 @@ Find instructions [here](https://learn.microsoft.com/en-us/azure/sentinel/connec
 2. Apply the **Microsoft Sentinel Contributor** or **Microsoft Sentinel Responder** role to the playbooks. 
 It is recommended to assign the role to the resource group that contains your Microsoft Sentinel workspace. 
 Find instructions [here](https://learn.microsoft.com/en-us/azure/sentinel/roles).
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2520SOC%2520Insights%2FPlaybooks%2FInfoblox-SOC-Import-Indicators-TI%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FInfoblox%2520SOC%2520Insights%2FPlaybooks%2FInfoblox-SOC-Import-Indicators-TI%2Fazuredeploy.json)
 
 
