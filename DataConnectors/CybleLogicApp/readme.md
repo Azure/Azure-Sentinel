@@ -23,7 +23,7 @@ Read and Write Access to your Sentinel Workspace is required.
 1. Install Cyble Threat Intel Connector from Data Connectors in Content Hub.
 
 2. Click on Deploy to Azure
-   - [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FCybleLogicApp%2Fazuredeploy.json)
+   - [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-CybleLogicApp-playbook)
 
 3. Select the preferred **Subscription**, **Resource Group**, and **Location**.
    > **Note:** Best practice: Create a new Resource Group while deploying; all the resources of your custom Data connector will reside in the newly created Resource Group.
