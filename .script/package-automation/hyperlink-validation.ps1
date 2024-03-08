@@ -151,7 +151,6 @@ if($global:counterInvalid -gt 0 -or $global:counterTimeout -gt 0)
 		Write-Host "`n"
 	}
 }
-
 if($global:counterInvalid -gt 0)
 {
 	exit 1
