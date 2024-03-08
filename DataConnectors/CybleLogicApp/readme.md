@@ -4,7 +4,7 @@
 
 The Cyble Threat Intel Connector facilitates the retrieval of logs from the Cyble Alerts API into Microsoft Sentinel.
 
-> **NOTE:** This connector operates to establish a connection with the Cyble Alerts API, enabling the retrieval of its logs for Microsoft Sentinel workspace. Pulling logs into Sentinel via logic app could lead to extra charges related to data ingestion. For a detailed understanding of these potential costs, it's advisable to consult the [Azure Logic App pricing page](https://azure.microsoft.com/en-in/pricing/details/logic-apps/) for details.
+> **NOTE:** This connector operates to establish a connection with the Cyble Alerts API, enabling the retrieval of its logs for Microsoft Sentinel workspace. Pulling logs into Sentinel via logic app could lead to extra charges related to data ingestion. For a detailed understanding of these potential costs, it's advisable to consult the [Azure Logic App pricing page](https://azure.microsoft.com/pricing/details/logic-apps/) for details.
 
 ## Configuration Steps to Deploy Logic App
 
