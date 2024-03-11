@@ -1,0 +1,147 @@
+id: e3e8c913-e5e9-4517-b4f7-dd1ec071888f
+name: Rare Windows Firewall Rule updates using Netsh
+description: |
+  This query searches for rare firewall rule changes using netsh utility by comparing rule names and program names from the previous day.
+description-detailed: |
+  This query will show rare firewall rule changes using netsh utility by comparing rule names and program names from the previous day.
+  with those from the historical chosen time frame.
+  - This technique was seen in relation to Solarigate attack but the results can indicate potential  malicious activity used in different attacks.
+  - The process name in each data source is commented out as an adversary could rename it. It is advisable to keep process name commented but
+    if the results show unrelated false positives, users may want to uncomment it.
+  - Note also that the queries use the KQL "has_all" operator, which hasn't yet been documented officially, but will be soon.
+    In short, "has_all" will only match when the referenced field has all strings in the list.
+  Refer to netsh syntax: https://docs.microsoft.com/windows-server/administration/windows-commands/netsh
+  Refer to our Microsoft Defender XDR blog for details on use during the Solorigate attack:
+  https://www.microsoft.com/security/blog/2021/01/20/deep-dive-into-the-solorigate-second-stage-activation-from-sunburst-to-teardrop-and-raindrop/
+severity: Low
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+tags:
+  - Solorigate
+  - NOBELIUM
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  // historical time frame
+  let lookback = totimespan((endtime-starttime)*7);
+  let AccountAllowList = dynamic(['SYSTEM']);
+  let tokens = dynamic(["add", "delete", "set"]);
+  (union isfuzzy=true
+  (
+  SecurityEvent
+  | where TimeGenerated >= ago(lookback)
+  // remove comment below to adjust for noise
+  // | where Process =~ "netsh.exe"
+  | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
+  | where AccountType !~ "Machine" and Account !in~ (AccountAllowList)
+  | extend KeyValuePairs = extract_all(@'(?P<key>\w+)=(?P<value>[a-zA-Z0-9-\":\\\s$_@()."]+\"|[a-zA-Z0-9-\":$_\\@()."]+)', dynamic(["key","value"]), CommandLine)
+  | mv-apply KeyValuePairs on (
+    summarize CommandLineParsed = make_bag(bag_pack(tostring(KeyValuePairs[0]), KeyValuePairs[1]))
+   )
+  | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
+  | join kind=leftanti (
+  SecurityEvent
+  | where TimeGenerated between (starttime..endtime)
+  // remove comment below to adjust for noise
+  // | where Process =~ "netsh.exe"
+  | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
+  | where AccountType !~ "Machine" and Account !in~ (AccountAllowList)
+  | extend KeyValuePairs = extract_all(@'(?P<key>\w+)=(?P<value>[a-zA-Z0-9-\":\\\s$_@()."]+\"|[a-zA-Z0-9-\":$_\\@()."]+)', dynamic(["key","value"]), CommandLine)
+  | mv-apply KeyValuePairs on (
+    summarize CommandLineParsed = make_bag(bag_pack(tostring(KeyValuePairs[0]), KeyValuePairs[1]))
+   )
+  | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
+  ) on RuleName, Program
+  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Type, Computer, Account, SubjectDomainName, SubjectUserName, RuleName, Program, CommandLineParsed = tostring(CommandLineParsed), Process, ParentProcessName
+  | extend timestamp = StartTime, AccountCustomEntity = Account, HostCustomEntity = Computer
+  ),
+  (
+  DeviceProcessEvents
+  | where TimeGenerated >= ago(lookback)
+  // remove comment below to adjust for noise
+  // | where InitiatingProcessFileName =~ "netsh.exe"
+  | where InitiatingProcessCommandLine has_all ("advfirewall", "firewall") and InitiatingProcessCommandLine has_any (tokens)
+  | where AccountName !in~ (AccountAllowList)
+  | extend KeyValuePairs = extract_all(@'(?P<key>\w+)=(?P<value>[a-zA-Z0-9-\":\\\s$_@()."]+\"|[a-zA-Z0-9-\":$_\\@()."]+)', dynamic(["key","value"]), InitiatingProcessCommandLine)
+  | mv-apply KeyValuePairs on (
+    summarize CommandLineParsed = make_bag(bag_pack(tostring(KeyValuePairs[0]), KeyValuePairs[1]))
+  )
+  | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
+  | join kind=leftanti (
+  DeviceProcessEvents
+  | where TimeGenerated between (starttime..endtime)
+  // remove comment below to adjust for noise
+  // | where InitiatingProcessFileName =~ "netsh.exe"
+  | where InitiatingProcessCommandLine has_all ("advfirewall", "firewall") and InitiatingProcessCommandLine has_any (tokens)
+  | where AccountName !in~ (AccountAllowList)
+  | extend KeyValuePairs = extract_all(@'(?P<key>\w+)=(?P<value>[a-zA-Z0-9-\":\\\s$_@()."]+\"|[a-zA-Z0-9-\":$_\\@()."]+)', dynamic(["key","value"]), InitiatingProcessCommandLine)
+  | mv-apply KeyValuePairs on (
+    summarize CommandLineParsed = make_bag(bag_pack(tostring(KeyValuePairs[0]), KeyValuePairs[1]))
+  )
+  | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
+  ) on RuleName, Program
+  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Type, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, RuleName, Program,  CommandLineParsed = tostring(CommandLineParsed), InitiatingProcessFileName, InitiatingProcessParentFileName
+  | extend timestamp = StartTime, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  ),
+  (
+  Event
+  | where TimeGenerated > ago(lookback)
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  // remove comment below to adjust for noise
+  // | where OriginalFileName =~ "netsh.exe"
+  | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
+  | where User !in~ (AccountAllowList)
+  | extend KeyValuePairs = extract_all(@'(?P<key>\w+)=(?P<value>[a-zA-Z0-9-\":\\\s$_@()."]+\"|[a-zA-Z0-9-\":$_\\@()."]+)', dynamic(["key","value"]), CommandLine)
+  | mv-apply KeyValuePairs on (
+    summarize CommandLineParsed = make_bag(bag_pack(tostring(KeyValuePairs[0]), KeyValuePairs[1]))
+  )
+  | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
+  | join kind=leftanti (
+  Event
+  | where TimeGenerated > ago(lookback)
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  // remove comment below to adjust for noise
+  // | where OriginalFileName =~ "netsh.exe"
+  | where CommandLine has_all ("advfirewall", "firewall") and CommandLine has_any (tokens)
+  | where User !in~ (AccountAllowList)
+  | extend KeyValuePairs = extract_all(@'(?P<key>\w+)=(?P<value>[a-zA-Z0-9-\":\\\s$_@()."]+\"|[a-zA-Z0-9-\":$_\\@()."]+)', dynamic(["key","value"]), CommandLine)
+  | mv-apply KeyValuePairs on (
+    summarize CommandLineParsed = make_bag(bag_pack(tostring(KeyValuePairs[0]), KeyValuePairs[1]))
+  )
+  | extend RuleName = tostring(parse_json(CommandLineParsed).name), Program = tostring(parse_json(CommandLineParsed).program)
+  ) on RuleName, Program
+  | extend Type = strcat(Type, ": ", Source)
+  | summarize count() , StartTime= min(TimeGenerated), EndTime=max(TimeGenerated) by Type, Computer, User, Process, RuleName, Program, CommandLineParsed = tostring(CommandLineParsed), ParentImage
+  )
+  )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.0
