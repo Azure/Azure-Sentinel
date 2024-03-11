@@ -140,6 +140,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.CorelightConnectorExporter;
   }
+  else if (dataTypes[0].name.includes("SecurityIncident"))
+  {
+    return ConnectorCategory.CybleThreatIntel;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];
