@@ -10,8 +10,8 @@ The key function of this Solution is to retrieve sign-in attempts, item usage, a
 
 - [1Password Business account](https://1password.com/business)
 - [1Password Events API key](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens)
-- [Microsoft Azure](https://azure.microsoft.com/en-us/free)
-- [Microsoft Sentinel](https://azure.microsoft.com/en-us/products/microsoft-sentinel/)
+- [Microsoft Azure](https://azure.microsoft.com/free)
+- [Microsoft Sentinel](https://azure.microsoft.com/products/microsoft-sentinel/)
 - Contributor role with User Access Administrator role on the Microsoft Sentinel Resource Group <br>
 **or**
 - Owner on the Microsoft Sentinel Resource Group 
