@@ -24,15 +24,11 @@ relevantTechniques:
 query: |
   CommonSecurityLog
   | where DeviceEventClassID == 1631
-  | extend CaptureATPVerdict = extract(@'Gateway Anti-Virus Status: (.*)\. ', 1, column_ifexists("Message", ""))
+  | extend CaptureATPVerdict = extract(@'Gateway Anti-Virus Status: (.*)\. ', 1, Message)
   | where CaptureATPVerdict == "BAD"
-  | extend RequestURL_ = extract(@"(?:[.*;]+?)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)(?:;fw_action|;fileid)", 1, AdditionalExtensions)
-  | extend RequestURL_ = iif(RequestURL_ startswith "snpt" or RequestURL_ startswith "dnpt" or RequestURL_ startswith "appid" or RequestURL_ startswith "appName", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), RequestURL_)
-  | extend RequestURL_ = iif(RequestURL_ matches regex @"^(.{2,6}=.{1,6})", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), iif(RequestURL_ matches regex @"^\w=\d$", "", RequestURL_))
-  | extend RequestURL_ = iif(RequestURL_ has_any(dynamic(["af_polid=", "ipscat=", "snpt=", "dnpt="])), "", RequestURL_)
-  | extend RequestURL = iif(isnotempty(RequestURL), RequestURL, iif(RequestURL_ contains "/" and RequestURL_ contains ".", RequestURL_, ""))
   | parse-kv AdditionalExtensions as (['susr']:string, ['fileid']:string) with (pair_delimiter=";", kv_delimiter="=")
-  | extend NetworkProtocol = toupper(trim_end(@"/.*", Protocol)),
+  | extend
+      NetworkProtocol = toupper(iff(Protocol contains "-" and Protocol !contains "/", toupper(trim_start(@".*-", Protocol)), toupper(trim_end(@"/.*", Protocol)))),
       NetworkApplicationProtocol = tostring(toupper(trim_start(@".*/", Protocol)))
   | project
       TimeGenerated,
