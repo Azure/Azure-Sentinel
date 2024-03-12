@@ -4,7 +4,7 @@
 #$script:AwsCloudResource = 'arn:aws-us-gov'
 
 
-$script:SentinelClientId = 'api://21f935c0-8092-4b62-a772-5a2afd714569'
+$script:SentinelClientId = 'api://1462b192-27f7-4cb9-8523-0f4ecb54b47e'
 $script:SentinelTenantId = '33e01921-4d64-4f8c-a055-5bdaffd5e33d'
 $script:CloudEnv = 'Com'
 $script:AwsCloudResource = 'arn:aws'
