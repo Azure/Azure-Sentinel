@@ -64,7 +64,7 @@
               ]
             },
             "value": {
-              "durationMs": 172800000
+              "durationMs": 86400000
             }
           },
           {
@@ -73,48 +73,33 @@
             "name": "Category",
             "label": "Threat Actor Category",
             "type": 2,
-            "isRequired": true,
-            "multiSelect": true,
-            "quote": "'",
-            "delimiter": ",",
-            "query": "RecordedFutureThreatMap_CL\r\n| extend parsed_json = parse_json(categories_s)\r\n| mv-expand parsed_json\r\n| distinct id = tostring(parsed_json.id), name = tostring(parsed_json.name)\r\n",
+            "query": "RecordedFutureThreatMap_CL\r\n| distinct categories_s\r\n| mv-expand parse_json(categories_s)\r\n| distinct id = tostring(categories_s.id), name = tostring(categories_s.name)\r\n",
             "typeSettings": {
-              "additionalResourceOptions": [
-                "value::all"
-              ],
               "showDefault": false
             },
             "timeContext": {
               "durationMs": 86400000
             },
-            "defaultValue": "value::all",
             "queryType": 0,
             "resourceType": "microsoft.operationalinsights/workspaces",
-            "value": [
-              "value::all"
-            ]
+            "value": null
           },
           {
             "id": "2d4f8b54-8321-4c37-9c78-79c3787a9d02",
             "version": "KqlParameterItem/1.0",
             "name": "Watchlist",
+            "label": "Recorded Future Watchlist",
             "type": 2,
-            "multiSelect": true,
-            "quote": "'",
-            "delimiter": ",",
-            "query": "RecordedFutureThreatMapLogEntries_CL\r\n| distinct id=watchlist_id_s, name=watchlist_name_s\r\n",
+            "query": "RecordedFutureThreatMap_CL\r\n| distinct log_entries_s\r\n| mv-expand parse_json(log_entries_s)\r\n| where isnotempty(log_entries_s.watchlist)\r\n| distinct id = tostring(log_entries_s.watchlist.id), name = tostring(log_entries_s.watchlist.name)",
             "typeSettings": {
-              "additionalResourceOptions": [
-                "value::all"
-              ]
+              "showDefault": false
             },
             "timeContext": {
               "durationMs": 86400000
             },
-            "defaultValue": "value::all",
             "queryType": 0,
             "resourceType": "microsoft.operationalinsights/workspaces",
-            "label": "Recorded Future Watchlist"
+            "value": null
           }
         ],
         "style": "pills",
@@ -127,7 +112,7 @@
     {
       "type": 1,
       "content": {
-        "json": "<h1>Threat Actor Map</h1>\n\n<p>This workbook shows Threat Actors imported from Recorded Future, their intent towards your company, and their opportunity. Data is fetched from Recorded Future thru the playbook ```RecordedFuture-ThreatMap-lmporter```.</p> \n\n\n",
+        "json": "<h1>Threat Actor Map</h1>\n\nThis workbook shows Threat Actors imported from [Recorded Future](https://app.recordedfuture.com/portal/threat), their intent towards your company, and their opportunity. \n\nIntent (y-axis) - The threat actor has presented previous interest (expressed or manifested) against elements that are relevant to an organization (e.g., industry, peers, third parties, executives, brand, internet-facing assets). \n\nOpportunity (x-axis) - A correlation between the threat actor's capabilities and an organization’s vulnerabilities. The capability is a threat actor's ability to perform certain activities or cyber attacks, (i.e., their \"sophistication\"); vulnerabilities include an organization's exposures, gaps, or technology-related vulnerabilities. \n\nData is fetched from Recorded Future thru the playbook ```RecordedFuture-ThreatMap-lmporter```.\n\n\n",
         "style": "info"
       },
       "customWidth": "50",
@@ -137,9 +122,8 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated {TimeRange:query}\n| where categories_s has_any({Category})\n| where log_entries_s has_any({Watchlist})\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d,  combine= intent_d+opportunity_d\n| order by combine desc \n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d\n| project MaxTimeGenerated, id_s, name_s, intent_d, opportunity_d",
+        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated {TimeRange:query}\n| where categories_s has_any('{Category}') \n| where log_entries_s has_any('{Watchlist}') \n| extend combine= intent_d+opportunity_d\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d,  combine\n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d, combine\n| order by combine desc \n| project MaxTimeGenerated, id_s, name_s, intent_d, opportunity_d\n| take 100\n",
         "size": 0,
-        "aggregation": 2,
         "title": "Threat Actor Map",
         "noDataMessage": "No data found",
         "queryType": 0,
@@ -202,7 +186,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated {TimeRange:query}\n| where categories_s has_any({Category})\n| where log_entries_s has_any({Watchlist})\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d, combine= intent_d+opportunity_d\n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d,combine\n| order by combine desc \n| project Name=name_s, Intent=intent_d, Opportunity=opportunity_d, id_s\n",
+        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated {TimeRange:query}\n| where categories_s has_any('{Category}') \n| where log_entries_s has_any('{Watchlist}') \n| extend combine= intent_d+opportunity_d\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d, combine\n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d,combine\n| order by combine desc \n| project Name=name_s, Intent=intent_d, Opportunity=opportunity_d, id_s\n",
         "size": 0,
         "title": "Threat Actors",
         "exportFieldName": "id_s",
@@ -216,8 +200,7 @@
               "formatter": 5
             }
           ]
-        },
-        "sortBy": []
+        }
       },
       "customWidth": "50",
       "name": "query - 0"
@@ -226,7 +209,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated {TimeRange:query}\n| where id_s == \"{ThreatActor}\"\n| project TimeGenerated, id_s, name_s, intent_d, opportunity_d, alias_s, categories_s\n| summarize MaxTimeGenerated = max(TimeGenerated) by id_s, name_s, intent_d, opportunity_d, alias_s, categories_s\n| mv-expand dynamicArray= parse_json(categories_s)\n| summarize [\"Threat Actor Categories\"] = make_list(dynamicArray.name) by   Link=strcat(\"https://app.recordedfuture.com/live/sc/entity/\",id_s)\n, Name=name_s, Id=id_s, Aliases=array_strcat(parse_json(alias_s),',')\n| take 1",
+        "query": "RecordedFutureThreatMap_CL\n| where TimeGenerated  {TimeRange:query}\n| where id_s == \"{ThreatActor}\"\n| take 1\n| mv-expand categoriesArray= parse_json(categories_s)\n| mv-expand watchlistArray = parse_json(log_entries_s)\n| summarize  [\"Threat Actor Categories\"] = make_list(categoriesArray.name), WatchLists= make_list_with_nulls(watchlistArray.watchlist.name) by Link=strcat(\"https://app.recordedfuture.com/live/sc/entity/\",id_s), Name=name_s, Id=id_s,  Aliases=array_strcat(parse_json(alias_s),',')",
         "size": 4,
         "title": "Actor Details",
         "noDataMessage": "Please select a threat actor in the Threat Actors table to display details.",
@@ -291,7 +274,6 @@
             }
           ]
         },
-        "sortBy": [],
         "tileSettings": {
           "showBorder": false,
           "titleContent": {

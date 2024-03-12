@@ -1,4 +1,4 @@
-param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath, $instrumentationKey)
+param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath, $instrumentationKey, $isPRMerged = $false)
 
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 $customProperties = @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "New Or Existing Solution"; }
@@ -36,7 +36,13 @@ else {
             return $newDataFolderFilesWithoutExcludedFiles;
         }
 
-        $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+        #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+        if ($isPRMerged) {
+            git fetch --depth=1 origin master
+            $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+        } else {
+            $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+        }
         Write-Host "List of files in PR: $diff"
 
         $filteredFiles = $diff | Where-Object {$_ -match "Solutions/"} | Where-Object {$_ -notlike "Solutions/Images/*"} | Where-Object {$_ -notlike "Solutions/*.md"} | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
@@ -109,8 +115,8 @@ else {
                 }
             }
             else {
-                . ./.script/package-automation/catelogAPI.ps1
-                $offerDetails = GetCatelogDetails $offerId
+                . ./.script/package-automation/catalogAPI.ps1
+                $offerDetails = GetCatalogDetails $offerId
                 if ($null -eq $offerDetails) {
                     Write-Host "OfferDetails not found for provided offerId $offerDetails"
                     $solutionSupportedBy = 'partner-supported-solution'

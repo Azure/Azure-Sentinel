@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimAuthenticationVMwareCarbonBlackCloud",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Authentication parser for VMware Carbon Black Cloud",
+            "category": "ASIM",
+            "FunctionAlias": "ASimAuthenticationVMwareCarbonBlackCloud",
+            "query": "let parser = (disabled: bool=false) {\n    CarbonBlackAuditLogs_CL\n    | where not(disabled)\n    | where description_s has_any (\"logged in\", \"login\",\"second factor authentication\") and description_s !has \"connector\"\n    | extend\n        EventStartTime = unixtime_milliseconds_todatetime(eventTime_d),\n        EventResult = iff(description_s has \"successfully\", \"Success\", \"Failure\"),\n        AdditionalFields = bag_pack(\"flagged\", flagged_b),\n        EventSeverity = iff(flagged_b == true, \"Low\", \"Informational\")\n    | extend\n        EventCount = int(1),\n        EventProduct = \"Carbon Black Cloud\",\n        EventSchema = \"Authentication\",\n        EventSchemaVersion = \"0.1.3\",\n        EventVendor = \"VMware\",\n        EventType = \"Logon\",\n        EventResultDetails = case(\n                       EventResult == \"Failure\" and description_s has (\"locked\"),\n                       \"User locked\",\n                       EventResult == \"Failure\" and description_s has_any (\"logged in\", \"login\"),\n                       \"Incorrect password\",\n                       EventResult == \"Failure\" and description_s has (\"second factor authentication\"),\n                       \"MFA not satisfied\",\n                       \"\"\n                   ),\n        EventOriginalResultDetails = iff(EventResult == \"Failure\", tostring(split(description_s, ';')[1]), \"\")\n    | project-rename\n        EventMessage = description_s,\n        EventOriginalUid = eventId_g,\n        TargetUsername = loginName_s,\n        SrcIpAddr = clientIp_s,\n        EventUid=_ItemId,\n        EventOwner = orgName_s\n    | extend\n        IpAddr = SrcIpAddr,\n        TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),\n        TargetUserType = _ASIM_GetUserType(TargetUsername, \"\"),\n        Dvc = EventProduct,\n        EventEndTime = EventStartTime,\n        User = TargetUsername,\n        Src = SrcIpAddr\n    | project-away\n        *_s,\n        *_d,\n        *_b,\n        _ResourceId,\n        Computer,\n        MG,\n        ManagementGroupName,\n        RawData,\n        SourceSystem,\n        TenantId \n};\nparser(disabled=disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
