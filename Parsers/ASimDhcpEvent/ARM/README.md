@@ -1,4 +1,4 @@
-# Advanced Security Information Model (ASIM) Dhcp Event parsers 
+# Advanced Security Information Model (ASIM) DhcpEvent parsers 
 
 This template deploys all ASIM DhcpEvent parsers.
 
@@ -8,7 +8,7 @@ For more information, see:
 
 - [Normalization and the Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM)
 - [Deploy all of ASIM](https://aka.ms/DeployASIM)
-- [ASIM Dhcp Event normalization schema reference](https://aka.ms/ASimDhcpEventDoc)
+- [ASIM DhcpEvent normalization schema reference](https://aka.ms/ASimDhcpEventDoc)
 
 <br>
 
