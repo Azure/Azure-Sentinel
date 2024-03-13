@@ -1,0 +1,926 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        }
+    },
+    "variables": {
+        "DCRName": "SophosEndpointDCR",
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "_solutionName": "Sophos Endpoint Protection solution",
+        "_solutionVersion": "1.0.0",
+        "_solutionAuthor": "Microsoft",
+        "_packageIcon": "icon icon icon icon",
+        "_solutionId": "azuresentinel.azure-sentinel-solution-azuresentinel.azure-sentinel-SophosEndpoint",
+        "dataConnectorVersionConnectorDefinition": "1.0.0",
+        "dataConnectorVersionConnections": "1.0.0",
+        "_solutionTier": "Microsoft",
+        "_dataConnectorContentIdConnectorDefinition": "SophosEndpointTemplateConnectorDefinition",
+        "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+        "_dataConnectorContentIdConnections": "SophosEndpointTemplateConnections",
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "location": "[resourceGroup().location]",
+        "subscriptionId": "[last(split(subscription().id, '/'))]",
+        "alertsApiEndpoint": ".central.sophos.com/siem/v1/alerts",
+        "eventsApiEndpoint": ".central.sophos.com/siem/v1/events",
+        "sophosEventsTableName": "SophosEPEvents_CL",
+        "sophosAlertsTableName": "SophosEPAlerts_CL",
+        "tokenEndpoint": "https://id.sophos.com/api/v2/oauth2/token"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('sophosAlertsTableName')]",
+                            "type": "Microsoft.OperationalInsights/workspaces",
+                            "apiVersion": "2021-03-01-privatepreview",
+                            "location": "[variables('location')]",
+                            "tags": {},
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('sophosAlertsTableName')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "Datetime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "CustomerId",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventSeverity",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventVendor",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventType",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventProduct",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "event_service_event_id",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventEndTime",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "DvcAction",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "description",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "DvcHostname",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventOriginalUid",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "data",
+                                            "type": "dynamic"
+                                        },
+                                        {
+                                            "name": "Source",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "info",
+                                            "type": "dynamic"
+                                        },
+                                        {
+                                            "name": "ThreatName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "threat_cleanable",
+                                            "type": "boolean"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('DCRName')]",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[variables('location')]",
+                            "properties": {
+                                "dataCollectionEndpointId": "[concat('/subscriptions/',variables('subscriptionID'),'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+                                "streamDeclarations": {
+                                    "[concat('Custom-', variables('sophosAlertsTableName'))]": {
+                                        "columns": [
+                                            {
+                                                "name": "customer_id",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "created_at",
+                                                "type": "datetime"
+                                            },
+                                            {
+                                                "name": "severity",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "event_service_event_id",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "when",
+                                                "type": "datetime"
+                                            },
+                                            {
+                                                "name": "type",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "description",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "location",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "id",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "data",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "source",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "threat",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "threat_cleanable",
+                                                "type": "boolean"
+                                            },
+                                            {
+                                                "name": "info",
+                                                "type": "dynamic"
+                                            }
+                                        ]
+                                    },
+                                    "[concat('Custom-', variables('sophosEventsTableName'))]": {
+                                        "columns": [
+                                            {
+                                                "name": "amsi_threat_data",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "appCerts",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "appSha256",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "core_remedy_items",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "created_at",
+                                                "type": "datetime"
+                                            },
+                                            {
+                                                "name": "customer_id",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "details",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "endpoint_id",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "endpoint_type",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "group",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "ips_threat_data",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "location",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "name",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "origin",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "severity",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "source",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "source_info",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "threat",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "user_id",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "when",
+                                                "type": "datetime"
+                                            },
+                                            {
+                                                "name": "whitelist_properties",
+                                                "type": "dynamic"
+                                            },
+                                            {
+                                                "name": "id",
+                                                "type": "string"
+                                            },
+                                            {
+                                                "name": "type",
+                                                "type": "string"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                            "name": "clv2ws1"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": [
+                                            "[concat('Custom-', variables('sophosAlertsTableName'))]"
+                                        ],
+                                        "destinations": [
+                                            "clv2ws1"
+                                        ],
+                                        "transformKql": "source\n| extend TimeGenerated = created_at | extend EventType = 'alert'| extend EventVendor = 'Sophos' | extend EventProduct = 'Endpoint Protection'| project-rename Created=created_at, CustomerId=customer_id, DvcAction=type, DvcHostname=location, EventEndTime=when, EventOriginalUid=id, EventSeverity=severity, Source=source, ThreatName=threat\n",
+                                        "outputStream": "[concat('Custom-', variables('sophosAlertsTableName'))]"
+                                    },
+                                    {
+                                        "streams": [
+                                            "[concat('Custom-', variables('sophosEventsTableName'))]"
+                                        ],
+                                        "destinations": [
+                                            "clv2ws1"
+                                        ],
+                                        "transformKql": "source\n| extend TimeGenerated = created_at | extend EventType = 'event' | extend EventVendor = 'Sophos' | extend EventProduct = 'Endpoint Protection'| extend SrcIpAddr = tostring(source_info.ip) | extend CoreRemedyTotalItems = toint(core_remedy_items.totalItems) | extend CoreRemedyItems = tostring(core_remedy_items.items) | project-rename AppSha256=appSha256, Created=created_at, CustomerId=customer_id, DstUserSid=user_id, DvcHostname=location, EndpointId=endpoint_id, EventEndTime=when, EventMessage=name, EventOriginalUid=id, EventSubType=origin, EventSeverity=severity, DvcAction = type, Source=source, SrcDvcType=endpoint_type, ThreatCategory=group, ThreatName=threat \n",
+                                        "outputStream": "[concat('Custom-', variables('sophosEventsTableName'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "[variables('sophosEventsTableName')]",
+                            "type": "Microsoft.OperationalInsights/workspaces",
+                            "apiVersion": "2021-03-01-privatepreview",
+                            "location": "[variables('location')]",
+                            "tags": {},
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('sophosEventsTableName')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "Datetime",
+                                            "isDefaultDisplay": true,
+                                            "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                            "name": "EventVendor",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventProduct",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventType",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "amsi_threat_data",
+                                            "type": "dynamic"
+                                        },
+                                        {
+                                            "name": "appCerts",
+                                            "type": "dynamic"
+                                        },
+                                        {
+                                            "name": "AppSha256",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "CoreRemedyItems",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "CoreRemedyTotalItems",
+                                            "type": "int"
+                                        },
+                                        {
+                                            "name": "Created",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "CustomerId",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "details",
+                                            "type": "dynamic"
+                                        },
+                                        {
+                                            "name": "EndpointId",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "SrcDvcType",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "ThreatCategory",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventOriginalUid",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "ips_threat_data",
+                                            "type": "dynamic"
+                                        },
+                                        {
+                                            "name": "DvcHostname",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventMessage",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventSubType",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventSeverity",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "Source",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "source_info",
+                                            "type": "dynamic"
+                                        },
+                                        {
+                                            "name": "SrcIpAddr",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "ThreatName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "DvcAction",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "DstUserSid",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "EventEndTime",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "whitelist_properties",
+                                            "type": "dynamic"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+            "apiVersion": "2022-09-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "location": "[variables('location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "title": "Sophos Endpoint Protection (using REST API) (Preview)",
+                    "publisher": "Microsoft",
+                    "descriptionMarkdown": "The [Sophos Endpoint Protection](https://www.sophos.com/en-us/products/endpoint-antivirus.aspx) data connector provides the capability to ingest [Sophos events](https://developer.sophos.com/docs/siem-v1/1/routes/events/get) and [Sophos alerts](https://developer.sophos.com/docs/siem-v1/1/routes/alerts/get) into Microsoft Sentinel. Refer to [Sophos Central Admin documentation](https://docs.sophos.com/central/Customer/help/en-us/central/Customer/concepts/Logs.html) for more information.",
+                    "graphQueriesTableName": "[variables('sophosEventsTableName')]",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total events received",
+                            "legend": "Sophos Endpoint Protection Event logs",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        },
+                        {
+                            "metricName": "Total alerts received",
+                            "legend": "Sophos Endpoint Protection Alert logs",
+                            "baseQuery": "SophosAlerts_CL"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "Get a sample of Sophos Endpoint Protection Event logs",
+                            "query": "{{graphQueriesTableName}}\n| take 10"
+                        },
+                        {
+                            "description": "Get a sample of Sophos Endpoint Protection Alert logs",
+                            "query": "SophosEPAlerts_CL\n| take 10"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n|summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+                        },
+                        {
+                            "name": "SophosEPAlerts_CL",
+                            "lastDataReceivedQuery": "SophosAlerts_CL\n|summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors"
+                        }
+                    ],
+                    "availability": {
+                        "isPreview": false
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions are required.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Sophos Endpoint Protection API access",
+                                "description": "Access to the Sophos Endpoint Protection API through a service principal is required."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "description": "Follow [Sophos instructions](https://developer.sophos.com/getting-started-tenant) to create a service principal with access to the Sophos API. It will need the Service Principal ReadOnly role.\n Through those instructions, you should get the Client ID, Client Secret, Tenant ID and data region.\n Fill the form bellow with that information.",
+                            "instructions": [
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "Sophos Tenant ID",
+                                        "placeholder": "",
+                                        "type": "text",
+                                        "name": "sophosTenantId"
+                                    }
+                                },
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "Sophos Tenant Data Region",
+                                        "placeholder": "eu01, eu02, us01, us02 or us03",
+                                        "type": "text",
+                                        "name": "sophosRegion"
+                                    }
+                                },
+                                {
+                                    "type": "OAuthForm",
+                                    "parameters": {
+                                        "clientIdLabel": "Client ID",
+                                        "clientSecretLabel": "Client Secret",
+                                        "connectButtonLabel": "Connect",
+                                        "disconnectButtonLabel": "Disconnect"
+                                    }
+                                },
+                                {
+                                    "type": "DataConnectorsGrid",
+                                    "parameters": {
+                                        "mapping": [
+                                            {
+                                                "columnValue": "name",
+                                                "columnName": "Name"
+                                            },
+                                            {
+                                                "columnValue": "id",
+                                                "columnName": "ID"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ],
+                            "title": "Connect to Sophos Endpoint Protection API to start collecting event and alert logs in Microsoft Sentinel"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+            "apiVersion": "2022-01-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                    "sourceId": "[variables('_solutionId')]",
+                    "name": "[variables('_solutionName')]",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "version": "[variables('dataConnectorVersionConnections')]",
+                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                            "kind": "ResourcesDataConnector"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters": {
+                        "clientSecret": {
+                            "defaultValue": "-NA-",
+                            "type": "string",
+                            "minLength": 1,
+                            "metadata": {
+                                "description": "clientSecret"
+                            }
+                        },
+                        "clientId": {
+                            "defaultValue": "-NA-",
+                            "type": "string",
+                            "minLength": 1,
+                            "metadata": {
+                                "description": "ClientId"
+                            }
+                        },
+                        "sophosTenantId": {
+                            "defaultValue": "",
+                            "type": "string",
+                            "metadata": {
+                                "description": "Sophos Tenant ID"
+                            }
+                        },
+                        "sophosRegion": {
+                            "defaultValue": "",
+                            "type": "string",
+                            "metadata": {
+                                "description": "Sophos Region"
+                            }
+                        },
+                        "connectorDefinitionName": {
+                            "defaultValue": "",
+                            "type": "string",
+                            "minLength": 1,
+                            "metadata": {
+                                "description": "connectorDefinitionName"
+                            }
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "type": "object",
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection Endpoint",
+                                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                            }
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]",
+                        "alertsApiEndpoint": ".sophos.com/siem/v1/alerts",
+                        "eventsApiEndpoint": ".sophos.com/siem/v1/events"
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'SophosEndpointAlerts')]",
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[variables('location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+                                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                                "dataType": "[variables('sophosAlertsTableName')]",
+                                "dcrConfig": {
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                                    "streamName": "[concat('Custom-',variables('sophosAlertsTableName'))]"
+                                },
+                                "auth": {
+                                    "type": "OAuth2",
+                                    "ClientSecret": "[[parameters('clientSecret')]",
+                                    "ClientId": "[[parameters('clientId')]",
+                                    "GrantType": "client_credentials",
+                                    "TokenEndpoint": "[variables('tokenEndpoint')]",
+                                    "tokenEndpointHeaders": {
+                                        "Accept": "application/json",
+                                        "Content-Type": "application/x-www-form-urlencoded"
+                                    },
+                                    "scope": "token"
+                                },
+                                "request": {
+                                    "apiEndpoint": "[[concat('https://api-',parameters('sophosRegion'), variables('alertsApiEndpoint'))]",
+                                    "rateLimitQPS": 10,
+                                    "queryWindowInMin": 5,
+                                    "httpMethod": "GET",
+                                    "retryCount": 3,
+                                    "timeoutInSeconds": 60,
+                                    "queryTimeFormat": "UnixTimestamp",
+                                    "startTimeAttributeName": "from_date",
+                                    "headers": {
+                                        "Accept": "application/json",
+                                        "X-Tenant-ID": "[[parameters('sophosTenantId')]"
+                                    }
+                                },
+                                "paging": {
+                                    "pagingType": "NextPageToken",
+                                    "nextPageTokenJsonPath": "$.next_cursor",
+                                    "hasNextFlagJsonPath": "$.has_more",
+                                    "nextPageParaName": "cursor"
+                                },
+                                "response": {
+                                    "eventsJsonPaths": [
+                                        "$.items"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'SophosEndpointEvents')]",
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[variables('location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+                                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                                "dataType": "[variables('sophosEventsTableName')]",
+                                "dcrConfig": {
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                                    "streamName": "[concat('Custom-',variables('sophosEventsTableName'))]"
+                                },
+                                "auth": {
+                                    "type": "OAuth2",
+                                    "ClientSecret": "[[parameters('clientSecret')]",
+                                    "ClientId": "[[parameters('clientId')]",
+                                    "GrantType": "client_credentials",
+                                    "TokenEndpoint": "[variables('tokenEndpoint')]",
+                                    "tokenEndpointHeaders": {
+                                        "Accept": "application/json",
+                                        "Content-Type": "application/x-www-form-urlencoded"
+                                    },
+                                    "scope": "token"
+                                },
+                                "request": {
+                                    "apiEndpoint": "[[concat('https://api-',parameters('sophosRegion'), variables('eventsApiEndpoint'))]",
+                                    "rateLimitQPS": 10,
+                                    "queryWindowInMin": 5,
+                                    "httpMethod": "GET",
+                                    "retryCount": 3,
+                                    "timeoutInSeconds": 60,
+                                    "queryTimeFormat": "UnixTimestamp",
+                                    "startTimeAttributeName": "from_date",
+                                    "headers": {
+                                        "Accept": "application/json",
+                                        "X-Tenant-ID": "[[parameters('sophosTenantId')]"
+                                    }
+                                },
+                                "paging": {
+                                    "pagingType": "NextPageToken",
+                                    "nextPageTokenJsonPath": "$.next_cursor",
+                                    "hasNextFlagJsonPath": "$.has_more",
+                                    "nextPageParaName": "cursor"
+                                },
+                                "response": {
+                                    "eventsJsonPaths": [
+                                        "$.items"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "location": "[variables('location')]",
+            "apiVersion": "2023-04-01-preview",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "[variables('_solutionName')]",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+                            "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2022-06-24",
+                "providers": [
+                    "[variables('_solutionAuthor')]"
+                ],
+                "contentKind": "Solution",
+                "packageId": "[variables('_solutionId')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+                "displayName": "[variables('_solutionName')]",
+                "publisherDisplayName": "[variables('_solutionId')]",
+                "descriptionHtml": "test",
+                "icon": "[variables('_packageIcon')]"
+            }
+        }
+    ]
+}
