@@ -24,6 +24,7 @@ To deploy a single schema use the buttons below:
 | [Web Session](https://aka.ms/ASimWebSessionDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimWebSessionARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimWebSessionARMgov)|
 | [Process Event](https://aka.ms/ASimProcessEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimProcessEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimProcessEventARMgov) |
 | [Registry](https://aka.ms/ASimRegistryEventDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimRegistryEventARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimRegistryEventARMgov) |
+| [UserManagement](https://aka.ms/ASimUserManagementDoc) | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/ASimUserManagementARM)| [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://aka.ms/ASimUserManagementARMgov) |
 
 
 
