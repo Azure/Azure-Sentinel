@@ -245,6 +245,34 @@ function addNewParameter($templateResourceObj, $parameterName, $isSecret = $fals
     return $templateResourceObj;
 }
 
+function replacePlaceHolders($actualFieldValue, $propMatchedPlaceHolderValues) {
+    $finalStringName = "[[concat("
+    $closureBrackets = ")]"
+
+    foreach ($currentPlaceHolder in $propMatchedPlaceHolderValues) {
+        if ($currentPlaceHolder.Value -ne '') {
+            $currentPlaceHolderValue = $currentPlaceHolder.Value
+            $placeHolderName = $currentPlaceHolderValue.replace("{{", "").replace("}}", "")
+            $startIndexOfPlaceholder = $actualFieldValue.IndexOf($currentPlaceHolderValue)
+
+            if ($startIndexOfPlaceholder -eq 0) {
+                $finalStringName += "parameters('" + $placeHolderName + "')"
+                $actualFieldValue = $actualFieldValue.Replace($currentPlaceHolder, "");
+            } else {
+                $strSubString = $actualFieldValue.Substring(0, $startIndexOfPlaceholder);
+                $finalStringName += ",'" + $strSubString + "', parameters('" + $placeHolderName + "')"
+                $actualFieldValue = $actualFieldValue.Replace($currentPlaceHolder, "");
+                $actualFieldValue = $actualFieldValue.Substring($strSubString.Length, $actualFieldValue.Length - $strSubString.Length);
+            }
+        }
+    }
+    if ($actualFieldValue -ne '') {
+        $finalStringName += ",'" + $actualFieldValue + "'"
+    }
+
+    return $finalStringName + $closureBrackets;
+}
+
 # THIS IS THE STARTUP FUNCTION FOR CCP RESOURCE CREATOR
 function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict, $solutionBasePath, $solutionName, $ccpTables, $ccpTablesCounter) {
     Write-Host "Inside of CCP Connector Code!"
@@ -368,12 +396,28 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     
                     Write-Host "Processing for CCP Poller file path: $ccpPollerFilePath"
                     $dataConnectorPollerName = $null -eq $fileContent.Name -or $fileContent.Name -eq '' ? $fileContent.properties.connectorDefinitionName : $fileContent.Name; 
-                    $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$dataConnectorPollerName')]"
+
+                    if ($dataConnectorPollerName.contains("{{")) {
+                        $resourceName = $dataConnectorPollerName
+                    } else {
+                        $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$dataConnectorPollerName')]"
+                    }
+
                     #$resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$templateName')]"
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
-    
+
+                    # data connector poller containing placeholder
+                    if ($dataConnectorPollerName.contains("{{")) {
+                        $placeHoldersMatched = $dataConnectorPollerName | Select-String $placeHolderPatternMatches -AllMatches
+
+                        if ($placeHoldersMatched.Matches.Count -gt 0) {
+                            $finalizedName = replacePlaceHolders -actualFieldValue $dataConnectorPollerName -propMatchedPlaceHolderValues $placeHoldersMatched.Matches
+                            $armResource.name = $finalizedName
+                        }
+                    }
+
                     # dataCollectionEndpoint : this is optional field for users to add.
                     $hasDataCollectionEndpoint = [bool](($armResource.properties.dcrConfig).PSobject.Properties.name -match "dataCollectionEndpoint")
                     if ($hasDataCollectionEndpoint) {
@@ -503,6 +547,10 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             }
                         }
                     }
+                    else {
+                        $authTypeValue = $armResource.properties.auth.type
+                        Write-Host "Data Connector Poller file has invalid auth 'type' property value '$($authTypeValue)'. Supported auth 'type' property value are OAuth2, Basic or APIKey!"
+                    }
     
                     if ($armResource.properties.request.apiEndPoint.contains("{{")) {
                         # identify any placeholders in apiEndpoint
@@ -544,6 +592,33 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             }
     
                             $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
+                        }
+                    }
+
+                    # headers placeholder
+                    $hasHeaders = [bool]($armResource.properties.request.PSobject.Properties.name -match "headers")
+                    if ($hasHeaders) {
+                        foreach ($headerProps in $armResource.properties.request.headers.PsObject.Properties) {
+                            $headerPropName = $headerProps.Name
+                            $headerPropValue = $headerProps.Value
+
+                            if ($headerPropValue.contains("{{")) {
+                                $placeHoldersMatched = $headerPropValue | Select-String $placeHolderPatternMatches -AllMatches
+                                if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
+                                    $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
+                                    $armResource.properties.request.headers."$headerPropName" = "[[parameters('$($placeHolderName)')]"
+                                    $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $false
+                                }
+                            }
+                        }
+                    }
+
+                    if ($dataConnectorPollerName.contains("{{")) {
+                        $placeHoldersMatched = $dataConnectorPollerName | Select-String $placeHolderPatternMatches -AllMatches
+
+                        if ($placeHoldersMatched.Matches.Count -gt 0) {
+                            $finalizedName = replacePlaceHolders -actualFieldValue $dataConnectorPollerName -propMatchedPlaceHolderValues $placeHoldersMatched.Matches
+                            $armResource.name = $finalizedName
                         }
                     }
                     $templateContentConnections.properties.mainTemplate.resources += $armResource
