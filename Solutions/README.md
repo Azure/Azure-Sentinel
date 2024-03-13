@@ -136,6 +136,6 @@ Quite simply, it permits your Microsoft Sentinel solution to be deployed into Mi
 You are **not** joining the CSP program.  Each offer is individually enabled or disabled for deployability in CSP sourced subscriptions, and setting this flag for your Microsoft Sentinel solution does not affect any other offer in your Marketplace publishing account.
 
 #### What will happen if you do not enable “CSP opt-in” for your Microsoft Sentinel solution offer?
-If the customer, who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 
+If the customer who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 
 
 

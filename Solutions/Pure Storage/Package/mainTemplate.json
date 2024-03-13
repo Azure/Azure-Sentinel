@@ -1,0 +1,237 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Pure Storage - support@purestorage.com",
+    "comments": "Solution template for Pure Storage"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@purestorage.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Pure Storage",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "purestoragemarketplaceadmin.microsoft-sentinel-solution-purestorage",
+    "_solutionId": "[variables('solutionId')]",
+    "parserObject1": {
+      "_parserName1": "[concat(parameters('workspace'),'/','PureStorageParser Data Parser')]",
+      "_parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'PureStorageParser Data Parser')]",
+      "parserTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pr-',uniquestring('PureStorageParserV1-Parser')))]",
+      "parserVersion1": "1.0.0",
+      "parserContentId1": "PureStorageParserV1-Parser"
+    },
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('parserObject1').parserTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "PureStorageParser Data Parser with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserObject1').parserVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('parserObject1')._parserName1]",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Pure Storage Parser",
+                "category": "PureStorageParser",
+                "functionAlias": "PureStorageParserV1",
+                "query": "Syslog\n| where SyslogMessage has \"purity.alert\"\n| extend Message = replace_regex(SyslogMessage, \"#012\", \"\\n\")\n| extend ParsedLog = extract_all(@\"((?P<process>.*?)\\[(?P<processid>.*?)\\]:\\s(?P<object>.*)\\[(?P<responsecode>\\w+)\\][\\s\\S]*Severity:\\s*(?P<severity>\\S+)\\s*(Tag:\\s*(?P<reason>\\S+))?\\s*UTC([\\s\\S]*)Array Name:\\s*(?P<objectname>\\S+)\\s*Domain:\\s*(?P<domainorigin>\\S+)\\s*(?P<part2log>[\\s\\S]*))\", dynamic(['process','processid','object','objectname','responsecode','severity','reason','domainorigin','part2log']), Message)\n| mv-expand ParsedLog\n| extend ResidueLog = tostring(ParsedLog[8])\n| extend Rlog = extract_all(@\"(((Suggested Action:\\s*(?P<action>[\\s\\S]*)\\s*Knowledge Base Article:\\s*(?P<url>.*))|(Knowledge Base Article:\\s*(?P<url>.*)\\s*Suggested Action:\\s*(?P<action>.*)\\s*)|(Suggested Action:\\s*(?P<action>[\\s\\S]*)))(([\\s\\S]*)Purity Version:\\s*(?P<pversion>.*))?\\s*([\\s\\S]*)Variables: \\(below\\)\\s*(?P<subject>[\\s\\S]*))\", dynamic(['action','url','pversion','subject']),ResidueLog)\n| mv-expand Rlog\n| extend PureLogType = ParsedLog[0], PureProcessID = ParsedLog[1], PureObject = ParsedLog[2], PureCode = ParsedLog[4], PureSeverity = ParsedLog[5], PureReason = ParsedLog[6], PureObjectName = ParsedLog[3], PureDomainOrigin = ParsedLog[7], PureAction = Rlog[0], PureUrl = Rlog[1], PureVersion = Rlog[2], PureMessage = Rlog[3]\n| project-away ResidueLog, Rlog, ParsedLog\n",
+                "functionParameters": "",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Parser to extract Pure Storage related info from log"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+              "dependsOn": [
+                "[variables('parserObject1')._parserId1]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Pure Storage Parser')]",
+                "contentId": "[variables('parserObject1').parserContentId1]",
+                "kind": "Parser",
+                "version": "[variables('parserObject1').parserVersion1]",
+                "source": {
+                  "name": "Pure Storage",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Pure Storage",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "purestoragemarketplaceadmin",
+                  "email": "support@purestorage.com",
+                  "tier": "Partner",
+                  "link": "https://support.purestorage.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "contentKind": "Parser",
+        "displayName": "Pure Storage Parser",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','pr','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject1').parserContentId1,'-', '1.0.0')))]",
+        "version": "[variables('parserObject1').parserVersion1]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('parserObject1')._parserName1]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "Pure Storage Parser",
+        "category": "PureStorageParser",
+        "functionAlias": "PureStorageParserV1",
+        "query": "Syslog\n| where SyslogMessage has \"purity.alert\"\n| extend Message = replace_regex(SyslogMessage, \"#012\", \"\\n\")\n| extend ParsedLog = extract_all(@\"((?P<process>.*?)\\[(?P<processid>.*?)\\]:\\s(?P<object>.*)\\[(?P<responsecode>\\w+)\\][\\s\\S]*Severity:\\s*(?P<severity>\\S+)\\s*(Tag:\\s*(?P<reason>\\S+))?\\s*UTC([\\s\\S]*)Array Name:\\s*(?P<objectname>\\S+)\\s*Domain:\\s*(?P<domainorigin>\\S+)\\s*(?P<part2log>[\\s\\S]*))\", dynamic(['process','processid','object','objectname','responsecode','severity','reason','domainorigin','part2log']), Message)\n| mv-expand ParsedLog\n| extend ResidueLog = tostring(ParsedLog[8])\n| extend Rlog = extract_all(@\"(((Suggested Action:\\s*(?P<action>[\\s\\S]*)\\s*Knowledge Base Article:\\s*(?P<url>.*))|(Knowledge Base Article:\\s*(?P<url>.*)\\s*Suggested Action:\\s*(?P<action>.*)\\s*)|(Suggested Action:\\s*(?P<action>[\\s\\S]*)))(([\\s\\S]*)Purity Version:\\s*(?P<pversion>.*))?\\s*([\\s\\S]*)Variables: \\(below\\)\\s*(?P<subject>[\\s\\S]*))\", dynamic(['action','url','pversion','subject']),ResidueLog)\n| mv-expand Rlog\n| extend PureLogType = ParsedLog[0], PureProcessID = ParsedLog[1], PureObject = ParsedLog[2], PureCode = ParsedLog[4], PureSeverity = ParsedLog[5], PureReason = ParsedLog[6], PureObjectName = ParsedLog[3], PureDomainOrigin = ParsedLog[7], PureAction = Rlog[0], PureUrl = Rlog[1], PureVersion = Rlog[2], PureMessage = Rlog[3]\n| project-away ResidueLog, Rlog, ParsedLog\n",
+        "functionParameters": "",
+        "version": 2,
+        "tags": [
+          {
+            "name": "description",
+            "value": "Parser to extract Pure Storage related info from log"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject1')._parserId1,'/'))))]",
+      "dependsOn": [
+        "[variables('parserObject1')._parserId1]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), 'Pure Storage Parser')]",
+        "contentId": "[variables('parserObject1').parserContentId1]",
+        "kind": "Parser",
+        "version": "[variables('parserObject1').parserVersion1]",
+        "source": {
+          "kind": "Solution",
+          "name": "Pure Storage",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Pure Storage",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "purestoragemarketplaceadmin",
+          "email": "support@purestorage.com",
+          "tier": "Partner",
+          "link": "https://support.purestorage.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Pure Storage",
+        "publisherDisplayName": "purestoragemarketplaceadmin",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Pure%20Storage/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>Solution for Microsoft Sentinel to ingest logs from PureStorage arrays</p>\n<p><strong>Parsers:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/purestorage_logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Pure Storage",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Pure Storage",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "purestoragemarketplaceadmin",
+          "email": "support@purestorage.com",
+          "tier": "Partner",
+          "link": "https://support.purestorage.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Parser",
+              "contentId": "[variables('parserObject1').parserContentId1]",
+              "version": "[variables('parserObject1').parserVersion1]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-02-05",
+        "providers": [
+          "Pure Storage"
+        ],
+        "categories": {
+          "domains": [
+            "Storage"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

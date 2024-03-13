@@ -1,6 +1,8 @@
 id: 86490334-5371-40a2-971a-3749c2654954
 name: Sign-ins From VPS Providers
 description: |
+  'This query finds successful logons from known VPS providers with suspicious token patterns. It's not exhaustive but covers prevalent providers. Now includes UEBA logs IdentityInfo and BehaviorAnalytics for context.'
+description-detailed: |
   'This query searches for successful logons from known VPS provider network ranges with suspicious token based logon patterns.
   This is not an exhaustive list of VPS provider ranges but covers some of the most prevalent providers observed.
   This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
@@ -39,13 +41,11 @@ query: |
   | join kind=leftouter (
       IdentityInfo
       | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
-      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
-      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled
       | summarize
           Tags = make_set(Tags, 1000),
           GroupMembership = make_set(GroupMembership, 1000),
           AssignedRoles = make_set(AssignedRoles, 1000),
-          BlastRadiusInt = sum(BlastRadiusInt),
           UserType = make_set(UserType, 1000),
           UserAccountControl = make_set(UserType, 1000)
       by AccountUPN
@@ -64,7 +64,7 @@ query: |
         IPInvestigationPriority = sum(InvestigationPriority)
       by IPAddress
   ) on IPAddress
-  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | extend UEBARiskScore = IPInvestigationPriority
   | where UEBARiskScore > riskScoreCutoff
   | sort by UEBARiskScore desc
 
@@ -77,4 +77,4 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPCustomEntity
-version: 2.0.2
+version: 2.0.3
