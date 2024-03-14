@@ -1,0 +1,45 @@
+id: 50c86f92-86b0-4ae3-bb94-698da076ca9e
+name: VMware SD-WAN - Orchestrator Audit Event
+version: 1.0.0
+kind: Scheduled
+description: This rule is searching for configuration changes. Configuration changes can override security measures and the overarching security design. Therefore audit events must be accurately tracked.
+severity: Informational
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+requiredDataConnectors:
+  - connectorId: VMwareSDWAN
+    dataTypes:
+      - SDWAN
+query: |
+  VMware_VECO_EventLogs_CL
+  | where event == "EDIT_PROFILE"
+  | extend edgeProfile = extract("^profile \\[(.+)\\] [a-z]+ module", 1, message)
+  | extend configAction = extract("^profile \\[.+\\] (.+) module", 1, message)
+  | extend edgeModule = extract("^profile \\[.+\\] [a-z]+ module \\[(.+)\\]$", 1, message)
+  | extend configChange = todynamic(detail).diff
+  | project TimeGenerated, severity, edgeProfile, configAction, edgeModule, configChange
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertDescriptionFormat: "There was a configuration change event on the VMware Edge Cloud Orchestrator.\nThe configuration changes are the following:\n{{{configChange}} "
+  alertDynamicProperties:
+  - alertProperty: ProductComponentName
+    value: edgeProfile
+customDetails:
+  edgeProfile: edgeProfile
+  auditAction: configAction
+  edgeModule: edgeModule
+suppressionDuration: 5h
