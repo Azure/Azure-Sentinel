@@ -1,0 +1,1817 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName" :{
+            "defaultValue": "SentinelConnector-VMwareSASE",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "metadata" : {
+                "description": "The name of the Function App that will start extracting information from the target VECO and import it into Sentinel"
+            }
+        },
+        "storageAccount_name": {
+            "defaultValue": "vmwsasesentinelstorage",
+            "type": "String",
+            "metadata": {
+                "description": "Storage Account to be able to store state information for certain scripts."
+            }
+        },
+        "StorageAccountNewOrExisting": {
+            "type": "string",
+            "defaultValue": "new",
+            "allowedValues": [
+                "new",
+                "existing"
+            ],
+            "metadata": {
+                "description": "Option to select an existing Storage Account or create a new one."
+            }
+        },
+        "loganalytics_workspace_name": {
+            "defaultValue": "VMware-SDWAN-SASE-Workspace",
+            "type": "String",
+            "metadata": {
+                "description": "The name of the Log Analytics Workspace which will be able to store and visualize data."
+            }
+        },
+        "WorkspaceNewOrExisting": {
+            "type": "string",
+            "defaultValue": "new",
+            "allowedValues": [
+                "new",
+                "existing"
+            ],
+            "metadata": {
+                "description": "Option to select an existing Log Analytics workspace or create a new one."
+            }
+        },
+        "dce_sentinel_name": {
+            "defaultValue": "DCE-VMware-SASE",
+            "type": "String"
+        },
+        "DataCollectionEndpointNewOrExisting": {
+            "type": "string",
+            "defaultValue": "new",
+            "allowedValues": [
+                "new",
+                "existing"
+            ],
+            "metadata": {
+                "description": "Option to select an existing DCE or create a new one."
+            }
+        },
+        "FirewallLogCollectionMethod": {
+            "type": "string",
+            "defaultValue": "Both Syslog and API",
+            "allowedValues": [
+                "Syslog",
+                "EFS API - IPS/IDS Alerts Only",
+                "Both Syslog and API"
+            ],
+            "metadata": {
+                "description": "Option to select a method for collecting Firewall logs. API method only collects IPS/IDS alerts. If both is selected, data duplication may occur."
+            }
+        },
+        "app_serviceplan_name": {
+            "defaultValue": "vmware-sase-sentinelconnector",
+            "type": "String"
+        },
+        "AppServicePlanNewOrExisting": {
+            "type": "string",
+            "defaultValue": "new",
+            "allowedValues": [
+                "new",
+                "existing"
+            ],
+            "metadata": {
+                "description": "Option to select an existing App Service Plan or create a new one."
+            }
+        },
+        "dcr_veco_events_name": {
+            "defaultValue": "VMware_SASE_EventLogs",
+            "type": "String",
+            "metadata": {
+                "description": "Data Collection Rule for ingesting VMware Edge Cloud Orchestrator Events."
+            }
+        },
+        "dcr_edgesyslog_name": {
+            "defaultValue": "VMware_SDWAN_EFS_Syslog",
+            "type": "String",
+            "metadata": {
+                "description": "Data Collection Rule for collecting Enhanced Firewall Service logs using Syslog."
+            }
+        },
+        "dcr_cws_dlp_name": {
+            "defaultValue": "VMware_SASE_CWS_DLPLogs",
+            "type": "String",
+            "metadata": {
+                "description": "Data Collection Rule for CWS Data Loss Prevention ingestion."
+            }
+        },
+        "dcr_cws_web_name": {
+            "defaultValue": "VMware_SASE_CWS_Weblogs",
+            "type": "String",
+            "metadata": {
+                "description": "Data Collection Rule for CWS Web Log ingestion."
+            }
+        },
+        "dcr_cws_healthcheck_name": {
+            "defaultValue": "VMware_SASE_CWS_Health",
+            "type": "String",
+            "metadata": {
+                "description": "Data Collection Rule for CWS Health telemetry ingestion."
+            }
+        },
+        "dcr_sdwan_efslogapi_name": {
+            "defaultValue": "VMware_SDWAN_EFSAPI_Logs",
+            "type": "String",
+            "metadata": {
+                "description": "Data Collection Rule for Enhanced Firewall Service alerts using Search API."
+            }
+        },
+        "dcr_veco_efsapihealth_name": {
+            "defaultValue": "VMware_VECO_EFSAPIHealth",
+            "type": "string",
+            "metadata": {
+                "description": "Data Collection Rule for Search API performance logs."
+            }
+        },
+        "VECO_FQDN": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "The Fully Qualified Domain Name of the Orchestator (VMware Edge Cloud Orchestrator), for example: vco58-usvi1.velocloud.net."
+            }
+        },
+        "VECO_API_Token": {
+            "defaultValue": "Token XXXXXXXXXXXXXXXXXXXX",
+            "type": "string",
+            "metadata": {
+                "description": "For the API connection to work, please generate an API token on your VECO Enterprise (including the keyword Token). The account needs Read-Only access only. Additional details can be found in the documentation."
+            }
+        },
+        "Function_App_Frequency": {
+            "defaultValue": "10",
+            "type": "string",
+            "metadata": {
+                "description": "The value defines the frequency of how often the Function App is execxuted in minutes. I.e. a value of 10 means that the functions are executed every ten minutes."
+            }
+        }        
+    },
+    "functions": [],
+    "variables": {
+        "FunctionName" : "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]"
+    },
+    "resources": [
+        {
+            "condition": "[equals(parameters('StorageAccountNewOrExisting'), 'new')]",
+            "name": "[parameters('storageAccount_name')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2023-01-01",
+            "tags": {
+                "displayName": "[parameters('storageAccount_name')]"
+            },
+            "location": "[resourceGroup().location]",
+            "kind": "StorageV2",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "defaultToOAuthAuthentication": true,
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": true,
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "condition": "[equals(parameters('AppServicePlanNewOrExisting'), 'new')]",
+            "name": "[parameters('app_serviceplan_name')]",
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2022-09-01",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic",
+                "size": "Y1",
+                "family": "Y",
+                "capacity": 0
+            },
+            "tags": {
+                "condition": "[equals(parameters('AppServicePlanNewOrExisting'), 'new')]",
+                "displayName": "[parameters('app_serviceplan_name')]"
+            },
+            "properties": {
+                "condition": "[equals(parameters('AppServicePlanNewOrExisting'), 'new')]",
+                "name": "[parameters('app_serviceplan_name')]",
+                "perSiteScaling": false,
+                "elasticScaleEnabled": false,
+                "maximumElasticWorkerCount": 1,
+                "isSpot": false,
+                "reserved": true,
+                "isXenon": false,
+                "hyperV": false,
+                "targetWorkerCount": 0,
+                "targetWorkerSizeId": 0,
+                "zoneRedundant": false
+            }
+        },
+        {
+            "condition": "[equals(parameters('DataCollectionEndpointNewOrExisting'),'new')]",
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dce_sentinel_name')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "configurationAccess": {},
+                "logsIngestion": {},
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "condition": "[equals(parameters('WorkspaceNewOrExisting'), 'new')]",
+            "name": "[parameters('loganalytics_workspace_name')]",
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "apiVersion": "2021-06-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "sku": {
+                    "name": "PerGB2018"
+                },
+                "features": {
+                    "enableLogAccessUsingOnlyResourcePermissions": true
+                },
+                "retentionInDays": 30,
+                "workspaceCapping": {
+                    "dailyQuotaGb": -1
+                },
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2021-12-01-preview",
+            "name": "[concat(parameters('loganalytics_workspace_name'), '/VMware_CWS_Health_CL')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]"
+            ],
+            "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "VMware_CWS_Health_CL",
+                    "columns": [
+                        {
+                            "name": "cws_component",
+                            "type": "string"
+                        },
+                        {
+                            "name": "healthtest_observed_unit",
+                            "type": "string"
+                        },
+                        {
+                            "name": "healthtest_observed_value",
+                            "type": "int"
+                        },
+                        {
+                            "name": "healthtest_status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "healthtest_timestamp",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                },
+                "retentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2021-12-01-preview",
+            "name": "[concat(parameters('loganalytics_workspace_name'), '/VMware_CWS_Weblogs_CL')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]"
+            ],
+            "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "VMware_CWS_Weblogs_CL",
+                    "columns": [
+                        {
+                            "name": "accessMode",
+                            "type": "string"
+                        },
+                        {
+                            "name": "action",
+                            "type": "string"
+                        },
+                        {
+                            "name": "browserType",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "browserVersion",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "casbAppName",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "casbCatName",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "casbFunName",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "casbOrgName",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "casbRiskScore",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "categories",
+                            "type": "string"
+                        },
+                        {
+                            "name": "contentType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "cws_timestamp",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "destinationIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dnsResponse",
+                            "type": "string"
+                        },
+                        {
+                            "name": "domain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dstCountry",
+                            "type": "string"
+                        },
+                        {
+                            "name": "egressIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fileHash",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "fileHashScore",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fileName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fileScanResult",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "fileSize",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fileType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "mimeType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "policyHeaders",
+                            "type": "string"
+                        },
+                        {
+                            "name": "policyName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "protocol",
+                            "type": "string"
+                        },
+                        {
+                            "name": "region",
+                            "type": "string"
+                        },
+                        {
+                            "name": "requestMethod",
+                            "type": "string"
+                        },
+                        {
+                            "name": "requestType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "responseCode",
+                            "type": "string"
+                        },
+                        {
+                            "name": "risks",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "ruleMatched",
+                            "type": "string"
+                        },
+                        {
+                            "name": "saasEgressHeaders",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "sandboxInspectionResult",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sandboxMaliciousActivitiesFound",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sandboxScore",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sourceIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "srcCountry",
+                            "type": "string"
+                        },
+                        {
+                            "name": "threatTypes",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "url",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userAgent",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userGroups",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "userGroupsMatched",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "userId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "virusList",
+                            "type": "string"
+                        },
+                        {
+                            "name": "webRiskScore",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                },
+                "retentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2021-12-01-preview",
+            "name": "[concat(parameters('loganalytics_workspace_name'), '/VMware_SDWAN_FirewallLogs_CL')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]"
+            ],
+            "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "VMware_SDWAN_FirewallLogs_CL",
+                    "columns": [
+                        {
+                            "name": "actionTaken",
+                            "type": "string"
+                        },
+                        {
+                            "name": "application",
+                            "type": "string"
+                        },
+                        {
+                            "name": "attackSource",
+                            "type": "string"
+                        },
+                        {
+                            "name": "attackTarget",
+                            "type": "string"
+                        },
+                        {
+                            "name": "bytesReceived",
+                            "type": "int"
+                        },
+                        {
+                            "name": "bytesSent",
+                            "type": "int"
+                        },
+                        {
+                            "name": "category",
+                            "type": "string"
+                        },
+                        {
+                            "name": "closeReason",
+                            "type": "string"
+                        },
+                        {
+                            "name": "destination",
+                            "type": "string"
+                        },
+                        {
+                            "name": "destinationIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "destinationPort",
+                            "type": "int"
+                        },
+                        {
+                            "name": "domainName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "edgeLogicalId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "edgeName",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "enterpriseLogicalId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "extensionHeader",
+                            "type": "string"
+                        },
+                        {
+                            "name": "firewallPolicyName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "idsAlert",
+                            "type": "int"
+                        },
+                        {
+                            "name": "inputInterface",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "ipsAlert",
+                            "type": "int"
+                        },
+                        {
+                            "name": "logType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "protocol",
+                            "type": "int"
+                        },
+                        {
+                            "name": "ruleId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ruleVersion",
+                            "type": "int"
+                        },
+                        {
+                            "name": "segmentLogicalId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "segmentName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sessionDurationSecs",
+                            "type": "int"
+                        },
+                        {
+                            "name": "sessionId",
+                            "type": "int"
+                        },
+                        {
+                            "name": "severity",
+                            "type": "int"
+                        },
+                        {
+                            "name": "signature",
+                            "type": "string"
+                        },
+                        {
+                            "name": "signatureId",
+                            "type": "int"
+                        },
+                        {
+                            "name": "sourceIp",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sourcePort",
+                            "type": "int"
+                        },
+                        {
+                            "name": "timestamp",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "verdict",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                },
+                "retentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2021-12-01-preview",
+            "name": "[concat(parameters('loganalytics_workspace_name'), '/VMware_SDWAN_EFSAPI_Health_CL')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]"
+            ],
+            "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "VMware_SDWAN_EFSAPI_Health_CL",
+                    "columns": [
+                        {
+                            "name": "data",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "metadata",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                },
+                "retentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2021-12-01-preview",
+            "name": "[concat(parameters('loganalytics_workspace_name'), '/VMware_CWS_DLPLogs_CL')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]"
+            ],
+            "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "VMware_CWS_DLPLogs_CL",
+                    "columns": [
+                        {
+                            "name": "action",
+                            "type": "string"
+                        },
+                        {
+                            "name": "alerted",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ccl",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "domain",
+                            "type": "string"
+                        },
+                        {
+                            "name": "dstUrl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "filename",
+                            "type": "string"
+                        },
+                        {
+                            "name": "fileType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "protocol",
+                            "type": "string"
+                        },
+                        {
+                            "name": "requestType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ruleId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "ruleName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sha256",
+                            "type": "string"
+                        },
+                        {
+                            "name": "srcUrl",
+                            "type": "string"
+                        },
+                        {
+                            "name": "status",
+                            "type": "string"
+                        },
+                        {
+                            "name": "streamName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userInput",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                },
+                "retentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2021-12-01-preview",
+            "name": "[concat(parameters('loganalytics_workspace_name'), '/VMware_VECO_SearchAPI_Health_CL')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]"
+            ],
+            "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "VMware_VECO_SearchAPI_Health_CL",
+                    "columns": [
+                        {
+                            "name": "data",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "metadata",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                },
+                "retentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2021-12-01-preview",
+            "name": "[concat(parameters('loganalytics_workspace_name'), '/VMware_VECO_EventLogs_CL')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]"
+            ],
+            "properties": {
+                "totalRetentionInDays": 30,
+                "plan": "Analytics",
+                "schema": {
+                    "name": "VMware_VECO_EventLogs_CL",
+                    "columns": [
+                        {
+                            "name": "category",
+                            "type": "string"
+                        },
+                        {
+                            "name": "detail",
+                            "type": "string"
+                        },
+                        {
+                            "name": "event",
+                            "type": "string"
+                        },
+                        {
+                            "name": "eventTime",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "message",
+                            "type": "string"
+                        },
+                        {
+                            "name": "severity",
+                            "type": "string"
+                        },
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        }
+                    ]
+                },
+                "retentionInDays": 30
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dcr_edgesyslog_name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]"
+            ],
+            "kind": "Linux",
+            "properties": {
+                "dataSources": {
+                    "syslog": [
+                        {
+                            "name": "[parameters('dcr_edgesyslog_name')]",
+                            "streams": [
+                                "Microsoft-Syslog"
+                            ],
+                            "facilityNames": [
+                                "auth",
+                                "authpriv",
+                                "cron",
+                                "daemon",
+                                "kern",
+                                "local0",
+                                "local1",
+                                "local2",
+                                "local3",
+                                "local4",
+                                "local5",
+                                "local6",
+                                "local7",
+                                "lpr",
+                                "mail",
+                                "news",
+                                "syslog",
+                                "user",
+                                "uucp"
+                            ],
+                            "logLevels": [
+                                "Debug",
+                                "Info",
+                                "Notice",
+                                "Warning",
+                                "Error",
+                                "Critical",
+                                "Alert",
+                                "Emergency"
+                            ]
+                        }
+                    ]
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                            "name": "SentinelWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Microsoft-Syslog"
+                        ],
+                        "destinations": [
+                            "SentinelWorkspace"
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dcr_sdwan_efslogapi_name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('loganalytics_workspace_name'), 'VMware_SDWAN_FirewallLogs_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "streamDeclarations": {
+                    "Custom-VMware_SDWAN_FirewallLogs_CL": {
+                        "columns": [
+                            {
+                                "name": "bytesSent",
+                                "type": "int"
+                            },
+                            {
+                                "name": "category",
+                                "type": "string"
+                            },
+                            {
+                                "name": "@timestamp",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "destinationIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ipsAlert",
+                                "type": "int"
+                            },
+                            {
+                                "name": "verdict",
+                                "type": "string"
+                            },
+                            {
+                                "name": "edgeLogicalId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "destinationPort",
+                                "type": "int"
+                            },
+                            {
+                                "name": "idsAlert",
+                                "type": "int"
+                            },
+                            {
+                                "name": "@version",
+                                "type": "string"
+                            },
+                            {
+                                "name": "inputInterface",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "closeReason",
+                                "type": "string"
+                            },
+                            {
+                                "name": "enterpriseLogicalId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "signature",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sourcePort",
+                                "type": "int"
+                            },
+                            {
+                                "name": "destination",
+                                "type": "string"
+                            },
+                            {
+                                "name": "segmentName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "severity",
+                                "type": "int"
+                            },
+                            {
+                                "name": "application",
+                                "type": "string"
+                            },
+                            {
+                                "name": "segmentLogicalId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "firewallPolicyName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sessionDurationSecs",
+                                "type": "int"
+                            },
+                            {
+                                "name": "edgeName",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "ruleVersion",
+                                "type": "int"
+                            },
+                            {
+                                "name": "actionTaken",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ruleId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "attackSource",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sessionId",
+                                "type": "int"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "int"
+                            },
+                            {
+                                "name": "domainName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "attackTarget",
+                                "type": "string"
+                            },
+                            {
+                                "name": "timestamp",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "extensionHeader",
+                                "type": "string"
+                            },
+                            {
+                                "name": "signatureId",
+                                "type": "int"
+                            },
+                            {
+                                "name": "bytesReceived",
+                                "type": "int"
+                            },
+                            {
+                                "name": "logType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sourceIp",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                            "name": "SentinelWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-VMware_SDWAN_FirewallLogs_CL"
+                        ],
+                        "destinations": [
+                            "SentinelWorkspace"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(timestamp)\n| project-away ['@timestamp']\n| project-away ['@version']\n",
+                        "outputStream": "Custom-VMware_SDWAN_FirewallLogs_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dcr_cws_healthcheck_name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('loganalytics_workspace_name'), 'VMware_CWS_Health_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "streamDeclarations": {
+                    "Custom-VMware_CWS_Health_CL": {
+                        "columns": [
+                            {
+                                "name": "healthtest_timestamp",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "cws_component",
+                                "type": "string"
+                            },
+                            {
+                                "name": "healthtest_observed_unit",
+                                "type": "string"
+                            },
+                            {
+                                "name": "healthtest_observed_value",
+                                "type": "int"
+                            },
+                            {
+                                "name": "healthtest_status",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                            "name": "SentinelWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-VMware_CWS_Health_CL"
+                        ],
+                        "destinations": [
+                            "SentinelWorkspace"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(healthtest_timestamp)\n\n",
+                        "outputStream": "Custom-VMware_CWS_Health_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dcr_veco_events_name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('loganalytics_workspace_name'), 'VMware_VECO_EventLogs_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "streamDeclarations": {
+                    "Custom-VMware_VECO_EventLogs_CL": {
+                        "columns": [
+                            {
+                                "name": "eventTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "event",
+                                "type": "string"
+                            },
+                            {
+                                "name": "category",
+                                "type": "string"
+                            },
+                            {
+                                "name": "severity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "message",
+                                "type": "string"
+                            },
+                            {
+                                "name": "detail",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                            "name": "SentinelWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-VMware_VECO_EventLogs_CL"
+                        ],
+                        "destinations": [
+                            "SentinelWorkspace"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(eventTime)\n",
+                        "outputStream": "Custom-VMware_VECO_EventLogs_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dcr_cws_dlp_name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('loganalytics_workspace_name'), 'VMware_CWS_DLPLogs_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "streamDeclarations": {
+                    "Custom-VMware_CWS_DLPLogs_CL": {
+                        "columns": [
+                            {
+                                "name": "eventTime",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "action",
+                                "type": "string"
+                            },
+                            {
+                                "name": "alerted",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ccl",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dstUrl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "eventId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fileType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "filename",
+                                "type": "string"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "string"
+                            },
+                            {
+                                "name": "requestType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ruleId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ruleName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sha256",
+                                "type": "string"
+                            },
+                            {
+                                "name": "srcUrl",
+                                "type": "string"
+                            },
+                            {
+                                "name": "status",
+                                "type": "string"
+                            },
+                            {
+                                "name": "streamName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "userInput",
+                                "type": "string"
+                            },
+                            {
+                                "name": "userId",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                            "name": "SentinelWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-VMware_CWS_DLPLogs_CL"
+                        ],
+                        "destinations": [
+                            "SentinelWorkspace"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(eventTime)\n",
+                        "outputStream": "Custom-VMware_CWS_DLPLogs_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dcr_veco_efsapihealth_name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('loganalytics_workspace_name'), 'VMware_SDWAN_EFSAPI_Health_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "streamDeclarations": {
+                    "Custom-VMware_VECO_EFSAPIHealth_CL": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "data",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "metadata",
+                                "type": "dynamic"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                            "name": "SentinelWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-VMware_VECO_SearchAPI_Health_CL"
+                        ],
+                        "destinations": [
+                            "SentinelWorkspace"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "Custom-VMware_VECO_SearchAPI_Health_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dcr_cws_web_name')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('loganalytics_workspace_name'), 'VMware_CWS_Weblogs_CL')]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dce_sentinel_name'))]",
+                "streamDeclarations": {
+                    "Custom-VMware_CWS_Weblogs_CL": {
+                        "columns": [
+                            {
+                                "name": "cws_timestamp",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "userId",
+                                "type": "string"
+                            },
+                            {
+                                "name": "url",
+                                "type": "string"
+                            },
+                            {
+                                "name": "domain",
+                                "type": "string"
+                            },
+                            {
+                                "name": "categories",
+                                "type": "string"
+                            },
+                            {
+                                "name": "threatTypes",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "webRiskScore",
+                                "type": "string"
+                            },
+                            {
+                                "name": "action",
+                                "type": "string"
+                            },
+                            {
+                                "name": "userAgent",
+                                "type": "string"
+                            },
+                            {
+                                "name": "browserType",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "browserVersion",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "requestType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "requestMethod",
+                                "type": "string"
+                            },
+                            {
+                                "name": "egressIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "destinationIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dnsResponse",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sourceIp",
+                                "type": "string"
+                            },
+                            {
+                                "name": "contentType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "accessMode",
+                                "type": "string"
+                            },
+                            {
+                                "name": "responseCode",
+                                "type": "string"
+                            },
+                            {
+                                "name": "protocol",
+                                "type": "string"
+                            },
+                            {
+                                "name": "region",
+                                "type": "string"
+                            },
+                            {
+                                "name": "ruleMatched",
+                                "type": "string"
+                            },
+                            {
+                                "name": "policyHeaders",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fileHash",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "fileHashScore",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fileSize",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fileType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fileName",
+                                "type": "string"
+                            },
+                            {
+                                "name": "mimeType",
+                                "type": "string"
+                            },
+                            {
+                                "name": "fileScanResult",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "virusList",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sandboxInspectionResult",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sandboxScore",
+                                "type": "string"
+                            },
+                            {
+                                "name": "sandboxMaliciousActivitiesFound",
+                                "type": "string"
+                            },
+                            {
+                                "name": "casbAppName",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "casbCatName",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "casbFunName",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "casbOrgName",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "casbRiskScore",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "userGroups",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "userGroupsMatched",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "risks",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "srcCountry",
+                                "type": "string"
+                            },
+                            {
+                                "name": "dstCountry",
+                                "type": "string"
+                            },
+                            {
+                                "name": "saasEgressHeaders",
+                                "type": "dynamic"
+                            },
+                            {
+                                "name": "policyName",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('loganalytics_workspace_name'))]",
+                            "name": "SentinelWorkspace"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Custom-VMware_CWS_Weblogs_CL"
+                        ],
+                        "destinations": [
+                            "SentinelWorkspace"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = todatetime(cws_timestamp)\n",
+                        "outputStream": "Custom-VMware_CWS_Weblogs_CL"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('FunctionName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-09-01",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp,linux",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('app_serviceplan_name'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_dlp_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_healthcheck_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_web_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_edgesyslog_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_sdwan_efslogapi_name'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_veco_events_name'))]"
+            ],
+            "properties": {
+                "reserved": true,
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('app_serviceplan_name'))]",
+                "isXenon": false,
+                "hyperV": false,
+                "vnetRouteAllEnabled": false,
+                "vnetImagePullEnabled": false,
+                "vnetContentShareEnabled": false,
+                "siteConfig": {
+                    "numberOfWorkers": 1,
+                    "linuxFxVersion": "PYTHON|3.10",
+                    "acrUseManagedIdentityCreds": false,
+                    "alwaysOn": false,
+                    "http20Enabled": false,
+                    "functionAppScaleLimit": 200,
+                    "minimumElasticInstanceCount": 0,
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsDashboard",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccount_name'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount_name')),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccount_name'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount_name')),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccount_name'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount_name')),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(parameters('FunctionName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+						{
+							"name": "WEBSITE_RUN_FROM_PACKAGE",
+							"value": "https://raw.githubusercontent.com/stlaszlo/myrepo/main/vmw_sdwan_sase_funcapp.zip"
+						},
+                        {
+                            "name": "api_veco_authorization",
+                            "value": "[parameters('VECO_API_Token')]"
+                        },
+                        {
+                            "name": "api_veco_fqdn",
+                            "value": "[parameters('VECO_FQDN')]"
+                        },
+                        {
+                            "name": "app_frequency_mins",
+                            "value": "[parameters('Function_App_Frequency')]"
+                        },
+                        {
+                            "name": "azsa_share_connectionstring",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', parameters('storageAccount_name'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccount_name')),'2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "azsa_share_name",
+                            "value": "[parameters('FunctionName')]"
+                        },
+                        {
+                            "name": "dce_endpoint",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints',parameters('dce_sentinel_name')),'2021-04-01').logsIngestion.endpoint]"
+                        },
+                        {
+                            "name": "dcr_cwsdlplog_immutableid",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_dlp_name')),'2022-06-01').immutableId]"
+                        },
+                        {
+                            "name": "dcr_cwshealth_immutableid",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_healthcheck_name')),'2022-06-01').immutableId]"
+                        },
+                        {
+                            "name": "dcr_cwsweblog_immutableid",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_web_name')),'2022-06-01').immutableId]"
+                        },
+                        {
+                            "name": "dcr_efsfwlog_immutableid",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_sdwan_efslogapi_name')),'2022-06-01').immutableId]"
+                        },
+                        {
+                            "name": "dcr_efshealth_immutableid",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_veco_efsapihealth_name')),'2022-06-01').immutableId]"
+                        },
+                        {
+                            "name": "dcr_saseaudit_immutableid",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_veco_events_name')),'2022-06-01').immutableId]"
+                        },
+                        {
+                            "name": "stream_cwsdlplog",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_dlp_name')),'2022-06-01').dataFlows[0].outputStream]"
+                        },
+                        {
+                            "name": "stream_cwshealth",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_healthcheck_name')),'2022-06-01').dataFlows[0].outputStream]"
+                        },
+                        {
+                            "name": "stream_cwsweblog",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_cws_web_name')),'2022-06-01').dataFlows[0].outputStream]"
+                        },
+                        {
+                            "name": "stream_efsfwlog",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_sdwan_efslogapi_name')),'2022-06-01').dataFlows[0].outputStream]"
+                        },
+                        {
+                            "name": "stream_efshealth",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_veco_efsapihealth_name')),'2022-06-01').dataFlows[0].outputStream]"
+                        },
+                        {
+                            "name": "stream_saseaudit",
+                            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules',parameters('dcr_veco_events_name')),'2022-06-01').dataFlows[0].outputStream]"
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
