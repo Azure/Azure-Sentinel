@@ -26,8 +26,7 @@ query: |
   | where CommandLine has_any("-ExclusionPath", "Set-MpPreference", "advfirewall", "-ExclusionExtension", 
   "-EnableControlledFolderAccess", "windefend", "onstart", "bcdedit", "Startup") 
   // Making list of found commands 
-  | summarize CommandLine = make_set(CommandLine, 10000) by DeviceId, DeviceName, bin(TimeGenerated, 6h) 
-  | where isnotempty(DeviceName)
+  | summarize CommandLine = make_set(CommandLine, 10000) by DvcId, Dvc, bin(TimeGenerated, 6h) 
   // Extending columns for later aggregration, based on TTP
   | extend StartUpExclusionPath = iff(CommandLine has_all("-ExclusionPath", "Startup"), 1, 0) 
   | extend DefenderTamp = iff(CommandLine has "Set-MpPreference" 
@@ -45,17 +44,17 @@ query: |
   | extend BootTampering = iff(CommandLine has_all("bcdedit", "default") and CommandLine has_any ("recoveryenabled No", "bootstatuspolicy ignoreallfailures"), 1, 0) 
   | extend SchTasks = iff(CommandLine has_all("/sc", "onstart", "system", "/create", "/delay"), 1, 0) 
   // Summarizing found commands 
-  | summarize by NetshFirewallTampering ,BatExclusion, ExeExclusion, DisableControlledFolderAccess, ScDeleteDefend, SchTasks, BootTampering, DefenderTamp, StartUpExclusionPath, DeviceId, DeviceName, TimeGenerated 
+  | summarize by NetshFirewallTampering ,BatExclusion, ExeExclusion, DisableControlledFolderAccess, ScDeleteDefend, SchTasks, BootTampering, DefenderTamp, StartUpExclusionPath, DvcId, Dvc, TimeGenerated 
   // Adding up each piece of evidence 
   | extend EvidenceCount = NetshFirewallTampering + BatExclusion + ExeExclusion + DisableControlledFolderAccess + ScDeleteDefend + SchTasks + BootTampering + DefenderTamp + StartUpExclusionPath 
   | where EvidenceCount > 4
-  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
-  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+  | extend HostName = iff(Dvc has '.', substring(Dvc, 0, indexof(Dvc, '.')), Dvc)
+  | extend DnsDomain = iff(Dvc has '.', substring(Dvc, indexof(Dvc, '.') + 1), "")
 entityMappings:
   - entityType: Host
     fieldMappings:
       - identifies: FullName
-        columnName: DeviceName
+        columnName: Dvc
       - identifier: HostName
         columnName: HostName
       - identifier: DnsDomain
