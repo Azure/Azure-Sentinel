@@ -201,19 +201,11 @@ namespace Kqlvalidations.Tests
         private List<string> GetYamlFilePathsByFileName(string detectionsYamlFileName)
         {
             var yamlFilePaths = new List<string>();
-            // Get file present in detection folder or else check in solution analytics rules folder
-            try
-            {
-                var filesList= (Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("\\Detections\\") || s.Contains("/Detections/") || s.Contains("Analytic Rules")).ToList());
+            var filesList = (Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("\\Detections\\") || s.Contains("/Detections/") || s.Contains("Analytic Rules")).ToList());
 
-                if (filesList.Any())
-                {
-                    yamlFilePaths.AddRange(filesList);
-                }
-            }
-            catch (Exception e) when (e.Message.Contains("Sequence contains more than one element"))
+            if (filesList.Any())
             {
-                throw new Exception($"Should not have 2 templates with the same name , problematic name is {detectionsYamlFileName}");
+                yamlFilePaths.AddRange(filesList);
             }
 
             return yamlFilePaths;
