@@ -26,23 +26,47 @@ query: |
   | mv-expand Members
   | extend UPN = tostring(Members.UPN)
   | where UPN has ("#EXT#")
-  | project TimeGenerated, Operation, UPN, UserId, TeamName
+  | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIP
   };
   let TeamsAdd = TeamsAddDel("MemberAdded")
-  | project TimeAdded=TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName;
+  | project TimeAdded=TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIP;
   let TeamsDel = TeamsAddDel("MemberRemoved")
-  | project TimeDeleted=TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName;
+  | project TimeDeleted=TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIP;
   TeamsAdd
-  | join kind=inner (TeamsDel) on UPN
+  | join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved
   | where TimeDeleted > TimeAdded
-  | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName
-  | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1])
+  | project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName
+  | extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, "@")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded_Removed, "@")[1])
+  | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, "@")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, "@")[1])
+  | extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, "@")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: MemberAdded_Removed
       - identifier: Name
-        columnName: AccountName
+        columnName: MemberAdded_RemovedAccountName
       - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
-version: 2.0.1
+        columnName: MemberAdded_RemovedAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserWhoAdded
+      - identifier: Name
+        columnName: UserWhoAddedAccountName
+      - identifier: UPNSuffix
+        columnName: UserWhoAddedAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserWhoDeleted
+      - identifier: Name
+        columnName: UserWhoDeletedAccountName
+      - identifier: UPNSuffix
+        columnName: UserWhoDeletedAccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 2.1.0
 kind: Scheduled

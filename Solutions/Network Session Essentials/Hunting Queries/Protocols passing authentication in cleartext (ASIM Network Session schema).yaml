@@ -1,0 +1,37 @@
+id: 96f9fdd1-bb5b-4d32-8790-666457dc00c0
+name: Protocols passing authentication in cleartext (ASIM Network Session schema)
+description: |
+  'This hunting query identifies cleartext protocols like telnet, POP3, IMAP, and non-anonymous FTP that could leak sensitive information. These protocols may use SSL, but usually on different ports.'
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors: []
+
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+
+query: |
+  // Filter events from last 1 day and not failed
+  _Im_NetworkSession(starttime=ago(1d))
+  // Filter for private source IP and public destination IP
+  | where EventResult != "Failure" and ipv4_is_private(SrcIpAddr) and not(ipv4_is_private(DstIpAddr))
+  // Filter for specific destination ports or non-anonymous FTP
+  | where tostring(DstPortNumber) has_any ("23", "143", "110") or (tostring(DstPortNumber) == "21" and SrcUsername != "anonymous")
+  // Summarize data by session parameters
+  | summarize Starttime= min(TimeGenerated),EndTime= max(TimeGenerated),Eventscount=sum(EventCount), EventVendors=make_set(EventVendor,10) by SrcIpAddr,DstIpAddr,DstPortNumber,NetworkProtocol,EventResult
+  | extend PortUsage = case(
+      DstPortNumber == 23, "Telnet",
+      DstPortNumber == 143, "IMAP",
+      DstPortNumber == 110, "POP3",
+      DstPortNumber == 21, "FTP",
+      "Other"
+  )
+  | extend IP_0_Address = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0
