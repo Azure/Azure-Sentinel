@@ -1,0 +1,79 @@
+id: e5f8e196-3544-4a8b-96a9-17c1b6a49710
+name: Unusual Volume of file deletion by users
+description: |
+  This query looks for users performing file deletion activities. Spikes in file deletion observed from risky sign-in sessions are flagged here.
+  This applies to SharePoint and OneDrive users.
+  Audit event and Cloud application identifier references.
+  Reference - https://learn.microsoft.com/microsoft-365/compliance/audit-log-activities?view=o365-worldwide
+  Reference - https://learn.microsoft.com/azure/sentinel/entities-reference#cloud-application-identifiers
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+      - AADSignInEventsBeta
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+  let relevantOperations = pack_array("FileDeleted", "FileRecycled", "FileDeletedFirstStageRecycleBin", "FileDeletedSecondStageRecycleBin", "FileVersionsAllMinorsRecycled", "FileVersionRecycled", "FileVersionsAllRecycled");
+  let relevantAppIds = pack_array(int(20892), int(15600)); // App Ids for SharePoint and OneDrive
+  let timeWindow = 24h;
+  let timeNow = now();
+  //
+  let riskyUsers= // Look for users with risky sign-ins
+    AADSignInEventsBeta    
+    | where Timestamp between ((timeNow - timeWindow) .. (timeNow))
+    | where isnotempty(AccountObjectId) and isnotempty(RequestId) // In AADSignInEventsBeta, the SessionId column has inaccurate data and instead the RequestId has the actual Session identifier
+    | where ErrorCode == 0
+    | where RiskLevelDuringSignIn >=80
+    | project RiskLevelDuringSignIn, AccountObjectId, Timestamp, SessionId=RequestId
+    ;
+  let hasUsers = isnotempty(toscalar(riskyUsers));
+  //
+  let deleteEvents = // look for file deletion activity and scope it to risky users
+    CloudAppEvents
+    | where hasUsers
+    | where TimeGenerated between ((timeNow - timeWindow) .. (timeNow))
+    | where ApplicationId in (relevantAppIds)
+    | where isnotempty(AccountObjectId)
+    | where AccountObjectId in (riskyUsers)
+    | where ActionType in (relevantOperations)
+    | extend SessionId= tostring(RawEventData.AppAccessContext.AADSessionId)
+    | where isnotempty(SessionId)
+    | project AccountObjectId, AccountDisplayName, ApplicationId, SessionId, ActionType, TimeGenerated, ReportId
+    ;   
+   //
+  deleteEvents  
+  | join kind=leftsemi riskyUsers on AccountObjectId, SessionId
+  | summarize Count=count() , (Timestamp, ReportId)=arg_min(TimeGenerated, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId, ActionType, Time=bin(TimeGenerated, 5m)
+  // look for only those scoped users who have generated an increase in file deletion activity.
+  | summarize TotalCount= countif(Count > 50), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId 
+  | where TotalCount >= 3
+  | project AccountObjectId, AccountDisplayName, ApplicationId, TotalCount, ReportId, Timestamp
+  | extend NTDomain = tostring(split(AccountDisplayName,'\\',0)[0]), Name = tostring(split(AccountDisplayName,'\\',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountObjectId
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+customDetails:
+  Count: TotalCount
+version: 1.0.0
+kind: Scheduled
