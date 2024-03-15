@@ -1,0 +1,87 @@
+id: a8e2bfd2-5d9c-4acc-aa55-30029e50d574
+name: VMware SD-WAN Edge - IDS/IPS Alert triggered (Syslog)
+version: 1.0.0
+kind: Scheduled
+description: |-
+  The VMware SD-WAN Edge appliance captured a potentially malicious traffic flow. Please investigate the IOC information available.
+
+  This analytics rule analyzes Syslog streams.
+severity: High
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+requiredDataConnectors:
+  - connectorId: VMwareSDWAN
+    dataTypes:
+      - SDWAN
+tactics:
+- LateralMovement
+relevantTechniques:
+- T1210
+query: |-
+  Syslog
+  | where SyslogMessage contains "VCF Alert"
+  | project-rename EdgeName=HostName
+  | project-away Computer, HostIP, SourceSystem, Type
+  | extend IdpsSignatureName = extract("SIGNATURE=(.+) CATEGORY=", 1, SyslogMessage)
+  | extend IdpsAlertCategory = extract("CATEGORY=(.+) SEVERITY=", 1, SyslogMessage)
+  | extend IdpsAlertSeverity = extract("SEVERITY=(.+) SRC_IP=", 1, SyslogMessage)
+  | extend IdpsSignatureId = extract("SIG_ID=([0-9]+) SIGNATURE=", 1, SyslogMessage)
+  | extend OverlaySegmentName = extract("SEGMENT_NAME=(.+) SIG_ID=", 1, SyslogMessage)
+  | extend IpProtocol = extract("PROTO=([A-Z]+) SRC=", 1, SyslogMessage)
+  | extend SrcIpAddress = extract("SRC=(.+) DST=", 1, SyslogMessage)
+  | extend SrcPort = extract("SPT=([0-9]+) DPT=", 1, SyslogMessage)
+  | extend DstIpAddress = extract("DST=(.+) SPT=", 1, SyslogMessage)
+  | extend DstPort = extract("DPT=(.+) DEST_DOMAIN=", 1, SyslogMessage)
+  | extend VictimIp = extract("TARGET_IP=(.+) TARGET_PORT=", 1, SyslogMessage)
+  | extend AttackerIp = extract("SRC_IP=(.+) SRC_PORT=", 1, SyslogMessage)
+  | extend DomainName = extract("DEST_DOMAIN=(.+) FW_POLICY_NAME=", 1, SyslogMessage)
+  | extend EdgeFwAction = extract("ATP_ACTION=(.+) SEGMENT=", 1, SyslogMessage)
+  | extend SyslogTag = extract("$(.+): ACTION=", 1, SyslogMessage)
+  | extend FwPolicyName = extract("FW_POLICY_NAME=(.+) SEGMENT_NAME=", 1, SyslogMessage)
+  | project
+      TimeGenerated,
+      IdpsSignatureName,
+      IdpsAlertSeverity,
+      IdpsAlertCategory,
+      IdpsSignatureId,
+      EdgeFwAction,
+      EdgeName,
+      SrcIpAddress,
+      IpProtocol,
+      SrcPort,
+      DstIpAddress,
+      DstPort,
+      DomainName,
+      AttackerIp,
+      VictimIp,
+      FwPolicyName,
+      SyslogTag
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  IDPS_Signature: IdpsSignatureName
+  IDPS_Event_Category: IdpsAlertCategory
+  Edge_Name: EdgeName
+entityMappings:
+- entityType: DNS
+  fieldMappings:
+  - identifier: DomainName
+    columnName: DomainName
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: VictimIp
+suppressionDuration: 5h
