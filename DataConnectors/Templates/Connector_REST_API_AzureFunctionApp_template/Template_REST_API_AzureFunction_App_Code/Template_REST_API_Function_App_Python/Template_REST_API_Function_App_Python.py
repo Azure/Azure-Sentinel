@@ -1,4 +1,4 @@
-""" Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel API \
+""" Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel API 
     Language:       Python
     Version:        1.0
     Last Modified:  5/30/2020
