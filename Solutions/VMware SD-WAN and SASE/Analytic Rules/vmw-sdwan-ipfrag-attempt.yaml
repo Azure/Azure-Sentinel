@@ -1,0 +1,71 @@
+id: ce207901-ed7b-49ae-ada7-033e1fbb1240
+name: VMware SD-WAN Edge - Network Anomaly Detection - Potential Fragmentation Attack
+version: 1.0.0
+kind: Scheduled
+description: |-
+  The VMware SD-WAN Edge appliance received packets potentially part of an IP Fragmentation attack or indicating an MTU mismatch.
+
+  An IP fragmentation attack is a cyberattack that exploits how IP packets are fragmented and reassembled. IP fragmentation is a process by which large IP packets are broken down into smaller packets to transmit them over networks with smaller Maximum Transmission Unit (MTU) sizes.
+
+  Attackers can exploit IP fragmentation in various ways, for example, Denial-of-service attacks, address spoofing, or even information disclosure.
+
+  This analytics rule analyzes Syslog streams; these alerts are not reported by default if Search API is used.
+severity: Low
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+requiredDataConnectors:
+  - connectorId: VMwareSDWAN
+    dataTypes:
+      - SDWAN
+tactics:
+- Impact
+- DefenseEvasion
+relevantTechniques:
+- T1498
+- T1599
+query: |+
+  Syslog
+  | where SyslogMessage contains "VCF Drop"
+  | where SyslogMessage contains "packet too big"
+  | project-rename EdgeName=HostName
+  | project-away Computer, HostIP, SourceSystem, Type
+  | extend OverlaySegmentName = extract("SEGMENT_NAME=(.+) COUNT=", 1, SyslogMessage)
+  | extend IpProtocol = extract("PROTO=(.+) SRC=", 1, SyslogMessage)
+  | extend SrcIpAddress = extract("SRC=(.+) DST=", 1, SyslogMessage)
+  | extend DstIpAddress = extract("DST=(.+) REASON=", 1, SyslogMessage)
+  | extend EdgeFwAction = extract("ACTION=(.+) SEGMENT=", 1, SyslogMessage)
+  | extend SyslogTag = extract("^(.+): ACTION=", 1, SyslogMessage)
+  | extend pcktCount = extract("COUNT=([0-9]+)$", 1, SyslogMessage)
+  | project
+      TimeGenerated,
+      EdgeFwAction,
+      EdgeName,
+      SrcIpAddress,
+      IpProtocol,
+      DstIpAddress,
+      pcktCount,
+      SyslogTag
+
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  Edge_Name: EdgeName
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddress
+suppressionDuration: 5h
