@@ -1,0 +1,192 @@
+Parser:
+  Title: ASIM Authentication parser for CrowdStrike Falcon Endpoint Protection
+  Version: '0.1.0'
+  LastUpdated: Oct 26 2023
+Product:
+  Name: CrowdStrike Falcon Endpoint Protection
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: CrowdStrike Falcon Endpoint Protection Documentation
+  Link: 
+    https://falcon.us-2.crowdstrike.com/documentation/page/d88d9ed6/streaming-api-event-dictionary
+    https://falcon.us-2.crowdstrike.com/documentation/page/eb1587d1/siem-connector#mc98af8f
+Description: |
+  This ASIM parser supports normalizing CrowdStrike Falcon Endpoint Protection logs to the ASIM Authentication normalized schema. These events are captured through CrowdStrike Falcon Endpoint Protection data connector which allows you to easily connect your CrowdStrike Falcon Event Stream with Microsoft Sentinel.
+ParserName: vimAuthenticationCrowdStrikeFalconHost
+EquivalentBuiltInParser: _Im_Authentication_CrowdStrikeFalconHost
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: targetusername_has_any
+    Type: string
+    Default: '*'
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: string
+    Default: '*'
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+  [
+      "0", "Informational",
+      "1", "Informational",
+      "2", "Low",
+      "3", "Medium",
+      "4", "High",
+      "5", "High"
+  ];
+  let parser = ( 
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      eventtype_in: dynamic=dynamic([]),
+      eventresultdetails_in: dynamic=dynamic([]),
+      eventresult: string='*',
+      targetusername_has_any: string='*',
+      targetappname_has_any: dynamic=dynamic([]),
+      actorusername_has_any: string='*',
+      srcipaddr_has_any_prefix: dynamic=dynamic([]),
+      srchostname_has_any: dynamic=dynamic([]),
+      targetipaddr_has_any_prefix: dynamic=dynamic([]),
+      dvcipaddr_has_any_prefix: dynamic=dynamic([]),
+      dvchostname_has_any: dynamic=dynamic([]),
+      disabled: bool = false
+      ) {
+      CommonSecurityLog
+      | where not(disabled)
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and (DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost")
+          and (DeviceEventCategory == "AuthActivityAuditEvent" and DeviceEventClassID in ("userAuthenticate", "twoFactorAuthenticate"))
+          and array_length(eventresultdetails_in) == 0
+          and actorusername_has_any == '*'
+          and array_length(srchostname_has_any) == 0
+          and array_length(srcipaddr_has_any_prefix) == 0
+          and (array_length(targetipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DestinationTranslatedAddress, targetipaddr_has_any_prefix))
+          and array_length(dvchostname_has_any) == 0
+          and (targetusername_has_any == '*' or DestinationUserName has targetusername_has_any)
+          and (array_length(targetappname_has_any) == 0 or ProcessName has_any (targetappname_has_any)) 
+          and (array_length(dvcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DestinationTranslatedAddress, dvcipaddr_has_any_prefix))
+      | extend
+          EventResult = iff(EventOutcome == "true", "Success", "Failure"),
+          EventType = "Logon"
+      | where (eventresult == '*' or eventresult =~ EventResult)
+          and (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
+      | lookup EventSeverityLookup on LogSeverity
+      | extend
+          EventStartTime = todatetime(DeviceCustomDate1),
+          EventCount = int(1),
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.3",
+          EventProduct = "FalconHost",
+          EventVendor = "CrowdStrike"
+      | project-rename 
+          TargetIpAddr = DestinationTranslatedAddress,
+          EventUid = _ItemId,
+          EventOriginalSeverity = LogSeverity,
+          EventOriginalSubType = DeviceEventClassID,
+          EventOriginalType = DeviceEventCategory,
+          EventProductVersion = DeviceVersion,
+          EventOriginalResultDetails = EventOutcome,
+          TargetUsername = DestinationUserName,
+          TargetAppName = ProcessName
+      | extend
+          EventEndTime = EventStartTime,
+          DvcIpAddr = TargetIpAddr,
+          TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+          TargetAppType = iff(isnotempty(TargetAppName), "Service", ""),
+          LogonMethod = iff(EventOriginalSubType =~ "userAuthenticate", "Username and Password", "Two Factor Authentication")
+      | extend
+          User = TargetUsername,
+          Dst = TargetIpAddr,
+          Dvc = coalesce(DvcIpAddr, EventProduct),
+          Application = TargetAppName
+      | project-away 
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          Computer,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          Protocol,
+          Activity,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          Threat*,
+          IndicatorThreatType,
+          ExternalID,
+          ReportReferenceLink,
+          ReceiptTime,
+          Reason,
+          ApplicationProtocol,
+          _ResourceId,
+          ExtID,
+          Message
+  };
+  parser(
+      starttime = starttime,
+      endtime = endtime,
+      eventtype_in = eventtype_in,
+      eventresultdetails_in = eventresultdetails_in,
+      eventresult = eventresult,
+      targetusername_has_any = targetusername_has_any,
+      targetappname_has_any = targetappname_has_any,
+      actorusername_has_any = actorusername_has_any,
+      srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+      srchostname_has_any = srchostname_has_any,
+      targetipaddr_has_any_prefix = targetipaddr_has_any_prefix,
+      dvcipaddr_has_any_prefix = dvcipaddr_has_any_prefix,
+      dvchostname_has_any = dvchostname_has_any,
+      disabled = disabled
+  )

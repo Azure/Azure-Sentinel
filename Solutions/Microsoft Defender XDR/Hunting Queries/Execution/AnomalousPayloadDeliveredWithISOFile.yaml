@@ -1,0 +1,37 @@
+id: 14694b88-a6e9-4cd1-9c4a-e382bdd82d8d
+name: Anomalous Payload Delivered from ISO files
+description: |
+  This query searches for lnk file executions from other locations than C: drive, which can relate to mounted ISO-files.
+description-detailed: |
+  This query looks for lnk file executions from other locations than C: -drive, which can relate to mounted ISO-files.
+  Reference - https://threathunt.blog/detecting-a-payload-delivered-with-iso-files-using-mde/
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceEvents
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  DeviceEvents
+  | where TimeGenerated > ago(30d) 
+  | where ActionType == 'BrowserLaunchedToOpenUrl' 
+  | where RemoteUrl endswith ".lnk"
+  | where RemoteUrl !startswith "C:"
+  | project LNKLaunchTimestamp = TimeGenerated, DeviceName, RemoteUrl
+  | parse RemoteUrl with Drive '\\' *
+  | extend Drive= tostring(Drive)
+  | where isnotempty(Drive)
+  | join kind=innerunique (
+  DeviceProcessEvents
+  | where TimeGenerated > ago(30d)
+  | where FolderPath !startswith "C:"
+  | parse FolderPath with Drive '\\' *
+  | project Drive= tostring(Drive), StartedProcessTimestamp = TimeGenerated, StartedProcessName = FileName, StartedProcessSHA1 = SHA1, StartedProcessCommandline = ProcessCommandLine, StartedProcessPath = FolderPath, DeviceName, StartedProcessParentName = InitiatingProcessFileName, StartedProcessParentCmdline = InitiatingProcessCommandLine, StartedParentProcessFolderPath = InitiatingProcessFolderPath, StartedProcessGrandParent = InitiatingProcessParentFileName, TimeGenerated
+  ) on DeviceName, Drive
+  | where StartedProcessTimestamp between (LNKLaunchTimestamp ..(LNKLaunchTimestamp+1m))
+  | project-away Drive1, DeviceName1
+  | project-reorder LNKLaunchTimestamp, StartedProcessTimestamp, DeviceName, RemoteUrl, Drive, StartedProcessName, StartedProcessSHA1, StartedProcessPath,StartedProcessCommandline, StartedProcessParentName, StartedProcessParentCmdline, StartedParentProcessFolderPath, StartedProcessGrandParent, TimeGenerated
+version: 1.0.0

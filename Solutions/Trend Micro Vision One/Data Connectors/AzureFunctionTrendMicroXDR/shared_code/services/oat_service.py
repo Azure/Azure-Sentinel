@@ -59,7 +59,6 @@ def get_trace_log(headers):
 
 
 def update_oat_pipeline_config(token: str, patch_data: Dict[str, Any]) -> None:
-    # See: https://adc.github.trendmicro.com/pages/CoreTech-SG/xdr-doc/?urls.primaryName=public-merged-beta#/Observed%20Attack%20Techniques%20Pipeline/patch_beta_xdr_oat_dataPipeline
     url = f"{XDR_HOST_URL}/beta/xdr/oat/dataPipeline"
     headers = get_header(
         {
@@ -118,6 +117,9 @@ def get_oat_package_list(
                 f'start_time: {start_time}, end_time: {end_time}'
             )
             return 0, []
+    if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
+        logger.error(f"response status code: {response.status_code}")
+        return 0, []
 
     response.raise_for_status()
 
@@ -165,6 +167,9 @@ def download_oat_file(
                 f'The OAT file is out of retention time, file_id: {oat_file_id}'
             )
             return None
+    if response.status_code in [requests.codes.forbidden, requests.codes.not_found]:
+        logger.error(f"response status code: {response.status_code}")
+        return None
 
     response.raise_for_status()
 

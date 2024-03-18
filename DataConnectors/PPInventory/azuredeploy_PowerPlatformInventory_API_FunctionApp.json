@@ -16,7 +16,10 @@
 			"type": "object"
 		},
 		"appInsightsWorkspaceResourceId": {
-			"type": "string"
+			"type": "string",
+			"metadata": {
+				"description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
+			}
 		},
 		"roleAssignmentDcr": {
 			"type": "bool",
@@ -33,10 +36,12 @@
 		"tagsByResource": {
 			"type": "object",
 			"defaultValue": {}
+		},
+		"storageAccountName": {
+			"type": "string"
 		}
 	},
 	"variables": {
-		"storageAccountName": "[concat(replace(toLower(parameters('functionAppName')),'-',''),'sa')]",
 		"storageSuffix": "[environment().suffixes.storage]",
 		"serverFarmName": "[concat('serverfarm_', parameters('functionAppName'))]",
 		"appInsightsLogName": "[concat(parameters('functionAppName'),'Logs')]",
@@ -464,7 +469,7 @@
 									]
 								}
 							}
-						}						
+						}
 					],
 					"outputs": {}
 				}
@@ -480,8 +485,6 @@
 			"properties": {
 				"Application_Type": "web",
 				"ApplicationId": "[parameters('functionAppName')]",
-				"Flow_Type": "Bluefield",
-				"Request_Source": "rest",
 				"WorkspaceResourceId": "[parameters('appInsightsWorkspaceResourceId')]"
 			}
 		},
@@ -515,7 +518,7 @@
 		{
 			"type": "Microsoft.Storage/storageAccounts",
 			"apiVersion": "2022-09-01",
-			"name": "[variables('storageAccountName')]",
+			"name": "[parameters('storageAccountName')]",
 			"tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Storage/storageAccounts'), parameters('tagsByResource')['Microsoft.Storage/storageAccounts'], json('{}')) ]",
 			"location": "[parameters('location')]",
 			"kind": "StorageV2",
@@ -534,7 +537,7 @@
 			"kind": "functionapp,linux",
 			"dependsOn": [
 				"[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
-				"[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+				"[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
 				"[resourceId('Microsoft.Insights/components', variables('appInsightsLogName'))]",
 				"[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
 			],
@@ -560,11 +563,11 @@
 					"appSettings": [
 						{
 							"name": "AzureWebJobsStorage",
-							"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('storageAccountName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
+							"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(parameters('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('storageAccountName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
 						},
 						{
 							"name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
-							"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('storageAccountName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
+							"value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(parameters('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(parameters('storageAccountName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
 						},
 						{
 							"name": "STORAGE_ACCOUNT_URL",
@@ -657,12 +660,12 @@
 						},
 						{
 							"name": "FULL_SYNC_INTERVAL_DAYS",
-							"value": "14",
+							"value": "7",
 							"slotSetting": false
 						},
 						{
-							"name": "TIMER_SCHEDULE_HOURS",
-							"value": "24",
+							"name": "TIMER_SCHEDULE",
+							"value": "0 0 2 * * *",
 							"slotSetting": false
 						},
 						{

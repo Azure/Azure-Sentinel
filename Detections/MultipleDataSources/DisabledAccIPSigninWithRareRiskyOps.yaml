@@ -55,13 +55,13 @@ query: |
   | order by disabledAccountLoginAttempts
   // Break up the string of Succesfully signed into accounts into individual events
   | mvexpand successfulAccountSigninSet
-  | extend IPCustomEntity = IPAddress
+  | extend JoinedOnIp = IPAddress
   | join kind = inner (
         OfficeActivity
       | where TimeGenerated > timeRange
       | where Operation in~ ( "Add-MailboxPermission", "Add-MailboxFolderPermission", "Set-Mailbox", "New-ManagementRoleAssignment", "New-InboxRule", "Set-InboxRule", "Set-TransportRule") and not(UserId has_any ('NT AUTHORITY\\SYSTEM (Microsoft.Exchange.ServiceHost)', 'NT AUTHORITY\\SYSTEM (w3wp)', 'devilfish-applicationaccount'))
       // Remove port from the end of the IP and/or square brackets around IP, if they exist 
-      | extend IPCustomEntity = case(
+      | extend JoinedOnIp = case(
         ClientIP matches regex @'\[((25[0-5]2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]2[0-4][0-9]|[01]?[0-9][0-9]?)\]-\d{1,5}', tostring(extract('\\[([0-9]+\\.[0-9]+\\.[0-9]+)\\]-[0-9]+', 1, ClientIP)),
         ClientIP matches regex @'\[((25[0-5]2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]2[0-4][0-9]|[01]?[0-9][0-9]?)\]', tostring(extract('\\[([0-9]+\\.[0-9]+\\.[0-9]+)\\]', 1, ClientIP)),  
         ClientIP matches regex @'(((25[0-5]2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]2[0-4][0-9]|[01]?[0-9][0-9]?))-\d{1,5}', tostring(extract('([0-9]+\\.[0-9]+\\.[0-9]+)-[0-9]+', 1, ClientIP)),
@@ -71,22 +71,25 @@ query: |
         ClientIP matches regex @'((?:[0-9a-fA-F]{1,4}::?){1,8}[0-9a-fA-F]{1,4}|\d{1,3}(?:\.\d{1,3}){3})-\d{1,5}', tostring(extract('((?:[0-9a-fA-F]{1,4}::?){1,8}[0-9a-fA-F]{1,4}|\\d{1,3}(?:\\.\\d{1,3}){3})-[0-9]+', 1, ClientIP)),
         ClientIP matches regex @'((?:[0-9a-fA-F]{1,4}::?){1,8}[0-9a-fA-F]{1,4}|\d{1,3}(?:\.\d{1,3}){3})', ClientIP,
         "")
-      | where isnotempty(IPCustomEntity)
+      | where isnotempty(JoinedOnIp)
       | extend OfficeTimeStamp = ElevationTime, UserPrincipalName = UserId
-  ) on IPCustomEntity
+  ) on JoinedOnIp
   // Rare and risky operations only happen within a certain time range of the successful sign-in
   | where OfficeTimeStamp >= successSigninStart and datetime_diff('day', OfficeTimeStamp, successSigninEnd) <= timeBuffer
+  | extend AccountName = tostring(split(UserPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: UserPrincipalName
       - identifier: Name
-        columnName: AppDisplayName
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: JoinedOnIp
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -99,7 +102,7 @@ entityMappings:
     fieldMappings:
       - identifier: AppId
         columnName: ApplicationId
-version: 1.0.0
+version: 1.0.1
 kind: Scheduled
 metadata:
     source:
