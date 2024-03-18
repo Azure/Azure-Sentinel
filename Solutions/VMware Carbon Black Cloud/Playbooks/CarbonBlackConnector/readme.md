@@ -1,6 +1,6 @@
 # CarbonBlack Logic Apps Custom connector
 
-![](https://raw.githubusercontent.com/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlackConnector/CarbonBlack.PNG)
+![](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlackConnector/CarbonBlack.PNG)
 
 This custom connector connects to CarbonBlack cloud end point and performs different actions on alerts, devices and threats using CarbonBlack cloud endpoint API.
 

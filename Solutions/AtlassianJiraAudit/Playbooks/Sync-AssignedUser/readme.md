@@ -84,25 +84,25 @@ Navigate to the project settings, then go to Automation to create rules.
 This automation rule has a trigger 'Issue Transitioned' and will trigger the Logic App 'Sync-Status'. 
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Sync%20Status.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Sync%20Status.png)
 
 #### Sync Assigned User
 This automation rule has a trigger 'Issue Assigned' and will trigger the Logic App 'Sync-AssignedUser'. 
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Sync%20Assigned%20User.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Sync%20Assigned%20User.png)
 
 #### Create Link
 This automation rule has a trigger 'Issue created' and will trigger the Logic App 'Add-JIRALinkComment'. 
 Provide the POST URL of the Logic App in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Create%20Link.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Create%20Link.png)
 
 #### Sync comment
 This automation rule will trigger the function app to sync public comments to Microsoft Sentinel.
 Provide the POST URL of the Sync Comment Function in the 'Send Web Request' Step. As webhook data, specify 'issue data'.
 
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/JIRA%20-%20Automation%20-%20Sync%20Comment.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/JIRA%20-%20Automation%20-%20Sync%20Comment.png)
 
 ## 3. Deploy Key Vault
 The Key Vault is used to store three secrets:
@@ -152,7 +152,7 @@ It uses two connections:
 In order to correlate the right add the incident in JIRA to the correct Organization, we use a switch and determine the correct organization based on the originate Subscription ID.
 Add a case per customer and add the right Subscription ID, Customer name and Organization ID.
 If you do not use organizations in JIRA, you can remove the switch.
-![Switch](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/Azure%20-%20Switch%20Organization.png)
+![Switch](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Azure%20-%20Switch%20Organization.png)
 
 ### Sync status from JIRA to Sentinel
 

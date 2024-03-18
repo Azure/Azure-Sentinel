@@ -3,8 +3,8 @@
  When a new Sentinel incident is created,this playbook gets triggered and performs below actions
  1. Fetches the devices information from CarbonBlack
  2. Enrich the incident with device information by adding a comment to the incident
-     ![Comment example](https://raw.githubusercontent.com/Azure/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-DeviceEnrichment/images/Incident_Comment.PNG)
-![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure/Azure-Sentinel/blob/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-DeviceEnrichment/images/designerOverviewLight.png)
+     ![Comment example](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-DeviceEnrichment/images/Incident_Comment.PNG)
+![CarbonBlack-Enrich Incident With devices information](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VMware%20Carbon%20Black%20Cloud/Playbooks/CarbonBlack-DeviceEnrichment/images/designerOverviewLight.png)
 ### Prerequisites 
 1. CarbonBlack Custom Connector needs to be deployed prior to the deployment of this playbook under the same subscription.
 2. Generate an API key.Refer this link [ how to generate the API Key](https://developer.carbonblack.com/reference/carbon-black-cloud/authentication/#creating-an-api-key)
