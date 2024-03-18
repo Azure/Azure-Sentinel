@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "imUserManagement",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "User Management ASIM filtering parser",
+            "category": "ASIM",
+            "FunctionAlias": "imUserManagement",
+            "query": "let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers')\n  | where SearchKey in ('Any', 'ExcludevimUserManagement')\n  | extend SourceSpecificParser=column_ifexists('SourceSpecificParser', '')\n  | distinct SourceSpecificParser\n  | where isnotempty(SourceSpecificParser));\nlet ASimBuiltInDisabled=toscalar('ExcludevimUserManagement' in (DisabledParsers) or 'Any' in (DisabledParsers)); \nlet parser=(\n    starttime: datetime=datetime(null), \n    endtime: datetime=datetime(null),\n    srcipaddr_has_any_prefix: dynamic=dynamic([]),\n    targetusername_has_any: dynamic=dynamic([]),\n    actorusername_has_any: dynamic=dynamic([]),\n    eventtype_in: dynamic=dynamic([]),\n    pack: bool=false) {\n    union isfuzzy=true\n        vimUserManagementEmpty,\n        vimUserManagementMicrosoftSecurityEvent(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, targetusername_has_any=targetusername_has_any, actorusername_has_any=actorusername_has_any, eventtype_in=eventtype_in, disabled = (ASimBuiltInDisabled or ('ExcludevimUserManagementMicrosoftSecurityEvent'      in (DisabledParsers)))),\n        vimUserManagementCiscoISE(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, targetusername_has_any=targetusername_has_any, actorusername_has_any=actorusername_has_any, eventtype_in=eventtype_in, disabled = (ASimBuiltInDisabled or ('ExcludevimUserManagementCiscoISE'      in (DisabledParsers)))),\n        vimUserManagementSentinelOne(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, targetusername_has_any=targetusername_has_any, actorusername_has_any=actorusername_has_any, eventtype_in=eventtype_in, disabled = (ASimBuiltInDisabled or ('ExcludevimUserManagementSentinelOne'      in (DisabledParsers)))),\n        vimUserManagementLinuxAuthpriv(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, targetusername_has_any=targetusername_has_any, actorusername_has_any=actorusername_has_any, eventtype_in=eventtype_in, disabled = (ASimBuiltInDisabled or ('ExcludevimUserManagementLinuxAuthpriv'      in (DisabledParsers)))),\n        vimUserManagementNative(starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, targetusername_has_any=targetusername_has_any, actorusername_has_any=actorusername_has_any, eventtype_in=eventtype_in, disabled = (ASimBuiltInDisabled or ('ExcludevimUserManagementNative'      in (DisabledParsers))))\n}; \nparser (\n    starttime=starttime, \n    endtime=endtime, \n    srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,\n    targetusername_has_any   = targetusername_has_any, \n    actorusername_has_any    = actorusername_has_any,\n    eventtype_in             = eventtype_in,\n    pack=pack\n)\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),targetusername_has_any:dynamic=dynamic([]),actorusername_has_any:dynamic=dynamic([]),eventtype_in:dynamic=dynamic([]),pack:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

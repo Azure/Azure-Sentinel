@@ -13,15 +13,32 @@ on:
        - 'Parsers/ASimAuthentication/Parsers/**'
        - 'Parsers/ASimFileEvent/Parsers/**'
        - 'Parsers/ASimRegistryEvent/Parsers/**'
+       - 'Parsers/ASimUserManagement/Parsers/**'
+       - 'Parsers/ASimDhcpEvent/Parsers/**'
+
+env:
+  GITHUB_APPS_ID: "${{ secrets.APPLICATION_ID }}"
+  GITHUB_APPS_KEY: "${{ secrets.APPLICATION_PRIVATE_KEY }}"
+
 jobs:
   kqlFuncYaml2Arm:
     # The workflow should not run on forked repositories for security reasons
     if: ${{ !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout pull request branch
-        uses: actions/checkout@v3
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@46e4a501e119d39574a54e53a06c9a705efc55c9
         with:
+          app-id: ${{ env.GITHUB_APPS_ID }}
+          private-key: ${{ env.GITHUB_APPS_KEY }}
+
+      - name: Checkout pull request branch
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        env:
+          GeneratedToken: ${{ steps.generate_token.outputs.token }}
+        with:
+            token: ${{ env.GeneratedToken}}
             ref: ${{github.event.pull_request.head.ref}}
             repository: ${{github.event.pull_request.head.repo.full_name}}
             persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
@@ -69,7 +86,7 @@ jobs:
         uses: ad-m/github-push-action@master
         if: ${{ env.armTemplatesChanged == 'true' }}
         with:
-            github_token: ${{ secrets.GITHUB_TOKEN }}
+            github_token: ${{ steps.generate_token.outputs.token }}
             repository: ${{github.event.pull_request.head.repo.full_name}}
             branch: ${{ github.head_ref }}
       - name: Add comment
@@ -79,6 +96,6 @@ jobs:
           message: |
             ASIM parsers have been changed. ARM templates were regenerated from the updated KQL function YAML files.
             To find the new ARM templates, pull your branch.
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: ${{ steps.generate_token.outputs.token }}
           repo-token-user-login: 'github-actions[bot]' # The user.login for temporary GitHub tokens
           allow-repeats: false # This is the default
