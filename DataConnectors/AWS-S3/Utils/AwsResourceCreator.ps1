@@ -137,11 +137,14 @@ function New-S3Bucket
 
         Write-Log -Message "Executing: aws s3api head-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
         $headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
+        # If there was an error the bucket does not already exist or no permissions.
+        Write-Log -Message "output $headBucketOutput 2>&1" -LogFileName $LogFileName -Severity Verbose
+        Write-Log -Message "error code $lastexitcode 2>&1" -LogFileName $LogFileName -Severity Verbose
             
-        $isBucketNotExist = $null -ne $headBucketOutput
+        $isBucketNotExist = $lastexitcode -ne 0
         if ($isBucketNotExist)
         {
-            $bucketCreationConfirm = Read-ValidatedHost -Prompt "Bucket doesn't exist, would you like to create a new bucket ? [y/n]" -ValidationType Confirm
+            $bucketCreationConfirm = Read-ValidatedHost -Prompt "Bucket doesn't exist or you don't have permission to access it, would you like to create a new bucket ? [y/n]" -ValidationType Confirm
             Write-Log -Message "Creating new bucket: $bucketCreationConfirm " -LogFileName $LogFileName -Indent 2 
             
             if ($bucketCreationConfirm -eq 'y')
