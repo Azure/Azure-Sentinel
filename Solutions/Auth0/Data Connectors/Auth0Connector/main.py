@@ -76,7 +76,7 @@ class Auth0Connector:
             events: last processed Events
     """
     def get_log_events(self, script_start_time, config: dict) -> Tuple[str, List]:
-        self.token = self._get_token()
+        self.token = self.access_token()
         logging.info(f'Token provided.')
         self.header = self._get_header()
         last_log_id = self._get_last_log_id(config)
@@ -176,7 +176,7 @@ class Auth0Connector:
             last_log_id = config['last_log_id']
         return last_log_id
 
-    def _get_token(self):
+    def access_token(self):
         params = {
                 'grant_type': 'client_credentials',
                 'client_id': self.client_id,
