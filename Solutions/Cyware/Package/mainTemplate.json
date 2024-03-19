@@ -51,6 +51,15 @@
       "_huntingQuerycontentId3": "61c99147-b749-4164-80b1-c4bfa4efa704",
       "huntingQueryTemplateSpecName3": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('61c99147-b749-4164-80b1-c4bfa4efa704')))]"
     },
+    "Send_Incident_To_Cyware_Orchestrate": "Send_Incident_To_Cyware_Orchestrate",
+    "_Send_Incident_To_Cyware_Orchestrate": "[variables('Send_Incident_To_Cyware_Orchestrate')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "Send_Incident_To_Cyware_Orchestrate",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
@@ -307,6 +316,248 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Send_Incident_To_Cyware_Orchestrate Playbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "workflows_Send_Incident_To_Cyware_Orchestrate_name": {
+              "defaultValue": "Send-Incident-To-Cyware-Orchestrate",
+              "type": "String"
+            },
+            "LogicAppLocation": {
+              "defaultValue": "eastus",
+              "type": "String"
+            },
+            "COWebHookURL": {
+              "defaultValue": "<Your-Cyware-Webhook-URL>",
+              "type": "String"
+            },
+            "connections_azuresentinel_connectionId": {
+              "defaultValue": "<Placeholder for Azure Sentinel to Cyware Orchestrate connection string>",
+              "type": "String"
+            }
+          },
+          "variables": {
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2017-07-01",
+              "name": "[[parameters('workflows_Send_Incident_To_Cyware_Orchestrate_name')]",
+              "location": "[[parameters('LogicAppLocation')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    },
+                    "COWebHookURL": {
+                      "defaultValue": "[[parameters('COWebHookURL')]",
+                      "type": "String"
+                    }
+                  },
+                  "triggers": {
+                    "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "path": "/incident-creation"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "HTTP": {
+                      "runAfter": {
+                        "Parse_JSON": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "body": "@triggerBody()",
+                        "method": "POST",
+                        "uri": "@{parameters('COWebHookURL')}"
+                      }
+                    },
+                    "Parse_JSON": {
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@triggerBody()",
+                        "schema": {
+                          "properties": {
+                            "properties": {
+                              "properties": {
+                                "body": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "description": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "firstActivityTimeUtc": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "incidentNumber": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "severity": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "title": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "connectionId": "[[parameters('connections_azuresentinel_connectionId')]",
+                        "connectionName": "[[concat('azuresentinel-', parameters('workflows_Send_Incident_To_Cyware_Orchestrate_name'))]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        },
+                        "id": "[[concat('/providers/Microsoft.Web/locations/', parameters('LogicAppLocation'), '/managedApis/azuresentinel')]"
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": {
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyware",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Cyware",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cyware",
+                  "email": "support@cyware.com",
+                  "tier": "Partner"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "Cyware-SendSentinelIncidentToCywareOrchestrate",
+            "description": "This playbook will send the Sentinel incident payload to Cyware Orchestrate to enable incident orchestration",
+            "prerequisites": [
+              "To use the Logic App, you will need a valid webhook URL from Cyware Orchestrate as detailed in the [documentation](https://techdocs.cyware.com/en/299672-359051-configure-webhooks.html)"
+            ],
+            "postDeployment": [
+              "After deployment, open the playbook to configure all connections and press save. Then also configure the required tags to trigger the playbook on Cyware Orchestrate as detailed [here](https://techdocs.cyware.com/en/299672-359051-configure-webhooks.html#299672-359051-configure-webhooks)"
+            ],
+            "lastUpdateTime": "2024-03-05T00:00:00Z",
+            "tags": [
+              "Threat Hunting"
+            ],
+            "releaseNotes": [
+              {
+                "version": "1.0",
+                "title": "Cyware-SendSentinelIncidentToCywareOrchestrate",
+                "notes": [
+                  "Initial version"
+                ]
+              }
+            ]
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_playbookContentId1')]",
+        "contentKind": "Playbook",
+        "displayName": "Send_Incident_To_Cyware_Orchestrate",
+        "contentProductId": "[variables('_playbookcontentProductId1')]",
+        "id": "[variables('_playbookcontentProductId1')]",
+        "version": "[variables('playbookVersion1')]"
+      }
+    },
+    {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
@@ -316,7 +567,7 @@
         "contentSchemaVersion": "3.0.0",
         "displayName": "Cyware",
         "publisherDisplayName": "Cyware",
-        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cyware/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Cyware solution for Microsoft Sentinel allows users to integrate Cyware and Microsoft Sentinel. Users can send events from Microsoft Sentinel to Cyware for further analysis. This solution also enables users to implement hunting queries that match events that are sent to Microsoft Sentinel from Cyware's Intel Exchange</p>\n<p><strong>Hunting Queries:</strong> 3</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cyware/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Cyware solution for Microsoft Sentinel allows users to integrate Cyware and Microsoft Sentinel. Users can send events from Microsoft Sentinel to Cyware for further analysis. This solution also enables users to implement hunting queries that match events that are sent to Microsoft Sentinel from Cyware's Intel Exchange</p>\n<p><strong>Hunting Queries:</strong> 3, <strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -354,6 +605,11 @@
               "kind": "HuntingQuery",
               "contentId": "[variables('huntingQueryObject3')._huntingQuerycontentId3]",
               "version": "[variables('huntingQueryObject3').huntingQueryVersion3]"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Send_Incident_To_Cyware_Orchestrate')]",
+              "version": "[variables('playbookVersion1')]"
             }
           ]
         },
