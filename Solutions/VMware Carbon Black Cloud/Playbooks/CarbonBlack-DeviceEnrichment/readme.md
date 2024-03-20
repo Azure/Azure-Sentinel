@@ -16,7 +16,7 @@
     * Playbook Name: Enter the playbook name here (Ex:CarbonBlack-DeviceEnrichment)
     * OrganizationKey : Enter the Organization key
     
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-DeviceEnrichment%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FCarbonBlack%2FPlaybooks%2FCarbonBlack-DeviceEnrichment%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-DeviceEnrichment%2Fazuredeploy.json) [![Deploy to Azure](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-DeviceEnrichment%2Fazuredeploy.json)
 
 ### Post-Deployment instructions 
 #### Authorize connections
