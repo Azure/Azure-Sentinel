@@ -177,6 +177,7 @@ class Auth0Connector:
         return last_log_id
 
     def _get_token(self):
+        token = None
         params = {
                 'grant_type': 'client_credentials',
                 'client_id': self.client_id,
