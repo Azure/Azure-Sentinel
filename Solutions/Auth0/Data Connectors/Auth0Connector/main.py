@@ -177,7 +177,6 @@ class Auth0Connector:
         return last_log_id
 
     def _get_token(self):
-        token = None
         params = {
                 'grant_type': 'client_credentials',
                 'client_id': self.client_id,
@@ -192,7 +191,7 @@ class Auth0Connector:
                 error=False
                 resp = requests.post(self.domain + '/oauth/token', headers=header, data=params)
                 try:
-                    token = resp.json()['access_token']
+                    token = resp.json()['_get_token']
                 except KeyError:
                     raise Exception('Token not provided.')
             except Exception as err:
@@ -203,6 +202,7 @@ class Auth0Connector:
         return token
 
     def _get_header(self):
+        self.token = self.token if self.token is not None else ''
         return {'Authorization': 'Bearer ' + self.token}
     
     def check_if_script_runs_too_long(self, script_start_time: int) -> bool:
