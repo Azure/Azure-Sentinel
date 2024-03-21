@@ -156,8 +156,8 @@ If you do not use organizations in JIRA, you can remove the switch.
 
 ### Sync status from JIRA to Sentinel
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FSync-Status%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FSync-Status%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-Status%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-Status%2Fazuredeploy.json)
 
 This Logic App will change the status in Sentinel when the status has been changed in JIRA.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule.
