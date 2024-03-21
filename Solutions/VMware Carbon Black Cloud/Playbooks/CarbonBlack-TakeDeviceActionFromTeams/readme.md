@@ -24,7 +24,7 @@
     * Teams ChannelId: Enter the Teams ChannelId
       [Refer the below link to get the channel id and group id](https://docs.microsoft.com/powershell/module/teams/get-teamchannel?view=teams-ps)
   
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json) [![Deploy to Azure](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVMware%2520Carbon%2520Black%2520Cloud%2FPlaybooks%2FCarbonBlack-TakeDeviceActionFromTeams%2Fazuredeploy.json)
 
 
 ### Post-Deployment instructions 
