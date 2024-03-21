@@ -55,6 +55,7 @@ def main(mytimer: func.TimerRequest) -> None:
     state_manager_cu = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
     
     ts_from = state_manager_cu.get()
+    ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
     if ts_from is not None:
         if (datetime.datetime.utcnow() - datetime.timedelta(days=3)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
             ts_from = parse_date_from(ts_from)
