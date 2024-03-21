@@ -3,8 +3,8 @@
 Microsoft Sentinel provides a new output plugin for Logstash. Use this output plugin to send any log via Logstash to the Microsoft Sentinel/Log Analytics workspace. This is done with the Log Analytics DCR-based API.
 You may send logs to custom or standard tables.
 
-Plugin version: v1.1.0  
-Released on: 2023-07-23
+Plugin version: v1.2.0 
+Released on: 2024-02-23
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
@@ -16,19 +16,42 @@ This plugin is currently in development and is free to use. We welcome contribut
 4) Configure Logstash configuration file
 5) Basic logs transmission
 
-
-## 1. Install the plugin
+## 1. Install Logstash and the plugin
 
 Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API. 
-Install the microsoft-sentinel-log-analytics-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - 7.0 - 7.17.13
 - 8.0 - 8.9
 - 8.11
 
+```
+wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/elastic.gpg >/dev/null
+echo "deb https://artifacts.elastic.co/packages/8.x/apt stable main" | sudo tee -a /etc/apt/sources.list.d/elastic-8.x.list >/dev/null
+sudo apt-get update && sudo apt-get install logstash=1:8.8.1-1
+```
+
+To make sure Logstash isn't automatically updated to a newer version, make sure its package is on hold for automatic updates:
+
+```
+sudo apt-mark hold logstash
+```
+
 Please note that when using Logstash 8, it is recommended to disable ECS in the pipeline. For more information refer to [Logstash documentation.](<https://www.elastic.co/guide/en/logstash/8.4/ecs-ls.html>)
 
+To install the microsoft-sentinel-log-analytics-logstash-output-plugin, you can make use of the published gem at rubygems.com:
+
+```
+sudo /usr/share/logstash/bin/logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin
+```
+
+If your machine doesn't has an active Internet connection, or you want to install the plugin manually, you can download the plugin files and perform an 'offline' installation. [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>).
+
+If you already have the plugin installed, you can check which version you have by running:
+
+```
+sudo /usr/share/logstash/bin/logstash-plugin list --verbose microsoft-sentinel-log-analytics-logstash-output-plugin
+```
 
 ## 2. Create a sample file
 To create a sample file, follow the following steps:
@@ -94,7 +117,7 @@ To configure Microsoft Sentinel Logstash plugin you first need to create the DCR
 Use the tutorial from the previous section to retrieve the following attributes: 
 - **client_app_Id** - String, The 'Application (client) ID' value created in step #3 of the "Configure Application" section of the tutorial you used in the previous step.
 - **client_app_secret** -String, The value of the client secret created in step #5 of the "Configure Application" section of the tutorial you used in the previous step.
-- **tenant_id** - String, Your subscription's tenant id. You can find in the following path: Home -> Azure Active Directory -> Overview Under 'Basic Information'.
+- **tenant_id** - String, Your subscription's tenant id. You can find in the following path: Home -> Microsoft Entra ID -> Overview Under 'Basic Information'.
 - **data_collection_endpoint** - String, - The value of the logsIngestion URI (see step #3 of the "Create data collection endpoint" section in Tutorial [Tutorial - Send custom logs to Azure Monitor Logs using resource manager templates - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs-api#create-data-collection-endpoint>).
 - **dcr_immutable_id** - String, The value of the DCR immutableId (see the "Collect information from DCR" section in [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs#collect-information-from-dcr>).
 - **dcr_stream_name** - String, The name of the data stream (Go to the json view of the DCR as explained in the "Collect information from DCR" section in [Tutorial - Send custom logs to Azure Monitor Logs (preview) - Azure Monitor | Microsoft Docs](<https://docs.microsoft.com/azure/azure-monitor/logs/tutorial-custom-logs#collect-information-from-dcr>) and copy the value of the "dataFlows -> streams" property (see circled in red in the below example).
@@ -102,6 +125,7 @@ Use the tutorial from the previous section to retrieve the following attributes:
 After retrieving the required values replace the output section of the Logstash configuration file created in the previous steps with the example below. Then, replace the strings in the brackets below with the corresponding values. Make sure you change the "create_sample_file" attribute to false.
 
 Here is an example for the output plugin configuration section:
+
 ```
 output {
     microsoft-sentinel-log-analytics-logstash-output-plugin {
@@ -115,16 +139,44 @@ output {
         sample_file_path => "c:\\temp"
     }
 }
-
 ```
+
 ### Optional configuration 
+
+- **managed_identity** - Boolean, false by default. Set to `true` if you'd whish to authenticate using a Managed Identity. Managed Identities provide a "passwordless" authentication solution. This means providing `client_app_id`, `client_app_secret` and `tenant_id` is no longer requird. [Learn more about using anaged Identities](<https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview>).
+  
+    **Using Managed Identities over app registrations is highly recommended!**  
+
+    If your machine resides outside of Azure, please make sure the machine is onboarded into Azure Arc. [Learn more about Azure Arc](<https://learn.microsoft.com/en-us/azure/azure-arc/servers/overview#next-steps>) Also, the 'logstash' user needs to be member of the `himds` group in order for Logstash to retrieve a bearer token while running as a system service.
 - **key_names** – Array of strings, if you wish to send a subset of the columns to Log Analytics.
 - **plugin_flush_interval** – Number, 5 by default. Defines the maximal time difference (in seconds) between sending two messages to Log Analytics. 
 - **retransmission_time** - Number, 10 by default. This will set the amount of time in seconds given for retransmitting messages once sending has failed. 
 - **compress_data** - Boolean, false by default. When this field is true, the event data is compressed before using the API. Recommended for high throughput pipelines
 - **proxy** - String, Empty by default. Specify which proxy URL to use for API calls for all of the communications with Azure.
-- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls for the Azure Active Directory service. Overrides the proxy setting.
+- **proxy_aad** - String, Empty by default. Specify which proxy URL to use for API calls to the Microsoft Entra ID service. Overrides the proxy setting.
 - **proxy_endpoint** - String, Empty by default. Specify which proxy URL to use when sending log data to the endpoint. Overrides the proxy setting.
+- **azure_cloud** - String, Empty by default. Used to specify the name of the Azure cloud that is being used, AzureCloud is set as default. Available values are: AzureCloud, AzureChinaCloud and AzureUSGovernment.
+
+Here is an example for the output plugin configuration section using a Managed Identity:
+
+```
+output {
+    microsoft-sentinel-log-analytics-logstash-output-plugin {
+        managed_identity => true
+        data_collection_endpoint => "<enter your DCE logsIngestion URI here>"
+        dcr_immutable_id => "<enter your DCR immutableId here>"
+        dcr_stream_name => "<enter your stream name here>"
+    }
+}
+```
+
+> **IMPORTANT** when using `managed_identity` on a non-Azure machine
+>
+> If your machine resides outside of Azure, please make sure the machine is onboarded into Azure Arc. [Learn more about Azure Arc](<https://learn.microsoft.com/en-us/azure/azure-arc/servers/overview#next-steps>)
+>
+> Also, the `logstash` user needs to be member of the `himds` group in order for Logstash to retrieve a bearer token while running as a system service:
+>
+> `sudo usermod -a -G himds logstash`
 
 #### Note: When setting an empty string as a value for a proxy setting, it will unset any system wide proxy setting.
 
