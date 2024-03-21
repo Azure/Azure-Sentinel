@@ -83,8 +83,12 @@ class ImpervaFilesHandler:
                 past_file = state.get()
                 if past_file is not None:
                     logging.info("The last file point is: {}".format(past_file))
-                    index = self.files_array.index(past_file)
-                    files_arr = self.files_array[index + 1:]
+                    try:
+                        index = self.files_array.index(past_file)
+                        files_arr = self.files_array[index + 1:]
+                    except Exception as err:
+                        logging.info("Last point file detection error: {}. So Processing all the files from index file".format(err))
+                        files_arr = self.files_array
                 else:
                     files_arr = self.files_array
                 logging.info("There are {} files in the list index file.".format(len(files_arr)))
