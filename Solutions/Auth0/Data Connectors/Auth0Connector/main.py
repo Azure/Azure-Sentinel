@@ -193,6 +193,7 @@ class Auth0Connector:
                 resp = requests.post(self.domain + '/oauth/token', headers=header, data=params)
                 try:
                     token = resp.json()['_get_token']
+                    logging.information("Token is",token)
                 except KeyError:
                     raise Exception('Token not provided.')
             except Exception as err:
