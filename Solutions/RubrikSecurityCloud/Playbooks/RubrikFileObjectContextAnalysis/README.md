@@ -2,7 +2,7 @@
 
 ## Summary
 
-This playbook will retrieve policy hits from Rubrik Secuirty Cloud for given File based object, for particular file/folder/fileshare.
+This playbook will retrieve policy hits from Rubrik Security Cloud for a given object, for a particular file, folder, or file share.
 
 ### Prerequisites
 

@@ -1,6 +1,6 @@
 # Rubrik Retrieve User Intelligence Information
 ## Summary
-This playbook queries Rubrik Security Cloud to get risk detail and policy hits details for user and enrich the incident by adding incident comment
+This playbook queries Rubrik Security Cloud to get risk detail and policy hits details for a username or email address, and enriches the incident by adding incident comment
 ### Prerequisites
 1. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).
 ### Deployment instructions

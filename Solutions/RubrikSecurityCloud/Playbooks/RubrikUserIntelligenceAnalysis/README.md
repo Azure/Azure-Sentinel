@@ -1,6 +1,6 @@
 # Rubrik User Intelligence Analysis
 ## Summary
-This playbook queries Rubrik Security Cloud to get user sensitive data and update sevrity of incident accordingly. This playbook calls the RubrikRetrieveUserIntelligenceInformation playbook internally to get user risk details and policyhits details to enrich the incident
+This playbook queries Rubrik Security Cloud to get user sensitive data and update severity of incident accordingly. This playbook calls the RubrikRetrieveUserIntelligenceInformation playbook internally to get user risk details and policy hits details to enrich the incident
 ### Prerequisites
 1. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).
 2. Store Service account credentials in Key Vault and obtain keyvault name and tenantId
