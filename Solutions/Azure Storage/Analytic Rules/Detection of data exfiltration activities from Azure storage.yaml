@@ -1,0 +1,51 @@
+id: 7e6we089-e756-40fb-r023-c8e8864e456z
+name: Detection of data exfiltration activities from Azure storage
+description: |
+  'Detection of data exfiltration activities from Azure storage accounts, based on anomaly detection mechanism.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SalesforceServiceCloud
+    dataTypes:
+      - SalesforceServiceCloud
+queryFrequency: 20m
+queryPeriod: 20m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110
+query: |
+  let failureCountThreshold = 10;
+  let successCountThreshold = 1;
+  let Failures =
+  SalesforceServiceCloud
+  | where EventType == "Login" and LoginStatus != "LOGIN_NO_ERROR"
+  | summarize
+        FailureStartTime = min(TimeGenerated),
+        FailureEndTime = max(TimeGenerated),
+        IpAddresses = make_set (ClientIp, 100),
+        FailureCount = count() by User, UserId, UserType;
+    SalesforceServiceCloud
+    | where EventType == "Login" and LoginStatus == "LOGIN_NO_ERROR"
+    | summarize
+            SuccessStartTime = min(TimeGenerated),
+            SuccessEndTime = max(TimeGenerated),
+            IpAddresses = make_set (ClientIp, 100),
+            SuccessCount = count() by User, UserId, UserType
+    | join kind=leftouter Failures on UserId
+    | where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold
+    | where FailureEndTime < SuccessStartTime
+    | project User, EventStartTime = FailureStartTime, EventEndTime = SuccessEndTime, IpAddresses
+customDetails:
+  EventStartTime: FailureStartTime
+  EventEndTime: SuccessEndTime
+  IPAddresses: IpAddresses
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+version: 1.0.1
+kind: Scheduled
