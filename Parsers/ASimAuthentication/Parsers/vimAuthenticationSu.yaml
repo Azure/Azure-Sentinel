@@ -120,8 +120,25 @@ ParserQuery: |
           ,
           SuDisconnect(disabled = disabled)
       // Post-filtering
-      | where ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)))
+      | where ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
           and (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
       | invoke _ASIM_ResolveDvcFQDN ('Computer')
       | extend
           EventVendor             = 'Linux'
