@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Authentication filtering parser for Salesforce Service Cloud
-  Version: "0.1.0"
-  LastUpdated: Dec 12th, 2023
+  Version: "0.1.1"
+  LastUpdated: Mar 24, 2024
 Product:
   Name: Salesforce Service Cloud
 Normalization:
@@ -35,44 +35,54 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (
-    starttime: datetime=datetime(null), 
-    endtime: datetime=datetime(null), 
-    targetusername_has: string="*",
-    disabled: bool=false
-    ) {
-    let SalesforceSchema = datatable(
-    api_version_s: string,
-    browser_type_s: string,
-    cipher_suite_s: string,
-    client_ip_s: string,
-    delegated_user_id_s: string,
-    delegated_user_name_s: string,
-    event_type_s: string,
-    login_key_s: string,
-    login_status_s: string,
-    login_type_s: string,
-    login_sub_type_s: string,
-    organization_id_s: string,
-    platform_type_s: string,
-    request_id_s: string,
-    request_status_s: string,
-    session_key_s: string,
-    source_ip_s: string,
-    timestamp_s: string,
-    tls_protocol_s: string,
-    uri_s: string,
-    user_id_s: string,
-    user_name_s: string,
-    user_type_s: string,
-    wave_session_id_g: string
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      username_has_any: dynamic = dynamic([]),
+      targetappname_has_any: dynamic = dynamic([]),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      srchostname_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      disabled: bool=false
+      )
+  {
+      let SalesforceSchema = datatable
+  (
+      api_version_s: string,
+      browser_type_s: string,
+      cipher_suite_s: string,
+      client_ip_s: string,
+      delegated_user_id_s: string,
+      delegated_user_name_s: string,
+      event_type_s: string,
+      login_key_s: string,
+      login_status_s: string,
+      login_type_s: string,
+      login_sub_type_s: string,
+      organization_id_s: string,
+      platform_type_s: string,
+      request_id_s: string,
+      request_status_s: string,
+      session_key_s: string,
+      source_ip_s: string,
+      timestamp_s: string,
+      tls_protocol_s: string,
+      uri_s: string,
+      user_id_s: string,
+      user_name_s: string,
+      user_type_s: string,
+      wave_session_id_g: string
   )[];
-      let EventResultLookup = datatable (
+      let EventResultLookup = datatable
+  (
       login_status_s: string,
       DvcAction: string,
       EventResultDetails: string,
       EventResult: string,
       EventSeverity: string
-  )[
+  )
+  [
       "LOGIN_CHALLENGE_ISSUED", "Blocked", "Other", "Failure", "Informational",
       "LOGIN_CHALLENGE_PENDING", "Blocked", "Other", "Failure", "Informational",
       "LOGIN_DATA_DOWNLOAD_ONLY", "Blocked", "Other", "Failure", "Informational",
@@ -191,16 +201,19 @@ ParserQuery: |
       "LOGIN_TWOFACTOR_REQ", "Blocked", "Logon violates policy", "Failure", "Informational"
   ];
       let SalesforceEventType = dynamic(['Login', 'LoginAs', 'Logout']);
-      let EventTypeLookup = datatable(event_type_s: string, EventType: string)[
+      let EventTypeLookup = datatable(event_type_s: string, EventType: string)
+  [
       "Login", "Logon",
       "LoginAs", "Logon",
       "Logout", "Logoff"
   ];
-      let DvcOsLookup = datatable(
+      let DvcOsLookup = datatable
+  (
       platform_type_s: string,
       DvcOs: string,
       DvcOsVersion: string
-  )[
+  )
+  [
       "1000", "Windows", "",
       "1008", "Windows", "2003",
       "1013", "Windows", "8.1",
@@ -212,11 +225,13 @@ ParserQuery: |
       "5007", "iPad", "",
       "5200", "Android", "10.0"
   ];
-      let LogonMethodLookup = datatable(
+      let LogonMethodLookup = datatable
+  (
       LoginType_s: string,
       LogonMethodOriginal: string,
       LogonMethod: string
-  )[
+  )
+  [
       "7", "AppExchange", "Other",
       "A", "Application", "Other",
       "s", "Certificate-based login", "PKI",
@@ -242,11 +257,13 @@ ParserQuery: |
       "E", "SelfService", "Other",
       "j", "Third Party SSO", "Other"
   ];
-      let LogonProtocolLookup = datatable(
+      let LogonProtocolLookup = datatable
+  (
       LoginSubType_s: string,
       LogonProtocolOriginal: string,
       LogonProtocol: string
-  )[
+  )
+  [
       "uiup", "UI Username-Password", "Basic Auth",
       "oauthpassword", "OAuth Username-Password", "OAuth",
       "oauthtoken", "OAuth User-Agent", "OAuth",
@@ -256,7 +273,8 @@ ParserQuery: |
       "oauthcode", "OAuth Web Server", "OAuth",
       "oauthhybridauthcode", "OAuth Web Server for Hybrid Apps", "OAuth",
   ];
-      let TempEventResultLookup = datatable(request_status_s: string, TempEventResult: string)[
+      let TempEventResultLookup = datatable(request_status_s: string, TempEventResult: string)
+  [
       "S", "Success",
       "F", "Failure",
       "A", "Failure",
@@ -264,7 +282,8 @@ ParserQuery: |
       "N", "Failure",
       "U", "NA"
   ];
-      let UserTypeLookup = datatable(user_type_s: string, TargetUserType: string)[
+      let UserTypeLookup = datatable(user_type_s: string, TargetUserType: string)
+  [
       "CsnOnly", "Other",
       "CspLitePortal", "Other",
       "CustomerSuccess", "Other",
@@ -298,12 +317,39 @@ ParserQuery: |
       | where 
           (isnull(starttime) or TimeGenerated >= starttime) 
           and (isnull(endtime) or TimeGenerated <= endtime)
-          and (targetusername_has == '*' or (user_name_s has targetusername_has))
+          and ((array_length(username_has_any) == 0) or (user_name_s has_any (username_has_any)) or (delegated_user_name_s has_any (username_has_any)))
+          and ((array_length(targetappname_has_any) == 0) or ('Salesforce Dot Com(SFDC)' in~ (targetappname_has_any)))
+          and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(source_ip_s, srcipaddr_has_any_prefix)))
+          and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
+          // eventtype_in filtering done later in the parser
+          // eventresultdetails_in filtering done later in the parser
+          // eventresult filtering done later in the parser
           and event_type_s in~ (SalesforceEventType)
       //  -- end pre-filtering
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=user_name_s has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=delegated_user_name_s has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
       | extend LoginType_s = login_type_s, LoginSubType_s = login_sub_type_s
       | lookup EventResultLookup on login_status_s
+      // filtering on 'eventresultdetails_in'
+      | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
       | lookup EventTypeLookup on event_type_s
+      // Filtering on eventtype_in
+      | where ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))
       | lookup LogonMethodLookup on LoginType_s
       | lookup LogonProtocolLookup on LoginSubType_s
       | lookup TempEventResultLookup on request_status_s
@@ -324,6 +370,7 @@ ParserQuery: |
           ActorUsername = delegated_user_name_s,
           ActorUserId = delegated_user_id_s,
           TargetUsername = user_name_s
+      | where ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
       | extend
           EventVendor = 'Salesforce',
           EventProduct='Service Cloud',
@@ -350,6 +397,8 @@ ParserQuery: |
           Application = TargetAppName,
           EventStartTime = TimeGenerated,
           EventEndTime = TimeGenerated
+      // Filtering on 'eventresult'
+      | where (eventresult == "*" or (EventResult == eventresult))
       | project-away
           *_s,
           *_t,
@@ -362,6 +411,18 @@ ParserQuery: |
           Message,
           RawData,
           TempEventResult,
-          _ItemId
+          _ItemId,
+          temp*
   };
-  parser (starttime=starttime, endtime=endtime, targetusername_has=targetusername_has, disabled=disabled)
+  parser (
+    starttime=starttime,
+    endtime=endtime,
+    username_has_any=username_has_any,
+    targetappname_has_any=targetappname_has_any,
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+    srchostname_has_any=srchostname_has_any,
+    eventtype_in=eventtype_in,
+    eventresultdetails_in=eventresultdetails_in,
+    eventresult=eventresult,
+    disabled=disabled
+  )
