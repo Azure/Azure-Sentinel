@@ -1,0 +1,77 @@
+id: 63aa43c2-e88e-4102-aea5-0432851c541a
+name: Local Admin Group Changes
+description: | 
+  This query searches for changes to the local administrators group.
+  Blogpost: https://www.verboon.info/2020/09/hunting-for-local-group-membership-changes.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - IdentityInfo
+      - DeviceEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let ADAZUsers =  IdentityInfo 
+  | extend DirectoryDomain = AccountDomain 
+  | extend DirectoryAccount = AccountName 
+  | extend OnPremSid = AccountSID
+  | distinct DirectoryDomain , DirectoryAccount , OnPremSid , AccountCloudSID, AccountUPN, GivenName, Surname;
+   // check for any new created or modified local accounts 
+  let NewUsers =  DeviceEvents
+  | where ActionType contains "UserAccountCreated" or ActionType contains "UserAccountModified"
+  | extend lUserAdded = AccountName
+  | extend NewUserSID = AccountSid
+  | extend laccountdomain = AccountDomain
+  | distinct NewUserSID, lUserAdded,laccountdomain;
+  // Check for any local group changes and enrich the data with the account name obtained from the previous query
+  DeviceEvents 
+  | where ActionType == 'UserAccountAddedToLocalGroup' 
+  | extend AddedAccountSID = tostring(parse_json(AdditionalFields).MemberSid)
+  | extend LocalGroup = AccountName
+  | extend LocalGroupSID = AccountSid
+  | extend Actor = trim(@"[^\w]+",InitiatingProcessAccountName)
+  // limit to local administrators group
+  //  | where LocalGroupSID contains "S-1-5-32-544"
+  | join kind= leftouter    (NewUsers)
+  on $left.AddedAccountSID == $right.NewUserSID
+  | project TimeGenerated, DeviceName, LocalGroup,LocalGroupSID, AddedAccountSID, lUserAdded , Actor, ActionType , laccountdomain 
+  | join kind=leftouter  (ADAZUsers)
+  on $left.AddedAccountSID == $right.OnPremSid
+  | extend UserAdded = iff(isnotempty(lUserAdded),strcat(laccountdomain,"\\", lUserAdded), strcat(DirectoryDomain,"\\", DirectoryAccount))
+  | extend AccountName = iff(isnotempty(lUserAdded), lUserAdded, DirectoryAccount)
+  | project TimeGenerated, DeviceName, LocalGroup, LocalGroupSID, AddedAccountSID, UserAdded ,Actor, ActionType, AccountName, laccountdomain  
+  | where DeviceName !contains Actor
+  // Provide details on actors that added users
+  // | summarize count()  by Actor 
+  // | join ADAZUsers
+  // on $left.Actor == $right.DirectoryAccount 
+  // | render piechart
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserAdded
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: laccountdomain
+version: 1.0.0
+kind: Scheduled
