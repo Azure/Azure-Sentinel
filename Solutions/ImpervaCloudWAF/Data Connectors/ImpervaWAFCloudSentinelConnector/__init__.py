@@ -132,15 +132,18 @@ class ImpervaFilesHandler:
 
     def decrypt_and_unpack_file(self, file_name, file_content):
         logging.info("Unpacking and decrypting file {}".format(file_name))
+        logging.info("File Content:{}".format(file_content))
         file_splitted = file_content.split(b"|==|\n")
         file_header = file_splitted[0].decode("utf-8")
         file_data = file_splitted[1]
         file_encryption_flag = file_header.find("key:")
+        logging.info("Header and Data extraction Completed")
         events_arr = []
         if file_encryption_flag == -1:
             try:
                 events_data = zlib.decompressobj().decompress(file_data).decode("utf-8")
             except Exception as err:
+                logging.info("Decompressing the Data failed with error: {}".format(err))
                 if 'while decompressing data: incorrect header check' in err.args[0]:
                     events_data = file_data.decode("utf-8")
                 else:
