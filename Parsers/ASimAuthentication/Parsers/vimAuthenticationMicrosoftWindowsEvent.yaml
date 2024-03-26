@@ -50,7 +50,8 @@ ParserParams:
 ParserQuery: |  
   let LogonEvents=dynamic([4624, 4625]);
   let LogoffEvents=dynamic([4634, 4647]);
-  let LogonTypes=datatable(LogonType: int, EventSubType: string)[
+  let LogonTypes=datatable(LogonType: int, EventSubType: string)
+  [
       2, 'Interactive',
       3, 'Network',
       4, 'Batch',
@@ -63,11 +64,12 @@ ParserQuery: |
   ];
   // https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/quick-reference-troubleshooting-netlogon-error-codes/ba-p/256000
   let LogonStatus=datatable 
-      (
+  (
       EventStatus: string,
       EventOriginalResultDetails: string,
       EventResultDetails: string
-  )[
+  )
+  [
       '0x80090325', 'SEC_E_UNTRUSTED_ROOT', 'Other',
       '0xc0000064', 'STATUS_NO_SUCH_USER', 'No such user or password',
       '0xc000006f', 'STATUS_INVALID_LOGON_HOURS', 'Logon violates policy',
@@ -120,7 +122,8 @@ ParserQuery: |
       eventtype_in: dynamic = dynamic([]),
       eventresultdetails_in: dynamic = dynamic([]),
       eventresult: string = '*',
-      disabled: bool=false) { 
+      disabled: bool=false)
+  { 
       WindowsEvent
       | where not(disabled)
       // ************************************************************************* 
@@ -160,6 +163,23 @@ ParserQuery: |
           TargetSessionId = tostring(EventData.TargetLogonId),
           TargetUserId = tostring(EventData.TargetUserSid),
           TargetUsername = tostring(iff (EventData.TargetDomainName in ('-', ''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\", EventData.TargetUserName)))
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
       | extend 
           SrcDvcHostname = tostring(EventData.WorkstationName), // Backword Compatibility. Will be removed by July 2024
           SrcHostname = tostring(EventData.WorkstationName),
@@ -167,7 +187,8 @@ ParserQuery: |
       | extend EventStatus= iff(SubStatus == '0x0', Status, SubStatus)
       // -- creating EventMessage matching EventMessage in SecurityEvent table
       | extend
-          EventMessage = case(
+          EventMessage = case
+                (
                     EventID == 4634,
                     "4634 - An account was logged off.", 
                     EventID == 4625,
@@ -237,7 +258,8 @@ ParserQuery: |
       eventtype_in: dynamic = dynamic([]),
       eventresultdetails_in: dynamic = dynamic([]),
       eventresult: string = '*',
-      disabled: bool=false) {
+      disabled: bool=false)
+  {
       SecurityEvent
       | where not(disabled)
       // ************************************************************************* 
@@ -316,6 +338,23 @@ ParserQuery: |
           SrcHostname = SrcDvcHostname // Backword Compatibility. Will be removed by July 2024
           ,
           SrcIpAddr = SrcDvcIpAddr // Backword Compatibility. Will be removed by July 2024
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
       // filtering on 'eventtype_in', 'eventresult', 'TargetUsername' and 'ActorUsername'
       | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
           and (eventresult == "*" or (EventResult == eventresult))
