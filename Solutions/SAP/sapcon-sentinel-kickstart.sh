@@ -553,7 +553,7 @@ fi
 validateKeyVault() {
 	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
 	if [ ! $? -eq 0 ]; then
-		echo "Cannot connect to Key Vault $kv. Make sure agent identity has been assigned 'Key Vault Secrets User' role on the Key Vault."
+		echo "Cannot connect to Key Vault $kv. Agent identity must have 'Key Vault Secrets User' role or list, get secret permissions on the Key Vault."
 		exit 1
 	fi
 }
@@ -864,7 +864,7 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
 	if [ ! $? -eq 0 ]; then
 		log 'Unable to set secrets in Azure Key Vault'
-		log 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
+		log 'Make sure user identity has permission to set secrets in the Key Vault.'
 		exit 1
 	fi
 	az keyvault secret set --name "$intprefix"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null

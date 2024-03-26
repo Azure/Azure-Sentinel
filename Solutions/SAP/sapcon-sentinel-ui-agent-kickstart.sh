@@ -318,7 +318,7 @@ sudo usermod -aG docker "$USER"
 validateKeyVault() {
 	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
 	if [ ! $? -eq 0 ]; then
-		log "Cannot connect to keyvault $kv. Make sure agent identity has been assigned 'Key Vault Secrets User' role on the Key Vault."
+		log "Cannot connect to Key Vault $kv. Agent identity must have 'Key Vault Secrets User' role or list, get secret permissions on the Key Vault."
 		exit 1
 	fi
 }
