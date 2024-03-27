@@ -5,9 +5,6 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "crossComponentResources": [
-          "{Subscription}"
-        ],
         "parameters": [
           {
             "id": "46c56e28-782c-460a-92a2-2537d1f0a231",
@@ -301,8 +298,7 @@
           }
         ],
         "style": "above",
-        "queryType": 1,
-        "resourceType": "microsoft.operationalinsights/workspaces"
+        "queryType": 12
       },
       "name": "parameters"
     },
@@ -2221,6 +2217,14 @@
                   "name": "queryTotalIngestion"
                 },
                 {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Select a data type from the Top Billable Tables below for analysis",
+                    "style": "upsell"
+                  },
+                  "name": "text - 11"
+                },
+                {
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
@@ -2228,6 +2232,8 @@
                     "size": 0,
                     "title": "Top billable Tables, from: {TimeRange:label} data",
                     "timeContextFromParameter": "TimeRange",
+                    "exportFieldName": "DataType",
+                    "exportParameterName": "TopIngestionDataType",
                     "queryType": 0,
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
@@ -2282,6 +2288,383 @@
                     }
                   },
                   "name": "queryTopBillableTable"
+                },
+                {
+                  "type": 9,
+                  "content": {
+                    "version": "KqlParameterItem/1.0",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "parameters": [
+                      {
+                        "id": "d33c75f0-bb4b-4560-a407-b27f10e7df55",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "TopIngestionColumns",
+                        "type": 1,
+                        "query": "{TopIngestionDataType} \r\n| take 1000\r\n| evaluate narrow()\r\n| where isnotempty(Value)\r\n| project Column\r\n//| summarize ColumnList=make_set(iif(ColumnType == 'dynamic',strcat('tostring(',ColumnName,')'), ColumnName))\r\n| summarize ColumnList=make_set(Column)\r\n| extend ColumnName = tostring(strcat_array(ColumnList, \", \"))\r\n| project-away ColumnList",
+                        "crossComponentResources": [
+                          "{Workspace}"
+                        ],
+                        "isHiddenWhenLocked": true,
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": 0,
+                        "resourceType": "microsoft.operationalinsights/workspaces"
+                      },
+                      {
+                        "id": "48939b18-bf0e-4840-b772-9744e5b683c6",
+                        "version": "KqlParameterItem/1.0",
+                        "name": "TopIngestionColumnQuery",
+                        "type": 1,
+                        "query": "{TopIngestionDataType} \r\n| take 1000\r\n| evaluate narrow()\r\n| where isnotempty(Value)\r\n| project Column= strcat(\"sum(estimate_data_size(tostring(\", Column, \")))\")\r\n//| summarize ColumnList=make_set(iif(ColumnType == 'dynamic',strcat('tostring(',ColumnName,')'), ColumnName))\r\n| summarize ColumnList=make_set(Column)\r\n| extend ColumnName = tostring(strcat_array( ColumnList, \", \"))\r\n| project-away ColumnList",
+                        "crossComponentResources": [
+                          "{Workspace}"
+                        ],
+                        "isHiddenWhenLocked": true,
+                        "timeContext": {
+                          "durationMs": 0
+                        },
+                        "timeContextFromParameter": "TimeRange",
+                        "queryType": 0,
+                        "resourceType": "microsoft.operationalinsights/workspaces"
+                      }
+                    ],
+                    "style": "pills",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "test123",
+                    "comparison": "isNotEqualTo"
+                  },
+                  "name": "param-TopIngestionColumns"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "### _Data analysis for '{TopIngestionDataType}' table:_"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "TopIngestionDataType",
+                    "comparison": "isNotEqualTo"
+                  },
+                  "name": "text-DataAnalysis"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{TopIngestionDataType}\r\n| project {TopIngestionColumns}\r\n| evaluate autocluster(0.5)\r\n| project-away TimeGenerated\r\n| evaluate narrow()\r\n| where isnotempty(Value)\r\n| where Value !='##(null)'\r\n| evaluate pivot(Column, any(Value), Row)\r\n| project-away Row\r\n| extend Percent = round(todouble(Percent),2)\r\n| project-reorder SegmentId, Count, Percent\r\n| order by SegmentId asc",
+                    "size": 0,
+                    "title": "Common patterns of discrete attributes in the data",
+                    "timeContextFromParameter": "TimeRange",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "visualization": "table",
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "Count",
+                          "formatter": 8,
+                          "formatOptions": {
+                            "min": 0,
+                            "palette": "magenta",
+                            "compositeBarSettings": {
+                              "labelText": "",
+                              "columnSettings": []
+                            }
+                          }
+                        },
+                        {
+                          "columnMatch": "Percent",
+                          "formatter": 8,
+                          "formatOptions": {
+                            "min": 0,
+                            "max": 100,
+                            "palette": "blue"
+                          },
+                          "numberFormat": {
+                            "unit": 1,
+                            "options": {
+                              "style": "decimal",
+                              "useGrouping": false,
+                              "minimumFractionDigits": 2,
+                              "maximumSignificantDigits": 2
+                            }
+                          }
+                        }
+                      ],
+                      "filter": true
+                    }
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "TopIngestionDataType",
+                    "comparison": "isNotEqualTo"
+                  },
+                  "name": "query-TopIngestionPatterns",
+                  "styleSettings": {
+                    "showBorder": true
+                  }
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "### _Column analysis for '{TopIngestionDataType}' table:_"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "TopIngestionDataType",
+                    "comparison": "isNotEqualTo"
+                  },
+                  "name": "text-ColumnAnalysis"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "#### Select a column name from below for analysis",
+                    "style": "upsell"
+                  },
+                  "customWidth": "35",
+                  "conditionalVisibilities": [
+                    {
+                      "parameterName": "TopIngestionSelectedColumn",
+                      "comparison": "isEqualTo"
+                    },
+                    {
+                      "parameterName": "TopIngestionDataType",
+                      "comparison": "isNotEqualTo"
+                    }
+                  ],
+                  "name": "text -TopIngestionColumnsbreakdown"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": ""
+                  },
+                  "customWidth": "65",
+                  "conditionalVisibilities": [
+                    {
+                      "parameterName": "TopIngestionSelectedColumn",
+                      "comparison": "isEqualTo"
+                    },
+                    {
+                      "parameterName": "TopIngestionDataType",
+                      "comparison": "isNotEqualTo"
+                    }
+                  ],
+                  "name": "text - 5"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{TopIngestionDataType}\r\n| summarize {TopIngestionColumnQuery}\r\n| evaluate narrow()\r\n| project-away Row\r\n| extend Value=toreal(Value) \r\n| order by Value desc\r\n| extend Column = trim_start('sum_string_size_',Column)\r\n| project-rename ['TotalSize(Bytes)']=Value \r\n",
+                    "size": 2,
+                    "title": "{TopIngestionDataType} table's columns by size",
+                    "timeContextFromParameter": "TimeRange",
+                    "exportFieldName": "Column",
+                    "exportParameterName": "TopIngestionSelectedColumn",
+                    "queryType": 0,
+                    "resourceType": "microsoft.operationalinsights/workspaces",
+                    "crossComponentResources": [
+                      "{Workspace}"
+                    ],
+                    "visualization": "table",
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "Column",
+                          "formatter": 0,
+                          "formatOptions": {
+                            "customColumnWidthSetting": "22ch"
+                          }
+                        },
+                        {
+                          "columnMatch": "TotalSize(Bytes)",
+                          "formatter": 8,
+                          "formatOptions": {
+                            "min": 0,
+                            "palette": "bluePurple",
+                            "customColumnWidthSetting": "19ch"
+                          },
+                          "numberFormat": {
+                            "unit": 36,
+                            "options": {
+                              "style": "decimal",
+                              "maximumFractionDigits": 2
+                            }
+                          }
+                        },
+                        {
+                          "columnMatch": "ColumnName",
+                          "formatter": 0,
+                          "formatOptions": {
+                            "customColumnWidthSetting": "25ch"
+                          }
+                        }
+                      ],
+                      "rowLimit": 500,
+                      "filter": true
+                    },
+                    "sortBy": []
+                  },
+                  "customWidth": "35",
+                  "conditionalVisibility": {
+                    "parameterName": "TopIngestionDataType",
+                    "comparison": "isNotEqualTo"
+                  },
+                  "name": "query-TopIngestionColumns"
+                },
+                {
+                  "type": 12,
+                  "content": {
+                    "version": "NotebookGroup/1.0",
+                    "groupType": "editable",
+                    "items": [
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": ""
+                        },
+                        "name": "text - 2"
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "#### Selected column : '{TopIngestionSelectedColumn}'",
+                          "style": "info"
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "TopIngestionSelectedColumn",
+                          "comparison": "isNotEqualTo"
+                        },
+                        "name": "text - 3"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "let Total = (\r\n{TopIngestionDataType}\r\n| count\r\n);\r\n{TopIngestionDataType}\r\n| project {TopIngestionSelectedColumn}\r\n| summarize Count = count() by {TopIngestionSelectedColumn}\r\n| extend Percentage = round(100.0 * Count/toscalar(Total),2)\r\n| project-away Count\r\n//| order by Count desc\r\n",
+                          "size": 0,
+                          "title": "Top values for '{TopIngestionSelectedColumn}' column",
+                          "timeContextFromParameter": "TimeRange",
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "visualization": "piechart",
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Percent",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "min": 0,
+                                  "max": 100,
+                                  "palette": "bluePurple"
+                                },
+                                "numberFormat": {
+                                  "unit": 1,
+                                  "options": {
+                                    "style": "decimal",
+                                    "maximumFractionDigits": 2
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "chartSettings": {
+                            "ySettings": {
+                              "numberFormatSettings": {
+                                "unit": 1,
+                                "options": {
+                                  "style": "decimal",
+                                  "useGrouping": true
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "TopIngestionSelectedColumn",
+                          "comparison": "isNotEqualTo"
+                        },
+                        "name": "query-TopIngestionSelectedColumnChart"
+                      },
+                      {
+                        "type": 3,
+                        "content": {
+                          "version": "KqlItem/1.0",
+                          "query": "{TopIngestionDataType}\r\n| project {TopIngestionSelectedColumn}\r\n//| evaluate basket()\r\n//| project-away SegmentId\r\n//| order by Count desc\r\n| summarize Count = count() by {TopIngestionSelectedColumn}\r\n| order by Count desc\r\n| take 30\r\n",
+                          "size": 0,
+                          "title": "Top 30 values for '{TopIngestionSelectedColumn}' column",
+                          "timeContextFromParameter": "TimeRange",
+                          "exportFieldName": "{TopIngestionSelectedColumn}",
+                          "exportParameterName": "TopIngestionSelectedColumnValue",
+                          "queryType": 0,
+                          "resourceType": "microsoft.operationalinsights/workspaces",
+                          "gridSettings": {
+                            "formatters": [
+                              {
+                                "columnMatch": "Percent",
+                                "formatter": 4,
+                                "formatOptions": {
+                                  "min": 0,
+                                  "max": 100,
+                                  "palette": "bluePurple"
+                                },
+                                "numberFormat": {
+                                  "unit": 1,
+                                  "options": {
+                                    "style": "decimal",
+                                    "maximumFractionDigits": 2
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "TopIngestionSelectedColumn",
+                          "comparison": "isNotEqualTo"
+                        },
+                        "name": "query-TopIngestionSelectedColumn"
+                      },
+                      {
+                        "type": 1,
+                        "content": {
+                          "json": "#### Consider filtering the row or column values? ####\r\n\r\n** Review Filtering Options: **\r\n\r\nOnce you have analysed the data and decided to filter the column values. Below are some guidance for your reference:\r\n\r\n1. Verify if your table *{TopIngestionDataType}* is supported by [data transformation](https://learn.microsoft.com/azure/sentinel/data-transformation) by checking [Tables that support transformations](https://learn.microsoft.com/azure/azure-monitor/logs/tables-feature-support).\r\n\r\n2. If the table  *{TopIngestionDataType}* is supported by transformation, you can leverage ingestion-time transformation for [filtering](https://learn.microsoft.com/azure/sentinel/data-transformation#filtering) using [Data Collection Rules (DCRs)](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-rule-overview?tabs=portal).\r\n\r\n3. Determine the [DCR support](https://learn.microsoft.com/azure/sentinel/data-transformation#dcr-support-for-microsoft-sentinel-data-connectors) type based on the collection method of the table.<br>Refer to sample [Workspace transform](https://learn.microsoft.com/azure/azure-monitor/logs/tutorial-workspace-transformations-portal) and [Standard transform](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-transformations#how-transformations-work). More samples can be found [here](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-transformations#create-a-transformation).\r\n\r\n4. Transformations are defined in a DCR using [KQL statement](https://learn.microsoft.com/azure/azure-monitor/essentials/data-collection-transformations-structure) under the field named **transformKql**.<br>Refer to a [sample DCR](https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/data-collection-transformations#single-destination) with transformation, you will find **transformKql** under **dataFlows** section. <br><br><br>\r\n\r\n\t#### Below are some sample transformKQL statements:\r\n\t_Note: The samples are for your reference only. Please update and test the transformKQL accordingly_.\r\n\r\n\t<br>\r\n\t**1. Filter out records with specific value**:\r\n\t\r\n\t_source | where {TopIngestionSelectedColumn} !has 'Your filter value'_\r\n\r\n\t<br>\r\n\t**2. Filter out the entire column**:\r\n\t\r\n\t_source | project-away {TopIngestionSelectedColumn}_\r\n\r\n",
+                          "style": "upsell"
+                        },
+                        "conditionalVisibility": {
+                          "parameterName": "TopIngestionSelectedColumn",
+                          "comparison": "isNotEqualTo"
+                        },
+                        "name": "text-TopIngestionSelectedColumnConsiderFilter"
+                      }
+                    ]
+                  },
+                  "customWidth": "65",
+                  "name": "group-TopIngestionColumnAnalysis"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": ""
+                  },
+                  "name": "text - 19"
+                },
+                {
+                  "type": 1,
+                  "content": {
+                    "json": "---"
+                  },
+                  "conditionalVisibility": {
+                    "parameterName": "TopIngestionDataType",
+                    "comparison": "isNotEqualTo"
+                  },
+                  "name": "text - 20"
                 },
                 {
                   "type": 3,
@@ -12310,6 +12693,142 @@
                     }
                   },
                   "name": "query - ActiveRulesByTactics"
+                },
+                {
+                  "type": 3,
+                  "content": {
+                    "version": "KqlItem/1.0",
+                    "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"/subscriptions/{Subscription:id}/resourcegroups/{Workspace:resourcegroup}/providers/microsoft.operationalinsights/workspaces/{Workspace:name}/providers/Microsoft.SecurityInsights/alertRules?api-version=2023-06-01-preview\",\"urlParams\":[],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$..value[?(@.properties.tactics==\\\"\\\" || @.properties.techniques== \\\"\\\" && (@.kind==\\\"Scheduled\\\" || @.kind== \\\"NRT\\\"))]\",\"columns\":[{\"path\":\"properties.displayName\",\"columnid\":\"AnalyticsRuleName\"},{\"path\":\"kind\",\"columnid\":\"RuleType\"},{\"path\":\"properties.enabled\",\"columnid\":\"Enabled\"},{\"path\":\"properties.severity\",\"columnid\":\"Severity\"},{\"path\":\"properties.tactics\",\"columnid\":\"Tactics\"},{\"path\":\"properties.techniques\",\"columnid\":\"Techniques\"},{\"path\":\"properties.query\",\"columnid\":\"Query\"},{\"path\":\"properties.lastModifiedUtc\",\"columnid\":\"LastModifiedAt\"}]}}]}",
+                    "size": 0,
+                    "title": "Active Analytics Rules without Tactics or Techniques, count: {$rowCount}",
+                    "queryType": 12,
+                    "gridSettings": {
+                      "formatters": [
+                        {
+                          "columnMatch": "RuleType",
+                          "formatter": 1,
+                          "formatOptions": {
+                            "customColumnWidthSetting": "16ch"
+                          }
+                        },
+                        {
+                          "columnMatch": "Enabled",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "true",
+                                "representation": "success",
+                                "text": "true"
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "false",
+                                "representation": "stopped",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "Blank",
+                                "text": "{0}{1}"
+                              }
+                            ],
+                            "customColumnWidthSetting": "14ch"
+                          }
+                        },
+                        {
+                          "columnMatch": "Severity",
+                          "formatter": 18,
+                          "formatOptions": {
+                            "thresholdsOptions": "icons",
+                            "thresholdsGrid": [
+                              {
+                                "operator": "==",
+                                "thresholdValue": "High",
+                                "representation": "Sev0",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "Medium",
+                                "representation": "Sev1",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "Low",
+                                "representation": "Sev2",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "==",
+                                "thresholdValue": "Informational",
+                                "representation": "Sev3",
+                                "text": "{0}{1}"
+                              },
+                              {
+                                "operator": "Default",
+                                "thresholdValue": null,
+                                "representation": "Blank",
+                                "text": "{0}{1}"
+                              }
+                            ],
+                            "customColumnWidthSetting": "17ch"
+                          }
+                        },
+                        {
+                          "columnMatch": "Tactics",
+                          "formatter": 0,
+                          "formatOptions": {
+                            "customColumnWidthSetting": "25ch"
+                          }
+                        },
+                        {
+                          "columnMatch": "Techniques",
+                          "formatter": 0,
+                          "formatOptions": {
+                            "customColumnWidthSetting": "22ch"
+                          }
+                        },
+                        {
+                          "columnMatch": "Query",
+                          "formatter": 7,
+                          "formatOptions": {
+                            "linkTarget": "CellDetails",
+                            "linkLabel": "📋",
+                            "linkIsContextBlade": true,
+                            "customColumnWidthSetting": "11ch"
+                          }
+                        },
+                        {
+                          "columnMatch": "LastModifiedAt",
+                          "formatter": 0,
+                          "formatOptions": {
+                            "customColumnWidthSetting": "24ch"
+                          }
+                        }
+                      ],
+                      "rowLimit": 2500,
+                      "filter": true,
+                      "sortBy": [
+                        {
+                          "itemKey": "AnalyticsRuleName",
+                          "sortOrder": 1
+                        }
+                      ]
+                    },
+                    "sortBy": [
+                      {
+                        "itemKey": "AnalyticsRuleName",
+                        "sortOrder": 1
+                      }
+                    ]
+                  },
+                  "customWidth": "99",
+                  "name": "query -  Analytics Rules without Tactics or Techniques"
                 },
                 {
                   "type": 3,
