@@ -33,13 +33,13 @@ query: |
   AuthEvents
   | summarize dcount(Location) by AppDisplayName, AppId, UserPrincipalName, UserId, bin(startofday(TimeGenerated), 1d)
   | where dcount_Location > 2
-  | summarize CountOfLocations = make_list(dcount_Location, 10000), TimeStamp = make_list(TimeGenerated, 10000) by AppId, UserId
+  | make-series CountOfLocations = sum(dcount_Location) on TimeGenerated  step 1d by AppId, UserId
   | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(CountOfLocations, sensitivity, -1, 'linefit')
-  | mv-expand CountOfLocations to typeof(double), TimeStamp to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)
-  | where Anomalies > 0
+  | mv-expand CountOfLocations to typeof(double), TimeGenerated to typeof(datetime), Anomalies to typeof(double), Score to typeof(double), Baseline to typeof(long)
+  | where Anomalies > 0 and Baseline > 0
   | join kind=inner( AuthEvents | extend TimeStamp = startofday(TimeGenerated)) on UserId, AppId
-  | extend SignInDetails = bag_pack("TimeGenerated", TimeGenerated, "Location", Location, "Source", IPAddress, "Device", DeviceDetail_dynamic)
-  | summarize SignInDetailsSet=make_set(SignInDetails, 1000) by UserId, UserPrincipalName, CountOfLocations, TimeStamp, AppId, AppDisplayName
+  | extend SignInDetails = bag_pack("TimeGenerated", TimeGenerated1, "Location", Location, "Source", IPAddress, "Device", DeviceDetail_dynamic)
+  | summarize SignInDetailsSet=make_set(SignInDetails, 1000) by UserId, UserPrincipalName, CountOfLocations, TimeGenerated, AppId, AppDisplayName
   | extend Name = split(UserPrincipalName, "@")[0], UPNSuffix = split(UserPrincipalName, "@")[1]
 entityMappings:
   - entityType: Account
@@ -60,5 +60,5 @@ alertDetailsOverride:
     This query over Microsoft Entra ID sign-in considers all user sign-ins for each Microsoft Entra ID application and picks out the most anomalous change in location profile for a user within an
     individual application. This has detected {{UserPrincipalName}} signing into {{AppDisplayName}} from {{CountOfLocations}} 
     different locations.
-version: 2.0.1
+version: 2.0.2
 kind: Scheduled
