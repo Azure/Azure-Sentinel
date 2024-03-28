@@ -1,0 +1,186 @@
+id: 39f51672-8c63-4600-882a-5db8275f798f
+Function:
+  Title: Parser for MRA Configuration Data Comparison
+  Version: '1.0.0'
+  LastUpdated: '2024-02-25'
+Category: Microsoft Sentinel Parser
+FunctionName: MESCompareDataMRA
+FunctionAlias: MESCompareDataMRA
+FunctionParams:
+  - Name: SectionCompare
+    Type: string
+    Description: The Section to compare. Default value is "".
+    DefaultValue: ''
+  - Name: DateCompare
+    Type: string
+    Description: The date of the source comparison. Default value is "lastdate".
+    DefaultValue: 'lastdate'
+  - Name: CurrentDate
+    Type: string
+    Description: The date of the target comparison. Default value is "lastdate".
+    DefaultValue: 'lastdate'
+  - Name: EnvList
+    Type: string
+    Description: List of environments to compare. Default value is "All".
+    DefaultValue: 'All'
+  - Name: TypeEnv
+    Type: string
+    Description: Type of environment to compare. Default value is "Online".
+    DefaultValue: 'Online'
+  - Name: CurrentRole
+    Type: string
+    Description: A specific role to compare. Default value is "".
+    DefaultValue: ''
+  - Name: ExclusionsAcct
+    Type: dynamic
+    Description: List of actors to exclude. Default value is "dynamic('')".
+    DefaultValue: dynamic('')
+FunctionQuery: |
+  // Version:         1.0.0
+  // Last Updated:    25/02/2024
+  //  
+  // DESCRIPTION:
+  // This parser is used to compare the data of a specific section of the Exchange Online Configuration. It will compare the data of a specific section between two dates and return the differences between them.
+  //
+  // USAGE:
+  // Parameters : 7 parameters to add during creation. 
+  //    1. SectionCompare, type string, default value ""
+  //    2. DateCompare, type string, default value "lastdate"
+  //    3. CurrentDate, type string, default value "lastdate"
+  //    4. EnvList, type string, default value "All"
+  //    5. TypeEnv, type string, default value "Online"
+  //    6. CurrentRole, type string, default value ""
+  //    7. ExclusionsAcct, type dynamic, default value dynamic("")
+  //
+  // Parameters simulation
+  // If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.
+  //
+  // let SectionCompare = "SampleEntry";
+  // let EnvList = "All";
+  // let TypeEnv = "Online";
+  // let CurrentRole = "";
+  // let ExclusionsAcct = dynamic("");
+  // let DateCompare = "lastdate";
+  // let CurrentDate = "lastdate";
+  //
+  // Parameters definition
+  let _SectionCompare = SectionCompare;
+  let _EnvList =EnvList;
+  let _TypeEnv = TypeEnv;
+  let _CurrentRole =CurrentRole;
+  let _ExclusionsAcct = ExclusionsAcct;
+  let _DateCompare = DateCompare;
+  let _CurrentDate = CurrentDate;
+  let _DateCompareB = todatetime(DateCompare);
+  let _currD = (ExchangeConfiguration(SpecificSectionList=_SectionCompare,SpecificConfigurationDate=_CurrentDate,SpecificConfigurationEnv=_EnvList,Target = _TypeEnv)
+  | summarize TimeMax = max(TimeGenerated)
+  | extend TimeMax = tostring(split(TimeMax,"T")[0])
+  | project TimeMax);
+  let _CurrentDateB = todatetime(toscalar(_currD));
+  let BeforeData = 
+      ExchangeConfiguration(SpecificSectionList=_SectionCompare,SpecificConfigurationDate=_DateCompare,SpecificConfigurationEnv=_EnvList,Target=_TypeEnv)
+      | where CmdletResultValue.Role contains _CurrentRole
+          and CmdletResultValue.RoleAssigneeName !in (_ExclusionsAcct)
+          and CmdletResultValue.Name !contains "Deleg"
+      | extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)
+      | extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType == "User", "User", "RoleGroup")
+      | extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)
+      | extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)
+      | extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)
+      | extend RecipientWriteScope = tostring(CmdletResultValue.RecipientWriteScope)
+      | extend ConfigWriteScope = tostring(CmdletResultValue.ConfigWriteScope)
+      | extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)
+      | extend Status= tostring(CmdletResultValue.Enabled)
+      | extend RoleAssignmentDelegationType = iff(CmdletResultValue.RoleAssignmentDelegationType == "6", "Delegating", "Regular") 
+      | extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)
+      | extend Role = tostring(CmdletResultValue.Role)
+      | extend RoleAssignmentDelegationType = tostring(CmdletResultValue.RoleAssignmentDelegationType)
+      ; 
+  let AfterData = 
+      ExchangeConfiguration(SpecificSectionList=_SectionCompare,SpecificConfigurationDate=_CurrentDate,SpecificConfigurationEnv=_EnvList,Target = _TypeEnv)
+      | where CmdletResultValue.Role contains _CurrentRole
+          and CmdletResultValue.RoleAssigneeName !in (_ExclusionsAcct)
+          and CmdletResultValue.Name !contains "Deleg"
+      | extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)
+      | extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType == "User", "User", "RoleGroup")
+      | extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)
+      | extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)
+      | extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)
+      | extend RecipientWriteScope = tostring(CmdletResultValue.RecipientWriteScope)
+      | extend ConfigWriteScope = tostring(CmdletResultValue.ConfigWriteScope)
+      | extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)
+      | extend Status= tostring(CmdletResultValue.Enabled)
+      | extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)
+      | extend Role = tostring(CmdletResultValue.Role)
+      | extend RoleAssignmentDelegationType = tostring(CmdletResultValue.RoleAssignmentDelegationType)
+      ;
+  let i=0;
+  let allDataRange = 
+      ESIExchangeOnlineConfig_CL
+      | where TimeGenerated between (_DateCompareB .. _CurrentDateB)
+      | where ESIEnvironment_s == _EnvList
+      | where Section_s == "MRA"
+      | extend CmdletResultValue = parse_json(rawData_s)
+      | project TimeGenerated,CmdletResultValue,WhenChanged = WhenChanged_t, WhenCreated=WhenCreated_t
+      | where CmdletResultValue.Role contains _CurrentRole
+          and CmdletResultValue.RoleAssigneeName !in (_ExclusionsAcct)
+          and CmdletResultValue.Name !contains "Deleg"
+      | extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)
+      | extend RoleAssigneeType = iff(CmdletResultValue.RoleAssigneeType == "User", "User", "RoleGroup")
+      | extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)
+      | extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)
+      | extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)
+      | extend RecipientWriteScope = tostring(CmdletResultValue.RecipientWriteScope)
+      | extend ConfigWriteScope = tostring(CmdletResultValue.ConfigWriteScope)
+      | extend ManagementRoleAssignement = tostring(CmdletResultValue.Name)
+      | extend Status= tostring(CmdletResultValue.Enabled)
+      | extend Role = tostring(CmdletResultValue.Role)
+      | extend RoleAssignmentDelegationType = tostring(CmdletResultValue.RoleAssignmentDelegationType)
+      ;
+  let DiffAddDataP1 = allDataRange
+    | join kind = rightanti  (AfterData | where WhenCreated >=_DateCompareB) on WhenCreated
+  ;
+  let DiffAddDataP2 = allDataRange
+      | join kind = innerunique   (allDataRange ) on WhenCreated
+      | where WhenCreated >=_DateCompareB
+      | where bin(WhenCreated,5m)==bin(WhenChanged,5m)
+      | distinct  ManagementRoleAssignement,RoleAssigneeName, Status,CustomRecipientWriteScope,RoleAssigneeType,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,RoleAssignmentDelegationType,WhenCreated
+  ;
+  let DiffAddData = union DiffAddDataP1,DiffAddDataP2
+  | extend Actiontype ="Add";
+  let DiffRemoveData = allDataRange
+      | join kind = leftanti AfterData on RoleAssigneeName
+      | extend Actiontype ="Remove"
+      | distinct  Actiontype,ManagementRoleAssignement,RoleAssigneeName, Status,CustomRecipientWriteScope,RoleAssigneeType,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,RoleAssignmentDelegationType,WhenCreated
+      | project  WhenChanged=_CurrentDateB,Actiontype,ManagementRoleAssignement,RoleAssigneeName, Status,CustomRecipientWriteScope,RoleAssigneeType,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,RoleAssignmentDelegationType,WhenCreated
+      ;
+  let DiffModifData = union AfterData,allDataRange
+  | sort by ManagementRoleAssignement,WhenChanged asc
+  | extend Status = iff( ManagementRoleAssignement == prev(ManagementRoleAssignement) and Status != prev(Status) and prev(Status) !="" , strcat("📍 ", Status, " (",prev(Status),"->", Status," )"),Status)
+  | extend CustomRecipientWriteScope = iff(ManagementRoleAssignement == prev(ManagementRoleAssignement) and CustomRecipientWriteScope != prev(CustomRecipientWriteScope) and prev(CustomRecipientWriteScope) !="" , strcat("📍 ", CustomRecipientWriteScope, " (", prev(CustomRecipientWriteScope),"->", CustomRecipientWriteScope, ")"),CustomRecipientWriteScope)
+  | extend CustomConfigWriteScope = iff(ManagementRoleAssignement == prev(ManagementRoleAssignement) and CustomConfigWriteScope != prev(CustomConfigWriteScope) and prev(CustomConfigWriteScope) !="" , strcat("📍 ", CustomConfigWriteScope, " (", prev(CustomConfigWriteScope),"->", CustomConfigWriteScope, ")"),CustomConfigWriteScope)
+  | extend RecipientWriteScope = iff(ManagementRoleAssignement == prev(ManagementRoleAssignement) and RecipientWriteScope != prev(RecipientWriteScope) and prev(RecipientWriteScope) !="" , strcat("📍 ", RecipientWriteScope, " (", prev(RecipientWriteScope),"->", RecipientWriteScope, ")"),RecipientWriteScope)
+  | extend ConfigWriteScope = iff(ManagementRoleAssignement == prev(ManagementRoleAssignement) and ConfigWriteScope != prev(ConfigWriteScope) and prev(ConfigWriteScope) !="" , strcat("📍 ", ConfigWriteScope, " (", prev(ConfigWriteScope),"->", ConfigWriteScope, ")"),ConfigWriteScope)
+  | extend ActiontypeR =iff((Status contains "📍" or CustomRecipientWriteScope contains"📍" or CustomConfigWriteScope contains"📍"  or RecipientWriteScope contains"📍"  or ConfigWriteScope contains"📍"   ), i=i + 1, i)
+  | extend Actiontype =iff(ActiontypeR > 0, "Modif", "NO")
+  | where ActiontypeR == 1
+  | project WhenChanged,Actiontype,ManagementRoleAssignement,RoleAssigneeName, Status,CustomRecipientWriteScope,RoleAssigneeType,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,RoleAssignmentDelegationType,WhenCreated
+  ;
+  union DiffAddData, DiffRemoveData, DiffModifData
+  | extend RoleAssigneeName = iff(RoleAssigneeType == "User", strcat("🧑‍🦰 ", RoleAssigneeName), strcat("👪 ", RoleAssigneeName))
+  | extend WhenChanged = iff (Actiontype == "Modif", WhenChanged, iff(Actiontype == "Add",WhenCreated, WhenChanged))
+  | extend Actiontype = case(Actiontype == "Add", strcat("➕ ", Actiontype), Actiontype == "Remove", strcat("➖ ", Actiontype), Actiontype == "Modif", strcat("📍 ", Actiontype), "N/A")
+  | sort by WhenChanged desc 
+  | project
+      WhenChanged,
+      Actiontype,
+      RoleAssigneeName,
+      RoleAssigneeType,
+      Status,
+      CustomRecipientWriteScope,
+      CustomConfigWriteScope,
+      RecipientWriteScope,
+      ConfigWriteScope,
+      ManagementRoleAssignement,
+      RoleAssignmentDelegationType,
+      WhenCreated
