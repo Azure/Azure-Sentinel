@@ -12,7 +12,7 @@
 <a name="overview">
 
 ## Overview
-The SpyCloud Enterprise API provides breach data for a domain or set of domains associated with an incident. When a new Azure Sentinel Incident is created, this playbook gets triggered and performs the following actions:
+The SpyCloud Enterprise API provides breach data for a domain or set of domains associated with an incident. When a new Microsoft Sentinel Incident is created, this playbook gets triggered and performs the following actions:
 
 - It fetches all the DNS entities from the incident.
 - Iterates through the domain objects and fetches the breach data from SpyCloud Enterprise for each domain.
@@ -46,5 +46,5 @@ Once deployment is complete, you will need to authorize each connection:
 ![for_each](images/for_each.png)
 - Save the Logic App. If the Logic App prompts any missing connections, please update the connections similarly.
 ### Configurations in Sentinel:
-- In Azure Sentinel, analytical rules should be configured to trigger an incident with a DNS entity.
+- In Microsoft Sentinel, analytical rules should be configured to trigger an incident with a DNS entity.
 - Configure the automation rules to trigger this playbook.
