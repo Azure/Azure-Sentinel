@@ -745,7 +745,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 displayName    = $contentToImport.Workbooks ? "[parameters('workbook$global:workbookCounter-name')]" : "[concat(parameters('workbook$global:workbookCounter-name'), ' - ', parameters('formattedTimeNow'))]";
                                 serializedData = $serializedData;
                                 version        = "1.0";
-                                sourceId       = $contentToImport.TemplateSpec? "[variables('workspaceResourceId')]" : "[variables('_workbook-source')]";
+                                sourceId       = $contentToImport.TemplateSpec? "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]" : "[variables('_workbook-source')]";
                                 category       = "sentinel"
                             }
                         }
@@ -838,11 +838,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 contentId = "[variables('_workbookContentId$global:workbookCounter')]";
                                 version   = "[variables('workbookVersion$global:workbookCounter')]";
                             };
-
-                            # Add workspace resource ID if not available
-                            if (!$global:baseMainTemplate.variables.workspaceResourceId) {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-                            }
 
                             if ($contentResourceDetails.contentSchemaVersion -ne '3.0.0')
                             {
@@ -1539,10 +1534,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                     }
 
-                        # Add workspace resource ID if not available
-                        if (!$global:baseMainTemplate.variables.workspaceResourceId) {
-                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-                        }
                         # Add base templateSpec
                         if ($contentResourceDetails.contentSchemaVersion -ne '3.0.0')
                         {
@@ -1791,10 +1782,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
 
                     if ($contentToImport.TemplateSpec) {
                         $connectorName = $contentToImport.Name
-                        # Add workspace resource ID if not available
-                        if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
-                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-                        }
                         # If both ID and Title exist, is standard GenericUI data connector
                         if ($templateSpecConnectorData.id -and $templateSpecConnectorData.title) {
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "uiConfigId$global:connectorCounter" -NotePropertyValue $templateSpecConnectorData.id
@@ -2109,7 +2096,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         elements   = @();
                     }
                     $baseDataConnectorTextElement = [PSCustomObject] @{
-                        name    = "dataconnectors$global:connectorCounter-text";
+                        name    = "dataconnectors-text$global:connectorCounter";
                         type    = "Microsoft.Common.TextBlock";
                         options = [PSCustomObject] @{
                             text = $connectorDescriptionText;
@@ -2301,10 +2288,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
 
                             $global:baseMainTemplate.variables | Add-Member -NotePropertyName "huntingQueryObject$global:huntingQueryCounter" -NotePropertyValue $objHuntingQueryVariables
-
-                            if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-                            }
 
                             if ($contentResourceDetails.contentSchemaVersion -ne '3.0.0')
                             {
@@ -2678,10 +2661,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $objAnalyticRulesVariables | Add-Member -NotePropertyName "analyticRuleTemplateSpecName$global:analyticRuleCounter" -NotePropertyValue "[concat(parameters('workspace'),'-ar-',uniquestring('$($yaml.id)'))]"
                             }
 
-                            if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-                            }
-                            
                             if ($contentResourceDetails.contentSchemaVersion -ne '3.0.0')
                             {
                                 $baseAnalyticRuleTemplateSpec = [PSCustomObject]@{
@@ -3291,11 +3270,6 @@ function Base32Encode([uint32]$charValue)
 
 function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceDetails)
 {
-        # Add workspace resource ID if not available
-        if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
-            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
-        }
-
         if ($contentResourceDetails.contentSchemaVersion -ne '3.0.0')
         {
             # Add base templateSpec
@@ -3516,7 +3490,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     }
     
     $displayDetails = getParserDetails $global:solutionId $yaml $isyaml
-    $parserName = $fileName + " Data Parser"
+    $parserName = $fileName;
     $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($parserName)')]"
 
     $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($parserName)')]"
