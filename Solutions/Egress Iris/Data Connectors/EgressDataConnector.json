@@ -1,0 +1,137 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+         "workspace": {
+            "defaultValue": "<Enter Log Analytics Workspace name>",
+            "type": "string",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+            }
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid(subscription().subscriptionId))]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(subscription().subscriptionId))]",
+            "apiVersion": "2022-10-01",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+            "kind": "APIPolling",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "EgressSiemPolling",
+                    "title": "Egress Iris Connector",
+                    "publisher": "Egress Software Technologies",
+                    "descriptionMarkdown": "The Egress Iris connector will allow you to ingest Egress data into Sentinel.",
+                    "graphQueriesTableName": "EgressEvents_CL",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total data received",
+                            "legend": "Egress Events",
+                            "baseQuery": "{{graphQueriesTableName}}"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All logs",
+                            "query": "DefendAuditData"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "{{graphQueriesTableName}}",
+                            "lastDataReceivedQuery": "{{graphQueriesTableName}}\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "SentinelKindsV2",
+                            "value": [
+                                "APIPolling"
+                            ]
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": true
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions on the Log Analytics workspace are required to enable the data connector.",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "action": true,
+                                    "write": true,
+                                    "read": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "Egress API Token",
+                                "description": "An Egress API token is required to ingest audit records to Microsoft Sentinel."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "Connect Egress Data with Microsoft Sentinel",
+                            "description": "Enter your Egress API Hostname and secret.",
+                            "instructions": [
+                                {
+                                    "parameters": {
+                                        "enable": "true",
+                                        "userRequestPlaceHoldersInput": [
+                                            {
+                                                "displayText": "Hostname",
+                                                "requestObjectKey": "apiEndpoint",
+                                                "placeHolderName": "{{hostname}}"
+                                            }
+                                        ]
+                                    },
+                                    "type": "APIKey"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pollingConfig": {
+                    "auth": {
+                        "authType": "APIKey",
+                        "APIKeyName": "x-iris-api-key",
+                        "IsAPIKeyInPostPayload": false
+                    },
+                    "request": {
+                        "apiEndpoint": "https://{{hostname}}/api/v1/siem/data/events",
+                        "httpMethod": "Get",
+                        "retryCount": 2,
+                        "startTimeAttributeName": "startTime",
+                        "endTimeAttributeName":"endTime",
+                        "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssssZ",
+                        "queryWindowInMin": 5,
+                        "timeoutInSeconds": 120
+                    },
+                    "paging": {
+                        "pagingType": "NextPageToken",
+                        "nextPageParaName": "cursor",
+                        "nextPageTokenJsonPath": "$.cursor",
+                        "nextPageUrlQueryParameters": {
+                            "cursor": "{{cursor}}",
+                            "pageSize": "{{pageSize}}"
+                        },
+                        "pageSize": 1000
+                    },
+                    "response": {
+                        "eventsJsonPaths": [
+                            "$.events"
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}
