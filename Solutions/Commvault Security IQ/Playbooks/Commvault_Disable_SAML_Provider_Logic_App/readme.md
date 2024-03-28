@@ -11,8 +11,8 @@ This Logic App executes when called upon by an Automation Rule. Accessing the Ke
 ## Deployment Instructions
 Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2Commvault%20Security%20IQ%2FPlaybooks%2CommvaultLogicApp%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2Commvault%20Security%20IQ%2FPlaybooks%2CommvaultLogicApp%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2Commvault%20Security%20IQ%2FPlaybooks%2Commvault_Disable_SAML_Provider_Logic_App%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2Commvault%20Security%20IQ%2FPlaybooks%2Commvault_Disable_SAML_Provider_Logic_App%2Fazuredeploy.json)
 
 Alternatively:-
 1. To import the logic app from the azure portal go to "Custom Deployment"
