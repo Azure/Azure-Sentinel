@@ -3,8 +3,8 @@ import json
 import logging
 import requests
 import os
-from models import TokenModel, QueryModel
-from storage import AzureBlobStorage, LocalStorage
+from .models import TokenModel, QueryModel
+from .storage import AzureBlobStorage, LocalStorage
 
 client_id = os.environ.get('OAuthUsername')
 client_secret = os.environ.get('OAuthPassword')

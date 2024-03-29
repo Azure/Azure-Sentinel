@@ -2,15 +2,15 @@ import logging
 import os
 
 import azure.functions as func
-from audit import get_query_model, get_cursor_results
-from exporter import send_dcr_data
+from .audit import get_query_model, get_cursor_results
+from .exporter import send_dcr_data
 
 trigger_cron = os.environ.get('TriggerSchedule', '0 */1 * * * *')
 app = func.FunctionApp()
 
 
 @app.schedule(schedule=trigger_cron, arg_name="myTimer", run_on_startup=True)
-def run_program(myTimer: func.TimerRequest) -> None:
+def main(myTimer: func.TimerRequest) -> None:
     logging.info('Starting program')
 
     query_model = get_query_model()

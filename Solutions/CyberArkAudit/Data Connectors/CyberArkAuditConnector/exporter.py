@@ -1,6 +1,6 @@
 import logging
 import os
-from models import DCREventModel
+from .models import DCREventModel
 from azure.identity import DefaultAzureCredential
 from azure.monitor.ingestion import LogsIngestionClient
 
