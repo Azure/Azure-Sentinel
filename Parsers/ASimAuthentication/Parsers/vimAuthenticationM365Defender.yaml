@@ -1,6 +1,6 @@
 Parser:
   Title: Authentication ASIM filtering parser for M365 Defender Device Logon Events
-  Version: '0.1.1'
+  Version: '0.1.2'
   LastUpdated: Sept 18, 2023
 Product:
   Name: M365 Defender for EndPoint
@@ -23,189 +23,364 @@ ParserParams:
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
     Type: string
     Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let EventResultDetailsLookup=datatable(EventOriginalResultDetails:string, EventResultDetails:string)[
-    'InvalidUserNameOrPassword','No such user or password'
+  let EventResultDetailsLookup=datatable
+  (
+      EventOriginalResultDetails: string,
+      EventResultDetails: string
+  )
+  [
+      'InvalidUserNameOrPassword', 'No such user or password'
   ];
-  let EventSubTypeLookup = datatable (EventOriginalType:string, EventSubType:string) [ 
-    'Interactive',                      'Interactive',
-    'Remote interactive (RDP) logons',  'RemoteInteractive',
-    'Network',                          'Remote',
-    'Batch',                            'Service',
-    'Service',                          'Service',
-    'Unknown',                          '',
-    'RemoteInteractive',                'RemoteInteractive',
-    'CachedInteractive',                'Interactive'
+  let EventSubTypeLookup = datatable (EventOriginalType: string, EventSubType: string)
+  [ 
+      'Interactive', 'Interactive',
+      'Remote interactive (RDP) logons', 'RemoteInteractive',
+      'Network', 'Remote',
+      'Batch', 'Service',
+      'Service', 'Service',
+      'Unknown', '',
+      'RemoteInteractive', 'RemoteInteractive',
+      'CachedInteractive', 'Interactive'
   ];
-  let EventResultLookup = datatable (ActionType:string, EventResult:string) [ 
-    'LogonSuccess', 'Success',
-    'LogonFailed', 'Failure',
-    'LogonAttempted', 'NA'
+  let EventResultLookup = datatable (ActionType: string, EventResult: string)
+  [ 
+      'LogonSuccess', 'Success',
+      'LogonFailed', 'Failure',
+      'LogonAttempted', 'NA'
   ];
   let parser = (
-        starttime:datetime=datetime(null)
-        , endtime:datetime=datetime(null)
-        , targetusername_has:string="*"
-        , disabled:bool=false
-  ) {
-    let UnixDeviceLogonEvents = (disabled:bool=false) {
-        DeviceLogonEvents  
-        | where not(disabled)
-        // -- prefilter
-        | where
-            (isnull(starttime)   or TimeGenerated >= starttime) 
-            and (isnull(endtime)     or TimeGenerated <= endtime) 
-            and (targetusername_has=='*' or (AccountName has targetusername_has))
-        // -- end prefilter
-        | where InitiatingProcessFolderPath startswith "/"
-        | extend 
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      username_has_any: dynamic = dynamic([]),
+      targetappname_has_any: dynamic = dynamic([]),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      srchostname_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      disabled: bool=false
+      )
+  {
+      let UnixDeviceLogonEvents = (disabled: bool=false)
+  {
+      DeviceLogonEvents  
+          | where not(disabled)
+          // -- prefilter
+          | where
+              (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime) 
+              and ((array_length(username_has_any) == 0) or (InitiatingProcessAccountName has_any (username_has_any)) or AccountName has_any (username_has_any))
+              and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+              and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(RemoteIP, srcipaddr_has_any_prefix))
+              and ((array_length(srchostname_has_any) == 0) or (RemoteDeviceName has_any (srchostname_has_any)))
+              and ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
+          // eventresultdetails_in filtering done later in the parser
+          // eventresult filtering done later in the parser
+          // -- end prefilter
+          | where InitiatingProcessFolderPath startswith "/"
+          | extend 
               TargetDvcOs        = "Linux"
-            , ActorUsernameType  = "Simple"
-            , TargetUsernameType = "Simple"
-        | project-rename 
+              ,
+              ActorUsernameType  = "Simple"
+              ,
+              TargetUsernameType = "Simple"
+          | project-rename 
               ActorUsername      = InitiatingProcessAccountName
-            , ActingProcessName  = InitiatingProcessFolderPath
-            , TargetUsername     = AccountName
-        | project-away 
-            InitiatingProcessAccountSid, AccountDomain, InitiatingProcessAccountDomain, InitiatingProcessFileName, AccountSid
-    };
-    let WindowsDeviceLogonEvents = (disabled:bool=false) {
-        DeviceLogonEvents  
-        | where not(disabled)
-        // -- prefilter
-        | where
-            (isnull(starttime)   or TimeGenerated >= starttime) 
-            and (isnull(endtime)     or TimeGenerated <= endtime) 
-            and (targetusername_has=='*' or (AccountName has targetusername_has) or (isnotempty(AccountDomain) and AccountDomain has targetusername_has))
-        // -- end prefilter
-        | where InitiatingProcessFolderPath !startswith "/"
-        | extend 
+              ,
+              ActingProcessName  = InitiatingProcessFolderPath
+              ,
+              TargetUsername     = AccountName
+          | project-away 
+              InitiatingProcessAccountSid,
+              AccountDomain,
+              InitiatingProcessAccountDomain,
+              InitiatingProcessFileName,
+              AccountSid
+  };
+      let WindowsDeviceLogonEvents = (disabled: bool=false)
+  {
+      DeviceLogonEvents  
+          | where not(disabled)
+          // -- prefilter
+          | where
+              (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime) 
+              and ((array_length(username_has_any) == 0) or (AccountName has_any (username_has_any)) or (AccountDomain has_any (username_has_any)) or (strcat(AccountDomain, '\\', AccountName) has_any (username_has_any)) or (InitiatingProcessAccountName has_any (username_has_any)) or (InitiatingProcessAccountDomain has_any (username_has_any)) or (strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName) has_any (username_has_any)))
+              and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+              and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(RemoteIP, srcipaddr_has_any_prefix))
+              and ((array_length(srchostname_has_any) == 0) or (RemoteDeviceName has_any (srchostname_has_any)))
+              and ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
+          // eventresultdetails_in filtering done later in the parser
+          // eventresult filtering done later in the parser
+          // -- end prefilter
+          | where InitiatingProcessFolderPath !startswith "/"
+          | extend 
               TargetDvcOs = "Windows"
-            , TargetUserIdType            = 'SID'
-            , ActorUserIdType             = 'SID'
-            , ActorUsername               = case (
-                isempty(InitiatingProcessAccountName), "",
-                isempty(InitiatingProcessAccountDomain), InitiatingProcessAccountName,
-                strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)
-            )
-            , TargetUsername              = iff (
-                isempty(AccountDomain), AccountName,
-                strcat(AccountDomain, '\\', AccountName)
-            )           
-            , TargetUsernameType          = iff (AccountDomain == '','Simple', 'Windows')
-            , ActorUsernameType           = iff (InitiatingProcessAccountDomain == '','Simple', 'Windows')
-            , ActingProcessName           = strcat (InitiatingProcessFolderPath,'\\',InitiatingProcessFileName)
-        | project-rename 
+              ,
+              TargetUserIdType            = 'SID'
+              ,
+              ActorUserIdType             = 'SID'
+              ,
+              ActorUsername               = case
+                                (
+                                    isempty(InitiatingProcessAccountName),
+                                    "",
+                                    isempty(InitiatingProcessAccountDomain),
+                                    InitiatingProcessAccountName,
+                                    strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)
+                                )
+              ,
+              TargetUsername              = iff
+                                (
+                                    isempty(AccountDomain),
+                                    AccountName,
+                                    strcat(AccountDomain, '\\', AccountName)
+                                )           
+              ,
+              TargetUsernameType          = iff (AccountDomain == '', 'Simple', 'Windows')
+              ,
+              ActorUsernameType           = iff (InitiatingProcessAccountDomain == '', 'Simple', 'Windows')
+              ,
+              ActingProcessName           = strcat (InitiatingProcessFolderPath, '\\', InitiatingProcessFileName)
+          | project-rename 
               ActorUserId        = InitiatingProcessAccountSid
-            , TargetUserId       = AccountSid
-        // -- Specific identifiers aliases
-        | extend 
+              ,
+              TargetUserId       = AccountSid
+          // -- Specific identifiers aliases
+          | extend 
               TargetUserSid         = TargetUserId
-            , ActorUserSid          = ActorUserId
-            , TargetWindowsUsername = TargetUsername
-            , ActorWindowsUsername  = ActorUsername
-            , ActorUserType         = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
-        | extend 
-            TargetUserType = iff(IsLocalAdmin, 
-                'Admin',
-                _ASIM_GetWindowsUserType (TargetWindowsUsername, TargetUserSid)
-            )
-        | project-away InitiatingProcessAccountName, InitiatingProcessAccountDomain, AccountDomain, AccountName, InitiatingProcessFolderPath, InitiatingProcessFileName
-    };
-    union 
-      WindowsDeviceLogonEvents (disabled=disabled),
-      UnixDeviceLogonEvents (disabled=disabled)
-    | project-away SourceSystem, TenantId, Timestamp, MachineGroup
-    | project-rename 
-         EventOriginalResultDetails  = FailureReason 
-       , EventOriginalType           = LogonType
-       , EventUid                    = _ItemId
-       , LogonProtocol               = Protocol
-       , TargetDvcId                 = DeviceId
-       , SrcHostname                 = RemoteDeviceName
-       , ActingProcessCommandLine    = InitiatingProcessCommandLine
-       , ActingProcessCreationTime   = InitiatingProcessCreationTime
-       , ActingProcessMD5            = InitiatingProcessMD5
-       , ActingProcessSHA1           = InitiatingProcessSHA1 
-       , ActingProcessSHA256         = InitiatingProcessSHA256
-       , ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel
-       , ActingProcessTokenElevation = InitiatingProcessTokenElevation
-       , ParentProcessName           = InitiatingProcessParentFileName
-       , ParentProcessCreationTime   = InitiatingProcessParentCreationTime
-       //??, ActingProcessName           = InitiatingProcessFolderPath 
-       , ActorUserUpn                = InitiatingProcessAccountUpn
-       , ActorUserAadId              = InitiatingProcessAccountObjectId
-       , SrcPortNumber               = RemotePort
-    | extend 
-         EventCount                  = int(1)
-       , EventStartTime              = TimeGenerated
-       , EventEndTime                = TimeGenerated
-       , EventSchemaVersion          = '0.1.3'
-       , EventType                   = 'Logon'
-       , EventVendor                 = 'Microsoft'
-       , EventProduct                = 'M365 Defender for EndPoint'
-       , EventSchema                 = 'Authentication'
-       , TargetDvcIdType             = 'MDEid'
-       , ActingProcessId             = tostring (InitiatingProcessId)
-       , ParentProcessId             = tostring (InitiatingProcessParentId)
-       , EventOriginalUid            = tostring (ReportId)
-       , TargetSessionId             = tostring (LogonId)
-       , SrcIpAddr                   = iff (RemoteIP == '-', '', RemoteIP)
-    | extend
-         Hash = coalesce(
-              ActingProcessSHA256
-            , ActingProcessSHA1
-            , ActingProcessMD5
-         )
-    | extend
-         HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5),Hash)])     
-    | invoke _ASIM_ResolveFQDN('DeviceName')
-    | project-rename 
-         TargetFQDN         = FQDN
-       , TargetHostname     = ExtractedHostname
-       , TargetDomainType   = DomainType
-       , TargetDomain       = Domain  
-    | project-away DeviceName
-    | lookup EventResultDetailsLookup on EventOriginalResultDetails 
-    | lookup EventSubTypeLookup on EventOriginalType
-    | lookup EventResultLookup on ActionType
-    | extend
-         EventSeverity = iff (EventResult == "Success", "Informational", "Low")
-    // -- Specific identifiers aliases
-    | extend
+              ,
+              ActorUserSid          = ActorUserId
+              ,
+              TargetWindowsUsername = TargetUsername
+              ,
+              ActorWindowsUsername  = ActorUsername
+              ,
+              ActorUserType         = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
+          | extend 
+              TargetUserType = iff
+                  (
+                      IsLocalAdmin, 
+                      'Admin',
+                      _ASIM_GetWindowsUserType (TargetWindowsUsername, TargetUserSid)
+                  )
+          | project-away
+              InitiatingProcessAccountName,
+              InitiatingProcessAccountDomain,
+              AccountDomain,
+              AccountName,
+              InitiatingProcessFolderPath,
+              InitiatingProcessFileName
+  };
+      union 
+          WindowsDeviceLogonEvents (disabled=disabled),
+          UnixDeviceLogonEvents (disabled=disabled)
+      | project-away SourceSystem, TenantId, Timestamp, MachineGroup
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
+      | project-rename 
+          EventOriginalResultDetails  = FailureReason 
+          ,
+          EventOriginalType           = LogonType
+          ,
+          EventUid                    = _ItemId
+          ,
+          LogonProtocol               = Protocol
+          ,
+          TargetDvcId                 = DeviceId
+          ,
+          SrcHostname                 = RemoteDeviceName
+          ,
+          ActingProcessCommandLine    = InitiatingProcessCommandLine
+          ,
+          ActingProcessCreationTime   = InitiatingProcessCreationTime
+          ,
+          ActingProcessMD5            = InitiatingProcessMD5
+          ,
+          ActingProcessSHA1           = InitiatingProcessSHA1 
+          ,
+          ActingProcessSHA256         = InitiatingProcessSHA256
+          ,
+          ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel
+          ,
+          ActingProcessTokenElevation = InitiatingProcessTokenElevation
+          ,
+          ParentProcessName           = InitiatingProcessParentFileName
+          ,
+          ParentProcessCreationTime   = InitiatingProcessParentCreationTime
+          //??, ActingProcessName           = InitiatingProcessFolderPath 
+          ,
+          ActorUserUpn                = InitiatingProcessAccountUpn
+          ,
+          ActorUserAadId              = InitiatingProcessAccountObjectId
+          ,
+          SrcPortNumber               = RemotePort
+      | extend 
+          EventCount                  = int(1)
+          ,
+          EventStartTime              = TimeGenerated
+          ,
+          EventEndTime                = TimeGenerated
+          ,
+          EventSchemaVersion          = '0.1.3'
+          ,
+          EventType                   = 'Logon'
+          ,
+          EventVendor                 = 'Microsoft'
+          ,
+          EventProduct                = 'M365 Defender for EndPoint'
+          ,
+          EventSchema                 = 'Authentication'
+          ,
+          TargetDvcIdType             = 'MDEid'
+          ,
+          ActingProcessId             = tostring (InitiatingProcessId)
+          ,
+          ParentProcessId             = tostring (InitiatingProcessParentId)
+          ,
+          EventOriginalUid            = tostring (ReportId)
+          ,
+          TargetSessionId             = tostring (LogonId)
+          ,
+          SrcIpAddr                   = iff (RemoteIP == '-', '', RemoteIP)
+      | extend
+          Hash = coalesce
+        (
+            ActingProcessSHA256
+          ,
+            ActingProcessSHA1
+          ,
+            ActingProcessMD5
+        )
+      | extend
+          HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5), Hash)])     
+      | invoke _ASIM_ResolveFQDN('DeviceName')
+      | project-rename 
+          TargetFQDN         = FQDN
+          ,
+          TargetHostname     = ExtractedHostname
+          ,
+          TargetDomainType   = DomainType
+          ,
+          TargetDomain       = Domain  
+      | project-away DeviceName
+      | lookup EventResultDetailsLookup on EventOriginalResultDetails
+      // filtering on 'eventresultdetails_in', 'TargetUsername' and 'ActorUsername'
+      | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+          and ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
+      | lookup EventSubTypeLookup on EventOriginalType
+      | lookup EventResultLookup on ActionType
+      // Filtering on 'eventresult'
+      | where (eventresult == "*" or (EventResult == eventresult))
+      | extend
+          EventSeverity = iff (EventResult == "Success", "Informational", "Low")
+      // -- Specific identifiers aliases
+      | extend
           TargetDvcMDEid        = TargetDvcId
-        , DvcMDEid              = TargetDvcId
-    // --  Aliases
-    | extend 
-         User          = TargetUsername 
-       , Prcess        = ActingProcessName
-       , IpAddr        = SrcIpAddr
-       , ActingAppName = ActingProcessName
-       , ActingAppType = "Process"
-       , Dvc           = coalesce (TargetFQDN, TargetHostname)
-       , Src           = coalesce (SrcIpAddr, SrcHostname)
-    // -- Alias Dvc to Target
-       , DvcFQDN       = TargetFQDN
-       , DvcHostname   = TargetHostname
-       , DvcDomain     = TargetDomain
-       , DvcDomainType = TargetDomainType
-       , DvcId         = TargetDvcId
-       , DvcIdType     = TargetDvcIdType
-       , DvcOs         = TargetDvcOs
-    | extend 
-         LogonTarget   = Dvc
-       , Dst = Dvc
-    | project-away ReportId, LogonId, InitiatingProcessId, InitiatingProcessParentId, ActionType, InitiatingProcessFileSize, InitiatingProcessVersionInfoCompanyName, InitiatingProcessVersionInfoFileDescription, InitiatingProcessVersionInfoInternalFileName, InitiatingProcessVersionInfoOriginalFileName, InitiatingProcessVersionInfoProductName, InitiatingProcessVersionInfoProductVersion, AppGuardContainerId, RemoteIPType, IsLocalAdmin, RemoteIP
+          ,
+          DvcMDEid              = TargetDvcId
+      // --  Aliases
+      | extend 
+          User          = TargetUsername 
+          ,
+          Prcess        = ActingProcessName
+          ,
+          IpAddr        = SrcIpAddr
+          ,
+          ActingAppName = ActingProcessName
+          ,
+          ActingAppType = "Process"
+          ,
+          Dvc           = coalesce (TargetFQDN, TargetHostname)
+          ,
+          Src           = coalesce (SrcIpAddr, SrcHostname)
+          // -- Alias Dvc to Target
+          ,
+          DvcFQDN       = TargetFQDN
+          ,
+          DvcHostname   = TargetHostname
+          ,
+          DvcDomain     = TargetDomain
+          ,
+          DvcDomainType = TargetDomainType
+          ,
+          DvcId         = TargetDvcId
+          ,
+          DvcIdType     = TargetDvcIdType
+          ,
+          DvcOs         = TargetDvcOs
+      | extend 
+          LogonTarget   = Dvc
+          ,
+          Dst = Dvc
+      | project-away
+          ReportId,
+          LogonId,
+          InitiatingProcessId,
+          InitiatingProcessParentId,
+          ActionType,
+          InitiatingProcessFileSize,
+          InitiatingProcessVersionInfoCompanyName,
+          InitiatingProcessVersionInfoFileDescription,
+          InitiatingProcessVersionInfoInternalFileName,
+          InitiatingProcessVersionInfoOriginalFileName,
+          InitiatingProcessVersionInfoProductName,
+          InitiatingProcessVersionInfoProductVersion,
+          AppGuardContainerId,
+          RemoteIPType,
+          IsLocalAdmin,
+          RemoteIP,
+          temp*
   };
   parser (
-        starttime          = starttime
-      , endtime            = endtime
-      , targetusername_has = targetusername_has
-      , disabled           = disabled
+    starttime=starttime,
+    endtime=endtime,
+    username_has_any=username_has_any,
+    targetappname_has_any=targetappname_has_any,
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+    srchostname_has_any=srchostname_has_any,
+    eventtype_in=eventtype_in,
+    eventresultdetails_in=eventresultdetails_in,
+    eventresult=eventresult,
+    disabled=disabled
   ) 

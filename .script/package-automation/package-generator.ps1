@@ -1,6 +1,6 @@
 param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $defaultPackageVersion, $solutionOfferId, $inputBaseFolderPath, $isNewSolution)
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
-. ./.script/package-automation/catelogAPI.ps1
+. ./.script/package-automation/catalogAPI.ps1
 
 function ErrorOutput {
     Write-Host "Package creation process failed!"
@@ -238,11 +238,11 @@ try {
         exit 0 
     }
 
-    # =============START: DETAILS TO IDENTIFY VERSION FROM CATELOG API=========
+    # =============START: DETAILS TO IDENTIFY VERSION FROM CATALOG API=========
     $customProperties = @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "Package Generator"; 'SolutionOfferId' = "$solutionOfferId"; }
 
     $offerId = "$solutionOfferId"
-    $offerDetails = GetCatelogDetails $offerId
+    $offerDetails = GetCatalogDetails $offerId
     Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Offer details in Package-generator for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
 
     $userInputPackageVersion = ''
@@ -252,7 +252,7 @@ try {
     $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $packageVersionAttribute $userInputPackageVersion
 
     Write-Host "Package version identified is $packageVersion"
-    # =============END: DETAILS TO IDENTIFY VERSION FROM CATELOG API=========
+    # =============END: DETAILS TO IDENTIFY VERSION FROM CATALOG API=========
     if (!$packageVersionAttribute) {
         $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'Version' -Value "$packageVersion"
     }
