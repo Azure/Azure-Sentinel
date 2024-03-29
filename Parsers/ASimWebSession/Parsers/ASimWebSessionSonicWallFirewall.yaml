@@ -1,7 +1,7 @@
 Parser:
   Title: Web Session ASIM parser for SonicWall firewalls
   Version: '0.1.0'
-  LastUpdated: Feb 28, 2024
+  LastUpdated: Mar 29, 2024
 Product:
   Name: SonicWall
 Normalization:
@@ -15,7 +15,7 @@ References:
   - Title: SonicWall SonicOS/X 7.0.1 Log Events Reference Guide [PDF]
     Link: https://www.sonicwall.com/techdocs/pdf/SonicOS-X_7.0.1_LogEvents_ReferenceGuide.pdf
 Description: |
-  This ASIM parser supports normalizing SonicWall SonicOS ArcSight-formatted syslog ingested by Microsoft Sentinel to the ASIM WebSession normalized schema.
+  This ASIM parser supports normalizing SonicWall SonicOS ArcSight-formatted syslog received via the SonicWall Firewall/Common Event Format data connectors and ingested to the CommonSecurityLog table by Microsoft Sentinel to the ASIM WebSession normalized schema.
 ParserName: ASimWebSessionSonicWallFirewall
 EquivalentBuiltInParser: _ASim_WebSession_SonicWallFirewall
 ParserParams:
@@ -32,23 +32,22 @@ ParserQuery: |
       ];
       CommonSecurityLog
       | where not(disabled)
-      | where DeviceVendor == "SonicWall"
-      | where DeviceEventClassID in (14, 97)
-      | where Protocol has_any(dynamic(["udp/http", "tcp/http", "udp/https", "tcp/https"]))
+          and DeviceVendor == "SonicWall"
+          and DeviceEventClassID in (14, 97)
+          and Protocol has_any(dynamic(["udp/http", "tcp/http", "udp/https", "tcp/https"]))
       | parse-kv AdditionalExtensions as (['gcat']:string, ['app']:string, ['arg']:string, ['dstV6']:string, ['srcV6']:string, ['snpt']:string, ['dnpt']:string, ['susr']:string,['appName']:string, ['appcat']:string, ['appid']:string, ['sid']:string, ['catid']:string, ['ipscat']:string, ['ipspri']:string, ['spycat']:string, ['spypri']:string, ['fw_action']:string, ['dpi']:string, ['bid']:string, ['af_action']:string, ['af_polid']:string, ['af_policy']:string, ['af_type']:string, ['af_service']:string, ['af_object']:string, ['contentObject']:string, ['fileid']:string, ['uuid']:string) with (pair_delimiter=";", kv_delimiter="=")
       | extend
-        SourceIP = coalesce(SourceIP, srcV6)
-        , DestinationIP = coalesce(DestinationIP, dstV6)
-      | where (isnotempty(SourceIP) or isnotempty(DestinationIP))
+        SrcIpAddr = coalesce(SourceIP, srcV6)
+        , DstIpAddr = coalesce(DestinationIP, dstV6)
+      | where (isnotempty(SrcIpAddr) or isnotempty(DstIpAddr))
+          and isnotempty(fw_action)
       | extend RequestURL_ = extract(@"(?:[.*;]+?)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)(?:;fw_action)", 1, AdditionalExtensions)
       | extend RequestURL_ = iif(RequestURL_ startswith "snpt" or RequestURL_ startswith "dnpt" or RequestURL_ startswith "appid" or RequestURL_ startswith "appName", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), RequestURL_)
       | extend RequestURL_ = iif(RequestURL_ matches regex @"^(.{2,6}=.{1,6})", extract(@"(?:\d;|.{1}\w.{1};)(?P<url>[a-zA-Z0-9_*.,}{&%$~:;\-=\/?[:space:]]+)", 1, RequestURL_), iif(RequestURL_ matches regex @"^\w=\d$", "", RequestURL_))
       | extend RequestURL_ = iif(RequestURL_ has_any(dynamic(["af_polid=", "ipscat=", "snpt=", "dnpt="])), "", RequestURL_)
       | extend RequestURL = iif(isnotempty(RequestURL), RequestURL, iif(RequestURL_ contains "/" and RequestURL_ contains ".", RequestURL_, ""))
       | where isnotempty(RequestURL)
-      | where isnotempty(fw_action)
       | lookup Actions on fw_action
-      // Sets the mandatory EventResult based on the DvcAction.
       | extend EventResult = case(DvcAction == "Allow", "Success",
             DvcAction == "Management", "NA",
             DvcAction == "NA", "NA",
@@ -73,13 +72,13 @@ ParserQuery: |
                                     , tolong(LogSeverity) > 8, "High"
                                     , ""
                                     )
-      | extend HttpRequestMethod = case(tolong(RequestMethod) == 0, "NO OPERATION"
+      | extend HttpRequestMethod = case(tolong(RequestMethod) == 0, ""
                                         , tolong(RequestMethod) == 1, "GET"
                                         , tolong(RequestMethod) == 2, "POST"
                                         , tolong(RequestMethod) == 3, "HEAD"
                                         , tolong(RequestMethod) == 4, "PUT"
                                         , tolong(RequestMethod) == 5, "CONNECT"
-                                        , tolong(RequestMethod) == 6, "OTHER"
+                                        , tolong(RequestMethod) == 6, ""
                                         , ""
                                         )
       | extend NetworkProtocolVersion = case(DestinationIP has ".", "IPv4"
@@ -92,14 +91,12 @@ ParserQuery: |
       | project-rename
           DstMacAddr = DestinationMACAddress
           , SrcMacAddr = SourceMACAddress
-          , DstIpAddr = DestinationIP
-          , SrcIpAddr = SourceIP
           , DstPortNumber = DestinationPort
           , SrcPortNumber = SourcePort
           , EventMessage = Activity
           , sosEventMessageDetail = Message
           , EventProductVersion = DeviceVersion
-          , sosSerialNumber = Computer
+          , Dvc = Computer
           , DvcOutboundInterface = DeviceOutboundInterface
           , DvcInboundInterface = DeviceInboundInterface
           , sosApplicationID = ApplicationProtocol // Application ID number (when Flow Reporting is enabled).
@@ -110,8 +107,8 @@ ParserQuery: |
           , sosLogMsgNote = DeviceCustomString6 // "Note" field. Additional information that is application-dependent.
           , SrcNatIpAddr = DeviceCustomString1Label // NAT'ed source IP4/IPv6 address.
           , DstNatIpAddr = DeviceCustomString2Label // NAT'ed destination IPv4/IPv6 address.
-          , sosSourceZone = DeviceCustomString3Label // Source Zone on Gen7. Src Zone Type on Gen6.
-          , sosDestinationZone = DeviceCustomString4Label // Destination Zone on Gen7. Dest Zone Type (Trusted/Untrusted, etc.) on Gen6.
+          , SrcZone = DeviceCustomString3Label // Source Zone on Gen7. Src Zone Type on Gen6.
+          , DstZone = DeviceCustomString4Label // Destination Zone on Gen7. Dest Zone Type (Trusted/Untrusted, etc.) on Gen6.
           , sosUserSessionType = DeviceCustomString5Label // String indicating the user session type, determined by the auth mechanism.
           , sosUserSessionDuration = DeviceCustomString6Label // User session duration in seconds.
           , SrcUsername = SourceUserName
@@ -139,7 +136,7 @@ ParserQuery: |
                                                 gcat == 19, "Unified Policy Engine (19)",
                                                 "Log Category Not Mapped"
                                                 )
-  | extend sosLegacyMessageCategory = case(DeviceEventCategory == 0, "None (0)",
+  | extend EventOriginalSubType = case(DeviceEventCategory == 0, "None (0)",
                                               DeviceEventCategory == 1, "System Maintenance (1)",
                                               DeviceEventCategory == 2, "System Errors (2)",
                                               DeviceEventCategory == 4, "Blocked Web Sites (4)",
@@ -181,7 +178,6 @@ ParserQuery: |
       , DvcOs = "SonicOS"
       , DvcOsVersion = EventProductVersion
       , DvcIdType = "Other"
-      , Dvc = sosSerialNumber
       , DvcDescription = DeviceProduct
       , Rule = RuleName
       , NetworkBytes = tolong(coalesce(toint(ReceivedBytes), 0) + coalesce(toint(SentBytes), 0))
@@ -199,8 +195,6 @@ ParserQuery: |
       , sosCFSCategoryID = extract(@'(\d+)\s', 1, coalesce(sosCFSFullString, "")) // Application Name from App Control
       , sosCFSCategoryName = extract(@'.*-("(.*))', 1, coalesce(sosCFSFullString, "")) // Application Name from App Control
       , sosCFSPolicyName = extract(@'Policy: (.*), Info:', 1, coalesce(sosLogMsgNote, ""))
-      , SrcZone = sosSourceZone
-      , DstZone = sosDestinationZone
       , EventOriginalSeverity = LogSeverity
       , Dst = DstIpAddr
       , Src = SrcIpAddr
@@ -212,7 +206,7 @@ ParserQuery: |
       , EventSchema = "WebSession"
       , EventCount = toint(1)
       , EventUid = _ItemId
-      , EventResultDetails = "NA"
+      , EventResultDetails = ""
       , ASimMatchingIpAddr = "-"
       , UserAgent = HttpUserAgent
       , ThreatConfidence = coalesce(toint(ThreatOriginalConfidence), int(null))
@@ -258,6 +252,18 @@ ParserQuery: |
     , DstAppName = iff(NetworkDirection in ("Outbound", "Local", "NA"), coalesce(appcat, appName), "")
     , SrcAppId = iff(NetworkDirection in ("Inbound", "Local", "NA"), sid, "")
     , DstAppId = iff(NetworkDirection in ("Outbound", "Local", "NA"), sid, "")
+    , SrcBytes = case(NetworkDirection == "Outbound", tolong(SentBytes)
+                    , NetworkDirection == "Inbound", tolong(ReceivedBytes)
+                    , NetworkDirection == "Local" and SrcZone == "WAN", tolong(ReceivedBytes)
+                    , NetworkDirection == "Local" and SrcZone != "WAN", tolong(SentBytes)
+                    , tolong(long(null))
+                    )
+    , DstBytes = case(NetworkDirection == "Outbound", tolong(ReceivedBytes)
+                    , NetworkDirection == "Inbound", tolong(SentBytes)
+                    , NetworkDirection == "Local" and DstZone == "WAN", tolong(SentBytes)
+                    , NetworkDirection == "Local" and DstZone != "WAN", tolong(ReceivedBytes)
+                    , tolong(long(null))
+                    )
   | extend
       SrcAppType = case(isempty(SrcAppName), ""
                       , SrcAppName contains "\'General " or SrcAppName contains "\'Service ", "Service", "Other")
@@ -335,7 +341,6 @@ ParserQuery: |
     , "AppControlFileName", sosAppControlFileName
     , "IPSFullString", sosIPSFullString
     , "IPSSignatureName", sosIPSSignatureName
-    , "LegacyMessageCategory", sosLegacyMessageCategory
     , "LogMsgCategory", sosLogMsgCategory
     , "LogMsgNote", sosLogMsgNote
     , "LogMsgSeverity", sosLogMsgSeverity
@@ -343,6 +348,7 @@ ParserQuery: |
     , "DestinationVPNPolicyName", sosDestinationVPNPolicyName
     , "EventMessageDetail", sosEventMessageDetail
     , "UserSessionType", sosUserSessionType
+    , "UserSessionDuration", sosUserSessionDuration
     )
   | project-away
       DeviceEventCategory
