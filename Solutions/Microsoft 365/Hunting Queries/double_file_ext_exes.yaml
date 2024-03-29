@@ -12,7 +12,6 @@ tactics:
 relevantTechniques:
   - T1036
 query: |
-
   let known_ext = dynamic(["lnk","log","option","config", "manifest", "partial"]);
   let excluded_users = dynamic(["app@sharepoint"]);
   OfficeActivity
@@ -25,14 +24,18 @@ query: |
       | where SourceFileExtension !in~ (known_ext)
   ) on OfficeObjectId 
   | where UserId1 !in~ (excluded_users)
-  | extend userBag = pack(UserId1, ClientIP1) 
-  | summarize makeset(UserId1), make_bag(userBag), Start=max(TimeGenerated), End=min(TimeGenerated) by UserId, OfficeObjectId, SourceFileName, Extension 
+  | extend userBag = bag_pack(UserId1, ClientIP1) 
+  | summarize make_set(UserId1, 10000), make_bag(userBag), Start=max(TimeGenerated), End=min(TimeGenerated) by UserId, OfficeObjectId, SourceFileName, Extension 
   | extend NumberOfUsers = array_length(bag_keys(bag_userBag))
   | project UploadTime=Start, Uploader=UserId, FileLocation=OfficeObjectId, FileName=SourceFileName, AccessedBy=bag_userBag, Extension, NumberOfUsers
-  | extend timestamp = UploadTime, AccountCustomEntity = Uploader
+  | extend UploaderName = tostring(split(Uploader, "@")[0]), UploaderUPNSuffix = tostring(split(Uploader, "@")[1])
+  | extend Account_0_Name = UploaderName
+  | extend Account_0_UPNSuffix = UploaderUPNSuffix
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 2.0.0
+      - identifier: Name
+        columnName: UploaderName
+      - identifier: UPNSuffix
+        columnName: UploaderUPNSuffix
+version: 2.0.1

@@ -26,16 +26,16 @@ query: |
   let dt_lookBack = 1h;
   let ioc_lookBack = 14d;
   ThreatIntelligenceIndicator
-  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-  | where Active == true
   // Picking up only IOC's that contain the entities we want
   | where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)
+  | where TimeGenerated >= ago(ioc_lookBack)
   // As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.
   // Taking the first non-empty value based on potential IOC match availability
   | extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)
   | extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
   | join (
       DuoSecurityAuthentication_CL
       | where TimeGenerated >= ago(dt_lookBack)
@@ -44,7 +44,9 @@ query: |
       | extend Duo_TimeGenerated = isotimestamp_t
   )
   on $left.TI_ipEntity == $right.access_device_ip_s
+  | where TimeGenerated >= ago(ioc_lookBack)
   | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
   | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, Duo_TimeGenerated,
   TI_ipEntity, user_name_s, factor_s, result_s, application_name_s, event_type_s, txid_g, user_key_s, access_device_ip_s, access_device_location_city_s, access_device_location_state_s, access_device_location_country_s
   | extend timestamp = Duo_TimeGenerated, Name = tostring(split(user_name_s, '@', 0)[0]), UPNSuffix = tostring(split(user_name_s, '@', 1)[0])
@@ -59,5 +61,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: access_device_ip_s
-version: 1.0.3
+version: 1.0.4
 kind: Scheduled

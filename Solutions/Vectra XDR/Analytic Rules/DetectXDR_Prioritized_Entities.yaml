@@ -1,0 +1,62 @@
+id: 93de640a-314d-459a-9e21-00de2bffa92d
+name: Vectra Priority Entities
+version: 1.0.0
+kind: Scheduled
+description: Create an incident when an identity is suspected to be compromised. Vectra is using AI to prioritize an entity based on multiple factors (attack rating, velocity, breadth, importance.etc.). This layer of aggregation at the entity level provides a greater signal-to-noise ratio and help analyst focus on what matters.
+status: Available
+requiredDataConnectors:
+  - connectorId: VectraXDR
+    dataTypes:
+      - Entity_Scoring_Data_CL
+severity: High
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+query: |
+  VectraEntityScoring
+  | where ['Is Prioritized'] == true
+  // custom details do not allow spaces in the attribute name
+  | extend attack_rating = ['Attack Rating']
+  | extend breadth = ['Breadth Contrib']
+  | extend detections = ['Active Detection Types']
+  | extend urgency = ['Urgency Score']
+  | extend url = ['Vectra Pivot']
+  | summarize arg_max(['Last Updated'], *) by ['Entity ID']
+
+entityMappings:
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: Name
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 7d
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+suppressionDuration: 5h
+customDetails:
+  Entity_importance: Importance
+  Entity_type: Type
+  Attack_Rating: attack_rating
+  Velocity: Velocity
+  Breadth: breadth
+  detections: detections
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Priority Incident - {{Name}}  with Urgency Score of {{Urgency Score}}  '
+  alertDescriptionFormat: |-
+    Entity {{Name}} has been prioritized by the Vectra AI prioritization algorithm with an urgency score of {{Urgency Score}}.
+    Attack rating is {{Attack Rating}}.
+  alertDynamicProperties:
+  - alertProperty: ConfidenceLevel
+    value: urgency
+  - alertProperty: AlertLink
+    value: url
+eventGroupingSettings:
+  aggregationKind: AlertPerResult

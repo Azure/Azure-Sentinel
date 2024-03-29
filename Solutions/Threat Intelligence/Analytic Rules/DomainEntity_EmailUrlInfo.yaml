@@ -1,0 +1,76 @@
+id: 87cc75df-d7b2-44f1-b064-ee924edfc879
+name: TI map Domain entity to EmailUrlInfo
+description: |
+  'Identifies a match in EmailUrlInfo table from any Domain IOC from TI.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - EmailUrlInfo
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let EmailUrlInfo_ = materialize(EmailUrlInfo
+  | where isnotempty(UrlDomain)
+  | where TimeGenerated > ago(dt_lookBack)
+  | project-rename Email_Url = Url);
+  let Domains = EmailUrlInfo_
+  | distinct UrlDomain
+  | summarize make_list(UrlDomain);
+  let Candidates = ThreatIntelligenceIndicator
+  | where isnotempty(DomainName)
+  | where TimeGenerated >= ago(ioc_lookBack)
+  | extend TI_Domain = tolower(DomainName)
+  | where TI_Domain in (Domains)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | join kind=innerunique EmailUrlInfo_ on $left.TI_Domain == $right.UrlDomain
+  | join kind=innerunique (EmailEvents | where TimeGenerated >= ago(dt_lookBack) | project-rename EmailEvents_TimeGenerated = TimeGenerated) on $left.NetworkMessageId == $right.NetworkMessageId
+  | where DeliveryLocation !has "Quarantine"
+  // Customize and uncomment the following line to remove security related mailboxes
+  //| where tolower(RecipientEmailAddress) !in ("secmailbox1@example.com", "secmailbox2@example.com")
+  | where EmailEvents_TimeGenerated < ExpirationDateTime
+  | summarize EmailEvents_TimeGenerated = arg_max(EmailEvents_TimeGenerated, *) by IndicatorId, RecipientEmailAddress;
+  let Candidate_Domains = Candidates | distinct TI_Domain | summarize make_list(TI_Domain);
+  ThreatIntelligenceIndicator
+  | where isnotempty(Url)
+  | where TimeGenerated > ago(ioc_lookBack)
+  | extend Host = tostring(parse_url(Url).Host)
+  | where Host in (Candidate_Domains)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | join kind=innerunique (Candidates | extend parsed_url = parse_url(Email_Url) | extend BaseUrl = strcat(parsed_url.Scheme, "://", parsed_url.Host, parsed_url.Path)) on $left.Url == $right.BaseUrl
+  | where DeliveryAction !has "Blocked"
+  | project EmailEvents_TimeGenerated, RecipientEmailAddress, IndicatorId, TI_Domain, ConfidenceScore, Description, Tags, TrafficLightProtocolLevel, Url = Email_Url, DeliveryAction, DeliveryLocation, EmailDirection, NetworkMessageId, AuthenticationDetails, SenderFromAddress, SenderIPv4, Subject
+  | extend Name = tostring(split(RecipientEmailAddress, '@', 0)[0]), UPNSuffix = tostring(split(RecipientEmailAddress, '@', 1)[0])
+  | extend timestamp = EmailEvents_TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0
+kind: Scheduled

@@ -23,14 +23,14 @@ FortiGate, a next-generation firewall from IT Cyber Security leaders Fortinet, p
 
 <a name="deployall">
 
-## Deploy Custom Connector+ Function App + 3 Playbook templates
+## Deploy Custom Connector + Function App + 3 Playbook templates
 This package includes:
-* [Custom connector](./CustomConnector) 
-* [Function App]((./FunctionApp)) 
+* [Custom connector](./FortinetCustomConnector) 
+* [Function App](./FortinetFortigateFunctionApp) 
 * Three playbook templates leverage fortinet custom connector and Function App:
-  * [Block IP](./Playbooks/FortinetFortiGate-ResponseOnIP)
-  * [Block URL](./Playbooks/FortinetFortiGate-ResponseOnURL)
-  * [Enrich incident](./Playbooks/FortinetFortiGate-Enrichment)
+  * [Block IP](./Fortinet_ResponseOnIP)
+  * [Block URL](./Fortinet_ResponseOnURL)
+  * [Enrich incident](./Fortinet_IncidentEnrichment)
   
 *The Azure Function handles the Get calls on FortiOS API in the playbook templates. These calls are not part of the custom connector due to platform limitations.*
 

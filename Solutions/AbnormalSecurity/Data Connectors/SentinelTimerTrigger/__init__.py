@@ -15,9 +15,8 @@ async def main(mytimer: func.TimerRequest, starter: str):
     client = df.DurableOrchestrationClient(starter)
     instance_id = "singleton_instance"
     existing_instance = await client.get_status(instance_id)
-    if existing_instance is None or str(existing_instance.runtime_status) in [None, "OrchestrationRuntimeStatus.Completed", "OrchestrationRuntimeStatus.Failed", "OrchestrationRuntimeStatus.Terminated"]:
+    if existing_instance is None or str(existing_instance.runtime_status) in ["None", "OrchestrationRuntimeStatus.Completed", "OrchestrationRuntimeStatus.Failed", "OrchestrationRuntimeStatus.Terminated"]:
         instance_id = await client.start_new("SentinelFunctionsOrchestrator", instance_id)
         logging.info(f"Starting new orchestration - the runtime status is: {str(existing_instance.runtime_status)}")
     else:
         logging.info(f"Skipped orchestration - runtime status is : {str(existing_instance.runtime_status)}") 
-

@@ -1,0 +1,68 @@
+id: 23391c84-87d8-452f-a84c-47a62f01e115
+name: TI Map URL Entity to UrlClickEvents
+description: |
+  'This query identifies any URL indicators of compromise (IOCs) from threat intelligence (TI) by searching for matches in UrlClickEvents.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - UrlClickEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let UrlClickEvents_ = materialize(UrlClickEvents
+      | where TimeGenerated >= ago(dt_lookBack)
+      | extend UrlClickEvents_TimeGenerated = TimeGenerated);
+  let ChainReportID = UrlClickEvents_
+      | mv-expand todynamic(UrlChain)
+      | extend UrlChain = tolower(UrlChain)
+      | project ReportId, Url, UrlChain;
+  // Url is not always in UrlChain, so we need to check both
+  let ClickedUrls = 
+    (union isfuzzy=false (ChainReportID), (ChainReportID | project Url = UrlChain))
+    | distinct Url
+    | summarize make_list(Url);
+  let TI = materialize(ThreatIntelligenceIndicator
+    | where TimeGenerated >= ago(ioc_lookBack)
+    | where isnotempty(Url) and tolower(Url) in (ClickedUrls)
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
+    | project-rename TI_Url = Url, TI_Type = Type
+    );
+  (union isfuzzy=false (TI | join kind=innerunique (ChainReportID) on $left.TI_Url == $right.UrlChain),
+    (TI | join kind=innerunique (ChainReportID) on $left.TI_Url == $right.Url))
+  | project-away UrlChain
+  | join kind=innerunique (UrlClickEvents_) on ReportId
+  | where UrlClickEvents_TimeGenerated < ExpirationDateTime
+  | summarize UrlClickEvents_TimeGenerated = arg_max(UrlClickEvents_TimeGenerated, *) by IndicatorId
+  | project UrlClickEvents_TimeGenerated, AccountUpn, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, NetworkMessageId
+  | extend timestamp = UrlClickEvents_TimeGenerated
+  | extend timestamp = UrlClickEvents_TimeGenerated, Name = tostring(split(AccountUpn, '@', 0)[0]), UPNSuffix = tostring(split(AccountUpn, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+version: 1.0.0
+kind: Scheduled
