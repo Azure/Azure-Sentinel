@@ -32,25 +32,25 @@ def lambda_handler(event, context):
             log_groups = logs.describe_log_groups()                   
             log_groups_streams_arry = []
         except Exception as e:            
-            print(f"An error occurred at logs.describe_log_groups: {e}")
+            print(f"An error occurred in list log groups: {e}")
 
-        for log_group in log_groups['logGroups']:
-            log_Group_Name = log_group['logGroupName']            
-            try:
-                # List log streams for each log group
-                log_streams = logs.describe_log_streams(logGroupName=log_Group_Name)                
-            except Exception as e:                
-                print(f"An error occurred at logs.describe_log_streams: {e}")
+        if 'logGroups' in log_groups:
+            for log_group in log_groups['logGroups']:
+                log_Group_Name = log_group['logGroupName']            
+                try:
+                    # List log streams for each log group
+                    log_streams = logs.describe_log_streams(logGroupName=log_Group_Name)                
+                except Exception as e:                
+                    print(f"An error occurred at logs.describe_log_streams: {e}")
 
-            for log_stream in log_streams['logStreams']:
-                log_Stream_Name = log_stream['logStreamName']
-                logGroup_logStream_entry = {
-                    "logGroupName": log_Group_Name,
-                    "logStreamName": log_Stream_Name
-                }
-                log_groups_streams_arry.append(logGroup_logStream_entry) 
-        
-        print(f"log_groups_streams_arry", log_groups_streams_arry)
+                for log_stream in log_streams['logStreams']:
+                    log_Stream_Name = log_stream['logStreamName']
+                    logGroup_logStream_entry = {
+                        "logGroupName": log_Group_Name,
+                        "logStreamName": log_Stream_Name
+                    }
+                    log_groups_streams_arry.append(logGroup_logStream_entry) 
+                
         # Iterate through log_groups_dict
         for key in log_groups_streams_arry:            
             # Gets objects from cloud watch
