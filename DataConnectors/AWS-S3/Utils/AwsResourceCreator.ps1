@@ -15,8 +15,8 @@ function New-OidcProvider
         $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
         Write-Log -Message $CustomerAWSAccountId -LogFileName $LogFileName -Severity Verbose
          
-        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' 2>&1" -LogFileName $LogFileName -Severity Verbose
-        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" 2>&1
+        Write-Log -Message "Executing: aws iam get-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/' 2>&1" -LogFileName $LogFileName -Severity Verbose
+        $providerInfo = aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/" 2>&1
         Write-Log -Message $providerInfo -LogFileName $LogFileName -Severity Verbose
 
         # If the provider was retrieved then the provider already exists
@@ -36,8 +36,8 @@ function New-OidcProvider
             else
             {
                 Write-Log -Message "Adding new client ID $SentinelClientId" -LogFileName $LogFileName -Severity Information -Indent 2
-                Write-Log -Message "Executing: aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)' --client-id $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
-                aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)" --client-id $SentinelClientId 2>&1
+                Write-Log -Message "Executing: aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn '$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/' --client-id $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
+                aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "$($AwsCloudResource):iam::$($CustomerAWSAccountId):oidc-provider/sts.windows.net/$($SentinelTenantId)/" --client-id $SentinelClientId 2>&1
 
                 # If the client ID was added then the operation was successful
                 if ($lastexitcode -eq 0)
@@ -54,8 +54,8 @@ function New-OidcProvider
         
             Set-RetryAction({
         
-                Write-Log -Message "Executing: aws iam create-open-id-connect-provider --url 'https://sts.windows.net/$($SentinelTenantId)' --ThumbprintList '626d44e704d1ceabe3bf0d53397464ac8080142c' --client-id-list $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
-                $tempForOutput = aws iam create-open-id-connect-provider --url "https://sts.windows.net/$($SentinelTenantId)" --thumbprint-list "626d44e704d1ceabe3bf0d53397464ac8080142c"  --client-id-list $SentinelClientId 2>&1
+                Write-Log -Message "Executing: aws iam create-open-id-connect-provider --url 'https://sts.windows.net/$($SentinelTenantId)/' --ThumbprintList '626d44e704d1ceabe3bf0d53397464ac8080142c' --client-id-list $SentinelClientId 2>&1" -LogFileName $LogFileName -Severity Verbose
+                $tempForOutput = aws iam create-open-id-connect-provider --url "https://sts.windows.net/$($SentinelTenantId)/" --thumbprint-list "626d44e704d1ceabe3bf0d53397464ac8080142c"  --client-id-list $SentinelClientId 2>&1
                 Write-Log -Message $tempForOutput -LogFileName $LogFileName -Severity Verbose
         
                 # If the provider was created then the operation was successful
@@ -80,7 +80,6 @@ function New-ArnRole
    Set-RetryAction({
 
         $script:roleName = Read-ValidatedHost -Prompt 'Please enter role name. If you have already configured an assume role for Azure Sentinel, use the same role name'
-        Write-Log -Message "Using role name: $roleName" -LogFileName $LogFileName -Severity Information -Indent 2
         
         # Determine if this role already exists before continuing
         Write-Log "Executing: aws iam get-role --role-name $roleName 2>&1| Out-Null" -LogFileName $LogFileName -Severity Verbose
@@ -90,22 +89,18 @@ function New-ArnRole
         $isRuleNotExist = $lastexitcode -ne 0
         if ($isRuleNotExist)
         {
+            $script:roleName = "OIDC_$roleName"
+            Write-Log -Message "Using role name: $roleName with OIDC prefix because OpenID Connect authentication is being used." -LogFileName $LogFileName -Severity Information -Indent 2
+
             Write-Output "`n`n"
             Write-Log "You must specify the the Azure Sentinel Workspace ID. This is found in the Azure Sentinel portal." -LogFileName $LogFileName -Severity Information -LinePadding 1
             
             $workspaceId = Read-ValidatedHost -Prompt "Please enter your Azure Sentinel External ID (Workspace ID)"
             Write-Log "Using Azure Sentinel Workspace ID: $workspaceId" -LogFileName $LogFileName -Severity Information -Indent 2
 
-            if($CloudEnv -eq "Gov")
-            {
-
-                $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
-                $rolePolicy = Get-OIDCRoleArnPolicy -WorkspaceId $workspaceId -CustomerAWSAccountId $CustomerAWSAccountId
-            }
-            else
-            {
-                $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
-            }
+            $CustomerAWSAccountId = aws sts get-caller-identity --query "Account" --output text
+            $rolePolicy = Get-OIDCRoleArnPolicy -WorkspaceId $workspaceId -CustomerAWSAccountId $CustomerAWSAccountId
+            # $rolePolicy = Get-RoleArnPolicy -WorkspaceId $workspaceId
             
             Write-Log "Executing: aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags $(Get-SentinelTagInJsonFormat) 2>&1" -LogFileName $LogFileName -Severity Verbose
             $tempForOutput = aws iam create-role --role-name $roleName --assume-role-policy-document $rolePolicy --tags [$(Get-SentinelTagInJsonFormat)] 2>&1
@@ -142,11 +137,14 @@ function New-S3Bucket
 
         Write-Log -Message "Executing: aws s3api head-bucket --bucket $bucketName 2>&1" -LogFileName $LogFileName -Severity Verbose
         $headBucketOutput = aws s3api head-bucket --bucket $bucketName 2>&1
+        # If there was an error the bucket does not already exist or no permissions.
+        Write-Log -Message "output $headBucketOutput 2>&1" -LogFileName $LogFileName -Severity Verbose
+        Write-Log -Message "error code $lastexitcode 2>&1" -LogFileName $LogFileName -Severity Verbose
             
-        $isBucketNotExist = $null -ne $headBucketOutput
+        $isBucketNotExist = $lastexitcode -ne 0
         if ($isBucketNotExist)
         {
-            $bucketCreationConfirm = Read-ValidatedHost -Prompt "Bucket doesn't exist, would you like to create a new bucket ? [y/n]" -ValidationType Confirm
+            $bucketCreationConfirm = Read-ValidatedHost -Prompt "Bucket doesn't exist or you don't have permission to access it, would you like to create a new bucket ? [y/n]" -ValidationType Confirm
             Write-Log -Message "Creating new bucket: $bucketCreationConfirm " -LogFileName $LogFileName -Indent 2 
             
             if ($bucketCreationConfirm -eq 'y')

@@ -1,12 +1,12 @@
 Parser:
   Title: Authentication ASIM filtering parser
-  Version: '0.2.2'
-  LastUpdated: Sept 18, 2023
+  Version: '0.3.0'
+  LastUpdated: Mar 12, 2024
 Product:
   Name: Source agnostic
 Normalization:
   Schema: Authentication
-  Version: '0.1.0'
+  Version: '0.1.3'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
@@ -23,39 +23,61 @@ ParserParams:
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
     Type: string
     Default: '*'
+  - Name: pack
+    Type: bool
+    Default: false
 ParserQuery: |
-  let Generic=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*") {
+  let Generic=(starttime: datetime=datetime(null), endtime: datetime=datetime(null), username_has_any: dynamic = dynamic([]), targetappname_has_any: dynamic = dynamic([]), srcipaddr_has_any_prefix: dynamic = dynamic([]), srchostname_has_any: dynamic = dynamic([]), eventtype_in: dynamic = dynamic([]), eventresultdetails_in: dynamic = dynamic([]), eventresult: string = '*', pack: bool=false) {
     let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'ExcludeimAuthentication') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser);
-    let imAuthenticationDisabled=toscalar('ExcludeimAuthentication' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
+    let imAuthenticationBuiltInDisabled=toscalar('ExcludeimAuthenticationBuiltIn' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
     union isfuzzy=true
       vimAuthenticationEmpty
-      , vimAuthenticationAADManagedIdentitySignInLogs   (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationAADManagedIdentitySignInLogs'      in (DisabledParsers) )))
-      , vimAuthenticationAADNonInteractiveUserSignInLogs(starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationAADNonInteractiveUserSignInLogs'   in (DisabledParsers) )))
-      , vimAuthenticationAADServicePrincipalSignInLogs  (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationAADServicePrincipalSignInLogs'     in (DisabledParsers) )))
-      , vimAuthenticationSigninLogs                     (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationSigninLogs'                        in (DisabledParsers) )))
-      , vimAuthenticationAWSCloudTrail                  (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationAWSCloudTrail'                     in (DisabledParsers) )))
-      , vimAuthenticationOktaSSO                        (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationOktaSSO'                           in (DisabledParsers) )))
-      , vimAuthenticationM365Defender                   (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationM365Defender'                      in (DisabledParsers) )))
-      , vimAuthenticationMicrosoftWindowsEvent          (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationMicrosoftWindowsEvent'             in (DisabledParsers) )))
-      , vimAuthenticationMD4IoT                         (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationMD4IoT'                            in (DisabledParsers) )))
-      , vimAuthenticationPostgreSQL                     (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationPostgreSQL'                    in (DisabledParsers) )))
-      , vimAuthenticationSshd                           (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationSshd' in (DisabledParsers) )))
-      , vimAuthenticationSu                             (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationSu' in (DisabledParsers) )))
-      , vimAuthenticationCiscoASA                       (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationCiscoASA' in (DisabledParsers) )))
-      , vimAuthenticationCiscoMeraki                    (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationCiscoMeraki' in (DisabledParsers) )))
-      , vimAuthenticationCiscoISE                       (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationCiscoISE' in (DisabledParsers) )))
-      , vimAuthenticationBarracudaWAF                   (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationBarracudaWAF' in (DisabledParsers) )))
-      , vimAuthenticationVectraXDRAudit               (starttime, endtime, (imAuthenticationDisabled or('ExcludevimAuthenticationVectraXDRAudit' in (DisabledParsers) )))
-      , vimAuthenticationPaloAltoCortexDataLake         (starttime, endtime, targetusername_has_any=targetusername_has, disabled=(imAuthenticationDisabled or('ExcludevimAuthenticationPaloAltoCortexDataLake' in (DisabledParsers) )))
-      , vimAuthenticationSentinelOne                    (starttime, endtime, targetusername_has, (imAuthenticationDisabled or('ExcludevimAuthenticationSentinelOne' in (DisabledParsers) )))
-      , vimAuthenticationCrowdStrikeFalconHost          (starttime=starttime, endtime=endtime, targetusername_has_any=targetusername_has, disabled=(imAuthenticationDisabled or('ExcludevimAuthenticationCrowdStrikeFalcon' in (DisabledParsers) )))
-      , vimAuthenticationVMwareCarbonBlackCloud         (starttime=starttime, endtime=endtime,  targetusername_has_any=targetusername_has, disabled=(imAuthenticationDisabled or('ExcludevimAuthenticationVMwareCarbonBlackCloud' in (DisabledParsers) )))
+      , vimAuthenticationAADManagedIdentitySignInLogs   (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationAADManagedIdentitySignInLogs'      in (DisabledParsers) )))
+      , vimAuthenticationAADNonInteractiveUserSignInLogs(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationAADNonInteractiveUserSignInLogs'   in (DisabledParsers) )))
+      , vimAuthenticationAADServicePrincipalSignInLogs  (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationAADServicePrincipalSignInLogs'     in (DisabledParsers) )))
+      , vimAuthenticationSigninLogs                     (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationSigninLogs'                        in (DisabledParsers) )))
+      , vimAuthenticationAWSCloudTrail                  (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationAWSCloudTrail'                     in (DisabledParsers) )))
+      , vimAuthenticationOktaSSO                        (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationOktaSSO'                           in (DisabledParsers) )))
+      , vimAuthenticationM365Defender                   (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationM365Defender'                      in (DisabledParsers) )))
+      , vimAuthenticationMicrosoftWindowsEvent          (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationMicrosoftWindowsEvent'             in (DisabledParsers) )))
+      , vimAuthenticationMD4IoT                         (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationMD4IoT'                            in (DisabledParsers) )))
+      , vimAuthenticationPostgreSQL                     (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationPostgreSQL'                    in (DisabledParsers) )))
+      , vimAuthenticationSshd                           (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationSshd' in (DisabledParsers) )))
+      , vimAuthenticationSu                             (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationSu' in (DisabledParsers) )))
+      , vimAuthenticationCiscoASA                       (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationCiscoASA' in (DisabledParsers) )))
+      , vimAuthenticationCiscoMeraki                    (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationCiscoMeraki' in (DisabledParsers) )))
+      , vimAuthenticationCiscoISE                       (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationCiscoISE' in (DisabledParsers) )))
+      , vimAuthenticationBarracudaWAF                   (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationBarracudaWAF' in (DisabledParsers) )))
+      , vimAuthenticationVectraXDRAudit                 (starttime=starttime, endtime=endtime, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationVectraXDRAudit' in (DisabledParsers) )))
+      , vimAuthenticationGoogleWorkspace                (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationGoogleWorkspace' in (DisabledParsers) )))
+      , vimAuthenticationSalesforceSC                   (starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled= (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationSalesforceSC' in (DisabledParsers) )))
+      , vimAuthenticationPaloAltoCortexDataLake         (starttime=starttime, endtime=endtime, targetusername_has_any=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationPaloAltoCortexDataLake' in (DisabledParsers) )))
+      , vimAuthenticationSentinelOne                    (starttime=starttime, endtime=endtime, targetusername_has=username_has_any, disabled = (imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationSentinelOne' in (DisabledParsers) )))
+      , vimAuthenticationCrowdStrikeFalconHost          (starttime=starttime, endtime=endtime, targetusername_has_any=username_has_any, disabled=(imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationCrowdStrikeFalcon' in (DisabledParsers) )))
+      , vimAuthenticationVMwareCarbonBlackCloud         (starttime=starttime, endtime=endtime,  targetusername_has_any=username_has_any, disabled=(imAuthenticationBuiltInDisabled or('ExcludevimAuthenticationVMwareCarbonBlackCloud' in (DisabledParsers) )))
   };
-  Generic(starttime, endtime, targetusername_has)
-
+  Generic(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, pack=pack)
 Parsers:
   - _Im_Authentication_Empty
   - _Im_Authentication_AADManagedIdentitySignInLogs  
@@ -76,6 +98,8 @@ Parsers:
   - _Im_Authentication_BarracudaWAF
   - _Im_Authentication_VectraXDRAudit
   - _Im_Authentication_SentinelOne
+  - _Im_Authentication_GoogleWorkspace
+  - _Im_Authentication_SalesforceSC
   - _Im_Authentication_PaloAltoCortexDataLake
   - _Im_Authentication_VMwareCarbonBlackCloud
   - _Im_Authentication_CrowdStrikeFalconHost
