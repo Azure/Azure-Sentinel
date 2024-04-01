@@ -152,7 +152,7 @@ It uses two connections:
 In order to correlate the right add the incident in JIRA to the correct Organization, we use a switch and determine the correct organization based on the originate Subscription ID.
 Add a case per customer and add the right Subscription ID, Customer name and Organization ID.
 If you do not use organizations in JIRA, you can remove the switch.
-![Switch](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/Azure%20-%20Switch%20Organization.png)
+![Switch](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Azure%20-%20Switch%20Organization.png)
 
 ### Sync status from JIRA to Sentinel
 
@@ -182,8 +182,8 @@ There is a check built-in to make sure that JIRA provides the assigned user. Som
 
 ### Add a link to the JIRA incident to the Sentinel incident
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FAdd-JiraLinkComment%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FSync-IncidentsWithJIRA%2FAdd-JiraLinkCommnet%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-Incidents%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FAtlassianJiraAudit%2FPlaybooks%2FSync-Incidents%2Fazuredeploy.json)
 
 This Logic App will add a URL to the JIRA incident as a comment to the Sentinel Incident.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule.

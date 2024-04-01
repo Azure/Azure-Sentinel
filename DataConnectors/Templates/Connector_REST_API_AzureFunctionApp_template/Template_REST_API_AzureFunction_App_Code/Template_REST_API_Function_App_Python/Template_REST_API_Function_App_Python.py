@@ -1,13 +1,9 @@
-/*  
-    Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel API 
+""" Title:          Azure Function App TEMPLATE - <PROVIDER NAME APPLIANCE NAME> API Ingestion to Azure Sentinel API 
     Language:       Python
     Version:        1.0
     Last Modified:  5/30/2020
     Comment:        Inital Release
-
-    DESCRIPTION:    The following Python Function App code is a generic data connector to pull logs from your <PROVIDER NAME APPLIANCE NAME> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the 
-                     Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the <PROVIDER NAME APPLIANCE NAME> API and format the data received into JSON format.
-*/
+    DESCRIPTION:    The following Python Function App code is a generic data connector to pull logs from your <PROVIDER NAME APPLIANCE NAME> API, transform the data logs into a Azure Sentinel acceptable format (JSON) and POST the logs to the Azure Sentinel workspace using the Azure Log Analytics Data Collector API. Use this generic template and replace with specific code needed to authenticate to the <PROVIDER NAME APPLIANCE NAME> API and format the data received into JSON format. """
 
 # Modules to support run the script
 import datetime
@@ -46,7 +42,7 @@ match = re.match(pattern,str(logAnalyticsUri))
 if(not match):
     raise Exception("Invalid Log Analytics Uri.")
     
-/* Used this block to build the <PROVIDER NAME APPLIANCE NAME> REQUEST header needed to call the API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
+""" Used this block to build the <PROVIDER NAME APPLIANCE NAME> REQUEST header needed to call the API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
 
 For example:
 apikey =  os.environ['api_id']
@@ -58,23 +54,23 @@ payload = {}
 headers = {
   'x-auth-token': '"+ api_key +" " + / + " "+ api_id +"'
 }
-*/
+"""
 
-/* Used this block to send a GET REQUEST to the <PROVIDER NAME APPLIANCE NAME> API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
+""" Used this block to send a GET REQUEST to the <PROVIDER NAME APPLIANCE NAME> API. Refer to the <PROVIDER NAME APPLIANCE NAME> API Documentation.
 
 For example:
 response = requests.request("GET", url, headers=headers, data = payload)
 
 json_data = response.text.encode('utf8')
 
-*/
+"""
 
-/* Used this block to transform the data recieved from the <PROVIDER NAME APPLIANCE NAME> API into JSON format, which is acceptable format for the Azure Log Analytics Data Collector API
+""" Used this block to transform the data recieved from the <PROVIDER NAME APPLIANCE NAME> API into JSON format, which is acceptable format for the Azure Log Analytics Data Collector API
 
 For example:
 body = json.dumps(json_data)
 
-*/
+"""
 
 
 # Required Function to build the Authorization signature for the Azure Log Analytics Data Collector API. References: https://docs.microsoft.com/azure/azure-monitor/platform/data-collector-api and https://docs.microsoft.com/azure/azure-functions/functions-reference-python#environment-variables
@@ -115,11 +111,11 @@ def post_data(customer_id, shared_key, body, log_type):
         else:
             print("Error during sending logs to Azure Sentinel. Response code: {}".format(response.status_code))
 
-/* Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
+""" Use this block to post the JSON formated data into Azure Log Analytics via the Azure Log Analytics Data Collector API
 
 For example:
 if (len(response) > 0):
     post_data(customer_id, shared_key, body, log_type)
 else:
     print "No records were found."
-*/
+"""
