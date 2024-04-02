@@ -2106,8 +2106,23 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     if ($global:connectorCounter -eq 1) {
                         $global:baseCreateUiDefinition.parameters.steps += $baseDataConnectorStep
                     }
+
+                    $hasDataConnectorText = $false
+                    foreach ($item in $global:baseCreateUiDefinition.parameters.steps.elements) {
+                        if ($item.name -like "*dataconnectors-text*") {
+                            $optionText = $item.options.text;
+                            if ($optionText -eq $connectorDescriptionText) {
+                                $hasDataConnectorText = $true
+                            }
+                        }
+                    }
+
                     $currentStepNum = $global:baseCreateUiDefinition.parameters.steps.Count - 1
-                    $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $baseDataConnectorTextElement
+                    if (!$hasDataConnectorText) {
+                        
+                        $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $baseDataConnectorTextElement
+                    }
+
                     if ($global:connectorCounter -eq $contentToImport."Data Connectors".Count) {
                         $parserTextElement = [PSCustomObject] @{
                             name    = "dataconnectors-parser-text";
