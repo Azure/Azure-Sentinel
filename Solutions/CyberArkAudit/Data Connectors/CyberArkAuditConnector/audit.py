@@ -2,8 +2,8 @@ import datetime
 import json
 import logging
 import requests
+import time
 import os
-from .models import TokenModel, QueryModel
 from .storage import AzureBlobStorage, LocalStorage
 
 client_id = os.environ.get('OAuthUsername')
@@ -14,6 +14,15 @@ api_base_url = os.environ.get('ApiBaseUrl')
 webapp_id = os.environ.get('WebAppID')
 
 storage = LocalStorage() if os.environ.get('Storage') == 'LocalStorage' else AzureBlobStorage()
+
+TOKEN_FILE_NAME = 'token.json'
+QUERY_FILE_NAME = 'query.json'
+
+
+def _is_token_expired(token: dict):
+    timestamp = int(token['timestamp'])
+    expiration = int(token['expiration'])
+    return timestamp + expiration <= int(time.time())
 
 
 def _get_oauth_token() -> str:
@@ -29,12 +38,11 @@ def _get_oauth_token() -> str:
     }
     url = f'{identity_endpoint}/oauth2/token/{webapp_id}'
     try:
-        token_data = storage.load(file_name=TokenModel.get_file_name())
+        token_data = storage.load(file_name=TOKEN_FILE_NAME)
 
         if token_data:
-            token_model = TokenModel(**token_data)
-            if not token_model.is_expired():
-                return token_model.token
+            if not _is_token_expired(token_data):
+                return token_data['token']
             else:
                 logging.warning(f'Stored token expired')
         logging.info('Creating new token')
@@ -44,7 +52,7 @@ def _get_oauth_token() -> str:
             expiration = res_content['expires_in']
             logging.info(f"Access Token obtained successfully. Valid for {expiration} sec")
             token = res_content['access_token']
-            storage.save(data=TokenModel(token=token, expiration=expiration).model_dump(), file_name=TokenModel.get_file_name())
+            storage.save(data={'token': token, 'expiration': expiration, 'timestamp': int(time.time())}, file_name=TOKEN_FILE_NAME)
         elif response.status_code == 400:
             logging.error(f"{res_content['error']} {res_content['error_description']}")
         else:
@@ -107,16 +115,15 @@ def _call_audit_api(route: str, body: dict) -> dict:
     return res_content
 
 
-def get_query_model() -> QueryModel:
-    cursor_data = storage.load(file_name=QueryModel.get_file_name())
+def get_query_data() -> dict:
+    cursor_data = storage.load(file_name=QUERY_FILE_NAME)
     if cursor_data:
-        model = QueryModel(**cursor_data)
-        logging.info(f'Fetched stored cursor cursorRef: {model.cursor}')
-        return model
+        logging.info(f"Fetched stored cursor cursorRef: {cursor_data['cursorRef']}")
+        return cursor_data
     if os.environ.get('cursorRef'):
-        model = QueryModel(cursor=os.environ.get('cursorRef'))
-        logging.info(f'Using local cursorRef: {model.cursor}')
-        return model
+        cursor_data['cursor'] = os.environ.get('cursorRef')
+        logging.info(f"Using local cursorRef: {cursor_data['cursorRef']}")
+        return cursor_data
     body = {
         "query": {
             "pageSize": 500,
@@ -158,23 +165,22 @@ def get_query_model() -> QueryModel:
         }
     }
     body = _add_filters(body)
-    res_content = _call_audit_api(route='createQuery', body=body)
-    if res_content:
-        query_model = QueryModel(query=body['query'], cursor=res_content['cursorRef'])
+    query_data = _call_audit_api(route='createQuery', body=body)
+    if query_data:
         logging.info('Saving cursor from new query')
-        storage.save(data=query_model.model_dump(), file_name=QueryModel.get_file_name())
-        logging.info(f'Saved new cursorRef: {query_model.cursor}')
-        return query_model
-    return None
+        storage.save(data=query_data, file_name=QUERY_FILE_NAME)
+        logging.info(f"Saved new cursorRef: {query_data['cursorRef']}")
+        return query_data
+    return cursor_data
 
 
-def get_cursor_results(query_model: QueryModel) -> list:
+def get_cursor_results(query_data: dict) -> list:
     body = {
-        'cursorRef': query_model.cursor
+        'cursorRef': query_data['cursorRef']
     }
     res_content = _call_audit_api(route='results', body=body)
     if res_content:
-        query_model.cursor = res_content['paging']['cursor']['cursorRef']
-        storage.save(data=query_model.model_dump(), file_name=QueryModel.get_file_name())
+        query_data['cursorRef'] = res_content['paging']['cursor']['cursorRef']
+        storage.save(data=query_data, file_name=QUERY_FILE_NAME)
         return res_content['data']
     return []

@@ -23,7 +23,7 @@ class LocalStorage(BaseStorage):
         if os.path.exists(file_name):
             with open(file_name, 'r') as file:
                 return json.load(file)
-        return None
+        return {}
 
 
 class AzureBlobStorage(BaseStorage):
@@ -50,4 +50,4 @@ class AzureBlobStorage(BaseStorage):
             return json.loads(blob_data)
         except Exception as e:
             logging.error(f'Error reading blob {file_name}: {str(e)}')
-            return None
+            return {}

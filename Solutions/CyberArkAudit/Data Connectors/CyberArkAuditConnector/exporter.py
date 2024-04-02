@@ -1,12 +1,30 @@
 import logging
 import os
-from .models import DCREventModel
 from azure.identity import DefaultAzureCredential
 from azure.monitor.ingestion import LogsIngestionClient
 
 
 def _transform_schema(audit_events: list) -> list:
-    dcr_events = [DCREventModel(**event).model_dump() for event in audit_events]
+    dcr_events = []
+    for audit in audit_events:
+        dcr = dict()
+        dcr['CyberArkTenantId'] = audit['tenantId']
+        dcr['timestamp'] = int(audit.get('timestamp', 0))
+        dcr['username'] = audit.get('username', '')
+        dcr['applicationCode'] = audit.get('applicationCode', '')
+        dcr['auditCode'] = audit.get('auditCode', '')
+        dcr['auditType'] = audit.get('auditType', '')
+        dcr['action'] = audit.get('action', '')
+        dcr['userId'] = audit.get('userId', '')
+        dcr['source'] = audit.get('source', '')
+        dcr['actionType'] = audit.get('actionType', '')
+        dcr['component'] = audit.get('component', '')
+        dcr['serviceName'] = audit.get('serviceName', '')
+        dcr['target'] = audit.get('target', '')
+        dcr['command'] = audit.get('command', '')
+        dcr['sessionId'] = audit.get('sessionId', '')
+        dcr['message'] = audit.get('message', '')
+        dcr_events.append(dcr)
     return dcr_events
 
 
