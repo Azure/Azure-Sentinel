@@ -2,8 +2,7 @@ import json
 import logging
 import os
 
-from azure.core.credentials import AzureNamedKeyCredential
-from azure.storage.blob import ContainerClient, BlobServiceClient
+from azure.storage.blob import ContainerClient
 
 
 class BaseStorage:
