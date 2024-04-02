@@ -165,9 +165,9 @@ def get_query_data() -> dict:
         }
     }
     body = _add_filters(body)
+    logging.info(f'Creating a new query {body}')
     query_data = _call_audit_api(route='createQuery', body=body)
     if query_data:
-        logging.info('Saving cursor from new query')
         storage.save(data=query_data, file_name=QUERY_FILE_NAME)
         logging.info(f"Saved new cursorRef: {query_data['cursorRef']}")
         return query_data

@@ -2,8 +2,8 @@ import json
 import logging
 import os
 
-from azure.identity import DefaultAzureCredential
-from azure.storage.blob import ContainerClient
+from azure.core.credentials import AzureNamedKeyCredential
+from azure.storage.blob import ContainerClient, BlobServiceClient
 
 
 class BaseStorage:
@@ -30,9 +30,8 @@ class AzureBlobStorage(BaseStorage):
     def __init__(self):
         storage_account = os.environ.get('AzureWebJobsStorage')
         audit_container = os.environ.get('StorageContainer', 'audit-query-storage')
-        self.container_client = ContainerClient(account_url=storage_account,
-                                                container_name=audit_container,
-                                                credential=DefaultAzureCredential())
+        self.container_client = ContainerClient.from_connection_string(conn_str=storage_account,
+                                                                       container_name=audit_container)
 
     def save(self, data: dict, file_name: str) -> None:
         blob_client = self.container_client.get_blob_client(blob=file_name)
