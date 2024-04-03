@@ -46,6 +46,8 @@ To generate the Client ID and API key:
 5. Click the Generate Key button.
 6. Copy the API key secret and  save it in a handy location. You won’t be able to copy it again.
 
+For additional information, please check: [Varonis Documentation](https://help.varonis.com/s/document-item?bundleId=ami1661784208197&topicId=emp1703144742927.html&_LANG=enus)
+
 
 STEP 2 - Choose ONE from the following deployment options to deploy the connector and the associated Azure Function.
 

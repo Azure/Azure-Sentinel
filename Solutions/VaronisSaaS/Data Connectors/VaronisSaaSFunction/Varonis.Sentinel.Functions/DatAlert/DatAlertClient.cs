@@ -30,6 +30,7 @@ namespace Varonis.Sentinel.Functions.DatAlert
         {
             var tokenJson = await GetAccessTokenAsync(_baseUri, _apikey).ConfigureAwait(false);
             var tokenInfo = CustomParser.ParseTokenInfo(tokenJson);
+            var maxAlerts = parameters.MaxAlertRetrieval;
 
             if (tokenInfo is null) 
             {
@@ -46,10 +47,10 @@ namespace Varonis.Sentinel.Functions.DatAlert
             client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue { NoCache = true };
             client.DefaultRequestHeaders.Add(Constants.IntegrationHeader, Constants.IntegrationType);
 
-            var severities = CustomParser.ParseArrayFromCSV(parameters.Severities);
-            var ruleIds = await GetRuleIdsAsync(client, parameters.ThreatModel)
+            var severities = CustomParser.ParseArrayFromCSV(parameters.AlertSeverity);
+            var ruleIds = await GetRuleIdsAsync(client, parameters.ThreatDetectionPolicies)
                 .ConfigureAwait(false);
-            var statuses = CustomParser.ParseArrayFromCSV(parameters.Status);
+            var statuses = CustomParser.ParseArrayFromCSV(parameters.AlertStatus);
 
             var searchQuery = new AlertSearchQueryBuilder()
                 .WithDateRange(parameters.Start, parameters.End, AlertAttributes.IngestTime)
@@ -66,7 +67,7 @@ namespace Varonis.Sentinel.Functions.DatAlert
             var rowLink = await GetSearchResultPath(client, payload)
                 .ConfigureAwait(false);
 
-            var result = await GetAlertItemsAsync(client, $"app/dataquery/api/search/{rowLink}")
+            var result = await GetAlertItemsAsync(client, $"app/dataquery/api/search/{rowLink}?from=0&to={maxAlerts}")
                 .ConfigureAwait(false);
 
             return result;

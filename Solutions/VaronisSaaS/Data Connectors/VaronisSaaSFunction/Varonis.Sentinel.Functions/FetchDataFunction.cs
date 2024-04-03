@@ -17,15 +17,18 @@ namespace Varonis.Sentinel.Functions
         {
             try
             {
-                var hostname = Environment.GetEnvironmentVariable("DatAlertHostName");
-                var datalertApiKey = Environment.GetEnvironmentVariable("DatAlertApiKey");
+                var hostname = Environment.GetEnvironmentVariable("VaronisFQDN_IP");
+                var datalertApiKey = Environment.GetEnvironmentVariable("VaronisApiKey");
                 var logAnalyticsKey = Environment.GetEnvironmentVariable("LogAnalyticsKey");
                 var logAnalyticsWorkspace = Environment.GetEnvironmentVariable("LogAnalyticsWorkspace");
 
-                var firstFetchTimeStr = Environment.GetEnvironmentVariable("FirstFetchTime");
-                var severities = Environment.GetEnvironmentVariable("Severities");
-                var threatModelName = Environment.GetEnvironmentVariable("ThreatModelNameList");
-                var status = Environment.GetEnvironmentVariable("Statuses");
+                var firstFetchTimeStr = Environment.GetEnvironmentVariable("AlertRetrievalStart");
+                var severities = Environment.GetEnvironmentVariable("AlertSeverity");
+                var threatModelName = Environment.GetEnvironmentVariable("ThreatDetectionPolicies");
+                var status = Environment.GetEnvironmentVariable("AlertStatus");
+                var maxAlerts = int.TryParse(Environment.GetEnvironmentVariable("MaxAlertRetrieval"), out var maxvalue)
+                    ? maxvalue
+                    : 1000;
 
                 var baseUri = new Uri($"https://{hostname}");
 
@@ -61,7 +64,7 @@ namespace Varonis.Sentinel.Functions
 
                 var interval = timer.ScheduleStatus.Next - timer.ScheduleStatus.Last;
 
-                var parameters = new DatAlertParams(lastUpdated, next, severities, threatModelName, status);
+                var parameters = new DatAlertParams(lastUpdated, next, severities, threatModelName, status, maxAlerts);
                 var alerts = await client.GetDataAsync(parameters);
 
                 if (!alerts.Any())
