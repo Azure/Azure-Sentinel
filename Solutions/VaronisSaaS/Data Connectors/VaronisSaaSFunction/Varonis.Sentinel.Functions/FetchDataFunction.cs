@@ -37,7 +37,7 @@ namespace Varonis.Sentinel.Functions
 
                 if (timer.IsPastDue)
                 {
-                    log.LogInformation("Timer is running late!");
+                    log.LogWarning("Timer is running late!");
                 }
 
                 var minDate = DateTime.MinValue.ToUniversalTime();
@@ -59,7 +59,7 @@ namespace Varonis.Sentinel.Functions
                     }
                 }
 
-                log.LogInformation($"DatAlert host name: {hostname}; LogAnalytics Key: {logAnalyticsKey.Substring(0, 5)}...;" +
+                log.LogInformation($"Varonis host name: {hostname}; LogAnalytics Key: {logAnalyticsKey.Substring(0, 5)}...;" +
                     $" LogAnalytics Workspace: {logAnalyticsWorkspace}; Time: {DateTime.Now}");
 
                 var interval = timer.ScheduleStatus.Next - timer.ScheduleStatus.Last;

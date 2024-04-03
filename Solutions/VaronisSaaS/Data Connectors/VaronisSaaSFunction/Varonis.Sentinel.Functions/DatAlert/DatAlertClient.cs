@@ -39,7 +39,7 @@ namespace Varonis.Sentinel.Functions.DatAlert
 
             var token = tokenInfo.Value.token;
 
-            _log.LogInformation($"Access token was received: {token.Substring(0, 5)}...");
+            _log.LogDebug($"Access token was received: {token.Substring(0, 5)}...");
 
             using var client = new HttpClient();
             client.BaseAddress = _baseUri;
