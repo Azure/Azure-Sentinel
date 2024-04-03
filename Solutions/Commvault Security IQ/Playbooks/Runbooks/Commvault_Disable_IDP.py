@@ -21,7 +21,7 @@ headers = {
 
 # Get all Tenant Identity Servers
 get_identity_servers_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/IdentityServers"
-get_identity_servers_result = requests.get(get_identity_servers_url, headers=headers, verify=False)
+get_identity_servers_result = requests.get(get_identity_servers_url, headers=headers, verify=True)
 
 if get_identity_servers_result.status_code == 200:
     try:
@@ -41,7 +41,7 @@ for saml_identity_server in saml_identity_servers:
     # Gets details of SAML Identity Server
     saml_identity_server_name = saml_identity_server["IdentityServerName"]
     getsaml_identity_server_prop_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/V4/SAML/{saml_identity_server_name}"
-    getsaml_identity_server_prop_result = requests.get(getsaml_identity_server_prop_url, headers=headers, verify=False)
+    getsaml_identity_server_prop_result = requests.get(getsaml_identity_server_prop_url, headers=headers, verify=True)
 
     # Check if SAML Identity Server is enabled or disabled and take action or give status
     if getsaml_identity_server_prop_result.status_code == 200:
@@ -51,7 +51,7 @@ for saml_identity_server in saml_identity_servers:
             # Disable SAML Identity Server if it is enabled
             body = {"enabled": False, "type": "SAML"}
             disablesaml_identity_server_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/V4/SAML/{saml_identity_server_name}"
-            disablesaml_identity_server_result = requests.put(disablesaml_identity_server_url, json=body, headers=headers, verify=False)
+            disablesaml_identity_server_result = requests.put(disablesaml_identity_server_url, json=body, headers=headers, verify=True)
             disablesaml_identity_server_resulterror_code = disablesaml_identity_server_result.json().get("errorCode", None)
             # Based on response error code verify if action was successful and return status
             if disablesaml_identity_server_resulterror_code == 0:

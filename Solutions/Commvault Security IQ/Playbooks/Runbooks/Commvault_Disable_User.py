@@ -22,8 +22,9 @@ headers = {
 }
 
 # Get all Tenant Users
-get_users_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/User?level=10"
-get_users_result = requests.get(get_users_url, headers=headers, verify=False)
+url = "/commandcenter/api/User?level=10"
+get_users_url = f"https://{EnvironmentEndpointURL}{url}"
+get_users_result = requests.get(get_users_url, headers=headers, verify=True)
 
 if get_users_result.status_code == 200:
     try:
@@ -46,7 +47,7 @@ else:
 
 # Get selected user details
 get_selected_user_details_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/User/{selected_user_id}"
-get_selected_user_details_result = requests.get(get_selected_user_details_url, headers=headers, verify=False)
+get_selected_user_details_result = requests.get(get_selected_user_details_url, headers=headers, verify=True)
 
 # Check user if user is enabled and take action
 if get_selected_user_details_result.status_code == 200:
@@ -54,7 +55,7 @@ if get_selected_user_details_result.status_code == 200:
     if enable_user_status is not None:
         if enable_user_status:
             disable_user_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/User/{selected_user_id}/Disable"
-            disable_user_result = requests.put(disable_user_url, headers=headers, verify=False)
+            disable_user_result = requests.put(disable_user_url, headers=headers, verify=True)
             disable_user_result_error_code = disable_user_result.json().get("response", {}).get("errorCode", None)
             if disable_user_result_error_code == 0:
                 print(f"User {userIdentity} was successfully disabled")

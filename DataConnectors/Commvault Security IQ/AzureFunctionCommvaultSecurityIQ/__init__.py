@@ -121,7 +121,7 @@ def main():
             fromtime = int((current_date - timedelta(days=2)).timestamp())
 
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
-        response = requests.get(event_endpoint, headers=headers, verify=False)
+        response = requests.get(event_endpoint, headers=headers, verify=True)
  
         if response.status_code == 200:
             events = response.json()
@@ -257,7 +257,7 @@ def format_alert_description(msg: str) -> str:
     return default_value
 
 
-def get_files_list(self, job_id) -> list:
+def get_files_list(job_id) -> list:
     """
     Get file list from analysis job
     
@@ -271,7 +271,7 @@ def get_files_list(self, job_id) -> list:
     job_details_body["advOptions"] = {
         "advConfig": {"browseAdvancedConfigBrowseByJob": {"jobId": int(job_id)}}
     }
-    resp = requests.post(url, headers=headers, body=job_details_body, verify=False)
+    resp = requests.post(url, headers=headers, body=job_details_body, verify=True)
     browse_responses = resp.get("browseResponses", [])
     file_list = []
     for browse_resp in browse_responses:
@@ -288,7 +288,7 @@ def get_files_list(self, job_id) -> list:
     return file_list
 
 
-def get_subclient_content_list(self, subclient_id) -> dict:
+def get_subclient_content_list(subclient_id) -> dict:
     """
     Get content from subclient
     
@@ -299,8 +299,8 @@ def get_subclient_content_list(self, subclient_id) -> dict:
         dict: Content from subclient
     """
 
-    self.validate_session_or_generate_token(self.current_api_token)
-    resp = self.http_request("GET", "/Subclient/" + str(subclient_id), None)
+    f_url = url + "/Subclient/" + str(subclient_id)
+    resp = requests.get(f_url, headers=headers).json()
     resp = resp.get("subClientProperties", [{}])[0].get("content")
     return resp
 
@@ -341,7 +341,7 @@ def get_job_details(job_id, url, headers):
     """
 
     f_url = f"{url}/Job/{job_id}"
-    response = requests.get(f_url, headers=headers, verify=False)
+    response = requests.get(f_url, headers=headers, verify=True)
     data = response.json()
     if ("totalRecordsWithoutPaging" in data) and (
             int(data["totalRecordsWithoutPaging"]) > 0
@@ -349,6 +349,10 @@ def get_job_details(job_id, url, headers):
         logging.info(f"Job Details for job_id : {job_id}")
         logging.info(data)
         return data
+    else:
+        logging.info(f"Failed to get Job Details for job_id : {job_id}")
+        logging.info(data)
+        return None
     
 
 def get_incident_details(message: str) -> dict | None:

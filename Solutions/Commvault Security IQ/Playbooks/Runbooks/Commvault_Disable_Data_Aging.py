@@ -24,7 +24,7 @@ headers = {
 
 # Get all Tenant Clients
 get_clients_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/client"
-get_clients_result = requests.get(get_clients_url, headers=headers, verify=False)
+get_clients_result = requests.get(get_clients_url, headers=headers, verify=True)
 
 if get_clients_result.status_code == 200:
     try:
@@ -68,7 +68,7 @@ if selected_clients:
 
         # Get Client Properties and Archive Pruning Status
         get_client_prop_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/client/{selected_client_id}"
-        get_client_prop_result = requests.get(get_client_prop_url, headers=headers, verify=False).json()
+        get_client_prop_result = requests.get(get_client_prop_url, headers=headers, verify=True).json()
         client_activity_control_options = get_client_prop_result["clientProperties"][0]["clientProps"]["clientActivityControl"]["activityControlOptions"]
         client_activity_type16_control_options = next((opt for opt in client_activity_control_options if opt["activityType"] == 16), None)
         client_archive_pruning_status = client_activity_type16_control_options.get("enableActivityType", False)
@@ -93,7 +93,7 @@ if selected_clients:
                 }
             }
             disable_client_archive_pruning_url = f"https://{EnvironmentEndpointURL}/commandcenter/api/client/{selected_client_id}"
-            disable_client_archive_pruning_result = requests.post(disable_client_archive_pruning_url, json=body, headers=headers, verify=False).json()
+            disable_client_archive_pruning_result = requests.post(disable_client_archive_pruning_url, json=body, headers=headers, verify=True).json()
             disable_client_archive_pruning_result_error_code = disable_client_archive_pruning_result.get("response", {})[0].get("errorCode", None)
 
             # Check status of operation to Disable Archive Pruning Status and print relevant message
