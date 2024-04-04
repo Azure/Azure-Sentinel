@@ -30,7 +30,9 @@ namespace Varonis.Sentinel.Functions
                     ? maxvalue
                     : 1000;
 
-                var baseUri = new Uri($"https://{hostname}");
+                var baseUri = hostname.StartsWith("http") 
+                    ? new Uri(hostname)
+                    : new Uri($"https://{hostname}");
 
                 var client = new DatAlertClient(baseUri, datalertApiKey, log);
                 var storage = new LogAnalyticsCollector(logAnalyticsKey, logAnalyticsWorkspace, log);
