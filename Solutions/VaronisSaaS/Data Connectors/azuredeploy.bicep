@@ -12,7 +12,7 @@ param location string = resourceGroup().location
 @description('Name of the Log Analytics workspace used by Microsoft Sentinel.')
 param logAnalyticsWorkspaceName string
 
-@description('Varonis FQDN/IP.')
+@description('FQDN/IP for the Integration Connection - Enter the Varonis Web Interface address. This is the Fully Qualified Domain Name (FQDN) of the Varonis server to which you want to connect.')
 param varonisFQDN string
 
 @description('Varonis API Key.')
