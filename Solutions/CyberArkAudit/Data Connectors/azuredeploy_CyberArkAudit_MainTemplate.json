@@ -1,0 +1,571 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "LoganalyticsWorkspaceName": {
+          "type": "string"
+        },
+        "LoganalyticsWorkspaceLocation": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+              "description": "Must be same as Region Name i.g. eastus, centralus, etc"
+            }
+        },
+        "FunctionName": {
+            "defaultValue": "Audit",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 10
+        },
+		"OauthUsername": {
+            "type": "string",
+            "metadata": {
+              "description": "OAuth2 Service user credentials"
+            }
+        },
+        "OauthPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "OAuth2 Service user credentials"
+            }
+        },
+        "WebAppID": {
+              "type": "string",
+              "metadata": {
+                    "description": "OAuth2 Server Web App Application ID"
+              }
+          },
+		"IdentityEndpoint": {
+            "type": "string",
+            "metadata": {
+                  "description": "CyberArk Identity endpoint"
+            }
+        },
+		"AuditApiBaseUrl": {
+            "type": "string",
+            "metadata": {
+                  "description": "Audit integration API base URL"
+            }
+        },
+        "AuditApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "SIEM Integration API key"
+            }
+        },
+        "AuditQueryFilterAction": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                  "description": "Optional query parameters. Comma separated values or none to include all. Available values specified in solution documentation"
+            }
+        },
+        "AuditQueryFilterApplicationCode": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                  "description": "Optional query parameters. Comma separated values or none to include all. Available values specified in solution documentation"
+            }
+        },
+        "AuditQueryFilterAuditType": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                  "description": "Optional query parameters. Comma separated values or none to include all. Available values specified in solution documentation"
+            }
+        },
+        "TriggeringSchedule": {
+            "type": "string",
+            "defaultValue": "0 */1 * * * *",
+            "metadata": {
+                "description": "Cron expression for trigger schedule. Highest supported frequency is every minute"
+            }
+        }
+    },
+    "variables": {
+            "loganalyticsworkspace": "[parameters('LoganalyticsWorkspaceName')]",
+            "dce-name": "[concat('sentinel-dce-',variables('FunctionName'))]",
+            "dcr-name": "[concat('sentinel-dcr-',variables('FunctionName'))]",
+            "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
+            "StorageSuffix": "[environment().suffixes.storage]",
+            "table-name": "CyberArk_AuditEvents_CL",
+            "stream-name": "[concat('Custom-', variables('table-name'))]",
+            "audit-storage-container": "audit-service-storage",
+            "hostingPlanName": "[concat('ASP-', variables('FunctionName'))]",
+            "location": "[parameters('LoganalyticsWorkspaceLocation')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "AuditTablesTemplate",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(variables('loganalyticsworkspace'),'/',variables('table-name'))]",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "apiVersion": "2022-10-01",
+                            "tags": {},
+                            "properties": {
+                                "plan": "Analytics",
+                                "schema": {
+                                    "name": "[variables('table-name')]",
+                                    "columns": [
+                                        {
+                                          "name": "TimeGenerated",
+                                          "type": "DateTime",
+                                          "isDefaultDisplay": true,
+                                          "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                                        },
+                                        {
+                                          "name": "CyberArkTenantId",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "name": "timestamp",
+                                          "type": "int"
+                                        },
+                                        {
+                                          "name": "username",
+                                          "type": "string"
+                                        },
+                                        {
+                                          "name": "applicationCode",
+                                          "type": "string"
+                                        },
+                                        {
+                                            "name": "auditCode",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "action",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "auditType",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "userId",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "source",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "actionType",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "component",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "serviceName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "target",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "command",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "sessionId",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "message",
+                                            "type": "string"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "parameters": {}
+            },
+            "subscriptionId": "[subscription().subscriptionId]",
+            "resourceGroup": "[resourceGroup().name]"
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('FunctionName')]",
+            "location": "[variables('location')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2022-07-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": true,
+                "enableSoftDelete": true,
+                "accessPolicies": "[createArray()]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(variables('FunctionName'), '/AuditApiKey')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('AuditApiKey')]",
+                "contentType": "string",
+                "attributes": {
+                    "enabled": true
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(variables('FunctionName'), '/OAuthUsername')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('OAuthUsername')]",
+                "contentType": "string",
+                "attributes": {
+                    "enabled": true
+                }
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2022-07-01",
+            "name": "[concat(variables('FunctionName'), '/OAuthPassword')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "value": "[parameters('OAuthPassword')]",
+                "contentType": "string",
+                "attributes": {
+                    "enabled": true
+                }
+            }
+        },
+        {
+            "name": "[concat(variables('FunctionName'), '/add')]",
+            "type": "Microsoft.KeyVault/vaults/accessPolicies",
+            "apiVersion": "2022-07-01",
+            "properties": {
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[reference(resourceId('Microsoft.Web/sites', variables('FunctionName')), '2022-03-01', 'full').identity.principalId]",
+                        "permissions": {
+                            "secrets": [
+                                "get"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2022-09-01",
+            "name": "[tolower(variables('FunctionName'))]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "keyType": "Account",
+                            "enabled": true
+                        },
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(variables('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+                "deleteRetentionPolicy": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/fileServices",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(variables('FunctionName'), '/default')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+            ],
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "properties": {
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(variables('FunctionName'), '/default/azure-webjobs-hosts')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(variables('FunctionName'), '/default/', variables('audit-storage-container'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('FunctionName'), 'default')]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName'))]"
+            ],
+            "properties": {
+                "publicAccess": "None"
+            }
+        },
+        {
+          "type": "Microsoft.Web/serverfarms",
+          "apiVersion": "2022-03-01",
+          "name": "[variables('hostingPlanName')]",
+          "location": "[variables('location')]",
+          "sku": {
+            "name": "Y1",
+            "tier": "Dynamic",
+            "size": "Y1",
+            "family": "Y"
+          },
+          "properties": {
+            "reserved": true
+          }
+        },
+		{
+          "type": "Microsoft.Insights/dataCollectionEndpoints",
+          "apiVersion": "2022-06-01",
+          "name": "[variables('dce-name')]",
+          "location": "[variables('location')]",
+          "properties": {
+            "networkAcls": {
+              "publicNetworkAccess": "Enabled"
+            }
+          }
+        },
+		{
+			"type": "Microsoft.Insights/dataCollectionRules",
+			"apiVersion": "2022-06-01",
+			"name": "[variables('dcr-name')]",
+			"location": "[variables('location')]",
+			"tags": {
+              "createdBy": "Sentinel"
+            },
+			"dependsOn": [
+              "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]",
+              "[resourceId('Microsoft.Resources/deployments', 'AuditTablesTemplate')]"
+            ],
+			"properties": {
+				"dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name'))]",
+                "streamDeclarations": {
+                  "Custom-CyberArk_AuditEvents_CL": {
+                    "columns": [
+                        {
+                          "name": "CyberArkTenantId",
+                          "type": "string"
+                        },
+                        {
+                          "name": "timestamp",
+                          "type": "int"
+                        },
+                        {
+                          "name": "username",
+                          "type": "string"
+                        },
+                        {
+                          "name": "applicationCode",
+                          "type": "string"
+                        },
+                        {
+                            "name": "auditCode",
+                            "type": "string"
+                        },
+                        {
+                            "name": "action",
+                            "type": "string"
+                        },
+                        {
+                            "name": "auditType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "userId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "source",
+                            "type": "string"
+                        },
+                        {
+                            "name": "actionType",
+                            "type": "string"
+                        },
+                        {
+                            "name": "component",
+                            "type": "string"
+                        },
+                        {
+                            "name": "serviceName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "target",
+                            "type": "string"
+                        },
+                        {
+                            "name": "command",
+                            "type": "string"
+                        },
+                        {
+                            "name": "sessionId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "message",
+                            "type": "string"
+                        }
+                    ]
+                  }
+                },
+                "destinations": {
+                    "logAnalytics": [
+                      {
+                        "name": "loganalyticsworkspacename",
+                        "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/Workspaces', variables('loganalyticsworkspace'))]"
+                      }
+                    ]
+              },
+                "dataFlows": [
+                    {
+                        "streams": [
+                          "[variables('stream-name')]"
+                        ],
+                        "destinations": [ "loganalyticsworkspacename" ],
+                        "transformKql": "source\r\n| extend TimeGenerated = now()\r\n",
+                        "outputStream": "[variables('stream-name')]"
+                    }
+                ]
+            }
+		},
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]",
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.10"
+                },
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]"
+            },
+            "resources": [
+                {
+                    "apiVersion": "2022-03-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/sites', variables('FunctionName'))]"
+                    ],
+                    "properties": {
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]",
+                        "ActionFilter": "[parameters('AuditQueryFilterAction')]",
+                        "ApiBaseUrl": "[parameters('AuditApiBaseUrl')]",
+                        "ApiKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('FunctionName'), 'AuditApiKey')).SecretUriWithVersion, ')')]",
+                        "ApplicationCodeFilter": "[parameters('AuditQueryFilterApplicationCode')]",
+                        "AuditTypeFilter": "[parameters('AuditQueryFilterAuditType')]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('FunctionName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('FunctionName'))), '2022-09-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]",
+                        "DATA_COLLECTION_ENDPOINT": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dce-name')), '2022-06-01').logsIngestion.endpoint]",
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "IdentityEndpoint": "[parameters('IdentityEndpoint')]",
+                        "LOGS_DCR_RULE_ID": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcr-name')), '2022-06-01').immutableId]",
+                        "LOGS_DCR_STREAM_NAME": "[variables('stream-name')]",
+                        "OAuthUsername": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('FunctionName'), 'OAuthUsername')).SecretUriWithVersion, ')')]",
+                        "OAuthPassword": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('FunctionName'), 'OAuthPassword')).SecretUriWithVersion, ')')]",
+                        "StorageContainer": "[variables('audit-storage-container')]",
+                        "TriggerSchedule": "[parameters('TriggeringSchedule')]",
+                        "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('FunctionName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('FunctionName')), '2022-05-01').keys[0].value)]",
+                        "WEBSITE_CONTENTSHARE": "[toLower(variables('FunctionName'))]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-CyberArkAuditAPI-functionapp",
+                        "WebAppID": "[parameters('WebAppID')]"
+                    }
+                }
+            ]
+        }
+    ]
+}

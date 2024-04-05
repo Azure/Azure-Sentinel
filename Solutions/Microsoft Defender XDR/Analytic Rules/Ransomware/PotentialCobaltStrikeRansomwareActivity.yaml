@@ -1,0 +1,80 @@
+id: 4bd9ce9d-8586-4beb-8fdb-bd018cacbe7d
+name: Potential Ransomware activity related to Cobalt Strike
+description: |
+  This query searches for alerts related to suspected ransomware and Cobalt Strike activity, a tool used in numerous ransomware campaigns. It looks for alerts that indicate potential ransomware activity, such as attempts to clear security event logs, delete backup files, and execute Cobalt Strike malware.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - AlertInfo
+      - AlertEvidence
+      - DeviceLogonEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - Persistence
+  - DefenseEvasion
+  - Impact
+relevantTechniques:
+  - T1059
+  - T1078
+  - T1070
+  - T1490
+query: |
+  // Look for sc.exe disabling services
+  AlertInfo 
+  // Attempts to clear security event logs. 
+  | where Title in("Event log was cleared", 
+  // List alerts flagging attempts to delete backup files. 
+  "File backups were deleted", 
+  // Potential Cobalt Strike activity - Note that other threat activity can also 
+  // trigger alerts for suspicious decoded content 
+  "Suspicious decoded content", 
+  // Cobalt Strike activity 
+  "\'Atosev\' malware was detected", 
+  "\'Ploty\' malware was detected", 
+  "\'Bynoco\' malware was detected",
+  "\'Cobaltstrike\' malware was detected",
+  "Echo command over pipe on localhost",
+  "Known attack framework activity was observed",
+  "An active \'Cobaltstrike\' malware was detected",
+  "Suspicious \'CobaltStrike\' behavior was prevented",
+  "Suspicious process launch by Rundll32.exe") 
+  | extend AlertTime = TimeGenerated | distinct AlertTime, AlertId, Title 
+  | join AlertEvidence on $left.AlertId == $right.AlertId
+  | summarize by DeviceId, AlertTime, Title, AlertId
+  // Get device IDs
+  | join DeviceLogonEvents on $left.DeviceId == $right.DeviceId 
+  // Creating 10 day Window surrounding alert activity 
+  | where TimeGenerated < AlertTime + 12h and TimeGenerated > AlertTime - 12h // Projecting specific columns 
+  | project Title, DeviceName, DeviceId, TimeGenerated, LogonType, AccountDomain, AccountName, AccountSid, AlertTime, AlertId, RemoteIP, RemoteDeviceName
+  | extend AccountFullName = tostring(strcat(AccountDomain, "\\", AccountName))
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:  
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUpn
+      - identifier: Name
+        columnName: AccountName
+      - identifier: DnsDomain
+        columnName: AccountDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP
+version: 1.0.0
+kind: Scheduled
