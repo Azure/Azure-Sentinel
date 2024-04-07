@@ -84,7 +84,8 @@ def main(mytimer: func.TimerRequest) -> None:
         'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
         'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
         'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10),
-        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
+        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10),
+        'audit': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_audit', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -98,7 +99,9 @@ def main(mytimer: func.TimerRequest) -> None:
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 sentinel = sentinel_dict['cloudfirewall']
             elif 'firewalllogs' in key.lower():
-                sentinel = sentinel_dict['firewall']    
+                sentinel = sentinel_dict['firewall'] 
+            elif 'auditlogs' in key.lower():
+                 sentinel = sentinel_dict['audit']      
             else:
                 # skip files of unknown types
                 continue
@@ -238,7 +241,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs','auditlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -496,6 +499,41 @@ class UmbrellaClient:
                     event = {"message": convert_list_to_csv_line(row)}
                 event['EventType'] = 'firewalllogs'
                 yield event
+    def parse_csv_al(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 23:
+                    event = {
+                        'TransactionID': row[0],
+                        'Time': self.format_date(row[1], self.input_date_format, self.output_date_format),
+                        'Email': row[2],
+                        'User': row[3],
+                        'Type': row[4],
+                        'Action': row[5],
+                        'Loggedinfrom': row[6],
+                        'Before': row[7],
+                        'After': row[8],
+                        'deviceKey': row[9],
+                        'label': row[10],
+                        'bundle': row[11],
+                        'phishing': row[12],
+                        'createdAt': self.format_date(row[13], self.input_date_format, self.output_date_format),
+                        "timeZoneName": row[14],
+                        "originId": row[15],
+                        "deviceTypeId": row[16],
+                        "maxBlockedDomains": row[17],
+                        "maxNoredirectDomains": row[18],
+                        "maxWhitelistDomains": row[19],
+                        "organizationId": row[20],
+                        "originTypeId": row[21],
+                        "modifiedAt": self.format_date(row[22], self.input_date_format, self.output_date_format),
+                        "auditLogUserId": row[23]
+                    }
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'auditlogs'
+                yield event
 
     def process_file(self, obj, dest):
         t0 = time.time()
@@ -516,6 +554,8 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_cdfw
             elif 'firewalllogs' in key.lower():
                 parser_func =  self.parse_csv_fw
+            elif 'auditlogs'  in key.lower():
+                parser_func=  self.parse_csv_al
 
             if parser_func:
                 file_events = 0
