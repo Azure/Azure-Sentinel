@@ -116,7 +116,7 @@ try {
                         FunctionAlias      = $yamlObject.ParserName
                         query              = $yamlObject.ParserQuery
                         version            = $yamlObject.Parser.Version
-                        functionParameters = $stringParams.trim(', ')
+                        functionParameters = $stringParams.replace("string=*", "string='*'").trim(', ')
                     }
                 }
 
