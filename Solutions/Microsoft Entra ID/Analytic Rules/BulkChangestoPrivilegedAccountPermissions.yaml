@@ -26,7 +26,7 @@ query: |
   | mv-apply TargetResource = TargetResources on 
     (
         where TargetResource.type =~ "User"
-        | extend Target = tostring(TargetResource.userPrincipalName),
+        | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),
                  props = TargetResource.modifiedProperties
     )
   | mv-apply Property = props on 
@@ -36,30 +36,53 @@ query: |
     )
   | where RoleName contains "Admin";
   AdminRecords
-  | summarize dcount(Target) by bin(TimeGenerated, 1h)
-  | where dcount_Target > 9
+  | summarize dcount(TargetUserPrincipalName) by bin(TimeGenerated, 1h)
+  | where dcount_TargetUserPrincipalName > 9
   | join kind=rightsemi  (
     AdminRecords
     | extend TimeWindow = bin(TimeGenerated, 1h)
   ) on $left.TimeGenerated == $right.TimeWindow
   | extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), "")
-  | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]),
-           InitiatedByUserName = tostring(split(InitiatedByUser,'@',0)[0]), InitiatedByUserUPNSuffix = tostring(split(InitiatedByUser,'@',1)[0])
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: Name
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUserPrincipalName
       - identifier: Name
         columnName: TargetName
       - identifier: UPNSuffix
         columnName: TargetUPNSuffix
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
       - identifier: Name
-        columnName: InitiatedByUserName
+        columnName: InitiatingAccountName
       - identifier: UPNSuffix
-        columnName: InitiatedByUserUPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIPAddress
 customDetails:
     InitiatedByUser: InitiatedByUser
-    TargetUser: Target
-version: 1.0.4
+    TargetUser: TargetUserPrincipalName
+version: 1.0.6
 kind: Scheduled

@@ -25,15 +25,18 @@ query: |
   AuditLogs
   | where TimeGenerated > ago(queryfrequency)
   | where OperationName =~ "Delete user"
-  //extend UserPrincipalName = tostring(TargetResources[0].userPrincipalName)
   | mv-apply TargetResource = TargetResources on 
     (
         where TargetResource.type == "User"
-        | extend UserPrincipalName = extract(@'([a-f0-9]{32})?(.*)', 2, tostring(TargetResource.userPrincipalName))
+        | extend TargetUserPrincipalName = extract(@'([a-f0-9]{32})?(.*)', 2, tostring(TargetResource.userPrincipalName))
     )
-  | extend DeletedByUser = tostring(InitiatedBy.user.userPrincipalName), DeletedByIPAddress = tostring(InitiatedBy.user.ipAddress)
-  | extend DeletedByApp = tostring(InitiatedBy.app.displayName)
-  | project Deletion_TimeGenerated = TimeGenerated, UserPrincipalName, DeletedByUser, DeletedByIPAddress, DeletedByApp, Deletion_AdditionalDetails = AdditionalDetails, Deletion_InitiatedBy = InitiatedBy, Deletion_TargetResources = TargetResources
+  | extend DeletedByApp = tostring(InitiatedBy.app.displayName),
+  DeletedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),
+  DeletedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),
+  DeletedByAadUserId = tostring(InitiatedBy.user.id),
+  DeletedByIPAddress = tostring(InitiatedBy.user.ipAddress)
+  | project Deletion_TimeGenerated = TimeGenerated, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, 
+  Deletion_AdditionalDetails = AdditionalDetails, Deletion_InitiatedBy = InitiatedBy, Deletion_TargetResources = TargetResources
   | join kind=inner (
       AuditLogs
       | where TimeGenerated > ago(queryperiod)
@@ -41,26 +44,62 @@ query: |
       | mv-apply TargetResource = TargetResources on 
         (
             where TargetResource.type == "User"
-            | extend UserPrincipalName = trim(@'"',tostring(TargetResource.userPrincipalName))
+            | extend TargetUserPrincipalName = trim(@'"',tostring(TargetResource.userPrincipalName))
         )
       | project-rename Creation_TimeGenerated = TimeGenerated
-  ) on UserPrincipalName
+  ) on TargetUserPrincipalName
   | extend TimeDelta = Deletion_TimeGenerated - Creation_TimeGenerated
   | where  TimeDelta between (time(0s) .. queryperiod)
-  | extend CreatedByUser = tostring(InitiatedBy.user.userPrincipalName), CreatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
-  | extend CreatedByApp = tostring(InitiatedBy.app.displayName)
-  | project Creation_TimeGenerated, Deletion_TimeGenerated, TimeDelta, UserPrincipalName, DeletedByUser, DeletedByIPAddress, DeletedByApp, CreatedByUser, CreatedByIPAddress, CreatedByApp, Creation_AdditionalDetails = AdditionalDetails, Creation_InitiatedBy = InitiatedBy, Creation_TargetResources = TargetResources, Deletion_AdditionalDetails, Deletion_InitiatedBy, Deletion_TargetResources
-  | extend timestamp = Deletion_TimeGenerated, Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  | extend CreatedByApp = tostring(InitiatedBy.app.displayName),
+  CreatedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId),
+  CreatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName),
+  CreatedByAadUserId = tostring(InitiatedBy.user.id),
+  CreatedByIPAddress = tostring(InitiatedBy.user.ipAddress)
+  | project Creation_TimeGenerated, Deletion_TimeGenerated, TimeDelta, TargetUserPrincipalName, DeletedByApp, DeletedByAppServicePrincipalId, DeletedByUserPrincipalName, DeletedByAadUserId, DeletedByIPAddress, 
+  CreatedByApp, CreatedByAppServicePrincipalId, CreatedByUserPrincipalName, CreatedByAadUserId, CreatedByIPAddress, Creation_AdditionalDetails = AdditionalDetails, Creation_InitiatedBy = InitiatedBy, Creation_TargetResources = TargetResources, Deletion_AdditionalDetails, Deletion_InitiatedBy, Deletion_TargetResources
+  | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+  | extend CreatedByName = tostring(split(CreatedByUserPrincipalName,'@',0)[0]), CreatedByUPNSuffix = tostring(split(CreatedByUserPrincipalName,'@',1)[0])
+  | extend DeletedByName = tostring(split(DeletedByUserPrincipalName,'@',0)[0]), DeletedByUPNSuffix = tostring(split(DeletedByUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: TargetUserPrincipalName
       - identifier: Name
-        columnName: Name
+        columnName: TargetName
       - identifier: UPNSuffix
-        columnName: UPNSuffix
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CreatedByUserPrincipalName
+      - identifier: Name
+        columnName: CreatedByName
+      - identifier: UPNSuffix
+        columnName: CreatedByUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: CreatedByAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeletedByUserPrincipalName
+      - identifier: Name
+        columnName: DeletedByName
+      - identifier: UPNSuffix
+        columnName: DeletedByUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: DeletedByAadUserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CreatedByIPAddress
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: DeletedByIPAddress
-version: 1.0.3
+version: 1.1.0
 kind: Scheduled
