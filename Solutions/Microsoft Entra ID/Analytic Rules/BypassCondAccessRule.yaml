@@ -46,13 +46,13 @@ query: |
   | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
   | extend Status = strcat(StatusCode, ": ", ResultDescription)
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Status = make_list(Status,10), StatusDetails = make_list(StatusDetails,50), IPAddresses = make_list(IPAddress,100), IPAddressCount = dcount(IPAddress), CorrelationIds = make_list(CorrelationId,100), ConditionalAccessPoliciesName = make_list(ConditionalAccessPoliciesName,100)
-  by UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type
+  by UserPrincipalName, UserId, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, Type
   | where IPAddressCount > threshold and StatusDetails !has "MFA successfully completed"
   | mv-expand IPAddresses, Status, StatusDetails, CorrelationIds
   | extend Status = strcat(Status, " ", StatusDetails)
   | summarize IPAddresses = make_set(IPAddresses,100), Status = make_set(Status,10), CorrelationIds = make_set(CorrelationIds,100), ConditionalAccessPoliciesName = make_set(ConditionalAccessPoliciesName,100)
-  by StartTime, EndTime, UserPrincipalName, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type
-  | extend timestamp = StartTime, IPAddresses = tostring(IPAddresses), Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])
+  by StartTime, EndTime, UserPrincipalName, UserId, AppDisplayName, tostring(Browser), tostring(OS), City, State, Region, IPAddressCount, Type
+  | extend IPAddressFirst = tostring(IPAddresses[0]), Name = tostring(split(UserPrincipalName, "@")[0]), UPNSuffix = tostring(split(UserPrincipalName, "@")[1])
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
@@ -60,13 +60,19 @@ query: |
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
       - identifier: Name
         columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: UserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPAddresses
-version: 1.0.5
+        columnName: IPAddressFirst
+version: 1.0.6
 kind: Scheduled
