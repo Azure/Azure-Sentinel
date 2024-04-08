@@ -10,8 +10,8 @@ The key function of this Solution is to retrieve sign-in attempts, item usage, a
 
 - [1Password Business account](https://1password.com/business)
 - [1Password Events API key](https://support.1password.com/events-reporting/#appendix-issue-or-revoke-bearer-tokens)
-- [Microsoft Azure](https://azure.microsoft.com/en-us/free)
-- [Microsoft Sentinel](https://azure.microsoft.com/en-us/products/microsoft-sentinel/)
+- [Microsoft Azure](https://azure.microsoft.com/free)
+- [Microsoft Sentinel](https://azure.microsoft.com/products/microsoft-sentinel/)
 - Contributor role with User Access Administrator role on the Microsoft Sentinel Resource Group <br>
 **or**
 - Owner on the Microsoft Sentinel Resource Group 
@@ -21,7 +21,7 @@ The key function of this Solution is to retrieve sign-in attempts, item usage, a
 Installing the 1Password Solution for Microsoft Sentinel is easy and can be completed in only a few minutes. 
 Just click the button below to get started with the deployment wizard. <br>
 
-[![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fazurekid%2FAzure-Sentinel%2Ffeature%2F1password%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fazuredeploy_1Password_API_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fazurekid%2FAzure-Sentinel%2Ffeature%2F1password%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fdeployment%2FUiDefinition.json)
+[![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fazuredeploy_1Password_API_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fdeployment%2FUiDefinition.json)
 
 > NOTE: To deploy the solution, the Azure user account executing the deployment needs to have `Owner` permissions on the Microsoft Sentinel `Resource Group` in Azure.<br>
 > This is required to assign the correct RBAC role to the managed identity of the FunctionApp!  
@@ -37,18 +37,18 @@ Just click the button below to get started with the deployment wizard. <br>
 
 1. Install the data connector using the ARM template or use this link to skip the steps below
 
-![Alt text](images/image.png)
+![Alt text](https://github.com/Azure/Azure-Sentinel/blob/f3655ba6a4891acdda67c3c3bf2414401de323b6/Solutions/1Password/images/image.png)
 
 2. After the deployment of the template has completed open the Microsoft Sentinel portal and select the data connector
 
-![Alt text](images/dataconnector.png)
+![Alt text](https://github.com/Azure/Azure-Sentinel/blob/f3655ba6a4891acdda67c3c3bf2414401de323b6/Solutions/1Password/images/dataconnector.png)
 
 3. Select the `Open connector page` button to open the data connector configuration
 4. click on the `Deploy to Azure` button<br>
 This will open a new browser page containing a deployment wizard in Microsoft Azure.<br>
 Fill in all the required fields and select `create` on the last page.
 
-![Alt text](images/summary.png)
+![Alt text](https://github.com/Azure/Azure-Sentinel/blob/fd9527ab432fa3e4e6115e4ee823ed5c2a92c163/Solutions/1Password/images/summary.png)
 
 The required resources for the deployment will now be created.
 
