@@ -21,7 +21,7 @@ The key function of this Solution is to retrieve sign-in attempts, item usage, a
 Installing the 1Password Solution for Microsoft Sentinel is easy and can be completed in only a few minutes. 
 Just click the button below to get started with the deployment wizard. <br>
 
-[![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fazuredeploy_1Password_API_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2F1Password%2FData%20Connectors%2F1Password%2Fdeployment%2FUiDefinition.json)
+[![Deploy To Azure](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/deploytoazure.svg?sanitize=true)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fazurekid%2FAzure-Sentinel%2Ffeature%2F1password%2FSolutions%2F1Password%2FData%2520Connectors%2F1Password%2Fazuredeploy_1Password_API_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fazurekid%2FAzure-Sentinel%2Ffeature%2F1password%2FSolutions%2F1Password%2FData%2520Connectors%2F1Password%2Fdeployment%2FUiDefinition.json)
 
 > NOTE: To deploy the solution, the Azure user account executing the deployment needs to have `Owner` permissions on the Microsoft Sentinel `Resource Group` in Azure.<br>
 > This is required to assign the correct RBAC role to the managed identity of the FunctionApp!  

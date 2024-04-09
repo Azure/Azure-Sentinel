@@ -7,7 +7,7 @@ $currentUTCtime = (Get-Date).ToUniversalTime()
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
 
-$currentStartTime = (Get-Date).AddDays(-30).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+$global:currentStartTime = (Get-Date).AddDays(-30).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 
 try {
     Get-Variables
@@ -32,6 +32,10 @@ foreach ($api in $endpoints) {
     } catch {
         $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
     }
+}
+
+$results += @{
+    "log_source" = "healthevents"
 }
 
 if ($results.count -gt 0) {
