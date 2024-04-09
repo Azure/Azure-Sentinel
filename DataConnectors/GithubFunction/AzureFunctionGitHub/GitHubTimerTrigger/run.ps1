@@ -37,9 +37,23 @@ $personalAccessToken = $env:PersonalAccessToken
 $workspaceId = $env:WorkspaceId
 $workspaceKey = $env:WorkspaceKey
 $LAURI = $env:LAURI
+$secret=$env:PEM
 $storageAccountContainer = "github-repo-logs"
 $AuditLogTable = "GitHub_CL"
 $RepoLogTable = "GitHubRepoLogs_CL"
+$apiSecret = [System.Text.Encoding]::UTF8.GetBytes($secret)
+$appID="838637"
+#Import-Module -Name powershell-jwt
+$exp = [int][double]::parse((Get-Date -Date $((Get-Date).addseconds(300).ToUniversalTime()) -UFormat %s)) 
+$iat = [int][double]::parse((Get-Date -Date $((Get-Date).ToUniversalTime()) -UFormat %s)) 
+
+# create a Json Web Tokken using new-jwt from the powershell-jwt module
+$jwt = New-JWT -Algorithm "RS256" -Issuer $appID -ExpiryTimestamp $exp -SecretKey $apiSecret -PayloadClaims @{ "iat" = $iat}
+Write-Host $jwt
+
+
+
+
 
 $currentStartTime = (get-date).ToUniversalTime() | get-date  -Format yyyy-MM-ddTHH:mm:ss:ffffffZ
 
@@ -209,14 +223,35 @@ else{
     Write-Error "No ORGS.json file, exiting"
     exit
 }
+$headersjwt = @{
+    "Accept" = "application/vnd.github+json"
+    "Authorization" = "Bearer $jwt"
+}
 
 
 #Process each Org
 $repoList = @()
 foreach($org in $githubOrgs){
+
     $orgName = $org.org
+    $orguri= "https://api.github.com/orgs/$orgName/installation"
+    $output = Invoke-WebRequest -Uri $orguri  -Headers $headersjwt
+    $converted=ConvertFrom-Json $output
+    Write-Host $converted.access_tokens_url
+    $accesstokenurl=$converted.access_tokens_url
+    if(-not([string]::IsNullOrWhiteSpace($accesstokenurl)))
+    {
+        
+#"https://api.github.com/app/installations/47849661/access_tokens"
+   $res = Invoke-WebRequest -Uri  $converted.access_tokens_url -Headers $headersjwt -Method Post
+   $json_res = ConvertFrom-Json($res.Content)
+   $token = $json_res.token
     Write-Host "Starting to process ORG: $orgName"
-    
+    $headersaccesstoken = @{
+        Accept="application/vnd.github+json"
+        Authorization="Bearer $token"
+        "X-GitHub-Api-Version" = "2022-11-28"
+    }
     #Get Audit Entries
     #check for last run file
     $checkBlob = Get-AzStorageBlob -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext
@@ -254,7 +289,7 @@ foreach($org in $githubOrgs){
     $uri = "https://api.github.com/graphql"
     do {
         $results = $null
-        $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headers
+        $results = Invoke-RestMethod -Method Post -Uri $uri -Body $AuditQuery -Headers $headersaccesstoken
         if(($results.data.organization.auditLog.edges).Count -ne 0){
             #write to log A to be added later           
             SendToLogA -gitHubData ($results.data.organization.auditLog.edges) -customLogName $AuditLogTable
@@ -293,7 +328,7 @@ foreach($org in $githubOrgs){
     $pageNumber = 1
     do {
         $uri = "https://api.github.com/orgs/$orgName/repos?page=$pageNumber"
-        $results = Invoke-RestMethod -Method GET -Uri $uri -Headers $headers
+        $results = Invoke-RestMethod -Method GET -Uri $uri -Headers $headersaccesstoken
         $repoList += $results
         if($results.Count -eq 0){
             Write-Host "No more repos found for Org: $orgName"
@@ -312,7 +347,7 @@ foreach($org in $githubOrgs){
     foreach($repo in $repoList){
         $repoName = $repo.Name        
         $uri = "https://api.github.com/repos/$orgName/$repoName/contributors"
-        $contributorsInfo = Invoke-WebRequest -Method Get -Uri $uri -Headers $headers -UseBasicParsing
+        $contributorsInfo = Invoke-WebRequest -Method Get -Uri $uri -Headers $headersaccesstoken -UseBasicParsing
         Write-Host $contributorsInfo.statuscode
         # Status 204 represents No Content - ie., empty repo
         if ($contributorsInfo.statuscode -ne 204)
@@ -321,7 +356,7 @@ foreach($org in $githubOrgs){
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/referrers"
             $referrerLogs = $null
-            $referrerLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $referrerLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($referrerLogs.Length -gt 0){
                 $referrerLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $referrerLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -333,7 +368,7 @@ foreach($org in $githubOrgs){
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/popular/paths"
             $pathLogs = $null
-            $pathLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $pathLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($pathLogs.Length -gt 0){
                 $pathLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $pathLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -344,7 +379,7 @@ foreach($org in $githubOrgs){
             
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/views"
             $viewLogs = $null
-            $viewLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $viewLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($viewLogs.Length -gt 0){
                 $viewLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $viewLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -355,7 +390,7 @@ foreach($org in $githubOrgs){
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/traffic/clones"
             $cloneLogs = $null
-            $cloneLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $cloneLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($cloneLogs.Length -gt 0){
                 $cloneLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $cloneLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -366,7 +401,7 @@ foreach($org in $githubOrgs){
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/commits"
             $commitLogs = $null
-            $commitLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $commitLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($commitLogs.Length -gt 0){
                 $commitLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $commitLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -377,7 +412,7 @@ foreach($org in $githubOrgs){
             
             $uri = "https://api.github.com/repos/$orgName/$repoName/collaborators"
             $collaboratorLogs = $null
-            $collaboratorLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $collaboratorLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($collaboratorLogs.Length -gt 0){
                 $collaboratorLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $collaboratorLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -388,7 +423,7 @@ foreach($org in $githubOrgs){
 
             $uri = "https://api.github.com/repos/$orgName/$repoName/forks"
             $forkLogs = $null
-            $forkLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $forkLogs = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($forkLogs.Length -gt 0){
                 $forkLogs | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $forkLogs | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -399,7 +434,7 @@ foreach($org in $githubOrgs){
 
 			$uri = "https://api.github.com/repos/$orgName/$repoName/secret-scanning/alerts"
             $secretscanningalerts = $null
-            $secretscanningalerts = Invoke-RestMethod -Method Get -Uri $uri -Headers $headers
+            $secretscanningalerts = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($secretscanningalerts.Length -gt 0){
                 $secretscanningalerts | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $secretscanningalerts | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -451,7 +486,7 @@ foreach($org in $githubOrgs){
         do {
             $uri = "https://api.github.com/graphql"
             $results = $null
-            $results = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Body $VulnQuery
+            $results = Invoke-RestMethod -Method Post -Uri $uri -Headers $headersaccesstoken -Body $VulnQuery
             if(($results.data.organization.repository.vulnerabilityAlerts.nodes).Count -ne 0){
                 $vulnList += $results.data.organization.repository.vulnerabilityAlerts.nodes
                 $vulnList | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
@@ -485,4 +520,8 @@ foreach($org in $githubOrgs){
     $repoList = @()
 	#clear the temp folder
 	Remove-Item $env:temp\* -Recurse -Force -ErrorAction SilentlyContinue
+}
+else {
+    Write-Host "No installation access token for this org " +$orgName
+}
 }
