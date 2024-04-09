@@ -34,9 +34,13 @@ foreach ($api in $endpoints) {
     }
 }
 
+Write-Output $results
+
 $results += @{
     "log_source" = "healthevents"
 }
+
+Write-Output $results
 
 if ($results.count -gt 0) {
     Write-Host "Sending $($results.count) new records"
