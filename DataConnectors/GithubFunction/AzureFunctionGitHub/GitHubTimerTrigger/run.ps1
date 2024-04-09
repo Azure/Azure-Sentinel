@@ -42,7 +42,8 @@ $storageAccountContainer = "github-repo-logs"
 $AuditLogTable = "GitHub_CL"
 $RepoLogTable = "GitHubRepoLogs_CL"
 $apiSecret = [System.Text.Encoding]::UTF8.GetBytes($secret)
-$appID="838637"
+$appID=$env:appID
+$appName=$env:appName
 #Import-Module -Name powershell-jwt
 $exp = [int][double]::parse((Get-Date -Date $((Get-Date).addseconds(300).ToUniversalTime()) -UFormat %s)) 
 $iat = [int][double]::parse((Get-Date -Date $((Get-Date).ToUniversalTime()) -UFormat %s)) 
@@ -239,7 +240,7 @@ foreach($org in $githubOrgs){
     $converted=ConvertFrom-Json $output
     Write-Host $converted.access_tokens_url
     $accesstokenurl=$converted.access_tokens_url
-    if(-not([string]::IsNullOrWhiteSpace($accesstokenurl)))
+    if(-not([string]::IsNullOrWhiteSpace($accesstokenurl)) -and ($appID -eq $converted.app_id)  -and ($appName -eq $converted.app_slug))
     {
         
 #"https://api.github.com/app/installations/47849661/access_tokens"
