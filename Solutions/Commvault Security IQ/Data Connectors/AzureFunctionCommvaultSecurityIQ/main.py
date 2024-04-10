@@ -33,13 +33,14 @@ if (not match):
 key_vault_name = os.environ["KeyVaultName"]
 credential = DefaultAzureCredential()
 client = SecretClient(vault_url=f"https://{key_vault_name}.vault.azure.net", credential=credential)
-secret_name = "environment_endpoint_url"
-url = client.get_secret(secret_name).value
+secret_name = "environment-endpoint-url"
+uri = client.get_secret(secret_name).value
+url = "https://" + uri + "/commandcenter/api"
 secret_name = "access-token"
 qsdk_token = client.get_secret(secret_name).value
 
 headers = {
-    "authtoken": qsdk_token,
+    "authtoken": "QSDK " + qsdk_token,
     "Content-Type": "application/json",
     "Accept": "application/json",
 }
@@ -128,7 +129,7 @@ def main():
             logging.info("Events Data")
             logging.info(events)
             data = events.get("commservEvents")
-            data = [event for event in data if event.get("eventCodeString") == "14:337"]
+            data = [event for event in data if event.get("eventCodeString") in "7:211|7:212|7:293|7:269|14:337|14:338|69:59|7:333|69:60|35:5575"]
             post_data = []
             if data:
                 for event in data:
@@ -271,7 +272,9 @@ def get_files_list(job_id) -> list:
     job_details_body["advOptions"] = {
         "advConfig": {"browseAdvancedConfigBrowseByJob": {"jobId": int(job_id)}}
     }
-    resp = requests.post(url, headers=headers, body=job_details_body, verify=True)
+    f_url = url+"/DoBrowse"
+    response = requests.post(f_url, headers=headers, json=job_details_body, verify=True)
+    resp = response.json()
     browse_responses = resp.get("browseResponses", [])
     file_list = []
     for browse_resp in browse_responses:
@@ -322,8 +325,9 @@ def fetch_file_details(job_id, subclient_id) -> tuple[list, list]:
         return [], []
     files_list = get_files_list(job_id)
     folder_response = get_subclient_content_list(subclient_id)
-    for resp in folder_response:
-        folders_list.append(resp[Constants.path_key])
+    if folder_response:
+        for resp in folder_response:
+            folders_list.append(resp[Constants.path_key])
     return files_list, folders_list
 
 
@@ -353,7 +357,24 @@ def get_job_details(job_id, url, headers):
         logging.info(f"Failed to get Job Details for job_id : {job_id}")
         logging.info(data)
         return None
-    
+
+def get_user_details(client_name):
+    """
+    Retrieves the user ID and user name associated with a given client name.
+
+    Args:
+        client_name (str): The name of the client.
+
+    Returns:
+        int | None: The user ID and username associated with the client, or None if not found.
+    """
+
+    f_url = f"{url}/Client/byName(clientName='{client_name}')"
+    response = requests.get(f_url, headers=headers, verify=False).json()
+    user_id = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userId']
+    user_name = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userName']
+    return user_id, user_name
+
 
 def get_incident_details(message: str) -> dict | None:
     """
@@ -398,17 +419,17 @@ def get_incident_details(message: str) -> dict | None:
         .get("subclientId")
     )
     files_list, scanned_folder_list = fetch_file_details(job_id, subclient_id)
+    originating_client = extract_from_regex(message, "", r"{}:\[(.*?)\]".format(Constants.originating_client))
+    user_id, username = get_user_details(originating_client)
     details = {
         "subclient_id": subclient_id,
         "files_list": files_list,
         "scanned_folder_list": scanned_folder_list,
         "anomaly_sub_type": anomaly_sub_type,
         "severity": define_severity(anomaly_sub_type),
-        "originating_client": extract_from_regex(
-            message,
-            "",
-            r"{} \[(.*?)\]".format( Constants.originating_client),
-        ),
+        "originating_client": originating_client,
+        "user_id": user_id,
+        "username": username,
         "affected_files_count": if_zero_set_none(
             extract_from_regex(
                 message,
