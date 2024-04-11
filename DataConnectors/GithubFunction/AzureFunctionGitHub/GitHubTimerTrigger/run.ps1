@@ -42,6 +42,7 @@ $storageAccountContainer = "github-repo-logs"
 $AuditLogTable = "GitHub_CL"
 $RepoLogTable = "GitHubRepoLogs_CL"
 $apiSecret = [System.Text.Encoding]::UTF8.GetBytes($secret)
+$appID="838637"
 $appID=$env:appID
 $appName=$env:appName
 #Import-Module -Name powershell-jwt
@@ -216,7 +217,7 @@ $headers = @{
 #Get Orgs from ORGS.json in Az Storage
 $storageAccountContext = New-AzStorageContext -ConnectionString $AzureWebJobsStorage
 $checkBlob = Get-AzStorageBlob -Blob ORGS.json -Container $storageAccountContainer -Context $storageAccountContext
-if($checkBlob -ne $null){
+if($null -ne $checkBlob){
     Get-AzStorageBlobContent -Blob ORGS.json -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\orgs.json" -Force
     $githubOrgs = Get-Content "$env:temp\orgs.json" | ConvertFrom-Json
 }
@@ -246,6 +247,8 @@ foreach($org in $githubOrgs){
 #"https://api.github.com/app/installations/47849661/access_tokens"
    $res = Invoke-WebRequest -Uri  $converted.access_tokens_url -Headers $headersjwt -Method Post
    $json_res = ConvertFrom-Json($res.Content)
+   if($null -ne $json_res)
+   {
    $token = $json_res.token
     Write-Host "Starting to process ORG: $orgName"
     $headersaccesstoken = @{
@@ -256,7 +259,7 @@ foreach($org in $githubOrgs){
     #Get Audit Entries
     #check for last run file
     $checkBlob = Get-AzStorageBlob -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext
-    if($checkBlob -ne $null){
+    if($null -ne $checkBlob){
         #Blob found get data
         Get-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -Destination "$env:temp\lastrun-Audit.json" -Force
         $lastRunAuditContext = Get-Content "$env:temp\lastrun-Audit.json" | ConvertFrom-Json
@@ -277,6 +280,7 @@ foreach($org in $githubOrgs){
 
     #Build query based on previous lastruncontext or not
     $lastRunContext = $lastRunAuditContext | Where-Object {$_.org -eq $orgName}
+    
     if([string]::IsNullOrEmpty($lastRunContext.lastContext)){
         $AuditQuery = '{"query": "query { organization(login: \"'+$orgName+'\") { auditLog(first: 100 orderBy: { direction: ASC field: CREATED_AT }) { edges { node { ... on AuditEntry { action actor actorIp actorLocation { city country countryCode region regionCode } actorLogin actorResourcePath actorUrl createdAt operationType user { email } userLogin userResourcePath } ... on MembersCanDeleteReposClearAuditEntry { organizationName enterpriseSlug } ... on MembersCanDeleteReposDisableAuditEntry { organizationName enterpriseSlug } ... on MembersCanDeleteReposEnableAuditEntry { organizationName enterpriseSlug } ... on OauthApplicationCreateAuditEntry { applicationUrl oauthApplicationName organizationName state } ... on OrgAddBillingManagerAuditEntry { invitationEmail organizationName } ... on OrgAddMemberAuditEntry { organizationName permission } ... on OrgBlockUserAuditEntry { organizationName blockedUserName } ... on OrgConfigDisableCollaboratorsOnlyAuditEntry { organizationName } ... on OrgConfigEnableCollaboratorsOnlyAuditEntry { organizationName } ... on OrgCreateAuditEntry { organizationName } ... on OrgDisableOauthAppRestrictionsAuditEntry { organizationName } ... on OrgDisableSamlAuditEntry { organizationName } ... on OrgDisableTwoFactorRequirementAuditEntry { organizationName } ... on OrgEnableOauthAppRestrictionsAuditEntry { organizationName } ... on OrgEnableSamlAuditEntry { organizationName } ... on OrgEnableTwoFactorRequirementAuditEntry { organizationName } ... on OrgInviteMemberAuditEntry { email organizationName } ... on OrgInviteToBusinessAuditEntry { organizationName enterpriseSlug } ... on OrgOauthAppAccessApprovedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgOauthAppAccessDeniedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgOauthAppAccessRequestedAuditEntry { oauthApplicationName oauthApplicationUrl organizationName } ... on OrgRemoveBillingManagerAuditEntry { organizationName reason } ... on OrgRemoveMemberAuditEntry { organizationName membershipTypes reason } ... on OrgRemoveOutsideCollaboratorAuditEntry { organizationName membershipTypes reason } ... on OrgRestoreMemberAuditEntry { organizationName restoredMembershipsCount restoredRepositoriesCount restoredMemberships { ... on OrgRestoreMemberMembershipOrganizationAuditEntryData { organizationName } ... on OrgRestoreMemberMembershipRepositoryAuditEntryData { repositoryName } ... on OrgRestoreMemberMembershipTeamAuditEntryData { teamName } } } ... on OrgUnblockUserAuditEntry { blockedUserName organizationName } ... on OrgUpdateDefaultRepositoryPermissionAuditEntry { organizationName permission permissionWas } ... on OrgUpdateMemberAuditEntry { organizationName permission permissionWas } ... on OrgUpdateMemberRepositoryCreationPermissionAuditEntry { canCreateRepositories organizationName visibility } ... on OrgUpdateMemberRepositoryInvitationPermissionAuditEntry { canInviteOutsideCollaboratorsToRepositories organizationName } ... on PrivateRepositoryForkingDisableAuditEntry { enterpriseSlug organizationName repositoryName } ... on PrivateRepositoryForkingEnableAuditEntry { enterpriseSlug organizationName repositoryName } ... on RepoAccessAuditEntry { organizationName repositoryName visibility } ... on RepoAddMemberAuditEntry { organizationName repositoryName visibility } ... on RepoAddTopicAuditEntry { organizationName repositoryName topicName } ... on RepoArchivedAuditEntry { organizationName repositoryName visibility } ... on RepoChangeMergeSettingAuditEntry { isEnabled mergeType organizationName repositoryName } ... on RepoConfigDisableAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigDisableCollaboratorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigDisableContributorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigDisableSockpuppetDisallowedAuditEntry { organizationName repositoryName } ... on RepoConfigEnableAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigEnableCollaboratorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigEnableContributorsOnlyAuditEntry { organizationName repositoryName } ... on RepoConfigEnableSockpuppetDisallowedAuditEntry { organizationName repositoryName } ... on RepoConfigLockAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoConfigUnlockAnonymousGitAccessAuditEntry { organizationName repositoryName } ... on RepoCreateAuditEntry { forkParentName forkSourceName organizationName repositoryName visibility } ... on RepoDestroyAuditEntry { organizationName repositoryName visibility } ... on RepoRemoveMemberAuditEntry { organizationName repositoryName visibility } ... on RepoRemoveTopicAuditEntry { organizationName repositoryName topicName } ... on RepositoryVisibilityChangeDisableAuditEntry { enterpriseSlug organizationName } ... on RepositoryVisibilityChangeEnableAuditEntry { enterpriseSlug organizationName } ... on TeamAddMemberAuditEntry { isLdapMapped organizationName teamName } ... on TeamAddRepositoryAuditEntry { isLdapMapped organizationName repositoryName teamName } ... on TeamChangeParentTeamAuditEntry { organizationName parentTeamName parentTeamNameWas teamName } ... on TeamRemoveMemberAuditEntry { isLdapMapped organizationName teamName } ... on TeamRemoveRepositoryAuditEntry { isLdapMapped organizationName repositoryName teamName } } } pageInfo { endCursor hasNextPage hasPreviousPage startCursor } } } }"}'
     }
@@ -319,7 +323,7 @@ foreach($org in $githubOrgs){
             $lastRunAuditContext | ConvertTo-Json | Out-File "$env:temp\lastrun-Audit.json"
             Set-AzStorageBlobContent -Blob "lastrun-Audit.json" -Container $storageAccountContainer -Context $storageAccountContext -File "$env:temp\lastrun-Audit.json" -Force
         }
-    } until ($hasNextPage -eq $false)
+    } until (($hasNextPage -eq $false) -or ($null -eq $hasNextPage))
     
     $uri = $null
     $results = $null
@@ -435,7 +439,8 @@ foreach($org in $githubOrgs){
 
 			$uri = "https://api.github.com/repos/$orgName/$repoName/secret-scanning/alerts"
             $secretscanningalerts = $null
-            $secretscanningalerts = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
+            try {
+                $secretscanningalerts = Invoke-RestMethod -Method Get -Uri $uri -Headers $headersaccesstoken
             if ($secretscanningalerts.Length -gt 0){
                 $secretscanningalerts | Add-Member -NotePropertyName OrgName -NotePropertyValue $orgName
                 $secretscanningalerts | Add-Member -NotePropertyName Repository -NotePropertyValue $repoName
@@ -443,6 +448,11 @@ foreach($org in $githubOrgs){
                 #Send to log A
                 SendToLogA -gitHubData $secretscanningalerts -customLogName $RepoLogTable
             }      
+            }
+            catch {
+                Write-Error "Failed at Scanning secrets with error message: $($_.Exception.Message)" -ErrorAction SilentlyContinue
+            }
+            
         }		 
         else {
             Write-Host "$repoName is empty"
@@ -525,4 +535,9 @@ foreach($org in $githubOrgs){
 else {
     Write-Host "No installation access token for this org " +$orgName
 }
+    }
+    else {
+        
+        Write-Host "Access token not generated for this org " +$orgName
+    }
 }
