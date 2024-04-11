@@ -55,10 +55,18 @@ def main(mytimer: func.TimerRequest):
     
        if (not GroupInstanceName or str(GroupInstanceName).isspace()) or (str(GroupInstanceName) in "<Optional>") :
         raise Exception("Please enter valid Group Instance Name")
-       cursor = get_cursor_by_group(stream_client, StreamOcid, GroupName, GroupInstanceName)
+       try:
+         cursor = get_cursor_by_group(stream_client, StreamOcid, GroupName, GroupInstanceName)
+       except oci.exceptions.ServiceError as e:
+            if e.status == 400:
+             cursor=get_cursor_by_group(stream_client, StreamOcid, GroupName, GroupInstanceName)
     else :
-        cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
-    
+        try:
+
+         cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
+        except oci.exceptions.ServiceError as e:
+            if e.status == 400:
+             cursor=get_cursor_by_partition(stream_client, StreamOcid, GroupName, GroupInstanceName) 
     process_events(stream_client, StreamOcid, cursor, limit, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
 
