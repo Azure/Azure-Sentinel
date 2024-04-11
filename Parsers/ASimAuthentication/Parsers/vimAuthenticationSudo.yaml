@@ -77,19 +77,6 @@ ParserQuery: |
         and (eventresult == "*" or ('Success' == eventresult))
     | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with (pair_delimiter=' ', kv_delimiter='=')
     | project-rename TargetUsername = USER
-    // Post-filtering on username_has_any
-    | where ((array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any))
-    // mapping ASimMatchingUsername
-    | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
-    // ActorUsername not coming from source. Hence, not mapped.
-    | extend ASimMatchingUsername = case
-        (
-                                    array_length(username_has_any) == 0,
-                                    "-",
-                                    temp_isMatchTargetUsername,
-                                    "TargetUsername",
-                                    "No match"
-                                )
     | extend
         EventVendor                 = 'Linux',
         EventProduct                = 'sudo',
@@ -106,6 +93,25 @@ ParserQuery: |
         TargetUsernameType          = 'Simple',
         EventResultDetails          = 'Other',
         EventOriginalRestultDetails = 'Connection authorized'
+    // Post-filtering on username_has_any
+    | where ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
+    // mapping ASimMatchingUsername
+    | extend
+        temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+        ,
+        temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+    | extend ASimMatchingUsername = case
+        (
+                                    array_length(username_has_any) == 0,
+                                    "-",
+                                    temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                    "Both",
+                                    temp_isMatchTargetUsername,
+                                    "TargetUsername",
+                                    temp_isMatchActorUsername,
+                                    "ActorUsername",
+                                    "No match"
+                                )
     // ************************
     //      <Aliases>
     // ************************
@@ -115,7 +121,7 @@ ParserQuery: |
     // ************************
     //      </Aliases>
     // ************************
-    | project-away Computer, MG, SourceSystem, TenantId
+    | project-away Computer, MG, SourceSystem, TenantId, temp_*
   };
   let SudoAuthFailure1=(
       starttime: datetime=datetime(null), 
@@ -145,19 +151,6 @@ ParserQuery: |
       | project-rename 
           EventUid       = _ItemId,
           TargetUsername = USER
-      // Post-filtering on username_has_any
-      | where ((array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any))
-      // mapping ASimMatchingUsername
-      | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
-      // ActorUsername not coming from source. Hence, not mapped.
-      | extend ASimMatchingUsername = case
-          (
-                                      array_length(username_has_any) == 0,
-                                      "-",
-                                      temp_isMatchTargetUsername,
-                                      "TargetUsername",
-                                      "No match"
-                                  )
       | extend
           ActorUsername               = extract(@'^(.*?):', 1, SyslogMessage),
           ActorUsernameType           = 'Simple',
@@ -174,7 +167,26 @@ ParserQuery: |
           EventType                   = 'Logon',
           EventVendor                 = 'Linux',
           TargetUsernameType          = 'Simple'
-      | project-away Computer, MG, SourceSystem, TenantId
+      // Post-filtering on username_has_any
+      | where ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+          (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
+      | project-away Computer, MG, SourceSystem, TenantId, temp_*
   };
   let SudoDisconnect=(
       starttime: datetime=datetime(null), 
@@ -238,7 +250,7 @@ ParserQuery: |
       // ************************
       //      </Aliases>
       // ************************
-      | project-away Computer, MG, SourceSystem, TenantId
+      | project-away Computer, MG, SourceSystem, TenantId, temp_*
   };
   union isfuzzy=false 
     SudoSignInAuthorized(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled), 
