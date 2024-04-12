@@ -27,7 +27,7 @@ ParserParams:
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: username_has_any
+  - Name: actor_has_any
     Type: dynamic
     Default: dynamic([])
   - Name: targetappname_has_any
@@ -53,23 +53,18 @@ ParserParams:
     Default: false
 ParserQuery: |
   let parser = (
-    starttime: datetime=datetime(null), 
-    endtime: datetime=datetime(null), 
-    username_has_any: dynamic = dynamic([]),
-    targetappname_has_any: dynamic = dynamic([]),
-    srcipaddr_has_any_prefix: dynamic = dynamic([]),
-    srchostname_has_any: dynamic = dynamic([]),
-    eventtype_in: dynamic = dynamic([]),
-    eventresultdetails_in: dynamic = dynamic([]),
-    eventresult: string = '*',
-    disabled: bool=false
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    actor_has_any:dynamic = dynamic([]),
+    targetappname_has_any:dynamic = dynamic([]),
+    srcipaddr_has_any_prefix:dynamic = dynamic([]),
+    srchostname_has_any:dynamic = dynamic([]),
+    eventtype_in:dynamic =dynamic([]),
+    eventresultdetails_in:dynamic = dynamic([]),
+    eventresult:string = '*',
+    disabled:bool=false
 )
 {
-let Githubschema = datatable
-(
-    user_name_s:string,
-    timestamp_s:string
-)
 let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventResult:string,EventType:string )
     ["user.login","Success","logon",
     "user.logout","Success","logoff",
@@ -88,8 +83,6 @@ let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventRe
     "user.two_factor_challenge_failure","Failure","logon",
     "user.two_factor_challenge_success","Success","logon",
     ];
-    union isfuzzy=true
-    Githubschema
     GitHubAuditLogPolling_CL 
      |where not(disabled)
      | extend TimeGenerated = todatetime(tostring(split(timestamp_s, '.', 0)[0]))
@@ -97,14 +90,14 @@ let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventRe
      | where 
           (isnull(starttime) or TimeGenerated >= starttime) 
           and (isnull(endtime) or TimeGenerated <= endtime)
-          and ((array_length(username_has_any) == 0) or (user_name_s has_any (username_has_any)))
+          and ((array_length(actor_has_any) == 0) or (actor_s  has_any (actor_has_any)))
           and ((array_length(targetappname_has_any) == 0)) // targetappname not available on source
           and ((array_length(srcipaddr_has_any_prefix) == 0))// ip address for source not available
           and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
           // eventresult filtering done later in the parser
           //  -- end pre-filtering
       // mapping ASimMatchingUsername
-    | extend temp_isMatchTargetUsername=user_name_s has_any(username_has_any),
+    | extend temp_isMatchTargetUsername=actor_s has_any(actor_has_any),
     | extend ASimMatchingUsername = case
                                   (
                                       array_length(username_has_any) == 0,
@@ -113,7 +106,7 @@ let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventRe
                                       "TargetUsername",
                                       "No match"
                                   )
-     |where ((array_length(username_has_any) == 0))     
+     |where ((array_length(actor_has_any) == 0))     
      |where operation_type_s == 'authentication'
      |project TimeGenerated=unixtime_milliseconds_todatetime(created_at_d),   
         EventCount=int(1),
@@ -126,12 +119,12 @@ let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventRe
         EventStartTime=TimeGenerated,
         EventOriginalResultDetails=action_s
     |lookup EventResultDetailslookup on EventOriginalResultDetails    
-    | where (eventresult == "*" or (EventResult == eventresult))    
+    |where (eventresult == "*" or (EventResult == eventresult))    
 };
 parser (
   starttime=starttime,
   endtime=endtime,
-  username_has_any=username_has_any,
+  actor_has_any=username_has_any,
   targetappname_has_any=targetappname_has_any,
   srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
   srchostname_has_any=srchostname_has_any,
