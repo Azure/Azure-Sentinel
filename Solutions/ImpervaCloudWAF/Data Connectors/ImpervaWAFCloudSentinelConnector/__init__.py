@@ -13,11 +13,11 @@ import re
 import logging
 from .state_manager import StateManager
 
-customer_id = os.environ['WorkspaceID']
+customer_id = os.environ['WorkspaceID'] 
 shared_key = os.environ['WorkspaceKey']
-imperva_waf_api_id = os.environ['ImpervaAPIID']
-imperva_waf_api_key = os.environ['ImpervaAPIKey']
-imperva_waf_log_server_uri = os.environ['ImpervaLogServerURI']
+imperva_waf_api_id = os.environ['ImpervaAPIID'] 
+imperva_waf_api_key = os.environ['ImpervaAPIKey'] 
+imperva_waf_log_server_uri = os.environ['ImpervaLogServerURI'] 
 logs_encryption_private_key = ""
 
 connection_string = os.environ['AzureWebJobsStorage']
@@ -26,8 +26,8 @@ logAnalyticsUri = os.environ.get('logAnalyticsUri')
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
-match = re.match(pattern, str(logAnalyticsUri))
-if (not match):
+match = re.match(pattern,str(logAnalyticsUri))
+if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
 
@@ -44,8 +44,7 @@ class ImpervaFilesHandler:
         adapter = requests.adapters.HTTPAdapter(max_retries=retries)
         self.session = requests.Session()
         self.session.mount('https://', adapter)
-        self.auth = urllib3.make_headers(basic_auth='{}:{}'.format(
-            imperva_waf_api_id, imperva_waf_api_key))
+        self.auth = urllib3.make_headers(basic_auth='{}:{}'.format(imperva_waf_api_id, imperva_waf_api_key))
         self.files_array = self.list_index_file()
         self.sentinel = ProcessToSentinel()
 
@@ -53,8 +52,8 @@ class ImpervaFilesHandler:
         files_array = []
         try:
             r = self.session.get(url="{}/{}".format(self.url, f"logs.index"),
-                                 headers=self.auth
-                                 )
+                            headers= self.auth
+                            )
             if 200 <= r.status_code <= 299:
                 logging.info("Successfully downloaded index file.")
                 for line in r.iter_lines():
@@ -62,26 +61,20 @@ class ImpervaFilesHandler:
                 return files_array
             elif r.status_code == 400:
                 logging.error("Bad Request. The request was invalid or cannot be otherwise served."
-                              " Error code: {}".format(r.status_code))
+                      " Error code: {}".format(r.status_code))
             elif r.status_code == 404:
-                logging.error(
-                    "Could not find index file. Response code is {}".format(r.status_code))
+                logging.error("Could not find index file. Response code is {}".format(r.status_code))
             elif r.status_code == 401:
-                logging.error(
-                    "Authorization error - Failed to download index file. Response code is {}".format(r.status_code))
+                logging.error("Authorization error - Failed to download index file. Response code is {}".format(r.status_code))
             elif r.status_code == 429:
-                logging.error(
-                    "Rate limit exceeded - Failed to download index file. Response code is {}".format(r.status_code))
+                logging.error("Rate limit exceeded - Failed to download index file. Response code is {}".format(r.status_code))
             else:
                 if r.status_code is None:
-                    logging.error(
-                        "Something wrong. Error text: {}".format(r.text))
+                    logging.error("Something wrong. Error text: {}".format(r.text))
                 else:
-                    logging.error(
-                        "Something wrong. Error code: {}".format(r.status_code))
+                    logging.error("Something wrong. Error code: {}".format(r.status_code))
         except Exception as err:
-            logging.error(
-                "Something wrong. Exception error text: {}".format(err))
+            logging.error("Something wrong. Exception error text: {}".format(err))
 
     def last_file_point(self):
         try:
@@ -89,26 +82,22 @@ class ImpervaFilesHandler:
                 state = StateManager(connection_string=connection_string)
                 past_file = state.get()
                 if past_file is not None:
-                    logging.info(
-                        "The last file point is: {}".format(past_file))
+                    logging.info("The last file point is: {}".format(past_file))
                     try:
                         index = self.files_array.index(past_file)
                         files_arr = self.files_array[index + 1:]
                     except Exception as err:
-                        logging.info(
-                            "Last point file detection error: {}. So Processing all the files from index file".format(err))
+                        logging.info("Last point file detection error: {}. So Processing all the files from index file".format(err))
                         files_arr = self.files_array
                 else:
                     files_arr = self.files_array
-                logging.info(
-                    "There are {} files in the list index file.".format(len(files_arr)))
+                logging.info("There are {} files in the list index file.".format(len(files_arr)))
                 if self.files_array is not None:
                     current_file = self.files_array[-1]
                 state.post(current_file)
                 return files_arr
         except Exception as err:
-            logging.error(
-                "Last point file detection error. Exception error text: {}".format(err))
+            logging.error("Last point file detection error. Exception error text: {}".format(err))
 
     def download_files(self):
         files_for_download = self.last_file_point()
@@ -119,35 +108,27 @@ class ImpervaFilesHandler:
 
     def download_file(self, file_name):
         try:
-            r = self.session.get(
-                url="{}/{}".format(self.url, file_name), stream=True, headers=self.auth)
+            r = self.session.get(url="{}/{}".format(self.url, file_name), stream=True, headers=self.auth)
             if 200 <= r.status_code <= 299:
-                logging.info(
-                    "Successfully downloaded file: {}".format(file_name))
+                logging.info("Successfully downloaded file: {}".format(file_name))
                 self.decrypt_and_unpack_file(file_name, r.content)
                 return r.status_code
             elif r.status_code == 400:
                 logging.error("Bad Request. The request was invalid or cannot be otherwise served."
-                              " Error code: {}".format(r.status_code))
+                      " Error code: {}".format(r.status_code))
             elif r.status_code == 404:
-                logging.error("Could not find file {}. Response code: {}".format(
-                    file_name, r.status_code))
+                logging.error("Could not find file {}. Response code: {}".format(file_name, r.status_code))
             elif r.status_code == 401:
-                logging.error(
-                    "Authorization error - Failed to download file {}. Response code: {}".format(file_name, r.status_code))
+                logging.error("Authorization error - Failed to download file {}. Response code: {}".format(file_name, r.status_code))
             elif r.status_code == 429:
-                logging.error(
-                    "Rate limit exceeded - Failed to downloadfile {}. Response code: {}".format(file_name, r.status_code))
+                logging.error("Rate limit exceeded - Failed to downloadfile {}. Response code: {}".format(file_name, r.status_code))
             else:
                 if r.status_code is None:
-                    logging.error(
-                        "Something wrong. Error text: {}".format(r.text))
+                    logging.error("Something wrong. Error text: {}".format(r.text))
                 else:
-                    logging.error(
-                        "Something wrong. Error code: {}".format(r.status_code))
+                    logging.error("Something wrong. Error code: {}".format(r.status_code))
         except Exception as err:
-            logging.error(
-                "Something wrong. Exception error text: {}".format(err))
+            logging.error("Something wrong. Exception error text: {}".format(err))
 
     def decrypt_and_unpack_file(self, file_name, file_content):
         logging.info("Unpacking and decrypting file {}".format(file_name))
@@ -163,8 +144,7 @@ class ImpervaFilesHandler:
                 if 'while decompressing data: incorrect header check' in err.args[0]:
                     events_data = file_data.decode("utf-8")
                 else:
-                    logging.error(
-                        "Error during decompressing and decoding the file with error message {}.".format(err))
+                    logging.error("Error during decompressing and decoding the file with error message {}.".format(err))                   
         if events_data is not None:
             for line in events_data.splitlines():
                 if "CEF" in line:
@@ -172,21 +152,20 @@ class ImpervaFilesHandler:
                     events_arr.append(event_message)
         for chunk in self.gen_chunks_to_object(events_arr, chunksize=1000):
             self.sentinel.post_data(json.dumps(chunk), len(chunk), file_name)
-
-    def parse_cef(self, cef_raw):
+    
+    def parse_cef(self,cef_raw):
         rx = r'([^=\s]+)?=((?:[\\]=|[^=])+)(?:\s|$)'
-        parsed_cef = {"EventVendor": "Imperva",
-                      "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
+        parsed_cef = {"EventVendor": "Imperva", "EventProduct": "Incapsula", "EventType": "SIEMintegration"}
         header_array = cef_raw.split('|')
-        parsed_cef["Device Version"] = header_array[3]
-        parsed_cef["Signature"] = header_array[4]
-        parsed_cef["Attack Name"] = header_array[5]
-        parsed_cef["Attack Severity"] = header_array[6]
-        for key, val in re.findall(rx, cef_raw):
+        parsed_cef["Device Version"]=header_array[3]
+        parsed_cef["Signature"]=header_array[4]
+        parsed_cef["Attack Name"]=header_array[5]
+        parsed_cef["Attack Severity"]=header_array[6]
+        for key,val in re.findall(rx, cef_raw):
             if val.startswith('"') and val.endswith('"'):
                 val = val[1:-1]
-            parsed_cef[key] = val
-        cs_array = ['cs1', 'cs2', 'cs3', 'cs4', 'cs5', 'cs6', 'cs7', 'cs8']
+            parsed_cef[key]=val
+        cs_array = ['cs1','cs2','cs3','cs4','cs5','cs6','cs7','cs8']
         for elem in cs_array:
             try:
                 if parsed_cef[elem] is not None:
@@ -197,11 +176,14 @@ class ImpervaFilesHandler:
 # As per the documentation availability of this field (cs6 and cs6 label) in your logs depends on your account plan. If your plan does not include Advanced Client Classification, the field name and value are not included in the logs. For more details, contact your Imperva Sales Representative.
             except Exception as err:
                 pass
+            if parsed_cef[elem] is not None:
+                parsed_cef[(parsed_cef[f'{elem}Label']).replace(" ", "")] = parsed_cef[elem]
+                parsed_cef.pop(f'{elem}Label')
+                parsed_cef.pop(elem)
 
-        if 'start' in parsed_cef.keys() and parsed_cef['start'] is not None and parsed_cef['start'] != "":
+        if 'start' in parsed_cef.keys() and parsed_cef['start'] is not None and parsed_cef['start']!="":
             try:
-                timestamp = datetime.datetime.utcfromtimestamp(
-                    int(parsed_cef['start'])/1000.0).isoformat()
+                timestamp = datetime.datetime.utcfromtimestamp(int(parsed_cef['start'])/1000.0).isoformat()
                 parsed_cef['EventGeneratedTime'] = timestamp
             except:
                 parsed_cef['EventGeneratedTime'] = ""
@@ -209,7 +191,7 @@ class ImpervaFilesHandler:
             parsed_cef['EventGeneratedTime'] = ""
 
         return parsed_cef
-
+                
     def gen_chunks_to_object(self, object, chunksize=100):
         chunk = []
         for index, line in enumerate(object):
@@ -219,7 +201,6 @@ class ImpervaFilesHandler:
             chunk.append(line)
         yield chunk
 
-
 class ProcessToSentinel:
 
     def __init__(self):
@@ -227,9 +208,7 @@ class ProcessToSentinel:
 
     def build_signature(self, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
-        string_to_hash = method + "\n" + \
-            str(content_length) + "\n" + content_type + \
-            "\n" + x_headers + "\n" + resource
+        string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
         encoded_hash = base64.b64encode(
@@ -237,7 +216,7 @@ class ProcessToSentinel:
         authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
         return authorization
 
-    def post_data(self, body, chunk_count, file_name):
+    def post_data(self, body, chunk_count,file_name):
         method = 'POST'
         content_type = 'application/json'
         resource = '/api/logs'
@@ -251,18 +230,15 @@ class ProcessToSentinel:
             'Authorization': signature,
             'Log-Type': 'ImpervaWAFCloud',
             'x-ms-date': rfc1123date,
-            'time-generated-field': 'EventGeneratedTime'
+            'time-generated-field':'EventGeneratedTime'
         }
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
-            logging.info("Chunk was processed with {} events from the file: {}".format(
-                chunk_count, file_name))
+            logging.info("Chunk was processed with {} events from the file: {}".format(chunk_count, file_name))
         else:
-            logging.error("Error during sending events to Azure Sentinel. Response code:{}. File name: {}.".format(
-                response.status_code, file_name))
+            logging.error("Error during sending events to Azure Sentinel. Response code:{}. File name: {}.".format(response.status_code,file_name))
 
-
-def main(mytimer: func.TimerRequest) -> None:
+def main(mytimer: func.TimerRequest)  -> None:
     if mytimer.past_due:
         logging.info('The timer is past due!')
     logging.info('Starting program')
