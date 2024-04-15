@@ -173,8 +173,8 @@ class ImpervaFilesHandler:
                         " ", "")] = parsed_cef[elem]
                     parsed_cef.pop(f'{elem}Label')
                     parsed_cef.pop(elem)
-# As per the documentation availability of this field (cs6 and cs6 label) in your logs depends on your account plan. If your plan does not include Advanced Client Classification, the field name and value are not included in the logs. For more details, contact your Imperva Sales Representative.
             except Exception as err:
+# As per the documentation availability of this field (cs6 and cs6 label) in your logs depends on your account plan. If your plan does not include Advanced Client Classification, the field name and value are not included in the logs. For more details, contact your Imperva Sales Representative.
                 pass
             if parsed_cef[elem] is not None:
                 parsed_cef[(parsed_cef[f'{elem}Label']).replace(" ", "")] = parsed_cef[elem]
