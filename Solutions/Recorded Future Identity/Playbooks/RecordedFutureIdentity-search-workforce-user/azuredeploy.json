@@ -1,25 +1,46 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata": {
-		"comment": "",
-		"author": "Dmytro Branitskyi, Recorded Future"
-	},
+       "metadata": {
+        "title": "RecordedFutureIdentity-search-workforce-user", 
+        "description": "This playbook searches the Recorded Future Identity Intelligence Module for compromised workforce users.\n\nThis playbook depends on:\n- RecordedFutureIdentity-add-EntraID-security-group-user\n- RecordedFutureIdentity-confirm-EntraID-risky-user\n- RecordedFutureIdentity-lookup-and-save-user\n\n Those playbooks need to be installed **manually** before installing current playbook.",
+        "lastUpdateTime": "2024-04-15T00:00:00.000Z", 
+        "entities": [], 
+        "tags": ["Identity protection"], 
+        "support": {
+            "tier": "Partner" 
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Initial version",
+                "notes": [ "Initial version" ]
+            },
+             {
+                "version": "1.1",
+                "title": "Updates",
+                "notes": [ "Added subscriptionId as a parameter and updated solution to match V3." ]
+            }
+        ]
+    },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Recorded_Future_Identity_Workforce",
+            "defaultValue": "RFI-search-workforce-user",
             "type": "string"
         },
-        "PlaybookName_Add_Risky_User_to_Security_Group": {
-            "defaultValue": "Recorded_Future_Identity_Add_Risky_User_to_Security_Group",
+        "Playbook-Name-add-EntraID-security-group-user": {
+            "defaultValue": "RFI-add-EntraID-security-group-user",
             "type": "string"
         },
-        "PlaybookName_Lookup_and_Save": {
-            "defaultValue": "Recorded_Future_Identity_Lookup_And_Save",
+        "Playbook-Name-lookup-and-save-user": {
+            "defaultValue": "RFI-lookup-and-save-user",
             "type": "string"
         },
-        "PlaybookName_Identity_Protection_Confirm_User_Is_Risky": {
-            "defaultValue": "Recorded_Future_Identity_Add_Risky_User_to_Security_Group",
+        "Playbook-Name-confirm-EntraID-risky-user": {
+            "defaultValue": "RFI-confirm-EntraID-risky-user",
             "type": "string"
         }
     },
@@ -48,6 +69,38 @@
                         "$connections": {
                             "defaultValue": {},
                             "type": "Object"
+                        },
+                        "organization_domain": {
+                            "defaultValue": "example.com",
+                            "type": "String"
+                        },
+                        "search_lookback_days": {
+                            "defaultValue": -14,
+                            "type": "Int"
+                        },
+                        "credential_dumps_log_analytics_custom_log_name": {
+                            "defaultValue": "RecordedFutureIdentity_LeakedCredentials_CredentialDumps_CL",
+                            "type": "String"
+                        },
+                        "malware_logs_log_analytics_custom_log_name": {
+                            "defaultValue": "RecordedFutureIdentity_LeakedCredentials_MalwareLogs_CL",
+                            "type": "String"
+                        },
+                        "lookup_results_log_analytics_custom_log_name": {
+                            "defaultValue": "RecordedFutureIdentity_UsersLookupResults_CL",
+                            "type": "String"
+                        },
+                        "lookup_lookback_days": {
+                            "defaultValue": -365,
+                            "type": "Int"
+                        },
+                        "active_directory_domain": {
+                            "defaultValue": "",
+                            "type": "String"
+                        },
+                        "active_directory_security_group_id": {
+                            "defaultValue": "",
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -89,20 +142,16 @@
                             }
                         },
                         "Credential_Search_-_Search_credential_data_for_one_or_more_domains": {
-                            "runAfter": {
-                                "Initialize_-_Name_for_\"Malware_Logs\"_Log_Analytics_Custom_Log": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
                                     "domain_type": "My Organization (workforce use case)",
                                     "domains": [
-                                        "@variables('company_domain')"
+                                        "@parameters('organization_domain')"
                                     ],
                                     "filter": {
-                                        "latest_downloaded_gte": "@{formatDateTime(addDays(utcNow(), variables('search_lookback_days')), 'yyyy-MM-dd')}"
+                                        "latest_downloaded_gte": "@{formatDateTime(addDays(utcNow(), parameters('search_lookback_days')), 'yyyy-MM-dd')}"
                                     },
                                     "limit": 500
                                 },
@@ -260,7 +309,7 @@
                                     "inputs": {},
                                     "description": "This block is needed only to create 3 branches in this For each loop."
                                 },
-                                "IdentityPlaybook_-_add_risky_user_to_AD_security_group": {
+                                "RecordedFutureIdentity-add-EntraID-security-group-user": {
                                     "runAfter": {
                                         "Current_time": [
                                             "Succeeded"
@@ -269,8 +318,8 @@
                                     "type": "Workflow",
                                     "inputs": {
                                         "body": {
-                                            "active_directory_domain": "@variables('active_directory_domain')",
-                                            "active_directory_security_group_id": "@variables('risky_security_group_id')",
+                                            "active_directory_domain": "@parameters('active_directory_domain')",
+                                            "active_directory_security_group_id": "@parameters('active_directory_security_group_id')",
                                             "risky_user_email": "@{items('For_each_new_exposures_-_do_protective_actions')}"
                                         },
                                         "headers": {
@@ -279,12 +328,12 @@
                                         "host": {
                                             "triggerName": "manual",
                                             "workflow": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('PlaybookName_Add_Risky_User_to_Security_Group'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Playbook-Name-add-EntraID-security-group-user'))]"
                                             }
                                         }
                                     }
                                 },
-                                "IdentityPlaybook_-_lookup_data_on_risky_user_and_save_it_into_LogAnalytics": {
+                                "RecordedFutureIdentity-lookup-and-save-user": {
                                     "runAfter": {
                                         "Current_time": [
                                             "Succeeded"
@@ -293,8 +342,8 @@
                                     "type": "Workflow",
                                     "inputs": {
                                         "body": {
-                                            "lookup_lookback_range": "@variables('lookup_lookback_days')",
-                                            "lookup_results_loganalytics_custom_log": "@variables('lookup_results_loganalytics_custom_log')",
+                                            "lookup_lookback_days": "@parameters('lookup_lookback_days')",
+                                            "lookup_results_log_analytics_custom_log_name": "@parameters('lookup_results_log_analytics_custom_log_name')",
                                             "risky_user_email": "@{items('For_each_new_exposures_-_do_protective_actions')}"
                                         },
                                         "headers": {
@@ -303,12 +352,12 @@
                                         "host": {
                                             "triggerName": "manual",
                                             "workflow": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('PlaybookName_Lookup_and_Save'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Playbook-Name-lookup-and-save-user'))]"
                                             }
                                         }
                                     }
                                 },
-                                "IdentityPlaybook_-_identity_protection_confirm_user_is_risky": {
+                                "RecordedFutureIdentity-confirm-EntraID-risky-user": {
                                     "runAfter": {
                                         "Current_time": [
                                             "Succeeded"
@@ -317,7 +366,7 @@
                                     "type": "Workflow",
                                     "inputs": {
                                         "body": {
-                                            "active_directory_domain": "@variables('active_directory_domain')",
+                                            "active_directory_domain": "@parameters('active_directory_domain')",
                                             "risky_user_email": "@{items('For_each_new_exposures_-_do_protective_actions')}"
                                         },
                                         "headers": {
@@ -326,14 +375,14 @@
                                         "host": {
                                             "triggerName": "manual",
                                             "workflow": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('PlaybookName_Identity_Protection_Confirm_User_Is_Risky'))]"
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Playbook-Name-confirm-EntraID-risky-user'))]"
                                             }
                                         }
                                     }
                                 }
                             },
                             "runAfter": {
-                                "Initialize_-_ID_of_Active_Directory_security_group_for_users_at_risk": [
+                                "For_Each_-_extend_new_exposures_array_with_new_Credential_dump_exposures": [
                                     "Succeeded"
                                 ]
                             },
@@ -348,11 +397,15 @@
                             "runAfter": {
                                 "Send_Data_-_Save_new_Credential_dump_exposures_into_Log_Analytics_Custom_Log": [
                                     "Succeeded",
+                                    "Skipped",
                                     "TimedOut",
                                     "Failed"
                                 ],
                                 "Send_Data_-_Save_new_Malware_log_exposures_into_Log_Analytics_Custom_Log": [
-                                    "Succeeded"
+                                    "Succeeded",
+                                    "Skipped",
+                                    "TimedOut",
+                                    "Failed"
                                 ]
                             },
                             "type": "InitializeVariable",
@@ -452,144 +505,6 @@
                             },
                             "description": "New Credential dumps are formatted to enable storing and comparing them with existing Credential dumps in Log Analytics."
                         },
-                        "Initialize_-_ID_of_Active_Directory_security_group_for_users_at_risk": {
-                            "runAfter": {
-                                "Initialize_-_[Optional]_Active_Directory_Domain": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "risky_security_group_id",
-                                        "type": "string"
-                                    }
-                                ]
-                            },
-                            "description": "Create an Active Directory security group that will store any users with exposed credentials."
-                        },
-                        "Initialize_-_Lookup_range_(days_back)": {
-                            "runAfter": {
-                                "Initialize_-_Name_for_Lookup_results_Log_Analytics_Custom_Log": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "lookup_lookback_days",
-                                        "type": "integer",
-                                        "value": -365
-                                    }
-                                ]
-                            },
-                            "description": "Number of days before today to lookup.  E.g. input \"-14\" to search the last 14 days."
-                        },
-                        "Initialize_-_Name_for_\"Credential_Dumps\"_Log_Analytics_Custom_Log": {
-                            "runAfter": {
-                                "Initialize_-_Search_range_(days_back)": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "credential_dumps_loganalytics_custom_log",
-                                        "type": "string",
-                                        "value": "LeakedCredentials_CredentialDumps_CL"
-                                    }
-                                ]
-                            },
-                            "description": "Custom Log name (Value) must end with \"CL\""
-                        },
-                        "Initialize_-_Name_for_\"Malware_Logs\"_Log_Analytics_Custom_Log": {
-                            "runAfter": {
-                                "Initialize_-_Name_for_\"Credential_Dumps\"_Log_Analytics_Custom_Log": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "malware_logs_loganalytics_custom_log",
-                                        "type": "string",
-                                        "value": "LeakedCredentials_MalwareLogs_CL"
-                                    }
-                                ]
-                            },
-                            "description": "Custom Log name (Value) must end with \"CL\""
-                        },
-                        "Initialize_-_Name_for_Lookup_results_Log_Analytics_Custom_Log": {
-                            "runAfter": {
-                                "For_Each_-_extend_new_exposures_array_with_new_Credential_dump_exposures": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "lookup_results_loganalytics_custom_log",
-                                        "type": "string",
-                                        "value": "RiskyUsers_CL"
-                                    }
-                                ]
-                            },
-                            "description": "Custom Log name (Value) must end with \"CL\""
-                        },
-                        "Initialize_-_Organization_domain": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "company_domain",
-                                        "type": "string",
-                                        "value": "example.com"
-                                    }
-                                ]
-                            },
-                            "description": "Organization domain to search exposures for."
-                        },
-                        "Initialize_-_Search_range_(days_back)": {
-                            "runAfter": {
-                                "Initialize_-_Organization_domain": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "search_lookback_days",
-                                        "type": "integer",
-                                        "value": -14
-                                    }
-                                ]
-                            },
-                            "description": "Number of days before today to search.  E.g. input \"-14\" to search the last 14 days."
-                        },
-                        "Initialize_-_[Optional]_Active_Directory_Domain": {
-                            "runAfter": {
-                                "Initialize_-_Lookup_range_(days_back)": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "active_directory_domain",
-                                        "type": "string"
-                                    }
-                                ]
-                            },
-                            "description": "If Active Directory (AD) and email use different domains, set AD domain here (Value). Syntax: \"company.onmicrosoft.com\" (exclude \"@\")."
-                        },
                         "Query_Log_Analytics_for_Credential_dump_exposures": {
                             "runAfter": {
                                 "Initialize_-_Array_of_known_Credential_dump_exposures": [
@@ -598,7 +513,7 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "@{variables('credential_dumps_loganalytics_custom_log')}\n| project email=email_s",
+                                "body": "@{parameters('credential_dumps_log_analytics_custom_log_name')}\n| project email=email_s",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -610,8 +525,8 @@
                                     "resourcegroups": "RF",
                                     "resourcename": "RF-log-analyitics",
                                     "resourcetype": "Log Analytics Workspace",
-                                    "subscriptions": "5129b3ff-c0c6-4e86-bd1c-70e5fcd579cf",
-                                    "timerange": "@{formatDateTime(addDays(utcNow(), variables('search_lookback_days')), 'yyyy-MM-dd')}"
+                                    "subscriptions": "@subscription().subscriptionId",
+                                    "timerange": "@{formatDateTime(addDays(utcNow(), parameters('search_lookback_days')), 'yyyy-MM-dd')}"
                                 }
                             }
                         },
@@ -623,7 +538,7 @@
                             },
                             "type": "ApiConnection",
                             "inputs": {
-                                "body": "@{variables('malware_logs_loganalytics_custom_log')}\n| project login=login_s, domain=domain_s",
+                                "body": "@{parameters('malware_logs_log_analytics_custom_log_name')}\n| project login=login_s, domain=domain_s",
                                 "host": {
                                     "connection": {
                                         "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
@@ -635,8 +550,8 @@
                                     "resourcegroups": "RF",
                                     "resourcename": "RF-log-analyitics",
                                     "resourcetype": "Log Analytics Workspace",
-                                    "subscriptions": "5129b3ff-c0c6-4e86-bd1c-70e5fcd579cf",
-                                    "timerange": "@{formatDateTime(addDays(utcNow(), variables('search_lookback_days')), 'yyyy-MM-dd')}"
+                                    "subscriptions": "@subscription().subscriptionId",
+                                    "timerange": "@{formatDateTime(addDays(utcNow(), parameters('search_lookback_days')), 'yyyy-MM-dd')}"
                                 }
                             }
                         },
@@ -650,7 +565,7 @@
                             "inputs": {
                                 "body": "@{outputs('Transform_new_Credential_dump_exposures_array_into_a_JSON_object')}",
                                 "headers": {
-                                    "Log-Type": "@variables('credential_dumps_loganalytics_custom_log')",
+                                    "Log-Type": "@parameters('credential_dumps_log_analytics_custom_log_name')",
                                     "time-generated-field": "@{utcNow()}"
                                 },
                                 "host": {
@@ -672,7 +587,7 @@
                             "inputs": {
                                 "body": "@{outputs('Transform_new_Malware_log_exposures_array_into_a_JSON_object')}",
                                 "headers": {
-                                    "Log-Type": "@variables('malware_logs_loganalytics_custom_log')",
+                                    "Log-Type": "@parameters('malware_logs_log_analytics_custom_log_name')",
                                     "time-generated-field": "@{utcNow()}"
                                 },
                                 "host": {

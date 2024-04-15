@@ -1,13 +1,34 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata": {
-		"comment": "",
-		"author": "Dmytro Branitskyi, Recorded Future"
-	},
+       "metadata": {
+        "title": "RecordedFutureIdentity-lookup-and-save-user", 
+        "description": "This playbook gets compromise identity details from Recorded Future Identity Intelligence and saves the data for further review and analysis.",
+        "lastUpdateTime": "2024-04-15T00:00:00.000Z", 
+        "entities": [], 
+        "tags": ["Identity protection"], 
+        "support": {
+            "tier": "Partner" 
+        },
+        "author": {
+            "name": "Recorded Future"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0",
+                "title": "Initial version",
+                "notes": [ "Initial version" ]
+            },
+             {
+                "version": "1.1",
+                "title": "Updates",
+                "notes": [ "Solution update." ]
+            }
+        ]
+    },
     "parameters": {
          "PlaybookName": {
-            "defaultValue": "Recorded_Future_Identity_Lookup_And_Save",
+            "defaultValue": "RFI-lookup-and-save-user",
             "type": "string"
         }
     },
@@ -34,6 +55,14 @@
                         "$connections": {
                             "defaultValue": {},
                             "type": "Object"
+                        },
+                        "lookup_results_log_analytics_custom_log_name_default": {
+                            "defaultValue": "RecordedFutureIdentity_UsersLookupResults_CL",
+                            "type": "String"
+                        },
+                        "lookup_lookback_days_default": {
+                            "defaultValue": -365,
+                            "type": "Int"
                         }
                     },
                     "triggers": {
@@ -44,10 +73,10 @@
                                 "method": "POST",
                                 "schema": {
                                     "properties": {
-                                        "lookup_lookback_range": {
+                                        "lookup_lookback_days": {
                                             "type": "integer"
                                         },
-                                        "lookup_results_loganalytics_custom_log": {
+                                        "lookup_results_log_analytics_custom_log_name": {
                                             "type": "string"
                                         },
                                         "risky_user_email": {
@@ -61,16 +90,12 @@
                     },
                     "actions": {
                         "Credential_Lookup_-_Look_up_credential_data_for_one_or_more_users": {
-                            "runAfter": {
-                                "Initialize_-_Default_name_for_Lookup_results_Log_Analytics_custom_log": [
-                                    "Succeeded"
-                                ]
-                            },
+                            "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
                                     "filter": {
-                                        "first_downloaded_gte": "@{formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_range'], null), variables('default_value_for_lookup_lookback_days'), triggerBody()?['lookup_lookback_range'])), 'yyyy-MM-dd')}"
+                                        "first_downloaded_gte": "@{formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_days'], null), parameters('lookup_lookback_days_default'), triggerBody()?['lookup_lookback_days'])), 'yyyy-MM-dd')}"
                                     },
                                     "subjects": [
                                         "@triggerBody()?['risky_user_email']"
@@ -85,42 +110,10 @@
                                 "path": "/credentials/lookup"
                             }
                         },
-                        "Initialize_-_Default_name_for_Lookup_results_Log_Analytics_custom_log": {
+                        "Response_-_Failed_to_get_Lookup_data": {
                             "runAfter": {
-                                "Initialize_-_Default_value_for_Lookup_range_(days_back)": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "lookup_results_loganalytics_custom_log",
-                                        "type": "string",
-                                        "value": "RiskyUsersLookupResults_CL"
-                                    }
-                                ]
-                            },
-                            "description": "Table name must ends with \"CL\""
-                        },
-                        "Initialize_-_Default_value_for_Lookup_range_(days_back)": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "default_value_for_lookup_lookback_days",
-                                        "type": "integer",
-                                        "value": -365
-                                    }
-                                ]
-                            },
-                            "description": "Default number of days before today to lookup.  E.g. input \"-14\" to search the last 14 days. This value can be changed by passing corresponding parameter in requests' json body."
-                        },
-                        "Response_-_Failed": {
-                            "runAfter": {
-                                "Response_-_Successfully_saved_lookup_results_into_LogAnalytics": [
-                                    "Skipped"
+                                "Credential_Lookup_-_Look_up_credential_data_for_one_or_more_users": [
+                                    "Failed"
                                 ]
                             },
                             "type": "Response",
@@ -128,16 +121,16 @@
                             "inputs": {
                                 "body": {
                                     "data": {
-                                        "lookup_lookback_date": "@formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_range'], null), variables('default_value_for_lookup_lookback_days'), triggerBody()?['lookup_lookback_range'])), 'yyyy-MM-dd')",
+                                        "lookup_lookback_date": "@formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_days'], null), parameters('lookup_lookback_days_default'), triggerBody()?['lookup_lookback_days'])), 'yyyy-MM-dd')",
                                         "lookup_results": "@body('Credential_Lookup_-_Look_up_credential_data_for_one_or_more_users')",
-                                        "lookup_results_loganalytics_custom_log": "@if(equals(triggerBody()?['lookup_results_loganalytics_custom_log'], null), variables('lookup_results_loganalytics_custom_log'), triggerBody()?['lookup_results_loganalytics_custom_log'])",
+                                        "lookup_results_log_analytics_custom_log_name": "@if(equals(triggerBody()?['lookup_results_log_analytics_custom_log_name'], null), parameters('lookup_results_log_analytics_custom_log_name_default'), triggerBody()?['lookup_results_log_analytics_custom_log_name'])",
                                         "parameters_passed": {
-                                            "lookup_lookback_range": "@triggerBody()?['lookup_lookback_range']",
-                                            "lookup_results_loganalytics_custom_log": "@triggerBody()?['lookup_results_loganalytics_custom_log']",
+                                            "lookup_lookback_days": "@triggerBody()?['lookup_lookback_days']",
+                                            "lookup_results_log_analytics_custom_log_name": "@triggerBody()?['lookup_results_log_analytics_custom_log_name']",
                                             "risky_user_email": "@triggerBody()?['risky_user_email']"
                                         }
                                     },
-                                    "reason": "Unknown",
+                                    "reason": "Failed to get Lookup data.",
                                     "status": "Error"
                                 },
                                 "headers": {
@@ -154,15 +147,84 @@
                                                     "properties": {},
                                                     "type": "object"
                                                 },
-                                                "lookup_results_loganalytics_custom_log": {
+                                                "lookup_results_log_analytics_custom_log_name": {
                                                     "type": "string"
                                                 },
                                                 "parameters_passed": {
                                                     "properties": {
-                                                        "lookup_lookback_range": {
+                                                        "lookup_lookback_days": {
                                                             "type": "integer"
                                                         },
-                                                        "lookup_results_loganalytics_custom_log": {
+                                                        "lookup_results_log_analytics_custom_log_name": {
+                                                            "type": "string"
+                                                        },
+                                                        "risky_user_email": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "reason": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "statusCode": 422
+                            }
+                        },
+                        "Response_-_Failed_to_save_Lookup_results": {
+                            "runAfter": {
+                                "Response_-_Successfully_saved_lookup_results_into_LogAnalytics": [
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "data": {
+                                        "lookup_lookback_date": "@formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_days'], null), parameters('lookup_lookback_days_default'), triggerBody()?['lookup_lookback_days'])), 'yyyy-MM-dd')",
+                                        "lookup_results": "@body('Credential_Lookup_-_Look_up_credential_data_for_one_or_more_users')",
+                                        "lookup_results_log_analytics_custom_log_name": "@if(equals(triggerBody()?['lookup_results_log_analytics_custom_log_name'], null), parameters('lookup_results_log_analytics_custom_log_name_default'), triggerBody()?['lookup_results_log_analytics_custom_log_name'])",
+                                        "parameters_passed": {
+                                            "lookup_lookback_days": "@triggerBody()?['lookup_lookback_days']",
+                                            "lookup_results_log_analytics_custom_log_name": "@triggerBody()?['lookup_results_log_analytics_custom_log_name']",
+                                            "risky_user_email": "@triggerBody()?['risky_user_email']"
+                                        }
+                                    },
+                                    "reason": "Failed to save Lookup results into LogAnalytics.",
+                                    "status": "Error"
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "properties": {
+                                                "lookup_lookback_date": {
+                                                    "type": "string"
+                                                },
+                                                "lookup_results": {
+                                                    "properties": {},
+                                                    "type": "object"
+                                                },
+                                                "lookup_results_log_analytics_custom_log_name": {
+                                                    "type": "string"
+                                                },
+                                                "parameters_passed": {
+                                                    "properties": {
+                                                        "lookup_lookback_days": {
+                                                            "type": "integer"
+                                                        },
+                                                        "lookup_results_log_analytics_custom_log_name": {
                                                             "type": "string"
                                                         },
                                                         "risky_user_email": {
@@ -197,12 +259,12 @@
                             "inputs": {
                                 "body": {
                                     "data": {
-                                        "lookup_lookback_date": "@formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_range'], null), variables('default_value_for_lookup_lookback_days'), triggerBody()?['lookup_lookback_range'])), 'yyyy-MM-dd')",
+                                        "lookup_lookback_date": "@formatDateTime(addDays(utcNow(), if(equals(triggerBody()?['lookup_lookback_days'], null), parameters('lookup_lookback_days_default'), triggerBody()?['lookup_lookback_days'])), 'yyyy-MM-dd')",
                                         "lookup_results": "@body('Credential_Lookup_-_Look_up_credential_data_for_one_or_more_users')",
-                                        "lookup_results_loganalytics_custom_log": "@if(equals(triggerBody()?['lookup_results_loganalytics_custom_log'], null), variables('lookup_results_loganalytics_custom_log'), triggerBody()?['lookup_results_loganalytics_custom_log'])",
+                                        "lookup_results_log_analytics_custom_log_name": "@if(equals(triggerBody()?['lookup_results_log_analytics_custom_log_name'], null), parameters('lookup_results_log_analytics_custom_log_name_default'), triggerBody()?['lookup_results_log_analytics_custom_log_name'])",
                                         "parameters_passed": {
-                                            "lookup_lookback_range": "@triggerBody()?['lookup_lookback_range']",
-                                            "lookup_results_loganalytics_custom_log": "@triggerBody()?['lookup_results_loganalytics_custom_log']",
+                                            "lookup_lookback_days": "@triggerBody()?['lookup_lookback_days']",
+                                            "lookup_results_log_analytics_custom_log_name": "@triggerBody()?['lookup_results_log_analytics_custom_log_name']",
                                             "risky_user_email": "@triggerBody()?['risky_user_email']"
                                         }
                                     },
@@ -222,15 +284,15 @@
                                                     "properties": {},
                                                     "type": "object"
                                                 },
-                                                "lookup_results_loganalytics_custom_log": {
+                                                "lookup_results_log_analytics_custom_log_name": {
                                                     "type": "string"
                                                 },
                                                 "parameters_passed": {
                                                     "properties": {
-                                                        "lookup_lookback_range": {
+                                                        "lookup_lookback_days": {
                                                             "type": "integer"
                                                         },
-                                                        "lookup_results_loganalytics_custom_log": {
+                                                        "lookup_results_log_analytics_custom_log_name": {
                                                             "type": "string"
                                                         },
                                                         "risky_user_email": {
@@ -253,15 +315,15 @@
                         },
                         "Send_Data_-_Save_Lookup_results_to_LogAnalytics_Custom_Log": {
                             "runAfter": {
-                                "Credential_Lookup_-_Look_up_credential_data_for_one_or_more_users": [
-                                    "Succeeded"
+                                "Response_-_Failed_to_get_Lookup_data": [
+                                    "Skipped"
                                 ]
                             },
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": "@{body('Credential_Lookup_-_Look_up_credential_data_for_one_or_more_users')}",
                                 "headers": {
-                                    "Log-Type": "@{if(equals(triggerBody()?['lookup_results_loganalytics_custom_log'], null), variables('lookup_results_loganalytics_custom_log'), triggerBody()?['lookup_results_loganalytics_custom_log'])}",
+                                    "Log-Type": "@{if(equals(triggerBody()?['lookup_results_log_analytics_custom_log_name'], null), parameters('lookup_results_log_analytics_custom_log_name_default'), triggerBody()?['lookup_results_log_analytics_custom_log_name'])}",
                                     "time-generated-field": "@{utcNow()}"
                                 },
                                 "host": {

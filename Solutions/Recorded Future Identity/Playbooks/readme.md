@@ -8,7 +8,7 @@ Recorded Future Identity Intelligence enables security and IT teams to detect id
 
 To do this, Recorded Future automates the collection, analysis, and production of identity intelligence from a vast range of sources. 
 
-Organizations can incorporate identity intelligence into automated workflows that regularly monitor for compromised credentials and take immediate action with applications such as Azure Active Directory and Microsoft Sentinel.
+Organizations can incorporate identity intelligence into automated workflows that regularly monitor for compromised credentials and take immediate action using Recorded Future Identity data and Microsoft Entra ID.
 
 There are many ways organizations can utilize Recorded Future Identity Intelligence; the playbooks in this Solution are just a quick introduction to some of those ways. 
 
@@ -18,8 +18,8 @@ They include:
 
 1. searches for compromised workforce or external customer users
 2. looking up existing users and saving the compromised user data to a Log file
-3. confirming high risk Azure Active Directory (AAD) users
-4. adding a compromised user to an AAD security group
+3. confirming high risk Microsoft Entra ID (EntraID) users
+4. adding a compromised user to an EntraID security group
 
 
 <br />
@@ -57,13 +57,10 @@ Possible remediations include requiring a password reset, or temporarily locking
       2) [Active Directory Identity Protection - confirm user is compromised](#active_directory_identity_protection_confirm_user_is_compromised)
       3) [Lookup risky user and save results](#lookup_risky_user_and_save_results)
 3) [Deployment](#deployment)
-   1) [Prerequisites](#prerequisites)
-   2) [Deployment using Azure Marketplace](#deployment_azure_marketplace)
-   3) [Deployment using "Deploy a custom template" service](#deployment_custom_template)
-      1) [Deploy the Solution](#deployment_custom_template_solution)
+   1) [Prerequisites](#prerequisites)  
       2) [Deploy Playbooks (Logic Apps) one by one](#deployment_custom_template_playbooks)
-         1) [RecordedFutureIdentity-add-AAD-security-group-user](#deployment_custom_template_playbooks_add_AAD_security_group_user)
-         2) [RecordedFutureIdentity-confirm-AAD-risky-user](#deployment_custom_template_playbooks_confirm_AAD_risky_user)
+         1) [RecordedFutureIdentity-add-EntraID-security-group-user](#deployment_custom_template_playbooks_add_EntraID_security_group_user)
+         2) [RecordedFutureIdentity-confirm-EntraID-risky-user](#deployment_custom_template_playbooks_confirm_EntraID_risky_user)
          3) [RecordedFutureIdentity-lookup-and-save-user](#deployment_custom_template_playbooks_lookup_and_save_user)
          4) [RecordedFutureIdentity-search-workforce-user](#deployment_custom_template_playbooks_search_workforce_user)
          5) [RecordedFutureIdentity-search-external-user](#deployment_custom_template_playbooks_search_external_user)
@@ -98,8 +95,8 @@ This Solution consists of 5 Playbooks (Logic Apps).
 
 | Playbook Name                                          | Description                                                                            |
 |--------------------------------------------------------|----------------------------------------------------------------------------------------|
-| **RecordedFutureIdentity-add-AAD-security-group-user** | Add risky user to Active Directory Security Group for users at risk.                   |
-| **RecordedFutureIdentity-confirm-AAD-risky-user**      | Confirm to Active Directory Identity Protection that user is compromised.              |
+| **RecordedFutureIdentity-add-EntraID-security-group-user** | Add risky user to Active Directory Security Group for users at risk.                   |
+| **RecordedFutureIdentity-confirm-EntraID-risky-user**      | Confirm to Active Directory Identity Protection that user is compromised.              |
 | **RecordedFutureIdentity-lookup-and-save-user**        | Lookup additional information on a compromised user and save results to Log Analytics. |
 
 
@@ -130,7 +127,7 @@ Those playbooks search the Recorded Future Identity Intelligence Module for comp
 
 <br/>
 
-If you are using External use case - you will get info on your clients leaks, so probably the most valuable "reactive" Logic App for you will be "Lookup risky user and save results", as "Add risky user to Active Directory Security Group" and "Active Directory Identity Protection - confirm user is compromised" assumes that the leaked email is a user in your organization Azure Active Directory, which is mostly probably not true for External use case.
+If you are using External use case - you will get info on your clients leaks, so probably the most valuable "reactive" Logic App for you will be "Lookup risky user and save results", as "Add risky user to Active Directory Security Group" and "Active Directory Identity Protection - confirm user is compromised" assumes that the leaked email is a user in your organization Microsoft Entra ID, which is mostly probably not true for External use case.
 
 <br/>
 
@@ -167,9 +164,9 @@ Logic App Parameters for Base Logic App "External use case" are the same as for 
 
 <a id="add_risky_user_to_active_directory_security_group"></a>
 
-#### RecordedFutureIdentity-add-AAD-security-group-user
+#### RecordedFutureIdentity-add-EntraID-security-group-user
 
-This playbook adds a compromised user to an AAD security group. Triage and remediation should be handled in follow up playbooks or actions.
+This playbook adds a compromised user to an EntraID security group. Triage and remediation should be handled in follow up playbooks or actions.
 
 By applying security policies to the security group and adding leaked users to that group - you can react to a leak and mitigate the risks.
 
@@ -205,9 +202,9 @@ HTTP request parameters:
 
 <a id="active_directory_identity_protection_confirm_user_is_compromised"></a>
 
-#### RecordedFutureIdentity-confirm-AAD-risky-user
+#### RecordedFutureIdentity-confirm-EntraID-risky-user
 
-This playbook confirms compromise of users deemed "high risk" by Azure Active Directory Identity Protection.
+This playbook confirms compromise of users deemed "high risk" by Microsoft Entra ID Identity Protection.
 
 More on Active Directory Identity Protection you can read here: [link1](https://docs.microsoft.com/azure/active-directory/identity-protection/) and [link2](https://docs.microsoft.com/azure/active-directory/identity-protection/overview-identity-protection) and [link3](https://docs.microsoft.com/azure/active-directory/identity-protection/howto-identity-protection-remediate-unblock).
 
@@ -300,182 +297,37 @@ Another way to cover this case - you can add a corresponding check to RecordedFu
 
 ## Deployment
 
-There is several ways you can deploy this Solution:
-- Deployment of complete Solution from Azure Marketplace
-- Using ["Deploy a Custom template"](https://portal.azure.com/#create/Microsoft.Template)
-  - Deploy the Solution (one step to deploy all resources in the Solution)
-  - Deploy each playbook one by one
-  
-**Important:**
-- **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
-- **Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
+> [!IMPORTANT]  
+> Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.
+> Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
 
 
 <a id="prerequisites"></a>
 
 ### Prerequisites
 
-- An Azure account and subscription. If you don't have a subscription, [sign up for a free Azure account](https://azure.microsoft.com/free/?WT.mc_id=A261C142F).
-- Azure subscription Owner or Contributor permissions so you can install the Logic Apps Management solution from the Azure Marketplace. For more information, review [Permission to purchase - Azure Marketplace purchasing](https://docs.microsoft.com/marketplace/azure-purchasing-invoicing#permission-to-purchase) and [Azure roles - Classic subscription administrator roles, Azure roles, and Azure AD roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
+- An Entra ID Tenant and subscription. If you don't have a subscription, [sign up for a free Azure account](https://azure.microsoft.com/free/?WT.mc_id=A261C142F).
+- Azure subscription Owner or Contributor permissions so you can install the Logic Apps Management solution from the Azure Marketplace. For more information, review [Permission to purchase - Azure Marketplace purchasing](https://docs.microsoft.com/marketplace/azure-purchasing-invoicing#permission-to-purchase) and [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
 - A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these playbooks will be created automatically if they don’t already exist.
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
 - For `Recorded Future Identity` Connections you will need `Recorded Future Identity API` token. To obtain one - check out [this section](#how_to_obtain_Recorded_Future_API_token).
-
-<a id="deployment_azure_marketplace"></a>
-### Deployment using [Azure Marketplace](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/)
-
-1) Open Recorded Future Identity Solution page in Azure Marketplace in one of two ways:
-   1) Use the direct link to [Recorded Future Identity Solution](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/GalleryItemDetailsBladeNopdl/id/recordedfuture1605638642586.recorded_future_identity_solution).
-   1) Open [Azure Marketplace](https://portal.azure.com/#view/Microsoft_Azure_Marketplace/). Search for "Recorded Future Identity Solution".
-1) On the Recorded Future Identity Solution page click "Create".
-1) Follow the installation process as described below.
-
-Parameters for deployment:
-
-| Parameter                                                    | Description                                                                                                                                                            |
-|--------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Subscription**                                             | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
-| **Resource group**                                           | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Workspace**                                                | Log Analytics Workspace name.                                                                                                                                          |
-| **Playbook Name for "Add ADD security group user" playbook** | Playbook name to use for "RecordedFutureIdentity-add-AAD-security-group-user" playbook.                                                                                |
-| **Playbook Name for "Confirm AAD risky user" playbook**      | Playbook name to use for "RecordedFutureIdentity-confirm-AAD-risky-user" playbook.                                                                                     |
-| **Playbook Name for "Lookup and save user" playbook**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
-| **Playbook Name for "Search workforce user" playbook**       | Playbook name to use for "RecordedFutureIdentity-search-workforce-user" playbook.                                                                                      |
-| **Playbook Name for "Search external user" playbook**        | Playbook name to use for "RecordedFutureIdentity-search-external-user" playbook.                                                                                       |
-
-<br/>
-
-<img src="./images/microsoft_sentinel_4.png" alt="Microsoft Sentinel Content Hub Installation  #4" width="60%"/>
-
-<img src="./images/microsoft_sentinel_5.png" alt="Microsoft Sentinel Content Hub Installation  #5" width="60%"/>
-
-<img src="./images/microsoft_sentinel_6.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
-
-<br/>
-
-At the end it should look like this:
-
-<img src="./images/microsoft_sentinel_7.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
-
-<img src="./images/microsoft_sentinel_8.png" alt="Microsoft Sentinel Content Hub Installation  #6" width="60%"/>
-
-<br/>
-<br/>
-
-<a id="deployment_custom_template"></a>
-### Deployment using "Deploy a custom template" service
-
-You can deploy resources (Solution, Playbooks, etc) from templates using `Deploy a custom template` service.
-
-<br/>
-
-**Important:**
-- **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
-- **Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
-
-
-<br/>
-
-**! If you decided deploy the Solution using `Deploy a custom template` service - THE EASIEST WAY TO DEPLOY templates of the current Solution - just by using corresponding `Deploy to Azure` ![Deploy to Azure](https://aka.ms/deploytoazurebutton) button or `Deploy to Azure Gov` ![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton) buttons in the next sections.**
-
-<br/>
-
-You can find `Deploy a custom template` service using search on [Azure portal home page](https://portal.azure.com).
-
-Here is how icons for this service looks: 
-
-<img src="./images/deploy_custom_template_service_icon_1.png" alt="Deploy a Custom Template Icon #1" width="70px"/>
-
-<img src="./images/deploy_custom_template_service_icon_2.png" alt="Deploy a Custom Template Icon #2" width="170px"/>
-
-<img src="./images/deploy_custom_template_service_icon_3.png" alt="Deploy a Custom Template Icon #3" width="250px"/> 
-
-<br/>
-
-<br/>
-
-Here is the interface and short usage tutorial:
-
-<img src="./images/deploy_custom_template_service_1.png" alt="Deploy a Custom Template Installation #1" width="60%"/>
-
-You can click on `Build your own template in the editor` button.
-
-There you can paste any template to deploy:
-
-<img src="./images/deploy_custom_template_service_2.png" alt="Deploy a Custom Template Installation #2" width="60%"/>
-
-<br/>
-
-"Templates" - are just content of corresponding files. For example:
-- use content of [../Package/mainTemplate.json](../Package/mainTemplate.json) file to deploy this whole Solution (all in one).
-- or use content of [./RecordedFutureIdentity-add-AAD-security-group-user.json](./RecordedFutureIdentity-add-AAD-security-group-user.json) file to deploy ONLY `RecordedFutureIdentity-add-AAD-security-group-user` playbook.
-
-
-After you paste your template to deploy - click `Save` button:
-
-<img src="./images/deploy_custom_template_service_3.png" alt="Deploy a Custom Template Installation #3" width="60%"/>
-
-Regarding next steps specific parameters descriptions - check out a corresponding section below for your specific template deployment (as each template have its own deployment parameters).
-
-But in general, next steps will look like this:
-
-<img src="./images/deploy_custom_template_service_4.png" alt="Deploy a Custom Template Installation #4" width="60%"/>
-
-<img src="./images/deploy_custom_template_service_5.png" alt="Deploy a Custom Template Installation #4" width="60%"/>
-
-<img src="./images/after_solution_deployed_1.png" alt="Deploy a Custom Template Installation #4" width="60%"/>
-
-<img src="./images/after_solution_deployed_2.png" alt="Deploy a Custom Template Installation #4" width="60%"/>
-
-
-<br/>
-
-<br/>
-
-<a id="deployment_custom_template_solution"></a>
-
-#### Deploy the Solution (all in one step)
-
-
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPackage%2FmainTemplate.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPackage%2FmainTemplate.json)
-
-Parameters for deployment:
-
-| Parameter                                     | Description                                                                                                                                                            |
-|-----------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Subscription**                              | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
-| **Resource group**                            | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
-| **Region**                                    | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
-| **Location**                                  | Not used. Leave default value.                                                                                                                                         |
-| **Workspace-location**                        | Region in which your Log Analytics Workspace is deployed (ex. "`eastus`" - for East US).                                                                               |
-| **Workspace**                                 | Log Analytics Workspace name.                                                                                                                                          |
-| **Playbook-Name-add-AAD-security-group-user** | Playbook name to use for "RecordedFutureIdentity-add-AAD-security-group-user" playbook.                                                                                |
-| **Playbook-Name-confirm-AAD-risky-user**      | Playbook name to use for "RecordedFutureIdentity-confirm-AAD-risky-user" playbook.                                                                                     |
-| **Playbook-Name-lookup-and-save-user**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
-| **Playbook-Name-search-workforce-user**       | Playbook name to use for "RecordedFutureIdentity-search-workforce-user" playbook.                                                                                      |
-| **Playbook-Name-search-external-user**        | Playbook name to use for "RecordedFutureIdentity-search-external-user" playbook.                                                                                       |
-
-
-<br/>
 
 <a id="deployment_custom_template_playbooks"></a>
 
 #### Deploy Playbooks one by one
 
-Important:
-- **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
-- **Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
-
+> [!IMPORTANT]  
+> **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
+> **Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
 
 <br/>
 
-<a id="deployment_custom_template_playbooks_add_AAD_security_group_user"></a>
+<a id="deployment_custom_template_playbooks_add_EntraID_security_group_user"></a>
 
-##### RecordedFutureIdentity-add-AAD-security-group-user
+##### RecordedFutureIdentity-add-EntraID-security-group-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-AAD-security-group-user.json) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-AAD-security-group-user.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-EntraID-security-group-user%2Fazuredeploy.json) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-EntraID-security-group-user%2Fazuredeploy.json)
 
 Parameters for deployment:
 
@@ -484,17 +336,17 @@ Parameters for deployment:
 | **Subscription**   | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**         | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
-| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-add-AAD-security-group-user").                                                                     |
+| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-add-EntraID-security-group-user").                                                                     |
 
 
 <br/>
 
-<a id="deployment_custom_template_playbooks_confirm_AAD_risky_user"></a>
+<a id="deployment_custom_template_playbooks_confirm_EntraID_risky_user"></a>
 
-##### RecordedFutureIdentity-confirm-AAD-risky-user
+##### RecordedFutureIdentity-confirm-EntraID-risky-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-AAD-risky-user.json) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-AAD-risky-user.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-EntraID-risky-user%2Fazuredeploy.json) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-EntraID-risky-user%2Fazuredeploy.json)
 
 Parameters for deployment:
 
@@ -503,7 +355,7 @@ Parameters for deployment:
 | **Subscription**   | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**         | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
-| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-confirm-AAD-risky-user").                                                                          |
+| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-confirm-EntraID-risky-user").                                                                          |
 
 
 <br/>
@@ -512,8 +364,8 @@ Parameters for deployment:
 
 ##### RecordedFutureIdentity-lookup-and-save-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user.json) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user%2Fazuredeploy.json) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user%2Fazuredeploy.json)
 
 Parameters for deployment:
 
@@ -531,8 +383,8 @@ Parameters for deployment:
 
 ##### RecordedFutureIdentity-search-workforce-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user.json) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user%2Fazuredeploy.json) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user%2Fazuredeploy.json)
 
 Parameters for deployment:
 
@@ -542,8 +394,8 @@ Parameters for deployment:
 | **Resource group**                            | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**                                    | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
 | **Playbook-Name**                             | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-search-workforce-user").                                                                           |
-| **Playbook-Name-add-AAD-security-group-user** | Playbook name to use for "RecordedFutureIdentity-add-AAD-security-group-user" playbook.                                                                                |
-| **Playbook-Name-confirm-AAD-risky-user**      | Playbook name to use for "RecordedFutureIdentity-confirm-AAD-risky-user" playbook.                                                                                     |
+| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RecordedFutureIdentity-add-EntraID-security-group-user" playbook.                                                                                |
+| **Playbook-Name-confirm-EntraID-risky-user**      | Playbook name to use for "RecordedFutureIdentity-confirm-EntraID-risky-user" playbook.                                                                                     |
 | **Playbook-Name-lookup-and-save-user**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
 
 
@@ -553,8 +405,8 @@ Parameters for deployment:
 
 ##### RecordedFutureIdentity-search-external-user
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user.json) 
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user%2Fazuredeploy.json) 
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user%2Fazuredeploy.json)
 
 Parameters for deployment:
 
@@ -564,8 +416,8 @@ Parameters for deployment:
 | **Resource group**                            | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**                                    | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
 | **Playbook-Name**                             | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-search-external-user").                                                                            |
-| **Playbook-Name-add-AAD-security-group-user** | Playbook name to use for "RecordedFutureIdentity-add-AAD-security-group-user" playbook.                                                                                |
-| **Playbook-Name-confirm-AAD-risky-user**      | Playbook name to use for "RecordedFutureIdentity-confirm-AAD-risky-user" playbook.                                                                                     |
+| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RecordedFutureIdentity-add-EntraID-security-group-user" playbook.                                                                                |
+| **Playbook-Name-confirm-EntraID-risky-user**      | Playbook name to use for "RecordedFutureIdentity-confirm-EntraID-risky-user" playbook.                                                                                     |
 | **Playbook-Name-lookup-and-save-user**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
 
 
