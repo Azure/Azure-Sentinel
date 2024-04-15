@@ -110,16 +110,16 @@ Workspace ID  | None
 Workspace Key  | None
 Portfolio_Companies_Table_Name | Portfolio_Companies
 Alerts_Table_Name  | Alerts_data
-Breaches_Table_Name | Breaches_data
-Company_Table_Name  | Company_details
-Company_Rating_Details_Table_Name  | Company_rating_details
-Diligence_Historical_Statistics_Table_Name  | Diligence_historical_statistics
-Diligence_Statistics_Table_Name  | Diligence_statistics
-Findings_Summary_Table_Name  | Findings_summary
-Findings_Table_Name  | Findings_data
-Graph_Table_Name  | Graph_data
-Industrial_Statistics_Table_Name  | Industrial_statistics
-Observation_Statistics_Table_Name  | Observation_statistics
+Breaches_Table_Name | BitsightBreaches_data
+Company_Table_Name  | BitsightCompany_details
+Company_Rating_Details_Table_Name  | BitsightCompany_rating_details
+Diligence_Historical_Statistics_Table_Name  | BitsightDiligence_historical_statistics
+Diligence_Statistics_Table_Name  | BitsightDiligence_statistics
+Findings_Summary_Table_Name  | BitsightFindings_summary
+Findings_Table_Name  | BitsightFindings_data
+Graph_Table_Name  | BitsightGraph_data
+Industrial_Statistics_Table_Name  | BitsightIndustrial_statistics
+Observation_Statistics_Table_Name  | BitsightObservation_statistics
 Log Level  | INFO
 Schedule  | 0 0 * * * *
 Schedule_Portfolio | 0 */30 *  * * *
