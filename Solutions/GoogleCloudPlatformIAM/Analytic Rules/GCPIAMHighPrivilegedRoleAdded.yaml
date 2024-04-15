@@ -1,0 +1,39 @@
+id: 86112c4b-2535-4178-aa0e-ed9e32e3f054
+name: GCP IAM - High privileged role added to service account
+description: |
+  'Detects when high privileged role was added to service account.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: GCPIAMDataConnector
+    dataTypes:
+      - GCP_IAM
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let privileged_roles = dynamic(['roles/iam.securityAdmin', 'roles/secretmanager.admin', 'roles/secretmanager.secretAccessor', 'roles/apigateway.admin', 'roles/logging.admin', 'roles/iam.organizationRoleAdmin', 'roles/iam.roleAdmin', 'roles/iam.serviceAccountAdmin', 'roles/iam.serviceAccountCreator', 'roles/iam.serviceAccountKeyAdmin']);
+  GCP_IAM
+  | where PayloadMethodname =~ 'SetIamPolicy'
+  | extend action = parse_json(todynamic(PayloadServicedataPolicydeltaBindingdeltas))[0]['action']
+  | where action =~ 'ADD'
+  | extend role = parse_json(todynamic(PayloadServicedataPolicydeltaBindingdeltas))[0]['role']
+  | where role in~ (privileged_roles)
+  | project-away action
+  | extend timestamp = TimeGenerated, AccountCustomEntity = PayloadAuthenticationinfoPrincipalemail, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

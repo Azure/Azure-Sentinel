@@ -1,0 +1,36 @@
+id: fbcb7ff3-0d5a-4565-9caa-fc454138081f
+name: devices_with_vuln_and_users_received_payload
+description: |
+  // Author: jan geisbauer
+  // @janvonkirchheim
+  // ------------------------
+  // 1.	A list of all devices that have this vulnerability
+  // 2.	A list of all users that uses those devices
+  // 3.	If these users received .mkv files recently
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceTvmSoftwareVulnerabilities
+  - DeviceInfo
+  - IdentityInfo
+  - EmailAttachmentInfo
+query: |
+  let all_computers_with_vlcvln=
+  DeviceTvmSoftwareVulnerabilities 
+  | where SoftwareName contains "vlc" 
+  | summarize makelist(DeviceName, 200);
+  let all_affected_users=
+  DeviceInfo
+  | where DeviceName in (all_computers_with_vlcvln)
+  | mvexpand todynamic(LoggedOnUsers)
+  | extend ParsedFields = parsejson(LoggedOnUsers)
+  | project UserName = ParsedFields.UserName
+  | summarize makelist(tolower(UserName), 200);
+  let all_email_addresses_aff_users=
+  IdentityInfo
+  | where tolower(AccountName) in (all_affected_users)
+  | summarize makelist(tolower(MailAddress), 200);
+  EmailAttachmentInfo
+  | where FileName contains ".mkv"
+  | where tolower(RecipientEmailAddress) in (all_email_addresses_aff_users)
+version: 1.0.0

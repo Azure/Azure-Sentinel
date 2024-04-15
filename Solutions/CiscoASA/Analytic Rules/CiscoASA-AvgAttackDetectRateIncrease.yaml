@@ -1,0 +1,73 @@
+id: 79f29feb-6a9d-4cdf-baaa-2daf480a5da1
+name: Cisco ASA - average attack detection rate increase
+description: |
+  'This will help you determine if Cisco ASA devices are under heavier attack than normal over the last hour versus the previous 6 hours based on DeviceEventClassID 733100
+  References: https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/b_syslog/syslogs9.html
+  Details on how to further troubleshoot/investigate: https://www.cisco.com/c/en/us/support/docs/security/asa-5500-x-series-next-generation-firewalls/113685-asa-threat-detection.html'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - Impact
+relevantTechniques:
+  - T1046
+  - T1498
+query: |
+  let timeframe = 1h;
+  let last1h = CommonSecurityLog
+  | where TimeGenerated >= ago(timeframe)
+  | where isempty(CommunicationDirection)
+  | where DeviceEventClassID == "733100"
+  | extend SourceOfDropRateCount = tostring(split(tostring(split(Message, "]")[0]),"[ ")[1])
+  | extend splitMessage = split(Message, ".")
+  | extend DropRate = tostring(split(tostring(splitMessage[0]),"] ")[1])
+  | extend CurrentBurstRate = split(tostring(split(tostring(splitMessage[1]),"  ")[0]),"is ")
+  | extend CurrentBurstRatePerSec = toint(split(tostring(CurrentBurstRate[1])," ")[0])
+  | extend MaxConfiguredBurstRate = toint(CurrentBurstRate[2])
+  | extend CurrentAvgRate = split(tostring(split(tostring(splitMessage[1]),"  ")[1]),"is ")
+  | extend CurrentAvgRatePerSec = toint(split(tostring(CurrentAvgRate[1])," ")[0])
+  | extend MaxConfiguredAvgRate = toint(CurrentAvgRate[2])
+  | extend CumulativeTotal = toint(split(tostring(split(tostring(splitMessage[1]),"  ")[2]),"is ")[1])
+  | summarize last1hCumTotal = sum(CumulativeTotal), last1hAvgRatePerSec = avg(CurrentAvgRatePerSec), last1hAvgBurstRatePerSec = avg(CurrentBurstRatePerSec) by DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate;
+  let prev6h = CommonSecurityLog
+  | where TimeGenerated between (ago(6h) .. ago(1h))
+  | where isempty(CommunicationDirection)
+  | where DeviceEventClassID == "733100"
+  | extend SourceOfDropRateCount = tostring(split(tostring(split(Message, "]")[0]),"[ ")[1])
+  | extend splitMessage = split(Message, ".")
+  | extend DropRate = tostring(split(tostring(splitMessage[0]),"] ")[1])
+  | extend CurrentBurstRate = split(tostring(split(tostring(splitMessage[1]),"  ")[0]),"is ")
+  | extend prevCurrentBurstRatePerSec = toint(split(tostring(CurrentBurstRate[1])," ")[0])
+  | extend prevMaxConfiguredBurstRate = toint(CurrentBurstRate[2])
+  | extend CurrentAvgRate = split(tostring(split(tostring(splitMessage[1]),"  ")[1]),"is ")
+  | extend prevCurrentAvgRatePerSec = toint(split(tostring(CurrentAvgRate[1])," ")[0])
+  | extend prevMaxConfiguredAvgRate = toint(CurrentAvgRate[2])
+  | extend prevCumulativeTotal = toint(split(tostring(split(tostring(splitMessage[1]),"  ")[2]),"is ")[1])
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), prev6hCumTotal = sum(prevCumulativeTotal), prev6hAvgRatePerSec = avg(prevCurrentAvgRatePerSec), prev6hAvgBurstRatePerSec = avg(prevCurrentBurstRatePerSec)
+  by DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate;
+  last1h | join (
+    prev6h
+  ) on DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate
+  | project StartTimeUtc, EndTimeUtc, DeviceName, DeviceEventClassID, SourceIP, SourceOfDropRateCount, DropRate, last1hCumTotal, prev6hCumTotal, prev6hAvgCumTotal = prev6hCumTotal/6, last1hAvgRatePerSec, prev6hAvgRatePerSec, last1hAvgBurstRatePerSec, prev6hAvgBurstRatePerSec
+  // Select only events that indicate a doubling of the expected rate in the last hour over the previous 6 hours
+  | where last1hCumTotal > 2*prev6hAvgCumTotal or last1hAvgRatePerSec > 2*prev6hAvgRatePerSec or last1hAvgBurstRatePerSec > 2*prev6hAvgBurstRatePerSec
+  | extend timestamp = StartTimeUtc, IPCustomEntity = SourceIP, HostCustomEntity = DeviceName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

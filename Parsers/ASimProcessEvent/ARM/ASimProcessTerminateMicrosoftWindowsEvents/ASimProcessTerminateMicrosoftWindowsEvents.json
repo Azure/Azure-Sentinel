@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimProcessTerminateMicrosoftWindowsEvents",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Terminate Event ASIM parser for WEF Security Events",
+            "category": "ASIM",
+            "FunctionAlias": "ASimProcessTerminateMicrosoftWindowsEvents",
+            "query": "let ASIM_GetFilenamePart = (path:string) { tostring(split(path,@'\\')[-1]) };\nlet ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { \n    T \n    | extend \n         type = case (\n            username == \"-\", \"\",\n            domain == \"-\", \"Simple\",\n            \"Windows\"\n        ),\n        username = case (\n          username == \"-\", \"\",\n          domain == '-', username,\n          strcat(domain, @\"\\\" , username)\n        )\n};\nlet parser=(disabled:boolean=false){\nWindowsEvent\n| where not(disabled)\n| where EventID == 4689\n| project-rename\n    DvcHostname = Computer\n| extend\n    EventCount = int(1),\n    EventVendor = 'Microsoft',\n    EventProduct = 'Security Events',\n    EventSchemaVersion = '0.1.0',\n    EventSchema = 'ProcessEvent',\n    EventResult = 'Success',\n    EventStartTime = todatetime(TimeGenerated),\n    EventEndTime = todatetime(TimeGenerated),\n    EventType = 'ProcessTerminated',\n    EventOriginalType = tostring(EventID),\n    DvcOs = 'Windows'\n| extend \n    ActorUsername = strcat(EventData.SubjectDomainName, @'\\', EventData.SubjectUserName), \n    SubjectUserSid = tostring(EventData.SubjectUserSid)\n| extend\n    ActorUserIdType = iff (SubjectUserSid <> \"S-1-0-0\", \"SID\", \"\"),\n    ActorUserId = iff (SubjectUserSid <> \"S-1-0-0\", SubjectUserSid, \"\"), \n    ActorUsernameType = \"Windows\"\n| extend \n    ActorUserSid = ActorUserId,\n    ActorUserType = _ASIM_GetWindowsUserType(ActorUsername, ActorUserId)\n| extend\n    ActorSessionId = tostring(toint(EventData.SubjectLogonId)),\n    // Processes \n    TargetProcessId = tostring(toint(tolong(EventData.NewProcessId))),\n    TargetProcessName = tostring(EventData.NewProcessName),\n    TargetProcessStatusCode = tostring(EventData.Status)\n| extend \n    TargetProcessFilename = ASIM_GetFilenamePart(TargetProcessName)\n// -- Aliases\n| extend\n    User = ActorUsername,\n    Dvc = DvcHostname,\n    Process = TargetProcessName\n| project-away Channel, EventData, Data, EventID, EventLevelName, EventLevel, Provider, RawEventData, Task, TenantId, ManagementGroupName, SourceSystem, EventOriginId, SubjectUserSid\n}; \nparser(disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

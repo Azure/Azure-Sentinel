@@ -1,0 +1,137 @@
+Parser:
+  Title: DNS activity ASIM parser for Sysmon for Windows
+  Version: '0.4'
+  LastUpdated: Jan 3 2023
+Product:
+  Name: Microsoft Windows Events Sysmon
+Normalization:
+  Schema: Dns
+  Version: '0.1.6'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Sysmon for Windows DNS logs (event number 22),collected using the Log Analytics agent, to the ASIM Dns normalized schema.<br>The parser supports events collected to both the Event and WindowsEvent tables.The parser supports events collected to both the Event and WindowsEvent tables.
+ParserName: ASimDnsMicrosoftSysmon
+EquivalentBuiltInParser: _ASim_Dns_MicrosoftSysmon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: | 
+    let parser = (disabled:bool=false) {
+    let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
+        // See https://docs.microsoft.com/windows/win32/debug/system-error-codes--9000-11999-
+        0, 'NOERROR'
+      , 9001, "FORMERR"
+      , 9002,"SERVFAIL"
+      , 9003,'NXDOMAIN'
+      , 9004,'NOTIMP'
+      , 9005,'REFUSED'
+      , 9006,'YXDOMAIN'
+      , 9007,'YXRRSET'
+      , 9008,'NXRRSET'
+      , 9009,'NOTAUTH'
+      , 9010,'NOTZONE'
+      , 9011,'DSOTYPENI'
+      , 9016,'BADVERS'
+      , 9016,'BADSIG'
+      , 9017,'BADKEY'
+      , 9018,'BADTIME'
+      , 9019,'BADMODE'
+      , 9020,'BADNAME'
+      , 9021,'BADALG'
+      , 9022,'BADTRUNC'
+      , 9023,'BADCOOKIE'
+      , 1460, 'TIMEOUT'
+      ];
+    let ParsedDnsEvent_Event =(disabled:bool=false) {
+        Event | where not(disabled)
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
+        | where Source == "Microsoft-Windows-Sysmon" and EventID==22
+        | project-away Source, EventID
+        | parse-kv EventData as (
+            RuleName:string,
+            UtcTime:datetime, 
+            ProcessGuid:string,
+            ProcessId:string,
+            QueryName:string,
+            QueryStatus:int,
+            QueryResults:string,
+            Image:string,
+            User:string
+          )
+          with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+        | project-rename 
+            EventEndTime = UtcTime,
+            SrcProcessId = ProcessId,
+            SrcProcessGuid = ProcessGuid,
+            DnsQuery = QueryName,
+            DnsResponseCode = QueryStatus,
+            DnsResponseName = QueryResults,
+            SrcProcessName = Image,
+            SrcUsername = User
+        | project-away EventData
+    };
+    let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
+        WindowsEvent | where not(disabled)
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId,  Provider, Type // , _ItemId 
+        | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
+        | project-away Provider, EventID      
+        | extend 
+            RuleName = tostring(EventData.RuleName),
+            EventEndTime = todatetime(EventData.UtcTime),
+            SrcProcessGuid = tostring(EventData.ProcessGuid),
+            // extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
+            SrcProcessId = tostring(EventData.ProcessId),  
+            DnsQuery = tostring(EventData.QueryName),
+            DnsResponseCode = toint(EventData.QueryStatus),
+            DnsResponseName = tostring(EventData.QueryResults),
+            SrcProcessName = tostring(EventData.Image),
+            SrcUsername = tostring(EventData.User)
+        | project-away EventData
+        | parse SrcProcessGuid with '{' SrcProcessGuid '}'
+    };
+    union isfuzzy=true 
+        //ParsedDnsEvent_Event(disabled), 
+        ParsedDnsEvent_WindowsEvent(disabled)
+      | lookup RCodeTable on DnsResponseCode
+      | project-rename 
+          DvcHostname = Computer,
+          // EventUid = _ItemId, 
+          DvcScopeId = _SubscriptionId,
+          DvcId = _ResourceId
+      | extend
+          EventOriginalType = '22',
+          EventCount=int(1),
+          EventProduct = 'Sysmon',
+          EventVendor = 'Microsoft',
+          EventSchema = 'Dns',
+          EventSchemaVersion="0.1.6",
+          EventType = 'Query',
+          EventResult = iff (DnsResponseCode == 0,'Success','Failure'),
+          EventStartTime = EventEndTime,
+          EventSubType= 'response',
+          EventSeverity= iif (DnsResponseCode == 0, 'Informational', 'Low'),
+          SrcUsernameType = 'Windows',
+          RuleName = iff (RuleName == "-", "", RuleName),
+          DnsResponseName = iff (DnsResponseName == "-", "", DnsResponseName),
+          DnsResponseCodeName = iff (DnsResponseCodeName == "", "NA", DnsResponseCodeName),
+          DvcIdType = iff (DvcId != "", "AzureResourceId", "")
+      // -- Aliases
+      | extend 
+          EventResultDetails = DnsResponseCodeName,
+          Domain = DnsQuery,
+          Dvc = DvcHostname,
+          SrcHostname = DvcHostname,
+          Hostname=DvcHostname,
+          Src = DvcHostname,
+          DnsResponseCode = toint(iff (DnsResponseCode > 9000 and DnsResponseCode < 9100, DnsResponseCode-9000, DnsResponseCode)),
+          User = SrcUsername,
+          Process = SrcProcessName,
+          Rule = RuleName,
+          DvcAzureResourceId = DvcId
+    };
+    parser(disabled=disabled)

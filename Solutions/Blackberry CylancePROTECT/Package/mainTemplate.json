@@ -1,0 +1,588 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft",
+    "comments": "Solution template for Blackberry CylancePROTECT"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-blackberrycylanceprotect",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "BlackberryCylancePROTECT",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "BlackberryCylancePROTECT",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "CylancePROTECT-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "CylancePROTECT",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Blackberry CylancePROTECT data connector with template",
+        "displayName": "Blackberry CylancePROTECT template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Blackberry CylancePROTECT data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Blackberry CylancePROTECT",
+                  "publisher": "Blackberry",
+                  "descriptionMarkdown": "The [Blackberry CylancePROTECT](https://www.blackberry.com/us/en/products/blackberry-protect) connector allows you to easily connect your CylancePROTECT logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.",
+                  "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "CylancePROTECT",
+                      "baseQuery": "CylancePROTECT​"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Event Types",
+                      "query": "CylancePROTECT​\n            | summarize count() by EventName\n            | top 10 by count_"
+                    },
+                    {
+                      "description": "Top 10 Triggered Policies",
+                      "query": "CylancePROTECT​\n            | where EventType == \"Threat\" \n            | summarize count() by PolicyName \n            | top 10 by count_"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "CylancePROTECT​\n |where TimeGenerated > ago(3d)\n    |take 1\n   | project IsConnected = true"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Syslog (CylancePROTECT)",
+                      "lastDataReceivedQuery": "CylancePROTECT​\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "write permission.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "CylancePROTECT",
+                        "description": "must be configured to export logs via Syslog."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias CyclanePROTECT and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Blackberry%20CylancePROTECT/Parsers/CylancePROTECT.txt), on the second line of the query, enter the hostname(s) of your CyclanePROTECT device(s) and any other unique identifiers for the logstream. The function usually takes 10-15 minutes to activate after solution installation/update."
+                    },
+                    {
+                      "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux"
+                    },
+                    {
+                      "description": "Configure the facilities you want to collect and their severities.\n\n1.  Select the link below to open your workspace **agents configuration**, and select the **Syslog** tab.\n2.  Select **Add facility** and choose from the drop-down list of facilities. Repeat for all the facilities you want to add.\n3.  Mark the check boxes for the desired severities for each facility.\n4.  Click **Apply**.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenSyslogSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "2. Configure the logs to be collected"
+                    },
+                    {
+                      "description": "[Follow these instructions](https://docs.blackberry.com/content/dam/docs-blackberry-com/release-pdfs/en/cylance-products/syslog-guides/Cylance%20Syslog%20Guide%20v2.0%20rev12.pdf) to configure the CylancePROTECT to forward syslog. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+                      "title": "3. Configure and connect the CylancePROTECT"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Blackberry CylancePROTECT",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Blackberry CylancePROTECT",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Blackberry CylancePROTECT",
+          "publisher": "Blackberry",
+          "descriptionMarkdown": "The [Blackberry CylancePROTECT](https://www.blackberry.com/us/en/products/blackberry-protect) connector allows you to easily connect your CylancePROTECT logs with Microsoft Sentinel. This gives you more insight into your organization's network and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "CylancePROTECT",
+              "baseQuery": "CylancePROTECT​"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (CylancePROTECT)",
+              "lastDataReceivedQuery": "CylancePROTECT​\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "CylancePROTECT​\n |where TimeGenerated > ago(3d)\n    |take 1\n   | project IsConnected = true"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Event Types",
+              "query": "CylancePROTECT​\n            | summarize count() by EventName\n            | top 10 by count_"
+            },
+            {
+              "description": "Top 10 Triggered Policies",
+              "query": "CylancePROTECT​\n            | where EventType == \"Threat\" \n            | summarize count() by PolicyName \n            | top 10 by count_"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "CylancePROTECT",
+                "description": "must be configured to export logs via Syslog."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias CyclanePROTECT and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Blackberry%20CylancePROTECT/Parsers/CylancePROTECT.txt), on the second line of the query, enter the hostname(s) of your CyclanePROTECT device(s) and any other unique identifiers for the logstream. The function usually takes 10-15 minutes to activate after solution installation/update."
+            },
+            {
+              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux"
+            },
+            {
+              "description": "Configure the facilities you want to collect and their severities.\n\n1.  Select the link below to open your workspace **agents configuration**, and select the **Syslog** tab.\n2.  Select **Add facility** and choose from the drop-down list of facilities. Repeat for all the facilities you want to add.\n3.  Mark the check boxes for the desired severities for each facility.\n4.  Click **Apply**.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            },
+            {
+              "description": "[Follow these instructions](https://docs.blackberry.com/content/dam/docs-blackberry-com/release-pdfs/en/cylance-products/syslog-guides/Cylance%20Syslog%20Guide%20v2.0%20rev12.pdf) to configure the CylancePROTECT to forward syslog. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+              "title": "3. Configure and connect the CylancePROTECT"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "CylancePROTECT Data Parser with template",
+        "displayName": "CylancePROTECT Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "CylancePROTECT Data Parser with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "CylancePROTECT",
+                "category": "Samples",
+                "functionAlias": "CylancePROTECT",
+                "query": "\nlet LogHeader = Syslog\r\n| where Computer in (\"sysloghost\") // Replace sysloghost with the name of your syslog server\r\n| extend EventType = extract(@\"^\\W*([\\w-]+),\",1,SyslogMessage),\r\n        EventName = extract(@\"Event Name: ([^,]+),\",1,SyslogMessage),\r\n        DeviceName = extract(@\"Device Name: ([^,]+),\",1,SyslogMessage);\r\nlet DeviceEvents = LogHeader\r\n| where SyslogMessage contains \"Device,\"\r\n| extend AgentVersion = extract(@\"Agent Version: ([^,]+),\",1,SyslogMessage),\r\n        SrcIpAddr = split(extract(@\"IP Address: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        SrcMacAddr = split(extract(@\"MAC Address: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        LoggedOnUsers = split(extract(@\"Logged On Users: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        OsVersion = extract(@\"OS: ([^,]+),\",1,SyslogMessage),\r\n        ZoneNames = split(extract(@\"Zone Names: \\(([^)]+)\\)(,|$)\",1,SyslogMessage),\",\");\r\nlet ScriptControlEvents = LogHeader\r\n| where SyslogMessage contains \"ScriptControl\"\r\n| extend FilePath = extract(@\"File Path: ([^,]+),\",1,SyslogMessage),\r\n        FileHashSha256 = extract(@\"SHA256: ([^,]+),\",1,SyslogMessage),\r\n        Interpreter = extract(@\"Interpreter: ([^,]+),\",1,SyslogMessage),\r\n        InterpreterVersion = extract(@\"Interpreter Version: ([^,]+),\",1,SyslogMessage),\r\n        UserName = extract(@\"User Name: ([^,]+),\",1,SyslogMessage),\r\n        DeviceId = extract(@\"Device Id: ([^,]+),\",1,SyslogMessage),\r\n        PolicyName = extract(@\"Policy Name: ([^,]+)(,|$)\",1,SyslogMessage);\r\nlet ThreatEvents = LogHeader\r\n| where SyslogMessage contains \"Threat\"\r\n| extend SrcIpAddr = split(extract(@\"IP Address: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        FileName = extract(@\"File Name: ([^,]+),\",1,SyslogMessage),\r\n        Path = extract(@\"Path: ([^,]+)(,|$)\",1,SyslogMessage),\r\n        DriveType = extract(@\"Drive Type: ([^,]+),\",1,SyslogMessage),\r\n        FileHashSha256 = extract(@\"SHA256: ([^,]+),\",1,SyslogMessage),\r\n        FileHashMd5 = extract(@\"MD5: ([^,]+),\",1,SyslogMessage),\r\n        Status = extract(@\"Status: ([^,]+),\",1,SyslogMessage),\r\n        CylanceScore = extract(@\"Cylance Score: ([^,]+),\",1,SyslogMessage),\r\n        FoundDate = extract(@\"Found Date: ([^,]+),\",1,SyslogMessage),\r\n        FileType = extract(@\"File Type: ([^,]+),\",1,SyslogMessage),\r\n        IsRunning = extract(@\"Is Running: ([^,]+),\",1,SyslogMessage),\r\n        AutoRun = extract(@\"Auto Run: ([^,]+),\",1,SyslogMessage),\r\n        DetectedBy = extract(@\"Detected By: ([^,]+),\",1,SyslogMessage),\r\n        ZoneNames = split(extract(@\"Zone Names: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        IsMalware = extract(@\"Is Malware: ([^,]+),\",1,SyslogMessage),\r\n        IsUniqueToCylance = extract(@\"Is Unique To Cylance: ([^,]+),\",1,SyslogMessage),\r\n        ThreatClassification = extract(@\"Threat Classification: ([^,]+),\",1,SyslogMessage),\r\n        DeviceId = extract(@\"Device Id: ([^,]+),\",1,SyslogMessage),\r\n        PolicyName = extract(@\"Policy Name: ([^,]+)(,|$)\",1,SyslogMessage);\r\nlet DeviceControlEvents = LogHeader\r\n| where SyslogMessage contains \"DeviceControl\"\r\n| extend ExtDeviceType = extract(@\"External Device Type: ([^,]+),\",1,SyslogMessage),\r\n        ExtDeviceVendorId = extract(@\"External Device Vendor ID: ([^,]+),\",1,SyslogMessage),\r\n        ExtDeviceName = extract(@\"External Device Name: ([^,]+),\",1,SyslogMessage),\r\n        ExtDeviceProductId = extract(@\"External Device Product ID: ([^,]+),\",1,SyslogMessage),\r\n        ExtDeviceSerialNumber = extract(@\"External Device Serial Number: ([^,]+),\",1,SyslogMessage),\r\n        ZoneNames = split(extract(@\"Zone Names: \\(([^)]+)\\)(,|$)\",1,SyslogMessage),\",\"),\r\n        DeviceId = extract(@\"Device Id: ([^,]+),\",1,SyslogMessage),\r\n        PolicyName = extract(@\"Policy Name: ([^,]+)(,|$)\",1,SyslogMessage);\r\nlet AuditLog = LogHeader\r\n| where SyslogMessage contains \"AuditLog\"\r\n| extend Provider = extract(@\"Provider: ([^,]+),\",1,SyslogMessage),\r\n        PolicyChanged = extract(@\"Policy Changed: ([^,]+),\",1,SyslogMessage),\r\n        ZoneNames = split(extract(@\"Zone: ([^,]+)(,|$)\",1,SyslogMessage),\",\"),\r\n        UserName = extract(@\"User: ([^,]+)(,|$)\",1,SyslogMessage),\r\n        DeviceName = extract(@\"Devices?:\\s([\\w\\d\\-\\_]+)\\,\",1,SyslogMessage),\r\n        SrcIpAddr = split(extract(@\"Source IP: ([\\w\\.\\:]+)\\,\",1,SyslogMessage),\",\");\r\nlet NoEventType = LogHeader\r\n| where isempty(SyslogMessage)\r\n| extend EventType = iif(isempty(EventType),\"Other\",EventType)\r\n| extend AgentVersion = tostring(parse_json(SyslogMessage).[\"Agent Version\"]),\r\n        BackgroundDetection = tostring(parse_json(SyslogMessage).[\"Background Detection\"]),\r\n        EventCreationTime = tostring(parse_json(SyslogMessage).Created),\r\n        DeviceName = tostring(parse_json(SyslogMessage).[\"Device Name\"]),\r\n        FilesAnalyzed = toint(parse_json(SyslogMessage).[\"Files Analyzed\"]),\r\n        SrcIpAddr = split(parse_json(SyslogMessage).[\"IP Addresses\"],\",\"),\r\n        IsOnline = tostring(parse_json(SyslogMessage).[\"Is Online\"]),\r\n        LastReportedUser = tostring(parse_json(SyslogMessage).[\"Last Reported User\"]),\r\n        SrcMacAddr = split(parse_json(SyslogMessage).[\"Mac Addresses\"],\",\"),\r\n        OsVersion = tostring(parse_json(SyslogMessage).[\"OS Version\"]),\r\n        OfflineDate = tostring(parse_json(SyslogMessage).[\"Offline Date\"]),\r\n        OnlineDate = tostring(parse_json(SyslogMessage).[\"Online Date\"]),\r\n        Policy = tostring(parse_json(SyslogMessage).Policy),\r\n        SerialNumber = tostring(parse_json(SyslogMessage).[\"Serial Number\"]), \r\n        Tenant = tostring(parse_json(SyslogMessage).Tenant),\r\n        ZoneNames = split(parse_json(SyslogMessage).Zones,\",\")\r\n| extend AvIndustry = tostring(parse_json(SyslogMessage).[\"AV Industry\"]),\r\n        AccessTime = tostring(parse_json(SyslogMessage).[\"Access Time\"]),\r\n        AutoRun = tostring(parse_json(SyslogMessage).[\"Auto Run\"]),\r\n        CertIssuer = tostring(parse_json(SyslogMessage).[\"Cert Issuer\"]),\r\n        CertPublisher = tostring(parse_json(SyslogMessage).[\"Cert Publisher\"]),\r\n        CertSubject = tostring(parse_json(SyslogMessage).[\"Cert Subject\"]),\r\n        CertTimestamp = tostring(parse_json(SyslogMessage).[\"Cert Timestamp\"]),\r\n        Classification_ = tostring(parse_json(SyslogMessage).Classification),\r\n        CompanyName = tostring(parse_json(SyslogMessage).[\"Company Name\"]),\r\n        Copyright = tostring(parse_json(SyslogMessage).Copyright),\r\n        CreateTime = tostring(parse_json(SyslogMessage).[\"Create Time\"]),\r\n        CylanceScore = tostring(parse_json(SyslogMessage).[\"Cylance Score\"]),\r\n        Description = tostring(parse_json(SyslogMessage).Description),\r\n        DetectedBy = tostring(parse_json(SyslogMessage).[\"Detected By\"]),\r\n        DriveType = tostring(parse_json(SyslogMessage).[\"Drive Type\"]),\r\n        EverRun = tostring(parse_json(SyslogMessage).[\"Ever Run\"]),\r\n        FileName = tostring(parse_json(SyslogMessage).[\"File Name\"]),\r\n        FileOwner = tostring(parse_json(SyslogMessage).[\"File Owner\"]),\r\n        FilePath = tostring(parse_json(SyslogMessage).[\"File Path\"]),\r\n        FileSize = tostring(parse_json(SyslogMessage).[\"File Size (bytes)\"]),\r\n        FileStatus = tostring(parse_json(SyslogMessage).[\"File Status\"]),\r\n        FileVersion = tostring(parse_json(SyslogMessage).[\"File Version\"]),\r\n        FirstFound = tostring(parse_json(SyslogMessage).[\"First Found\"]),\r\n        GlobalQuarantined = tostring(parse_json(SyslogMessage).[\"Global Quarantined\"]),\r\n        LastFound = tostring(parse_json(SyslogMessage).[\"Last Found\"]),\r\n        FileHashMd5 = tostring(parse_json(SyslogMessage).MD5),\r\n        ModificationTime = tostring(parse_json(SyslogMessage).[\"Modification Time\"]),\r\n        ProductName = tostring(parse_json(SyslogMessage).[\"Product Name\"]),\r\n        Running = tostring(parse_json(SyslogMessage).Running),\r\n        FileHashSha256 = tostring(parse_json(SyslogMessage).SHA256),\r\n        Safelisted = tostring(parse_json(SyslogMessage).Safelisted),\r\n        SerialNumber = tostring(parse_json(SyslogMessage).[\"Serial Number\"]),\r\n        SignatureStatus = tostring(parse_json(SyslogMessage).[\"Signature Status\"]),\r\n        Signed = tostring(parse_json(SyslogMessage).Signed);\r\nlet AllOtherEvents = LogHeader\r\n| where EventType !in (\"Device\", \"ScriptControl\", \"Threat\", \"DeviceControl\", \"AuditLog\", \"Other\");\r\nunion DeviceEvents, ScriptControlEvents, ThreatEvents, DeviceControlEvents, AuditLog, NoEventType, AllOtherEvents\r\n| where EventType != \"Other\"\r\n",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "CylancePROTECT"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Blackberry CylancePROTECT",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "CylancePROTECT",
+        "category": "Samples",
+        "functionAlias": "CylancePROTECT",
+        "query": "\nlet LogHeader = Syslog\r\n| where Computer in (\"sysloghost\") // Replace sysloghost with the name of your syslog server\r\n| extend EventType = extract(@\"^\\W*([\\w-]+),\",1,SyslogMessage),\r\n        EventName = extract(@\"Event Name: ([^,]+),\",1,SyslogMessage),\r\n        DeviceName = extract(@\"Device Name: ([^,]+),\",1,SyslogMessage);\r\nlet DeviceEvents = LogHeader\r\n| where SyslogMessage contains \"Device,\"\r\n| extend AgentVersion = extract(@\"Agent Version: ([^,]+),\",1,SyslogMessage),\r\n        SrcIpAddr = split(extract(@\"IP Address: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        SrcMacAddr = split(extract(@\"MAC Address: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        LoggedOnUsers = split(extract(@\"Logged On Users: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        OsVersion = extract(@\"OS: ([^,]+),\",1,SyslogMessage),\r\n        ZoneNames = split(extract(@\"Zone Names: \\(([^)]+)\\)(,|$)\",1,SyslogMessage),\",\");\r\nlet ScriptControlEvents = LogHeader\r\n| where SyslogMessage contains \"ScriptControl\"\r\n| extend FilePath = extract(@\"File Path: ([^,]+),\",1,SyslogMessage),\r\n        FileHashSha256 = extract(@\"SHA256: ([^,]+),\",1,SyslogMessage),\r\n        Interpreter = extract(@\"Interpreter: ([^,]+),\",1,SyslogMessage),\r\n        InterpreterVersion = extract(@\"Interpreter Version: ([^,]+),\",1,SyslogMessage),\r\n        UserName = extract(@\"User Name: ([^,]+),\",1,SyslogMessage),\r\n        DeviceId = extract(@\"Device Id: ([^,]+),\",1,SyslogMessage),\r\n        PolicyName = extract(@\"Policy Name: ([^,]+)(,|$)\",1,SyslogMessage);\r\nlet ThreatEvents = LogHeader\r\n| where SyslogMessage contains \"Threat\"\r\n| extend SrcIpAddr = split(extract(@\"IP Address: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        FileName = extract(@\"File Name: ([^,]+),\",1,SyslogMessage),\r\n        Path = extract(@\"Path: ([^,]+)(,|$)\",1,SyslogMessage),\r\n        DriveType = extract(@\"Drive Type: ([^,]+),\",1,SyslogMessage),\r\n        FileHashSha256 = extract(@\"SHA256: ([^,]+),\",1,SyslogMessage),\r\n        FileHashMd5 = extract(@\"MD5: ([^,]+),\",1,SyslogMessage),\r\n        Status = extract(@\"Status: ([^,]+),\",1,SyslogMessage),\r\n        CylanceScore = extract(@\"Cylance Score: ([^,]+),\",1,SyslogMessage),\r\n        FoundDate = extract(@\"Found Date: ([^,]+),\",1,SyslogMessage),\r\n        FileType = extract(@\"File Type: ([^,]+),\",1,SyslogMessage),\r\n        IsRunning = extract(@\"Is Running: ([^,]+),\",1,SyslogMessage),\r\n        AutoRun = extract(@\"Auto Run: ([^,]+),\",1,SyslogMessage),\r\n        DetectedBy = extract(@\"Detected By: ([^,]+),\",1,SyslogMessage),\r\n        ZoneNames = split(extract(@\"Zone Names: \\(([^)]+)\\),\",1,SyslogMessage),\",\"),\r\n        IsMalware = extract(@\"Is Malware: ([^,]+),\",1,SyslogMessage),\r\n        IsUniqueToCylance = extract(@\"Is Unique To Cylance: ([^,]+),\",1,SyslogMessage),\r\n        ThreatClassification = extract(@\"Threat Classification: ([^,]+),\",1,SyslogMessage),\r\n        DeviceId = extract(@\"Device Id: ([^,]+),\",1,SyslogMessage),\r\n        PolicyName = extract(@\"Policy Name: ([^,]+)(,|$)\",1,SyslogMessage);\r\nlet DeviceControlEvents = LogHeader\r\n| where SyslogMessage contains \"DeviceControl\"\r\n| extend ExtDeviceType = extract(@\"External Device Type: ([^,]+),\",1,SyslogMessage),\r\n        ExtDeviceVendorId = extract(@\"External Device Vendor ID: ([^,]+),\",1,SyslogMessage),\r\n        ExtDeviceName = extract(@\"External Device Name: ([^,]+),\",1,SyslogMessage),\r\n        ExtDeviceProductId = extract(@\"External Device Product ID: ([^,]+),\",1,SyslogMessage),\r\n        ExtDeviceSerialNumber = extract(@\"External Device Serial Number: ([^,]+),\",1,SyslogMessage),\r\n        ZoneNames = split(extract(@\"Zone Names: \\(([^)]+)\\)(,|$)\",1,SyslogMessage),\",\"),\r\n        DeviceId = extract(@\"Device Id: ([^,]+),\",1,SyslogMessage),\r\n        PolicyName = extract(@\"Policy Name: ([^,]+)(,|$)\",1,SyslogMessage);\r\nlet AuditLog = LogHeader\r\n| where SyslogMessage contains \"AuditLog\"\r\n| extend Provider = extract(@\"Provider: ([^,]+),\",1,SyslogMessage),\r\n        PolicyChanged = extract(@\"Policy Changed: ([^,]+),\",1,SyslogMessage),\r\n        ZoneNames = split(extract(@\"Zone: ([^,]+)(,|$)\",1,SyslogMessage),\",\"),\r\n        UserName = extract(@\"User: ([^,]+)(,|$)\",1,SyslogMessage),\r\n        DeviceName = extract(@\"Devices?:\\s([\\w\\d\\-\\_]+)\\,\",1,SyslogMessage),\r\n        SrcIpAddr = split(extract(@\"Source IP: ([\\w\\.\\:]+)\\,\",1,SyslogMessage),\",\");\r\nlet NoEventType = LogHeader\r\n| where isempty(SyslogMessage)\r\n| extend EventType = iif(isempty(EventType),\"Other\",EventType)\r\n| extend AgentVersion = tostring(parse_json(SyslogMessage).[\"Agent Version\"]),\r\n        BackgroundDetection = tostring(parse_json(SyslogMessage).[\"Background Detection\"]),\r\n        EventCreationTime = tostring(parse_json(SyslogMessage).Created),\r\n        DeviceName = tostring(parse_json(SyslogMessage).[\"Device Name\"]),\r\n        FilesAnalyzed = toint(parse_json(SyslogMessage).[\"Files Analyzed\"]),\r\n        SrcIpAddr = split(parse_json(SyslogMessage).[\"IP Addresses\"],\",\"),\r\n        IsOnline = tostring(parse_json(SyslogMessage).[\"Is Online\"]),\r\n        LastReportedUser = tostring(parse_json(SyslogMessage).[\"Last Reported User\"]),\r\n        SrcMacAddr = split(parse_json(SyslogMessage).[\"Mac Addresses\"],\",\"),\r\n        OsVersion = tostring(parse_json(SyslogMessage).[\"OS Version\"]),\r\n        OfflineDate = tostring(parse_json(SyslogMessage).[\"Offline Date\"]),\r\n        OnlineDate = tostring(parse_json(SyslogMessage).[\"Online Date\"]),\r\n        Policy = tostring(parse_json(SyslogMessage).Policy),\r\n        SerialNumber = tostring(parse_json(SyslogMessage).[\"Serial Number\"]), \r\n        Tenant = tostring(parse_json(SyslogMessage).Tenant),\r\n        ZoneNames = split(parse_json(SyslogMessage).Zones,\",\")\r\n| extend AvIndustry = tostring(parse_json(SyslogMessage).[\"AV Industry\"]),\r\n        AccessTime = tostring(parse_json(SyslogMessage).[\"Access Time\"]),\r\n        AutoRun = tostring(parse_json(SyslogMessage).[\"Auto Run\"]),\r\n        CertIssuer = tostring(parse_json(SyslogMessage).[\"Cert Issuer\"]),\r\n        CertPublisher = tostring(parse_json(SyslogMessage).[\"Cert Publisher\"]),\r\n        CertSubject = tostring(parse_json(SyslogMessage).[\"Cert Subject\"]),\r\n        CertTimestamp = tostring(parse_json(SyslogMessage).[\"Cert Timestamp\"]),\r\n        Classification_ = tostring(parse_json(SyslogMessage).Classification),\r\n        CompanyName = tostring(parse_json(SyslogMessage).[\"Company Name\"]),\r\n        Copyright = tostring(parse_json(SyslogMessage).Copyright),\r\n        CreateTime = tostring(parse_json(SyslogMessage).[\"Create Time\"]),\r\n        CylanceScore = tostring(parse_json(SyslogMessage).[\"Cylance Score\"]),\r\n        Description = tostring(parse_json(SyslogMessage).Description),\r\n        DetectedBy = tostring(parse_json(SyslogMessage).[\"Detected By\"]),\r\n        DriveType = tostring(parse_json(SyslogMessage).[\"Drive Type\"]),\r\n        EverRun = tostring(parse_json(SyslogMessage).[\"Ever Run\"]),\r\n        FileName = tostring(parse_json(SyslogMessage).[\"File Name\"]),\r\n        FileOwner = tostring(parse_json(SyslogMessage).[\"File Owner\"]),\r\n        FilePath = tostring(parse_json(SyslogMessage).[\"File Path\"]),\r\n        FileSize = tostring(parse_json(SyslogMessage).[\"File Size (bytes)\"]),\r\n        FileStatus = tostring(parse_json(SyslogMessage).[\"File Status\"]),\r\n        FileVersion = tostring(parse_json(SyslogMessage).[\"File Version\"]),\r\n        FirstFound = tostring(parse_json(SyslogMessage).[\"First Found\"]),\r\n        GlobalQuarantined = tostring(parse_json(SyslogMessage).[\"Global Quarantined\"]),\r\n        LastFound = tostring(parse_json(SyslogMessage).[\"Last Found\"]),\r\n        FileHashMd5 = tostring(parse_json(SyslogMessage).MD5),\r\n        ModificationTime = tostring(parse_json(SyslogMessage).[\"Modification Time\"]),\r\n        ProductName = tostring(parse_json(SyslogMessage).[\"Product Name\"]),\r\n        Running = tostring(parse_json(SyslogMessage).Running),\r\n        FileHashSha256 = tostring(parse_json(SyslogMessage).SHA256),\r\n        Safelisted = tostring(parse_json(SyslogMessage).Safelisted),\r\n        SerialNumber = tostring(parse_json(SyslogMessage).[\"Serial Number\"]),\r\n        SignatureStatus = tostring(parse_json(SyslogMessage).[\"Signature Status\"]),\r\n        Signed = tostring(parse_json(SyslogMessage).Signed);\r\nlet AllOtherEvents = LogHeader\r\n| where EventType !in (\"Device\", \"ScriptControl\", \"Threat\", \"DeviceControl\", \"AuditLog\", \"Other\");\r\nunion DeviceEvents, ScriptControlEvents, ThreatEvents, DeviceControlEvents, AuditLog, NoEventType, AllOtherEvents\r\n| where EventType != \"Other\"\r\n",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Blackberry CylancePROTECT",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Blackberry CylancePROTECT",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-20",
+        "providers": [
+          "Blackberry"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

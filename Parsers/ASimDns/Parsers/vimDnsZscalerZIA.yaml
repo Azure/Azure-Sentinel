@@ -1,0 +1,132 @@
+Parser:
+  Title: DNS activity ASIM filtering parser for Zscaler ZIA
+  Version: '0.4'
+  LastUpdated: Feb 19 2023
+Product:
+  Name: Zscaler ZIA DNS
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Zscaler ZIA DNS logs to the ASIM Dns normalized schema.
+ParserName: vimDnsZscalerZIA
+EquivalentBuiltInParser: _Im_Dns_ZscalerZIA
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ZscalerDNSevents=(
+    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*', response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
+    , disabled:bool=false
+  ){
+    CommonSecurityLog 
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime) 
+    | where not(disabled)
+    | where DeviceProduct == "NSSDNSlog"
+    //  -- Pre-parsing filtering
+    | where
+        (eventtype in~ ('lookup', 'Query')
+        and (srcipaddr=='*' or SourceIP==srcipaddr)
+        and (array_length(domain_has_any) == 0 or DeviceCustomString5 has_any (domain_has_any))
+        and (response_has_ipv4=='*' or has_ipv4(DeviceCustomString6,response_has_ipv4) )
+        and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(DeviceCustomString6, response_has_any_prefix))
+        and (responsecodename in ('*', 'NOERROR') or DeviceCustomString6 =~ responsecodename)) // NOERROR is determined only later
+    | extend
+        EventResultDetails = iff (DeviceCustomString6 matches regex @'^([A-Z_]+)$', DeviceCustomString6, 'NOERROR')
+    | where
+        (responsecodename=='*' or EventResultDetails =~ responsecodename)
+    // --
+    | project-rename
+        Dvc=Computer , 
+        SrcIpAddr = SourceIP, 
+        SrcUsername = SourceUserName,
+        DstIpAddr = DestinationIP, 
+        DstPortNumber = DestinationPort, 
+        EventProductVersion = DeviceVersion, 
+        DnsQueryTypeName = DeviceCustomString4, 
+        DnsQuery = DeviceCustomString5, 
+        SrcUserDepartment = DeviceCustomString1, // Not part of the standard schema
+        reqaction = DeviceCustomString2, 
+        resaction = DeviceCustomString3, 
+        DvcUsername = SourceUserID,
+        DvcZone = SourceUserPrivileges,
+        SrcHostname = DeviceName,
+        NetworkProtocol = Protocol,
+        EventOriginalSeverity = LogSeverity,
+        EventMessage = Message
+    | extend
+        EventCount=int(1), 
+        EventStartTime=TimeGenerated, 
+        EventVendor = "Zscaler", 
+        EventProduct = "ZIA DNS", 
+        EventSchema = "Dns",
+        EventSchemaVersion="0.1.3", 
+        EventEndTime=TimeGenerated, 
+        SrcUsernameType = "UPN",
+        EventSubType = iff(resaction == 'None', 'request', 'response'), 
+        DvcAction = iff(resaction == 'None', reqaction, resaction), 
+        EventType = 'Query', 
+        RuleName = strcat (FlexString1, " / ", FlexString2),
+        // -- Adjustment to support both old and new CSL fields.
+        UrlCategory = coalesce(column_ifexists("DeviceEventCategory", ""), extract("cat=(.*)", 1, AdditionalExtensions), ""),  
+        DnsNetworkDuration = coalesce(
+          toint(column_ifexists ("FieldDeviceCustomNumber1", int(null))), 
+          toint(column_ifexists ("DeviceCustomNumber1",int(null)))
+        )
+     | extend 
+        EventResult = case (
+          EventSubType == 'request', 'NA', 
+          EventResultDetails == 'NOERROR', 'Success',
+          'Failure'),
+        DnsResponseName = iff (EventResultDetails == 'NOERROR', DeviceCustomString6, '')
+    // -- Aliases
+    | extend
+        DnsResponseCodeName = EventResultDetails,
+        Domain = DnsQuery,
+        IpAddr = SrcIpAddr,
+        Src = SrcIpAddr,
+        Hostname = SrcHostname,
+        Dst = DstIpAddr,
+        DvcHostname = Dvc,
+        Duration = DnsNetworkDuration,
+        User = SrcUsername,
+    // -- Entity identifier explicit aliases
+        SrcUserUpn = SrcUsername
+    | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, ReceiptTime, ReceivedBytes, Remote*, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, EventOutcome, FieldDevice*, ExtID, Reason, ApplicationProtocol, ReportReferenceLink, Activity, resaction, reqaction
+    };
+  ZscalerDNSevents (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)

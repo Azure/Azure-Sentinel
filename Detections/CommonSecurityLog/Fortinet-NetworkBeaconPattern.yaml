@@ -1,0 +1,88 @@
+id: 3255ec41-6bd6-4f35-84b1-c032b18bbfcb
+name: Fortinet - Beacon pattern detected
+description: |
+  'Identifies patterns in the time deltas of contacts between internal and external IPs in Fortinet network data that are consistent with beaconing.
+   Accounts for randomness (jitter) and seasonality such as working hours that may have been introduced into the beacon pattern.
+   The lookback is set to 1d, the minimum granularity in time deltas is set to 60 seconds and the minimum number of beacons required to emit a
+   detection is set to 4.
+   Increase the lookback period to capture beacons with larger periodicities.
+   The jitter tolerance is set to 0.2 - This means we account for an overall 20% deviation from the infered beacon periodicity. Seasonality is dealt with
+   automatically using series_outliers.
+   Note: In large environments it may be necessary to reduce the lookback period to get fast query times.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+  - T1571
+query: |
+    let starttime = 1d;
+    let TimeDeltaThresholdInSeconds = 60; // we ignore beacons diffs that fall below this threshold
+    let TotalBeaconsThreshold = 4; // minimum number of beacons required in a session to surface a row
+    let JitterTolerance = 0.2; // tolerance to jitter, e.g. - 0.2 = 20% jitter is tolerated either side of the periodicity
+    CommonSecurityLog
+    | where DeviceVendor == "Fortinet"
+    | where TimeGenerated > ago(starttime)
+    // eliminate bad data
+    | where isnotempty(SourceIP) and isnotempty(DestinationIP) and SourceIP != "0.0.0.0"
+    // filter out deny, close, rst and SNMP to reduce data volume
+    | where DeviceAction !in ("close", "client-rst", "server-rst", "deny") and DestinationPort != 161
+    // map input fields
+    | project TimeGenerated , SourceIP, DestinationIP, DestinationPort, ReceivedBytes, SentBytes, DeviceAction
+    // where destination IPs are public
+    | where ipv4_is_private(DestinationIP) == false
+    // sort into source->destination 'sessions'
+    | sort by SourceIP asc, DestinationIP asc, DestinationPort asc, TimeGenerated asc
+    | serialize
+    // time diff the contact times between source and destination to get a list of deltas
+    | extend nextTimeGenerated = next(TimeGenerated, 1), nextSourceIP = next(SourceIP, 1), nextDestIP = next(DestinationIP, 1), nextDestPort = next(DestinationPort, 1)
+    | extend TimeDeltainSeconds = datetime_diff("second",nextTimeGenerated,TimeGenerated)
+    | where SourceIP == nextSourceIP and DestinationIP == nextDestIP and DestinationPort == nextDestPort
+    // remove small time deltas below the set threshold
+    | where TimeDeltainSeconds > TimeDeltaThresholdInSeconds
+    // summarize the deltas by source->destination
+    | summarize count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), sum(ReceivedBytes), sum(SentBytes), makelist(TimeDeltainSeconds), makeset(DeviceAction) by SourceIP, DestinationIP, DestinationPort
+    // get some statistical properties of the delta distribution and smooth any outliers (e.g. laptop shut overnight, working hours)
+    | extend series_stats(list_TimeDeltainSeconds), outliers=series_outliers(list_TimeDeltainSeconds)
+    // expand the deltas and the outliers
+    | mvexpand list_TimeDeltainSeconds to typeof(double), outliers to typeof(double)
+    // replace outliers with the average of the distribution
+    | extend list_TimeDeltainSeconds_normalized=iff(outliers > 1.5 or outliers < -1.5, series_stats_list_TimeDeltainSeconds_avg , list_TimeDeltainSeconds)
+    // summarize with the smoothed distribution
+    | summarize BeaconCount=count(), makelist(list_TimeDeltainSeconds), list_TimeDeltainSeconds_normalized=makelist(list_TimeDeltainSeconds_normalized), makeset(set_DeviceAction) by StartTime, EndTime, SourceIP, DestinationIP, DestinationPort, sum_ReceivedBytes, sum_SentBytes
+    // get stats on the smoothed distribution
+    | extend series_stats(list_TimeDeltainSeconds_normalized)
+    // match jitter tolerance on smoothed distrib
+    | extend MaxJitter = (series_stats_list_TimeDeltainSeconds_normalized_avg*JitterTolerance)
+    | where series_stats_list_TimeDeltainSeconds_normalized_stdev < MaxJitter
+    // where the minimum beacon threshold is satisfied and there was some data transfer
+    | where BeaconCount > TotalBeaconsThreshold and (sum_SentBytes > 0 or sum_ReceivedBytes > 0)
+    // final projection
+    | project StartTime, EndTime, SourceIP, DestinationIP, DestinationPort, BeaconCount, TimeDeltasInSeconds=list_list_TimeDeltainSeconds, Periodicity=series_stats_list_TimeDeltainSeconds_normalized_avg, ReceivedBytes=sum_ReceivedBytes, SentBytes=sum_SentBytes, Actions=set_set_DeviceAction
+    // where periodicity is order of magnitude larger than time delta threshold (eliminates FPs whose periodicity is close to the values we ignored)
+    | where Periodicity >= (10*TimeDeltaThresholdInSeconds)
+    | extend timestamp = StartTime, IPCustomEntity = DestinationIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: robMSFT
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Network" ]

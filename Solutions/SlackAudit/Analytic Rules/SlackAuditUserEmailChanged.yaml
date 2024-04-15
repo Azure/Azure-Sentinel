@@ -1,0 +1,39 @@
+id: 9d85feb3-7f54-4181-b143-68abb1a86823
+name: SlackAudit - User email linked to account changed.
+description: |
+  'Detects when user email linked to account changes.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SlackAuditAPI
+    dataTypes:
+      - SlackAudit_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  SlackAudit
+  | where TimeGenerated between (ago(14d) .. (1d))
+  | summarize max(TimeGenerated) by SrcUserName, SrcUserEmail
+  | join (SlackAudit 
+        | where Action =~ 'user_login'
+        | project SrcIpAddr, SrcUserName, NewUserEmail = SrcUserEmail) on SrcUserName
+  | where NewUserEmail != SrcUserEmail
+  | extend AccountCustomEntity = SrcUserName
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

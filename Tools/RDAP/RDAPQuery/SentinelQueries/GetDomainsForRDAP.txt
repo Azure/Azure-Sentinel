@@ -1,0 +1,23 @@
+// A dynamic list of domains and TLDs to not bother searching for
+let ExcludedDomains = dynamic(["cn","io", "ms", "microsoft.com","google.com"]);
+DeviceNetworkEvents
+| where TimeGenerated >= ago(1h)
+| where isnotempty(RemoteUrl)
+// A little cleanup just in case
+| extend parsedDomain = case(RemoteUrl contains "//", parse_url(RemoteUrl).Host, RemoteUrl)
+| extend cleanDomain = split(parsedDomain,"/")[0]
+// Split the resultant domain on the "." character.  This will give us all of the domain parts, but we're really only interested in the TLD and root domain
+| extend splitDomain = split(cleanDomain,".")
+// Use just the last two parts of the domain (e.g. "crazyfunnyhats" and "com") as our domain to lookup / return
+| extend Domain = tolower(strcat(splitDomain[array_length(splitDomain)-2],".",splitDomain[array_length(splitDomain)-1]))
+//  Extract just the TLD so we can use it in the exclusions
+| extend TLD = splitDomain[array_length(splitDomain)-1]
+// Check to see if we're to ignore this domain / TLD
+| where TLD !in(ExcludedDomains)
+| where Domain !in(ExcludedDomains)
+// summarize the results to remove duplicates
+| summarize DistinctDomain = dcount(Domain) by Domain
+| project Domain
+// Join to the already resolved domains with a leftanti (e.g. if already in ResolvedDomains_CL, then ignore)
+| join kind=leftanti (ResolvedDomains_CL
+| where TimeGenerated >= ago(90d)) on $left.Domain == $right.domainName_s //Uncomment this line after the FIRST run of the Azure Function.

@@ -1,0 +1,36 @@
+id: 67da5c4e-49f2-476d-96ff-2dbe4b855a48
+name: GitHub Mass Deletion of repos or projects
+description: |
+  'This hunting query identifies GitHub activites where there are a large number of deletions that may be a sign of compromise.'
+requiredDataConnectors: []
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let LearningPeriod = 7d;
+  let BinTime = 1h;
+  let EndLearningTime = starttime - LearningPeriod;
+  let NumberOfStds = 3;
+  let MinThreshold = 10.0;
+  let GitHubRepositoryDestroyEvents = (GitHubAudit
+  | where Action == "repo.destroy");
+  GitHubRepositoryDestroyEvents
+  | where TimeGenerated between (EndLearningTime .. starttime)
+  | summarize count() by bin(TimeGenerated, BinTime)
+  | summarize AvgInLearning = avg(count_), StdInLearning = stdev(count_)
+  | extend LearningThreshold = max_of(AvgInLearning + StdInLearning * NumberOfStds, MinThreshold)
+  | extend Dummy = 1
+  | join kind=innerunique (
+    GitHubRepositoryDestroyEvents
+    | where TimeGenerated between (starttime..endtime)
+    | summarize CountInRunTime = count() by bin(TimeGenerated, BinTime)
+    | extend Dummy = 1
+  ) on Dummy
+  | project-away Dummy
+  | where CountInRunTime > LearningThreshold
+
+

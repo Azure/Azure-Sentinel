@@ -1,0 +1,134 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Base playbook - F5 BIG-IP",
+        "description": "This playbook generates access token for F5 BIG-IP Main playbooks.",
+        "mainSteps": [ "Generates Access Token from F5 BIG-IP using Login Provider Name, Host URL, Username and Password as inputs." ],
+        "prerequisites": [
+            "1. F5 BIG-IP Host url should be known.",
+            "2. F5 BIG-IP firewall username and password should be known.",
+            "3. F5 BIG-IP environment should be accessible with the credentials."
+        ],
+        "lastUpdateTime": "2021-08-12T00:00:00.000Z",
+        "tags": [ "Utilities" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "F5BigIP_Base",
+            "type": "String"
+        },
+        "HostURL": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter host url"
+            }
+        },
+        "Username": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Username"
+            }
+        },
+        "Password": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter password"
+            }
+        }
+
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "F5BigIPHost": {
+                            "defaultValue": "[parameters('HostURL')]",
+                            "type": "String"
+                        },
+                        "password": {
+                            "defaultValue": "[parameters('Password')]",
+                            "type": "SecureString"
+                        },
+                        "username": {
+                            "defaultValue": "[parameters('Username')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {}
+                        }
+                    },
+                    "actions": {
+                        "HTTP_-_Get_Access_Token": {
+                            "runAfter": {
+                                "Initialize_variable_loginProviderName_for_F5_environment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "loginProviderName": "@{variables('loginProviderName')}",
+                                    "password": "@{parameters('password')}",
+                                    "username": "@{parameters('username')}"
+                                },
+                                "method": "POST",
+                                "uri": "@{parameters('F5BigIPHost')}/mgmt/shared/authn/login"
+                            }
+                        },
+                        "Initialize_variable_loginProviderName_for_F5_environment": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "loginProviderName",
+                                        "type": "string",
+                                        "value": "tmos"
+                                    }
+                                ]
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "HTTP_-_Get_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "body": {
+                                    "F5BigIPHost": "@{parameters('F5BigIPHost')}",
+                                    "X-F5-Auth-Token": "@{body('HTTP_-_Get_Access_Token')?['token']?['token']}"
+                                },
+                                "statusCode": 200
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {}
+            }
+        }
+    ]
+}

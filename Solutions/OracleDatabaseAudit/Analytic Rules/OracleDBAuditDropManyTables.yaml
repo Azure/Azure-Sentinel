@@ -1,0 +1,36 @@
+id: b3aa0e5a-75a2-4613-80ec-93a1be3aeb8f
+name: OracleDBAudit - Multiple tables dropped in short time
+description: |
+  'Detects when user drops many tables in short period of time.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+  let tbl_threshold = 10;
+  OracleDatabaseAuditEvent
+  | where isnotempty(DstUserName)
+  | where DbAction =~ 'DROP'
+  | extend TableName = replace(@'[,\(\)]', '', extract(@'(?i)SELECT(.*?)FROM\s(.*?)\s', 2, Action))
+  | where isnotempty(TableName)
+  | where TableName !~ 'SELECT'
+  | summarize tbl_count = dcount(TableName) by DstUserName
+  | where tbl_count > tbl_threshold
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

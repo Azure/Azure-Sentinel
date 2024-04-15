@@ -1,0 +1,40 @@
+id: 036ce0a8-a1ff-4731-a078-02b3207fa4f3
+name: M2131_EventLogManagementPostureChanged_EL1
+description: |
+  'This alert is desinged to monitor Azure policies aligned with the Maturity Model for Event Log Management (M-21-31) standard. The alert triggers when EL1 policy compliance falls below 70% within a 1 week timeframe.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 7d
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  SecurityRecommendation
+  | where RecommendationDisplayName <> ""
+  | extend MaturityLevel=iff(RecommendationDisplayName has_any("agent","extension","retention","logs encryption","collect","retained","log profile","CloudTrail","metric","AWS","GCP","DNS","Auditing","Flow","logging","usage"), "Event Logging (EL0)",
+  iff(RecommendationDisplayName has_any("container registries","logic apps","Enhanced monitoring","IoT Hub","Event Hub","App Service", "Kubernetes","updates","email", "automation", "adaptive"), "Advanced Event Logging (EL3)",
+  iff(RecommendationDisplayName has_any("signatures","CMK","CMEK","double encryption","managed key","KMS","container","Watcher"), "Intermediate Event Logging (EL2)",
+  iff(RecommendationDisplayName has_any("Exploit Guard","endpoint protection","Antimalware","health","VPC","Defender","Vulnerabilities","vulnerability","diagnostic","Key","activity log alert",""), "Basic Event Logging (EL1)","Other"))))
+  | summarize arg_max(TimeGenerated, *) by RecommendationDisplayName, AssessedResourceId, MaturityLevel
+  | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by MaturityLevel
+  | extend PassedControls = (Passed/todouble(Total))*100
+  | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+  | project MaturityLevel, Total, PassedControls, Passed, Failed, RemediationLink, LastObserved=now()
+  | where MaturityLevel <> ''
+  | where MaturityLevel == "Basic Event Logging (EL1)"
+  | where PassedControls < 70 
+  //Adjust Either FailedRatePercentage or PasedRatePercentage Thresholds within   Organizational Needs
+  | sort by PassedControls desc
+  | extend URLCustomEntity = RemediationLink
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

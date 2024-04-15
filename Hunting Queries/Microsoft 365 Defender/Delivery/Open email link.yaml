@@ -1,0 +1,54 @@
+id: 67be3fdd-6942-45f8-8663-d825b61d1ab9
+name: Open email link
+description: |
+  Query for links opened from mail apps - if a detection occurred right afterwards.
+  As there are many links opened from mails, to have a successful hunt we should have some filter or join with some other signal,.
+  Such as suspicious processes, network connections, etc.
+  Therefore, in this example, we query for alerts that might be related to links sent via email.
+  This could be indicative of a phishing or spear-phishing attacks.
+  Tags: #EmailLink, #Phishing, #GetNearbyAlerts.
+  Explaining the underlying data:.
+  This query uses the BrowserLaunchedToOpenUrl event, that includes clicks on http:// or https:// links (clicks outside of browsers), or on .lnk files.
+  For this event, RemoteUrl contains the opened URL.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+  - AlertInfo
+  - AlertEvidence
+query: |
+  // Query for links opened from mail apps - if a detection occurred right afterwards. - MTP Schema
+  // As there are many links opened from mails, to have a successful hunt we should have some filter or join with some other signal,
+  // such as suspicious processes, network connections, etc.
+  // Therefore, in this example, we query for alerts that might be related to links sent via email.
+  // This could be indicative of a phishing or spear-phishing attacks.
+  // Tags: #EmailLink, #Phishing, #GetNearbyAlerts
+  // Explaining the underlying data:
+  //     This query uses the BrowserLaunchedToOpenUrl event, that includes clicks on http:// or https:// links (clicks outside of browsers), or on .lnk files
+  //     For this event, RemoteUrl contains the opened URL.
+  let minTimeRange = ago(7d);
+  let outlookLinks = 
+      DeviceEvents
+      // Filter on click on links from outlook
+      | where Timestamp > minTimeRange and ActionType == "BrowserLaunchedToOpenUrl" and isnotempty(RemoteUrl)
+  	| where 
+  			// outlook.exe is the Office Outlook app
+  			InitiatingProcessFileName =~ "outlook.exe" 
+  			// RuntimeBroker.exe opens links for all apps from the Windows store, including the Windows Mail app (HxOutlook.exe).
+  			// However, it will also include some links opened from other apps.			
+  	        or InitiatingProcessFileName =~ "runtimebroker.exe"
+      | project Timestamp, DeviceId, DeviceName, RemoteUrl, InitiatingProcessFileName, ParsedUrl=parse_url(RemoteUrl)
+      // When applicable, parse the link sent via email from the clicked O365 ATP SafeLink
+      | extend WasOutlookSafeLink=(tostring(ParsedUrl.Host) endswith "safelinks.protection.outlook.com")
+      | project Timestamp, DeviceId, DeviceName, WasOutlookSafeLink, InitiatingProcessFileName,
+              OpenedLink=iff(WasOutlookSafeLink, url_decode(tostring(ParsedUrl["Query Parameters"]["url"])), RemoteUrl);
+  let alerts =
+      AlertInfo | join AlertEvidence on AlertId
+      | summarize (FirstDetectedActivity, Title)=argmin(Timestamp, Title) by AlertId, DeviceId
+      // Filter alerts that include events from before the queried time period
+      | where FirstDetectedActivity > minTimeRange;
+  // Join the two together - looking for alerts that are right after an abnormal network logon
+  alerts | join kind=inner (outlookLinks) on DeviceId | where FirstDetectedActivity - Timestamp between (0min..3min)
+  // If there are multiple alerts close to a single click-on-link, aggregate them together to a single row
+  // Note: bin(Timestamp, 1tick) is used because when summarizing by a datetime field, the default "bin" used is 1-hour.
+  | summarize FirstDetectedActivity=min(FirstDetectedActivity), AlertTitles=makeset(Title) by OpenedLink, InitiatingProcessFileName, Timestamp=bin(Timestamp, 1tick), DeviceName, DeviceId, WasOutlookSafeLink

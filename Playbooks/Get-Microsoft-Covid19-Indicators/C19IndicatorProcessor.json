@@ -1,0 +1,158 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "C19IndicatorProcessor",
+      "type": "string"
+    },
+    "UserName": {
+      "defaultValue": "<username>@<domain>",
+      "type": "string"
+    },
+    "Playbook2Name": {
+      "defaultValue": "C19ImportToSentinel",
+      "type": "string"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "triggers": {
+            "Recurrence": {
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1
+              },
+              "type": "Recurrence"
+            }
+          },
+          "actions": {
+            "For_each": {
+              "foreach": "@body('Select_Covid19_indicators_and_transform_to_tiIndicators')",
+              "actions": {
+                "C19ImportToSentinel": {
+                  "runAfter": {},
+                  "type": "SendToBatch",
+                  "inputs": {
+                    "batchName": "tiIndicators",
+                    "content": "@items('For_each')",
+                    "host": {
+                      "triggerName": "Batch_messages",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Playbook2Name'))]"
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Select_Covid19_indicators_and_transform_to_tiIndicators": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "HTTP": {
+              "runAfter": {},
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/Microsoft.Covid19.Indicators.json"
+              }
+            },
+            "Parse_JSON_array_of_Covid19_indicators": {
+              "runAfter": {
+                "HTTP": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('HTTP')",
+                "schema": {
+                  "properties": {
+                    "Event": {
+                      "properties": {
+                        "Covid19Indicators": {
+                          "items": {
+                            "properties": {
+                              "ExternalId": {
+                                "type": "string"
+                              },
+                              "FirstSeen": {
+                                "type": "string"
+                              },
+                              "Indicator": {
+                                "type": "string"
+                              },
+                              "IndicatorType": {
+                                "type": "string"
+                              },
+                              "ThreatType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "FirstSeen",
+                              "IndicatorType",
+                              "ExternalId",
+                              "Indicator",
+                              "ThreatType"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "Select_Covid19_indicators_and_transform_to_tiIndicators": {
+              "runAfter": {
+                "Parse_JSON_array_of_Covid19_indicators": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Parse_JSON_array_of_Covid19_indicators')?['Covid19Indicators']",
+                "select": {
+                  "action": "alert",
+                  "confidence": 100,
+                  "description": "Microsoft COVID-19 Threat Indicators",
+                  "expirationDateTime": "2030-05-01T00:00:00.0000000Z",
+                  "externalId": "@{item()?['ExternalId']}",
+                  "fileHashType": "@{item()?['IndicatorType']}",
+                  "fileHashValue": "@{item()?['Indicator']}",
+                  "targetProduct": "Azure Sentinel",
+                  "threatType": "@{if(contains(item()['ThreatType'],'Phish'),'Phishing',item()['ThreatType'])}",
+                  "tlpLevel": "white"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    }
+  ]
+}

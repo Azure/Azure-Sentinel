@@ -1,0 +1,41 @@
+id: 98e4df23-7bd2-480d-814a-a03f77efc670
+name: New ServicePrincipal running queries
+description: |
+  'This hunting query looks for new Service Principals running queries that have not previously been seen running queries.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor(Query Audit)
+    dataTypes:
+      - LAQueryLogs
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1530
+  - T1213
+  - T1020
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
+  LAQueryLogs
+  | where TimeGenerated between (ago(lookback)..starttime)
+  | where ResponseCode == 200 and RequestClientApp != "AppAnalytics" and AADEmail !contains "@"
+  | distinct AADClientId
+  | join kind=rightanti(
+  LAQueryLogs
+  | where TimeGenerated between(starttime..endtime)
+  | where ResponseCode == 200 and RequestClientApp != "AppAnalytics" and AADEmail !contains "@"
+  )
+  on AADClientId
+  | extend timestamp = TimeGenerated, AccountCustomEntity = AADEmail
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Microsoft
+    categories:
+        domains: [ "Security - Threat Protection" ]

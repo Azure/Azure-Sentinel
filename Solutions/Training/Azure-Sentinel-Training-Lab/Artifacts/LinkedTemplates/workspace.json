@@ -1,0 +1,158 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name for the Log Analytics workspace"
+            }
+        },
+        "pricingTier": {
+            "type": "string",
+            "metadata": {
+                "description": "Pricing tier: pergb2018 or legacy tiers (Free, Standalone, PerNode, Standard or Premium) which are not available to all customers."
+            },
+            "allowedValues": [
+                "PerGB2018",
+                "Free",
+                "Standalone",
+                "PerNode",
+                "Standard",
+                "Premium"
+            ],
+            "defaultValue": "PerGB2018"
+        },
+        "dataRetention": {
+            "type": "int",
+            "minValue": 7,
+            "maxValue": 730,
+            "metadata": {
+                "description": "Number of days of retention. Workspaces in the legacy Free pricing tier can only have 7 days."
+            },
+            "defaultValue": 90
+        },
+        "location": {
+            "type": "string",
+            "metadata": {
+                "description": "Location for all resources."
+            },
+            "defaultValue": "[resourceGroup().location]"
+        }
+    },
+    "functions": [],
+    "variables": {},
+    "resources": [
+        {
+            "name": "[parameters('workspaceName')]",
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "apiVersion": "2020-08-01",
+            "location": "[parameters('location')]",
+            "properties": {},
+            "resources": [
+                {
+                    "type": "savedSearches",
+                    "apiVersion": "2020-08-01",
+                    "name": "vimciscoumbrella",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+                    ],
+                    "properties": {
+                        "etag": "*",
+                        "displayName": "Vendor Information Model Dns - Cisco Umbrella",
+                        "category": "Security",
+                        "FunctionAlias": "vimDnsCiscoUmbrella",
+                        "query": "let DNSQuery_CiscoUmbrella=(){\n    Cisco_Umbrella_dns_CL\n    // \n    // *********** Parsing\n    | parse QueryType_s with DnsQueryType:int \" (\"DnsQueryTypeName:string \")\"\n    //\n    | project \n    //\n    // ******************* Mandatory\n      Type='Cisco_Umbrella_dns_CL',\n       EventCount=int(1),\n       EventStartTime=todatetime(Timestamp_t),\n       EventProduct=\"Umbrella\",\n       EventVendor=\"Cisco Systems\",\n       EventSchemaVersion=\"0.1.1\",\n       Dvc=\"Unknown\" ,\n       EventType=\"lookup\",\n       EventResult=iff(ResponseCode_s=~'NOERROR','Success','Failure'),\n       EventResultDetails=ResponseCode_s,  // => ResponseCodeNames\n       //\n       TimeGenerated, // not handled by schema, but we need to preserve it\n       SrcIpAddr=column_ifexists('InternalIp_s', ''),\n       EventSubType='response',\n  // ********** Renamed columns\n       UrlCategory=column_ifexists('Categories_s', ''),\n       DnsQuery=column_ifexists('Domain_s', '') ,  // [DnsQueryName]\n       ThreatCategory=column_ifexists('Blocked_Categories_s', ''),\n       SrcNatIpAddr=column_ifexists('ExternalIp_s', ''),\n       DvcAction=column_ifexists('Action_s', ''),\n       EventEndTime=todatetime(column_ifexists('Timestamp_t', '')),  // [is this the same as TimeGenrated?]\n   //\n   // *************** keep Parsed data\n       DnsQueryType, DnsQueryTypeName, \n   //\n   // **** Not in schema\n       Identities=column_ifexists('Identities_s', ''), \n       IdentityTypes=column_ifexists('Identity_Types_s', ''),\n       PolicyIdentity=column_ifexists('Policy_Identity_s', ''),\n       PolicyIdentityType=column_ifexists('Policy_Identity_Type_s', '')\n  //\n  // **************Aliases\n  | extend \n      DnsResponseCodeName=EventResultDetails, \n      DomainCategory=UrlCategory,\n      Domain=DnsQuery,\n      IpAddr=SrcIpAddr,\n  // Backward Competability\n      Query=DnsQuery\n      , QueryType=DnsQueryType\n      , ResponseCodeName=column_ifexists('DnsResponseCodeName','')\n      , QueryTypeName=DnsQueryTypeName\n      // \n       };\nDNSQuery_CiscoUmbrella\n",
+                        "version": 1
+                    }
+                },
+                {
+                    "type": "savedSearches",
+                    "apiVersion": "2020-08-01",
+                    "name": "imDns",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+                    ],
+                    "properties": {
+                        "etag": "*",
+                        "displayName": " ASIM DNS source agnostic parser",
+                        "category": "Security",
+                        "FunctionAlias": "imDns",
+                        "query": "union isfuzzy=true vimDnsEmpty, vimDnsCiscoUmbrella , vimDnsInfobloxNIOS , vimDnsMicrosoftOMS",
+                        "version": 1
+                    }
+                },
+                {
+                    "type": "savedSearches",
+                    "apiVersion": "2020-08-01",
+                    "name": "OAuthApplications",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+                    ],
+                    "properties": {
+                        "etag": "*",
+                        "category": "Hunting Queries",
+                        "displayName": "Adding credentials to legitimate OAuth Applications",
+                        "query": "AuditLogs_CL\r\n| where OperationName has_any (\"Add service principal\", \"Certificates and secrets management\")\r\n| where Result_s =~ \"success\"\r\n| mv-expand target = todynamic(TargetResources_s )\r\n| where tostring(tostring(parse_json(tostring(parse_json(InitiatedBy_s).user)).userPrincipalName)) has \"@\" or tostring(parse_json(InitiatedBy_s).displayName) has \"@\"\r\n| extend targetDisplayName = tostring(parse_json(TargetResources_s)[0].displayName)\r\n| extend targetId = tostring(parse_json(TargetResources_s)[0].id)\r\n| extend targetType = tostring(parse_json(TargetResources_s)[0].type)\r\n| extend eventtemp = todynamic(TargetResources_s)\r\n| extend keyEvents = eventtemp[0].modifiedProperties\r\n| mv-expand keyEvents\r\n| where keyEvents.displayName =~ \"KeyDescription\"\r\n| extend set1 = parse_json(tostring(keyEvents.newValue))\r\n| extend set2 = parse_json(tostring(keyEvents.oldValue))\r\n| extend diff = set_difference(set1, set2)\r\n| where isnotempty(diff)\r\n| parse diff with * \"KeyIdentifier=\" keyIdentifier: string \",KeyType=\" keyType: string \",KeyUsage=\" keyUsage: string \",DisplayName=\" keyDisplayName: string \"]\" *\r\n| where keyUsage == \"Verify\" or keyUsage == \"\"\r\n| extend AdditionalDetailsttemp = todynamic(AdditionalDetails_s)\r\n| extend UserAgent = iff(todynamic(AdditionalDetailsttemp[0]).key == \"User-Agent\", tostring(AdditionalDetailsttemp[0].value), \"\")\r\n| extend InitiatedByttemp = todynamic(InitiatedBy_s)\r\n| extend InitiatingUserOrApp = iff(isnotempty(InitiatedByttemp.user.userPrincipalName), tostring(InitiatedByttemp.user.userPrincipalName), tostring(InitiatedByttemp.app.displayName))\r\n| extend InitiatingIpAddress = iff(isnotempty(InitiatedByttemp.user.ipAddress), tostring(InitiatedByttemp.user.ipAddress), tostring(InitiatedByttemp.app.ipAddress))\r\n| project-away diff, set1, set2 , eventtemp ,AdditionalDetailsttemp, InitiatedByttemp\r\n| project-reorder TimeGenerated, OperationName,InitiatingUserOrApp,InitiatingIpAddress,UserAgent,targetDisplayName,targetId,targetType,keyDisplayName,keyType,keyUsage,keyIdentifier,CorrelationId\r\n| extend timestamp = TimeGenerated,AccountCustomEntity = InitiatingUserOrApp,IPCustomEntity = InitiatingIpAddress",
+                        "tags": [
+                            {
+                                "Name": "description",
+                                "Value": "This query looks for Applications or Service Principals where new Key Credentials were added. This has been used by attackers to gain persistent access and elevate privileges."
+                            },
+                            {
+                                "Name": "tactics",
+                                "Value": "Persistence"
+                            },
+                            {
+                                "Name": "techniques",
+                                "Value": "T1098"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "type": "savedSearches",
+                    "apiVersion": "2020-08-01",
+                    "name": "solorigateInventoryCheck",
+                    "dependsOn": [
+                        "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+                    ],
+                    "properties": {
+                        "etag": "*",
+                        "category": "Hunting Queries",
+                        "displayName": "Solorigate Inventory check",
+                        "query": "let timeframe = 7d;\r\n(union isfuzzy=true\r\n(Event\r\n| where TimeGenerated >= ago(timeframe)\r\n| where Source == \"Microsoft-Windows-Sysmon\"\r\n| where EventID in (17,18)\r\n| extend EvData = parse_xml(EventData)\r\n| extend EventDetail = EvData.DataItem.EventData.Data\r\n| extend NamedPipe = EventDetail.[5].[\"#text\"]\r\n| extend ProcessDetail = EventDetail.[6].[\"#text\"]\r\n| where NamedPipe contains '583da945-62af-10e8-4902-a8f205c72b2e'\r\n| extend Account = UserName\r\n| project-away EventDetail, EvData\r\n),\r\n(\r\nSecurityEvent_CL\r\n| where TimeGenerated >= ago(timeframe)\r\n| where EventID_s == '5145'\r\n| where AccessList_s has '%%4418' // presence of CreatePipeInstance value\r\n| where RelativeTargetName_g contains '583da945-62af-10e8-4902-a8f205c72b2e'\r\n)\r\n)\r\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account_s, HostCustomEntity = Computer",
+                        "Tags": [
+                            {
+                                "Name": "description",
+                                "Value": "On systems where the malicious SolarWinds DLL is running, it is known that the attacker used a hardcoded named pipe '583da945-62af-10e8-4902-a8f205c72b2e'. This activity can be detected if you are collecting Sysmon Event Id 17/18 or Security Event Id 5145"
+                            },
+                            {
+                                "Name": "tactics",
+                                "Value": "Execution"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {
+        "workspaceName": {
+            "type": "string",
+            "value": "[parameters('workspaceName')]"
+        },
+        "workspaceIdOutput": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName')), '2015-11-01-preview').customerId]"
+        },
+        "workspaceKeyOutput": {
+            "type": "string",
+            "value": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName')), '2015-11-01-preview').primarySharedKey]"
+        },
+        "workspaceResourceIdOutput": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+        }
+    }
+}

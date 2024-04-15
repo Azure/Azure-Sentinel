@@ -1,0 +1,46 @@
+id: 39a0995e-f4a9-4869-a0ae-36d6d9049bfd
+name: OracleDBAudit - User connected to database from new IP
+description: |
+  'Detects when a user connects to database from new IP address.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let lbtime_d = 14d;
+  let lbtime_24h = 24h;
+  OracleDatabaseAuditEvent
+  | where TimeGenerated between (ago(lbtime_d) .. ago(lbtime_24h))
+  | where isnotempty(SrcIpAddr)
+  | where isnotempty(DstUserName)
+  | summarize knownIPs = make_set(SrcIpAddr) by DstUserName
+  | join (OracleDatabaseAuditEvent
+        | where isnotempty(SrcIpAddr)
+        | where isnotempty(DstUserName)
+        | where DbAction =~ 'connect'
+        ) on DstUserName
+  | where knownIPs !contains SrcIpAddr
+  | project DstUserName, SrcIpAddr
+  | extend AccountCustomEntity = DstUserName
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

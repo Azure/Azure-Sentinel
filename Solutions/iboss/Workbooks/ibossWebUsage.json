@@ -1,0 +1,394 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## iboss Web Usage\r\n\r\n**NOTE:** This workbook uses a parser based on a Kusto Function to normalize fields. [Follow these steps](https://aka.ms/sentinel-iboss-parser) to create the Kusto function alias **ibossUrlEvent**."
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "7cf056ef-64cd-41a5-85e0-90c0ec529434",
+            "version": "KqlParameterItem/1.0",
+            "name": "time_range_picker",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "label": "Time Range Picker"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ibossUrlEvent\r\n| where EventTime {time_range_picker}\r\n| where isnotempty(UrlCategory) and UrlCategory != \"-\"\r\n| extend UrlCategory = split(UrlCategory, \", \")\r\n| mv-expand UrlCategory\r\n| summarize count() by tostring(UrlCategory)",
+        "size": 3,
+        "showAnalytics": true,
+        "title": "URL Categories",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart",
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "UrlCategory",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "query - categories query"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ibossUrlEvent\r\n| where EventTime {time_range_picker}\r\n| sort by EventTime\r\n| summarize sum(DstBytes), sum(SrcBytes) by bin(EventTime,{time_range_picker:grain})\r\n",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "Bandwidth ({time_range_picker:grain} interval)",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "linechart",
+        "chartSettings": {
+          "seriesLabelSettings": [
+            {
+              "seriesName": "sum_DstBytes",
+              "label": "Received Bytes"
+            },
+            {
+              "seriesName": "sum_SrcBytes",
+              "label": "Sent Bytes"
+            }
+          ],
+          "showDataPoints": true,
+          "ySettings": {
+            "numberFormatSettings": {
+              "unit": 2,
+              "options": {
+                "style": "decimal",
+                "useGrouping": true
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "query - bandwidth"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ibossUrlEvent\r\n| where EventTime {time_range_picker}\r\n| where isnotempty(Domain)\r\n| summarize count() by Domain\r\n| sort by count_ desc\r\n| project Domain = Domain, count = count_\r\n| limit 20",
+        "size": 1,
+        "showAnalytics": true,
+        "title": "Top 20 Domains",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Domain",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2,
+                "maximumSignificantDigits": 3
+              }
+            }
+          },
+          "showBorder": false,
+          "rowLimit": 20,
+          "sortCriteriaField": "count",
+          "size": "auto"
+        }
+      },
+      "name": "query - top 20 domains"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ibossUrlEvent\r\n| where EventTime {time_range_picker} and DvcAction == \"Blocked\"\r\n| make-series Trend = count() default = 0 on EventTime step {time_range_picker:grain} by Domain\r\n| join kind = inner (ibossUrlEvent\r\n    | where EventTime {time_range_picker}\r\n    | where DvcAction == \"Blocked\"\r\n    | summarize Requests = count() by Domain\r\n    ) on Domain\r\n| project Domain, Requests, Trend\r\n| order by Requests desc\r\n\r\n",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "Top Blocked Domains",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Requests",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "redBright"
+              },
+              "numberFormat": {
+                "unit": 17,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "redBright",
+                "compositeBarSettings": {
+                  "labelText": "",
+                  "columnSettings": []
+                }
+              },
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "count_",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              },
+              "numberFormat": {
+                "unit": 17,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "DeviceCustomDate1",
+              "formatter": 5,
+              "formatOptions": {
+                "aggregation": "Count"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - top blocked domains"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ibossUrlEvent\r\n| where EventTime {time_range_picker} and DvcAction == \"Blocked\"\r\n| make-series Trend = count() default = 0 on EventTime step {time_range_picker:grain} by SrcUsername\r\n| join kind = inner (ibossUrlEvent\r\n    | where EventTime {time_range_picker}\r\n    | where DvcAction == \"Blocked\"\r\n    | summarize Requests = count() by SrcUsername\r\n    ) on SrcUsername\r\n| extend User = SrcUsername\r\n| project User, Requests, Trend\r\n| order by Requests desc",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "Top Blocked Users",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Requests",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "redBright"
+              },
+              "numberFormat": {
+                "unit": 17,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "redBright"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - top blocked users"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ibossUrlEvent\r\n| where EventTime {time_range_picker}\r\n| summarize sum(DstBytes), sum(SrcBytes), sum(NetworkBytes) by SrcUsername\r\n| join kind = inner (ibossUrlEvent\r\n    | where EventTime {time_range_picker}\r\n    | make-series Trend = sum(NetworkBytes) default = 0 on EventTime step {time_range_picker:grain} by SrcUsername\r\n    ) on SrcUsername\r\n| order by sum_NetworkBytes desc\r\n| project Username=SrcUsername\r\n, Received=sum_DstBytes\r\n, Sent=sum_SrcBytes\r\n, Total=sum_NetworkBytes\r\n, Trend",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "Bandwidth By User",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Received",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "green"
+              },
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "Sent",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "green"
+              },
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "Total",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "green"
+              },
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - bandwidth by user"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "ibossUrlEvent\r\n| where EventTime {time_range_picker}\r\n| make-series Trend = count() default = 0 on EventTime step {time_range_picker:grain} by SrcUsername\r\n| join kind = inner (ibossUrlEvent\r\n    | where EventTime {time_range_picker}\r\n    | summarize Requests = count() by SrcUsername\r\n    ) on SrcUsername\r\n| extend User = SrcUsername\r\n| project User, Requests, Trend\r\n| order by Requests desc",
+        "size": 0,
+        "showAnalytics": true,
+        "title": "Connections by User",
+        "showExportToExcel": true,
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Requests",
+              "formatter": 4,
+              "formatOptions": {
+                "palette": "blue"
+              },
+              "numberFormat": {
+                "unit": 17,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "query - connections by user"
+    }
+  ],
+  "fromTemplateId": "sentinel-ibossWebUsageWorkbook",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

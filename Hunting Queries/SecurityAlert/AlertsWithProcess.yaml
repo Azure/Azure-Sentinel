@@ -1,0 +1,42 @@
+id: 635cba46-c077-4959-a2d9-b7eb6fecb854
+name: Alerts With This Process
+description: |
+  'Any Alerts that fired on any host with this same process in the range of +-1d'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+
+  let GetAllAlertsWithProcess = (suspiciousEventTime:datetime, v_Process:string){
+  let v_StartTime = suspiciousEventTime-1d;
+  let v_EndTime = suspiciousEventTime+1d;
+  SecurityAlert
+  | where TimeGenerated between (v_StartTime .. v_EndTime)
+  | where Entities has v_Process
+  | extend Extprop = parse_json(Entities)
+  | mv-expand Extprop
+  | extend Extprop = parse_json(Extprop)
+  | extend CmdLine = iff(Extprop['Type']=="process", Extprop['CommandLine'], '')
+  | extend File = iff(Extprop['Type']=="file", Extprop['Name'], '')
+  | extend Account = Extprop['Name']
+  | extend Domain = Extprop['UPNSuffix']
+  | extend Account = iif(isnotempty(Domain) and Extprop['Type']=="account", tolower(strcat(Account, "@", Domain)), iif(Extprop['Type']=="account", tolower(Account), ""))
+  | extend Computer = iff(Extprop['Type']=="host", Extprop['HostName'], '')
+  | extend IpAddress = iff(Extprop["Type"] == "ip",Extprop['Address'], '')
+  | extend Process = iff(isnotempty(CmdLine), CmdLine, File)
+  | summarize max(TimeGenerated), make_set(AlertName), make_set(Process), make_set(Computer), make_set(Account), make_set(IpAddress), make_set(Entities) by SystemAlertId
+  | project TimeGenerated = max_TimeGenerated, AlertName=set_AlertName[0], Process=set_Process[1], Account = set_Account[1], Computer=set_Computer[0], IPAddress = set_IpAddress[1], Entities=set_Entities
+  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress
+  | top 10 by TimeGenerated desc nulls last
+  };
+  // change datetime value and <processname> value below
+  GetAllAlertsWithProcess(datetime('2019-01-18T10:36:07Z'), "<processname>")

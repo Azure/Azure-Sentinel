@@ -1,0 +1,291 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Search for Breaches - ShadowByte Aria",
+        "description": "This playbook updates the Incident with the brach details if an account has been compromised.",
+        "mainSteps": [ "1. Fetch the breach information from ShadowByte Aria", "2. Send the breach information to the chosen Azure Log Analytics workspace" ],
+        "prerequisites": [
+            "1. ShadowByte Aria Custom Connector needs to be deployed and configured prior to the deployment of this playbook under the same resource group."
+        ],
+        "prerequisitesDeployTemplateFile": "../ShadowByte_Custom_Connector/azuredeploy.json",
+        "lastUpdateTime": "2022-07-31T00:00:00.000Z",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "ShadowByte"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Search for Breaches - ShadowByte Aria",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "shadowbyte-aria-search-for-breaches",
+            "type": "String"
+        },
+        "ShadowByteAriaConnectorName": {
+            "defaultValue": "ShadowByteAriaConnector",
+            "type": "String"
+        },
+        "WorkspaceId": {
+            "type": "String"
+        },
+        "WorkspaceKey": {
+            "type": "String"
+        },
+        "Search": {
+            "defaultValue": "phrase",
+            "type": "String"
+        },
+        "SearchType": {
+            "defaultValue": "search-all",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "ShadowByteAriaConnectionName": "[concat('shadowbyteariaconnector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('ShadowByteAriaConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('ShadowByteAriaConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                },
+                "parameterValues": {
+                    "username": "[parameters('WorkspaceId')]",
+                    "password": "[parameters('WorkspaceKey')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('ShadowByteAriaConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]"
+            ],
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "SearchForBreachesShadowByteAria",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "search": {
+                            "defaultValue": " ",
+                            "type": "String"
+                        },
+                        "type": {
+                            "defaultValue": "search-all",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Set_End_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "nextStart",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Set_End_Date": {
+                            "runAfter": {
+                                "Set_Start_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "formattedEndDate",
+                                        "type": "string",
+                                        "value": "@{formatDateTime(utcNow(), 'yyyy-MM-dd')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Set_Start_Date": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "formattedStartDate",
+                                        "type": "string",
+                                        "value": "@{formatDateTime(addDays(utcNow(), -1), 'yyyy-MM-dd')}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Until": {
+                            "actions": {
+                                "Breach_Search": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ShadowByteAriaConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/v2/breach/search",
+                                        "queries": {
+                                            "dateFrom": "@variables('formattedStartDate')",
+                                            "dateTo": "@variables('formattedEndDate')",
+                                            "fuzzySearch": false,
+                                            "length": 100,
+                                            "marketingData": false,
+                                            "search": "@parameters('search')",
+                                            "searchType": "@parameters('type')",
+                                            "sortBy": "breach",
+                                            "sortType": "asc",
+                                            "start": "@variables('nextStart')"
+                                        }
+                                    }
+                                },
+                                "For_each": {
+                                    "foreach": "@body('Breach_Search')?['data']",
+                                    "actions": {
+                                        "Send_Data": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": "@{items('For_each')}",
+                                                "headers": {
+                                                    "Log-Type": "ShadowByteAriaForums"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/api/logs"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Breach_Search": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "nextStart",
+                                        "value": "@add(body('Breach_Search').pagination.start, body('Breach_Search').pagination.length)"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@greaterOrEquals(variables('nextStart'), body('Breach_Search')?['pagination']?['total'])",
+                            "limit": {
+                                "count": 100,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "search": {
+                        "type": "String",
+                        "value": "[parameters('Search')]"
+                    },
+                    "type": {
+                        "type": "String",
+                        "value": "[parameters('SearchType')]"
+                    },
+                    "$connections": {
+                        "value": {
+                            "ShadowByteAriaConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('ShadowByteAriaConnectionName'))]",
+                                "connectionName": "[variables('ShadowByteAriaConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('ShadowByteAriaConnectorName'))]"
+                            },
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,41 @@
+id: 1218175f-c534-421c-8070-5dcaabf28067
+name: Suspicious link sharing pattern
+description: |
+  'Alerts in links that have been shared across multiple Zoom chat channels by the same user in a short space if time.
+  Adjust the threshold figure to change the number of channels a message needs to be posted in before an alert is raised.'
+severity: Low
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Persistence
+query: |
+  let threshold = 3;
+  ZoomLogs
+  | where Event =~ "chat_message.sent"
+  | extend Channel = tostring(parse_json(ChatEvents).Channel)
+  | extend Message = tostring(parse_json(ChatEvents).Message)
+  | where Message matches regex "http(s?):\\/\\/"
+  | summarize Channels = makeset(Channel), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Message, User, UserId
+  | extend ChannelCount = arraylength(Channels)
+  | where ChannelCount > threshold
+  | extend timestamp = StartTime, AccountCustomEntity = User
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

@@ -1,0 +1,44 @@
+id: 033e98d2-5740-11ec-bf63-0242ac130002
+name: Oracle - Put file and get file from same IP address
+description: |
+  'Detects put or get files from one source in short timeframe' 
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OracleWebLogicServer
+    dataTypes:
+      - OracleWebLogicServerEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let p = OracleWebLogicServerEvent
+  | where HttpRequestMethod in~ ('POST', 'PUT')
+  | sort by EventStartTime asc
+  | summarize post_time=min(EventStartTime) by SrcIpAddr, tostring(UrlOriginal);
+  OracleWebLogicServerEvent
+  | where HttpRequestMethod =~ 'GET'
+  | sort by EventStartTime asc
+  | summarize get_time=min(EventStartTime) by SrcIpAddr, tostring(UrlOriginal)
+  | join kind=innerunique (p) on UrlOriginal, SrcIpAddr
+  | extend second = datetime_diff('second',get_time,post_time)
+  | where second between (1 .. 300)
+  | project second, post_time, get_time, SrcIpAddr, UrlOriginal
+  | extend IPCustomEntity = SrcIpAddr, UrlCustomEntity = tostring(UrlOriginal)
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: UrlCustomEntity
+version: 1.0.0
+kind: Scheduled

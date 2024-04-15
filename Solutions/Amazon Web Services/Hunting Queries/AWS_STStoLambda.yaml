@@ -1,0 +1,60 @@
+id: 70a6e84f-6f3b-4ce1-83d6-ea6df9e7a9dd
+name: Suspicious activity of STS token related to Lambda
+description: |
+  'Suspicious activity of the STS token of a Lambda function (for example, by SSRF) indicates a possible token hijacking. An attacker may have stolen the token and could abuse its permissions to escalate privileges and move laterally in the cloud account.'
+severity: High
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Credential Access
+relevantTechniques:
+  - T1528
+query: |
+    let aws_public_ips = externaldata(prefixes: string)
+    [ 
+       h@'https://aka.ms/awspublicipaddresse/aws-public-ip-addresses/ip-ranges.json'
+    ]
+    with(format='multijson');
+    let timeframe = 30m;
+    let lookback = 12h;
+    //Get the AccessKey in the STS token when Lambda service assumes the Role periodically (max assumed session can be 12h)
+    let sts_token = AWSCloudTrail
+    | where TimeGenerated >= ago (lookback)
+    | where EventSource == "sts.amazonaws.com" and SourceIpAddress == "lambda.amazonaws.com"
+    | extend instanceId = tostring(parse_json(RequestParameters).roleSessionName)
+    | extend token = tostring(parse_json(ResponseElements).credentials.accessKeyId);
+    //Get the identities who used that STS token - this can be the Lambda function itself which assumed it (legit),
+    //but it can also be an external identity which abuses the token permissions
+    let tokenUsage = AWSCloudTrail
+    | where TimeGenerated >= ago (timeframe)
+    | join kind=inner sts_token on $left.UserIdentityAccessKeyId == $right.token
+    | extend region = AWSRegion1
+    | project-away SourceIpAddress1, UserIdentityUserName1, UserIdentityArn1, TimeGenerated1;
+    //Check whether the called identity is legit
+    aws_public_ips
+    | mv-expand todynamic(prefixes)
+    | extend ip_prefix=tostring(todynamic(prefixes.['ip_prefix']))
+    | extend region=tostring(todynamic(prefixes.['region']))
+    | extend service=tostring(todynamic(prefixes.['service']))
+    | project-away prefixes
+    | where service == "AMAZON" 
+    | join kind=inner tokenUsage on region
+    | where SourceIpAddress !contains "amazonaws.com"
+    | where ipv4_is_private(SourceIpAddress) == false
+    | extend IsInRange = ipv4_is_in_range(SourceIpAddress, ip_prefix)
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName, AssumedRoleArn = UserIdentityArn
+    | summarize timestamp=arg_max(timestamp,*), r = make_set(IsInRange) by SourceIpAddress, UserIdentityUserName, UserIdentityArn
+    | where not (set_has_element(r, true))
+    | project-away ip_prefix, IsInRange
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

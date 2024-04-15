@@ -1,0 +1,598 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Enrichment IP - F5 BIG-IP",
+        "description": "This playbook checks if malicious IP address is part of IP Address List of F5 BIG-IP firewall.",
+        "mainSteps": [ "1. Fetches a list of potentially malicious IP addresses", "2.  Enriches Incident Comment with IP status information." ],
+        "prerequisites": [
+            "1. Deploy the F5 BIG-IP Base Playbook before the deployment of this playbook under the same subscription and same resource group. Capture the name of the playbook during deployment.",
+            "2. A Firewall Policy Rule should be created for blocking of IP.",
+            "3. An address list should be created for blocking IP.",
+            "4. The address list should be a part of Firewall Policy Rule"
+        ],
+        "prerequisitesDeployTemplateFile": "./BasePlaybook-F5BigIP/azuredeploy.json",
+        "lastUpdateTime": "2021-08-12T00:00:00.000Z",
+        "entities": [ "Ip" ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "F5BigIP-Enrichment-IP",
+            "type": "String",
+            "metadata": {
+                "description": "Enter name for Enrichment IP playbook without spaces"
+            },
+            "minLength": 3
+        },
+        "BasePlaybookName": {
+            "defaultValue": "F5BigIP_Base",
+            "type": "String",
+            "metadata": {
+                "description": "Enter name for Base playbook name without spaces"
+            },
+            "minLength": 3
+        },
+        "IPAddressListName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter ip address list name"
+            },
+            "minLength": 3
+        }
+    },
+    "variables": {
+        "AzureSentinel_Connection": "[concat('Azuresentienl-', parameters('PlaybookName'))]",
+        "F5BigIP_Base_id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('BasePlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "AddressListName": {
+                            "defaultValue": "[parameters('IPAddressListName')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_if_body_present_in_Azure_Sentinel_incident": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Compose_Image_to_add_in_the_Incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{outputs('Compose_Image_to_add_in_the_Incident')}<strong>Enrichment Playbook captured the below information from F5 Big IP.<br>\n</strong><strong>@{variables('FirewallRuleName')}</strong><strong></strong><br>\n@{body('Create_HTML_table_to_comment_in_the_Incident')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Compose_Image_to_add_in_the_Incident": {
+                                    "runAfter": {
+                                        "Create_HTML_table_to_comment_in_the_Incident": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "<img src=\"https://www.bing.com/th?id=OIP.7EfUwjpb7ziFgcqJgEla3gHaHP&w=119&h=102&c=8&rs=1&qlt=90&o=6&dpr=1.5&pid=3.1&rm=2\" alt=\"Lamp\" width=\"32\" height=\"32\">",
+                                    "description": "This composes the F5 image to update in the incident"
+                                },
+                                "Condition__to_check_if_predefined_address_list_is_present_in_F5_Big_IP": {
+                                    "actions": {
+                                        "For_each_IP": {
+                                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                                            "actions": {
+                                                "Condition_to_check_if_IP_is_present_in_predefined_address_list": {
+                                                    "actions": {
+                                                        "Append_to_array_variable_consolidated_comments_in_case_of_IP_already_blocked": {
+                                                            "runAfter": {
+                                                                "Set_variable_comment_in_case_of_IP_already_blocked": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "ConsolidatedComments",
+                                                                "value": "@variables('Comment')"
+                                                            },
+                                                            "description": "This appends consolidated comments"
+                                                        },
+                                                        "Set_variable_comment_in_case_of_IP_already_blocked": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "Comment",
+                                                                "value": {
+                                                                    "Action": "Yes",
+                                                                    "IP_Address": " @{items('For_each_IP')?['Address']}",
+                                                                    "Status": "Blocked"
+                                                                }
+                                                            },
+                                                            "description": "This sets comment variable if IP already blocked"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Filter_array_IP_from_address_list": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Append_to_array_variable_in_case_if_IP_is_not_blocked": {
+                                                                "runAfter": {
+                                                                    "Set_variable_comment_in_case_if_IP_is_not_blocked": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "ConsolidatedComments",
+                                                                    "value": "@variables('Comment')"
+                                                                },
+                                                                "description": "This appends consolidated comments"
+                                                            },
+                                                            "Set_variable_comment_in_case_if_IP_is_not_blocked": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Comment",
+                                                                    "value": {
+                                                                        "Action": "No",
+                                                                        "IP_Address": " @{items('For_each_IP')?['Address']}",
+                                                                        "Status": "Allowed"
+                                                                    }
+                                                                },
+                                                                "description": "This sets comment variable if IP already blocked"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "greater": [
+                                                                    "@length(body('Filter_array_IP_from_address_list'))",
+                                                                    0
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If",
+                                                    "description": "This checks if IP is present in address list"
+                                                },
+                                                "Filter_array_IP_from_address_list": {
+                                                    "runAfter": {},
+                                                    "type": "Query",
+                                                    "inputs": {
+                                                        "from": "@body('HTTP-Get_specific_Address_list')?['addresses']",
+                                                        "where": "@equals(item()?['name'], items('For_each_IP')?['Address'])"
+                                                    },
+                                                    "description": "This filters the IP from address list"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach",
+                                            "description": "Loops on each IP",
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP-Get_specific_Address_list": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_array_variable_consolidated_comments_if_address_list_not_present": {
+                                                "runAfter": {
+                                                    "Set_variable_comment_if_address_list_is_not_present": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "ConsolidatedComments",
+                                                    "value": "@variables('Comment')"
+                                                },
+                                                "description": "This appends consolidated comments if address list is not present"
+                                            },
+                                            "Set_variable_comment_if_address_list_is_not_present": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Comment",
+                                                    "value": {
+                                                        "Action": "Address List not present in F5",
+                                                        "IP_Address": "NA",
+                                                        "Status": "NA"
+                                                    }
+                                                },
+                                                "description": "This sets comment variable if address list not present"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP-Get_specific_Address_list')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "This checks if IP address is present in F5 Big IP"
+                                },
+                                "Condition_to_check_if__predefined_address_list_is_added_in_policy_rules": {
+                                    "actions": {
+                                        "Compose_the_firewall_rule_names": {
+                                            "runAfter": {
+                                                "For_each_firewall_rule_found": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@substring(variables('RuleName'),0,sub(length(variables('RuleName')),2))",
+                                            "description": "This composes all the firewall rule names where address list is a part of"
+                                        },
+                                        "For_each_firewall_rule_found": {
+                                            "foreach": "@body('Filter_array_address_list_from_policy')",
+                                            "actions": {
+                                                "Append_to_string_variable_rule_name": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "RuleName",
+                                                        "value": "@{items('For_each_firewall_rule_found')?['name']} ,"
+                                                    },
+                                                    "description": "This appends the firewall rule names in coma separated values"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        },
+                                        "Set_variable_firewall_rule_name": {
+                                            "runAfter": {
+                                                "Compose_the_firewall_rule_names": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "FirewallRuleName",
+                                                "value": "The address list is a part of the firewall policy rules: @{outputs('Compose_the_firewall_rule_names')}."
+                                            },
+                                            "description": "This sets the firewall rule names with all the rules where address list is a part of"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Filter_array_address_list_from_policy": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_Firewall_Rule_name_if_address_list_is_not_present": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "FirewallRuleName",
+                                                    "value": "The address list is not a part of any firewall policy rule."
+                                                },
+                                                "description": "Set Firewall rule name if address list not a part of any firewall rule name"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Filter_array_address_list_from_policy'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "This checks if address list is part of security firewall rule"
+                                },
+                                "Create_HTML_table_to_comment_in_the_Incident": {
+                                    "runAfter": {
+                                        "Condition__to_check_if_predefined_address_list_is_present_in_F5_Big_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "columns": [
+                                            {
+                                                "header": "IP Address",
+                                                "value": "@item()?['IP_Address']"
+                                            },
+                                            {
+                                                "header": "Status",
+                                                "value": "@item()?['Status']"
+                                            },
+                                            {
+                                                "header": "Is IP part of “@{parameters('AddressListName')}” address list? ",
+                                                "value": "@item()?['Action']"
+                                            }
+                                        ],
+                                        "format": "HTML",
+                                        "from": "@variables('ConsolidatedComments')"
+                                    },
+                                    "description": "This creates a HTML table to update in the incident"
+                                },
+                                "F5BigIP_Base": {
+                                    "runAfter": {},
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[variables('F5BigIP_Base_id')]"
+                                            }
+                                        }
+                                    },
+                                    "description": "This calls the F5 Big IP base playbook for the authentication token"
+                                },
+                                "Filter_array_address_list_from_policy": {
+                                    "runAfter": {
+                                        "HTTP-Get_Global_Firewall_Policy_Rules": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('HTTP-Get_Global_Firewall_Policy_Rules')?['items']",
+                                        "where": "@contains(item()?['source']?['addressLists']?[0], parameters('AddressListName'))"
+                                    },
+                                    "description": "This filters address list from policy"
+                                },
+                                "HTTP-Get_Global_Firewall_Policy_Rules": {
+                                    "runAfter": {
+                                        "F5BigIP_Base": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "X-F5-Auth-Token": "@{body('F5BigIP_Base')?['X-F5-Auth-Token']}"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{body('F5BigIP_Base')?['F5BigIPHost']}/mgmt/tm/security/firewall/policy/~Common~global_fwpolicy/rules/"
+                                    },
+                                    "description": "This fetches the list of all firewall rules present in F5 Big IP"
+                                },
+                                "HTTP-Get_specific_Address_list": {
+                                    "runAfter": {
+                                        "Condition_to_check_if__predefined_address_list_is_added_in_policy_rules": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "X-F5-Auth-Token": "@{body('F5BigIP_Base')?['X-F5-Auth-Token']}"
+                                        },
+                                        "method": "GET",
+                                        "uri": "@{body('F5BigIP_Base')?['F5BigIPHost']}/mgmt/tm/security/firewall/address-list/@{parameters('AddressListName')}"
+                                    },
+                                    "description": "This gets the specific address list information"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_Rule_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_if_IP_not_found_in_sentinel_body": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "code": "404",
+                                                "message": "IP Address not found in Azure Sentinel Incident"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@outputs('Entities_-_Get_IPs')",
+                                            "body"
+                                        ]
+                                    },
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "This checks if body is present in Azure Sentinel"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Initialize_variable_Comment": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Comment",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the value of comment variable"
+                        },
+                        "Initialize_variable_Consolidated_Comment": {
+                            "runAfter": {
+                                "Initialize_variable_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ConsolidatedComments",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the value of consolidated comments"
+                        },
+                        "Initialize_variable_Firewall_Rule_Name": {
+                            "runAfter": {
+                                "Initialize_variable_Consolidated_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "FirewallRuleName",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "This Holds the Firewall rule name"
+                        },
+                        "Initialize_variable_Rule_Name": {
+                            "runAfter": {
+                                "Initialize_variable_Firewall_Rule_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "RuleName",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "This holds the rule name"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]",
+                                "connectionName": "[variables('AzureSentinel_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinel_Connection')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinel_Connection')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

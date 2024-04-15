@@ -1,0 +1,47 @@
+id: e71890a2-5f61-4790-b1ed-cf1d92d3e398
+name: CiscoISE - Command executed with the highest privileges by new user
+description: |
+  'Detects command execution with PrivilegeLevel - 15 by user for wich there was no such activity detected earlier.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoISE
+    dataTypes:
+      - Syslog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+  - PrivilegeEscalation
+  - DefenseEvasion
+  - Execution
+query: |
+  let lbperiod = 14d;
+  let lbtime = 15m;
+  let knownPrivUsers =
+  CiscoISEEvent
+  | where TimeGenerated between (ago(lbperiod) .. ago(lbtime))
+  | where PrivilegeLevel == '15'
+  | summarize makelist(DstUserName)
+  ;
+  CiscoISEEvent
+  | where TimeGenerated > ago(lbtime)
+  | where PrivilegeLevel == '15'
+  | where DstUserName !in (knownPrivUsers)
+  | project TimeGenerated, SrcIpAddr, DstIpAddr, DstUserName, CmdSet
+  | extend AccountCustomEntity = DstUserName
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

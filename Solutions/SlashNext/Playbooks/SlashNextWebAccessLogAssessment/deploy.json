@@ -1,0 +1,726 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"metadata": {
+		"title": "SlashNext Web Access Log Assessment",
+		"description": "Designed to analyze Web Access logs from Web Gateways and Firewalls. Scan your logs for continuous detection of phishing and malicious threat URLs clicked by end users. Identify threats missed by current security layers.The playbook shall extract all the URLs from the logs to perform analysis using SlashNext Connector and create an incident for each unique malicious URL found in the web logs.",
+		"prerequisites": [
+			"1.Prior to the deployment of this playbook, SlashNext Function App needs to be deployed under the same subscription. \n Use https://aka.ms/sentinel-slashnext-functionapp to deploy",
+			"2.**SlashNext Logic Apps Connector** supports **Basic** authentication, while creating connection you will be asked to provide API key.",
+            "To acquire SlashNext API key, please contact us at [support@slashnext.com](mailto:support@slashnext.com) or visit [SlashNext.com](www.slashnext.com)"
+		],
+		"postDeployment": [ "**a. Authorize Connection**", "Once deployment is complete, authorize SlashNext Logic Apps Connector connection", "1. Click on the SlashNext connection resource", "2. Click **Edit** API connection", "3. Enter API key acquired from SlashNext", "4. Click **Save**","**b. Configure Logic App Permissions**","1. Click on **Identity**","2. Select **Azure role assignment** from system assigned tab","3. Click on **Add role assignment**","4. Select relevant permission and save","5. Repeat above steps for the following permissions"," 1. Log Analytics Reader"," 2. Microsoft Sentinel Contributor","**c. Set following Variables in Logic App as per the Environment**","1. Subscription Id","2. Workspace Id","3. Resource Group","4. Workspace Name"],
+		"lastUpdateTime": "2022-09-27T00:00:00.000Z",
+		"entities": [],
+		"tags": [],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "SlashNext"
+		},
+		"releaseNotes": [
+			{
+				"version": "1.0.0",
+				"title": "SlashNext Web Access Log Assessment Playbook",
+				"notes": [ "Initial version" ]
+			}
+		]
+	},
+	"parameters": {
+		"PlaybookName": {
+      		"defaultValue": "SlashNextWebAccessLogAssessment",
+			"type": "string"
+		},
+		"Subscription Id": {
+			"defaultValue": "",
+			"type": "string"
+		},
+		"Workspace Id": {
+			"defaultValue": "",
+			"type": "string"
+		},
+		"Resource Group": {
+			"defaultValue": "",
+			"type": "string"
+		},
+		"Workspace Name": {
+			"defaultValue": "",
+			"type": "string"
+		},
+		"customApis_slashnext_name": {
+			"defaultValue": "SlashNext",
+			"type": "string",
+			"metadata": {
+				"description": "Name of the SlashNext Connector"
+			}
+		},
+		"FunctionAppName": {
+			"defaultValue": "SlashnextFunctionApp",
+			"type": "string"
+		}
+
+	},
+	"variables": {
+		"slashnext_connection_name": "[concat('slashnext-connection-', parameters('PlaybookName'))]",
+		"parent_suffix": "[substring(toLower(uniqueString(resourceGroup().id, concat('[resourceGroup().locatio', 'n]'))),0,5)]",
+		"azureFunction": "[concat(parameters('FunctionAppName'), variables('parent_suffix')) ]",
+		"azure": "[concat('https://api','.loganalytics','.io')]",
+		"domain": "[concat('https://management','.azure','.com')]"
+	},
+	"resources": [
+		{
+			"name": "[variables('slashnext_connection_name')]",
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('slashnext_connection_name')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_slashnext_name'))]"
+				}
+			}
+		},
+		{
+			"properties": {
+				"state": "Disabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						}
+					},
+					"triggers": {
+						"Recurrence": {
+							"recurrence": {
+								"frequency": "Minute",
+								"interval": 5
+							},
+							"evaluatedRecurrence": {
+								"frequency": "Minute",
+								"interval": 5
+							},
+							"type": "Recurrence"
+						}
+					},
+					"actions": {
+						"Current_time": {
+							"runAfter": {},
+							"type": "Expression",
+							"kind": "CurrentTime",
+							"inputs": {}
+						},
+						"Get_past_time": {
+							"runAfter": {
+								"Current_time": [
+									"Succeeded"
+								]
+							},
+							"type": "Expression",
+							"kind": "GetPastTime",
+							"inputs": {
+								"interval": 5,
+								"timeUnit": "Minute"
+							}
+						},
+						"Incident_Id": {
+							"runAfter": {
+								"Malicious_urls": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "IncidentId",
+									"type": "string",
+									"value": "''"
+								}]
+							}
+						},
+						"Log_Query_API": {
+							"runAfter": {
+								"Incident_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "Query API",
+									"type": "string",
+									"value": "[uri(variables('azure'),'/v1/workspaces/@{variables(''workspace_id'')}/query')]"
+								}]
+							}
+						},
+						"Malicious_urls": {
+							"runAfter": {
+								"Workspace_Name": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "malicious_urls",
+									"type": "array",
+									"value": []
+								}]
+							}
+						},
+						"Parse_JSON": {
+							"runAfter": {
+								"Query_for_table_names": [
+									"Succeeded"
+								]
+							},
+							"type": "ParseJson",
+							"inputs": {
+								"content": "@body('Query_for_table_names')",
+								"schema": {
+									"properties": {
+										"tables": {
+											"items": {
+												"properties": {
+													"columns": {
+														"items": {
+															"properties": {
+																"name": {
+																	"type": "string"
+																},
+																"type": {
+																	"type": "string"
+																}
+															},
+															"required": [
+																"name",
+																"type"
+															],
+															"type": "object"
+														},
+														"type": "array"
+													},
+													"name": {
+														"type": "string"
+													},
+													"rows": {
+														"items": {
+															"items": {
+																"type": "string"
+															},
+															"type": "array"
+														},
+														"type": "array"
+													}
+												},
+												"required": [
+													"name",
+													"columns",
+													"rows"
+												],
+												"type": "object"
+											},
+											"type": "array"
+										}
+									},
+									"type": "object"
+								}
+							}
+						},
+						"Query_for_table_names": {
+							"runAfter": {
+								"Log_Query_API": [
+									"Succeeded"
+								]
+							},
+							"type": "Http",
+							"inputs": {
+								"authentication": {
+									"audience": "[variables('azure')]",
+									"type": "ManagedServiceIdentity"
+								},
+								"body": {
+									"query": "search * | where TimeGenerated > ago(2h)|distinct $table"
+								},
+								"method": "POST",
+								"uri": "@variables('Query API')"
+							}
+						},
+						"Resource_Group": {
+							"runAfter": {
+								"Workspace_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "resource_group",
+									"type": "string",
+									"value": "[parameters('Resource Group')]"
+								}]
+							}
+						},
+						"Subscription_Id": {
+							"runAfter": {
+								"Get_past_time": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "subscription_id",
+									"type": "string",
+									"value": "[parameters('subscription Id')]"
+								}]
+							}
+						},
+						"Traverse_Table_Names": {
+							"foreach": "@body('Parse_JSON')?['tables']",
+							"actions": {
+								"For_each": {
+									"foreach": "@items('Traverse_Table_Names')?['rows']",
+									"actions": {
+										"Fetch_Data_from_Each_Table_": {
+											"foreach": "@body('Parse_Table_Names')",
+											"actions": {
+												"Ignore_Tables": {
+													"actions": {
+														"Clear_Incident_Id_for_Next_Table": {
+															"runAfter": {
+																"Traverse_Split_Lists": [
+																	"Succeeded"
+																]
+															},
+															"type": "SetVariable",
+															"inputs": {
+																"name": "IncidentId",
+																"value": "''"
+															}
+														},
+														"Extract_List_of_URLs": {
+															"runAfter": {
+																"Query_data_from_each_table": [
+																	"Succeeded"
+																]
+															},
+															"type": "Function",
+															"inputs": {
+																"body": "@body('Query_data_from_each_table')",
+																"function": {
+																	"id": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/', resourceGroup().name,'/providers/Microsoft.Web/sites/',variables('azureFunction'),'/functions/processlogs')]"
+																},
+																"queries": {
+																	"label": "extract"
+																},
+																"retryPolicy": {
+																	"type": "none"
+																}
+															}
+														},
+														"Query_data_from_each_table": {
+															"runAfter": {},
+															"type": "Http",
+															"inputs": {
+																"authentication": {
+																	"audience": "[variables('azure')]",
+																	"type": "ManagedServiceIdentity"
+																},
+																"body": {
+																	"query": "@{items('Fetch_Data_from_Each_Table_')} |where ingestion_time() >= todatetime(format_datetime(datetime(@{body('Get_past_time')}),'yyyy-MM-dd HH:mm')) and ingestion_time() <todatetime(format_datetime(datetime(@{body('Current_time')}),'yyyy-MM-dd HH:mm')) "
+																},
+																"method": "POST",
+																"uri": "@variables('Query API')"
+															}
+														},
+														"Split_List_of_URLs": {
+															"runAfter": {
+																"Extract_List_of_URLs": [
+																	"Succeeded"
+																]
+															},
+															"type": "ParseJson",
+															"inputs": {
+																"content": "@body('Extract_List_of_URLs')",
+																"schema": {
+																	"items": {
+																		"items": {
+																			"type": "string"
+																		},
+																		"type": "array"
+																	},
+																	"type": "array"
+																}
+															}
+														},
+														"Traverse_Split_Lists": {
+															"foreach": "@body('Split_List_of_URLs')",
+															"actions": {
+																"Empty_List_Check": {
+																	"actions": {
+																		"Clear_Malicious_URLs_List": {
+																			"runAfter": {
+																				"Incident_Creating_Loop": [
+																					"Succeeded"
+																				]
+																			},
+																			"type": "SetVariable",
+																			"inputs": {
+																				"name": "malicious_urls",
+																				"value": []
+																			}
+																		},
+																		"Generate_URL_Mapping": {
+																			"runAfter": {},
+																			"type": "Function",
+																			"inputs": {
+																				"body": "@variables('malicious_urls')",
+																				"function": {
+																					"id": "[concat('/subscriptions/',subscription().subscriptionId, '/resourceGroups/', resourceGroup().name,'/providers/Microsoft.Web/sites/',variables('azureFunction'),'/functions/processlogs')]"
+																				},
+																				"queries": {
+																					"label": "mapping"
+																				}
+																			}
+																		},
+																		"Incident_Creating_Loop": {
+																			"foreach": "@body('Parse_Mapping_Repsonse')",
+																			"actions": {
+																				"Incident_Already_Exists": {
+																					"actions": {
+																						"Add_Comment_in_Existing_Incident": {
+																							"runAfter": {},
+																							"type": "Http",
+																							"inputs": {
+																								"authentication": {
+																									"audience": "[variables('domain')]",
+																									"type": "ManagedServiceIdentity"
+																								},
+																								"body": {
+																									"properties": {
+																										"message": "Event spotted again in @{items('Fetch_Data_from_Each_Table_')} at @{body('Current_time')}"
+																									}
+																								},
+																								"method": "PUT",
+																								"uri": "[uriComponentToString(uri(variables('domain'),'subscriptions/@{variables(''subscription_id'')}/resourceGroups/@{variables(''resource_group'')}/providers/Microsoft.OperationalInsights/workspaces/@{variables(''workspace_name'')}/providers/Microsoft.SecurityInsights/incidents/@{items(''Incident_Creating_Loop'')[''hash'']}/comments/@{guid()}?api-version=2021-10-01'))]"
+																							}
+																						}
+																					},
+																					"runAfter": {
+																						"Insert_Incident": [
+																							"Succeeded",
+																							"Failed"
+																						]
+																					},
+																					"expression": {
+																						"and": [{
+																							"equals": [
+																								"@outputs('Insert_Incident')['statusCode']",
+																								409
+																							]
+																						}]
+																					},
+																					"type": "If"
+																				},
+																				"Insert_Incident": {
+																					"runAfter": {
+																						"Parse_URL_Mapping": [
+																							"Succeeded"
+																						]
+																					},
+																					"type": "Http",
+																					"inputs": {
+																						"authentication": {
+																							"audience": "[variables('domain')]",
+																							"type": "ManagedServiceIdentity"
+																						},
+																						"body": {
+																							"etag": "@{guid()}",
+																							"properties": {
+																								"description": "@{items('Fetch_Data_from_Each_Table_')} table contains malicious url @{body('Parse_URL_Mapping')?['url']}",
+																								"severity": "High",
+																								"status": "New",
+																								"title": "Malicious Incident"
+																							}
+																						},
+																						"method": "PUT",
+																						"uri": "[uriComponentToString(uri(variables('domain'),'subscriptions/@{variables(''subscription_id'')}/resourceGroups/@{variables(''resource_group'')}/providers/Microsoft.OperationalInsights/workspaces/@{variables(''workspace_name'')}/providers/Microsoft.SecurityInsights/incidents/@{body(''Parse_URL_Mapping'')?[''hash'']}?api-version=2021-10-01-preview'))]"
+																					}
+																				},
+																				"Parse_URL_Mapping": {
+																					"runAfter": {},
+																					"type": "ParseJson",
+																					"inputs": {
+																						"content": "@items('Incident_Creating_Loop')",
+																						"schema": {
+																							"properties": {
+																								"hash": {
+																									"type": "string"
+																								},
+																								"url": {
+																									"type": "string"
+																								}
+																							},
+																							"type": "object"
+																						}
+																					}
+																				}
+																			},
+																			"runAfter": {
+																				"Parse_Mapping_Repsonse": [
+																					"Succeeded"
+																				]
+																			},
+																			"type": "Foreach"
+																		},
+																		"Parse_Mapping_Repsonse": {
+																			"runAfter": {
+																				"Generate_URL_Mapping": [
+																					"Succeeded"
+																				]
+																			},
+																			"type": "ParseJson",
+																			"inputs": {
+																				"content": "@body('Generate_URL_Mapping')",
+																				"schema": {
+																					"items": {
+																						"properties": {
+																							"hash": {
+																								"type": "string"
+																							},
+																							"url": {
+																								"type": "string"
+																							}
+																						},
+																						"required": [
+																							"hash",
+																							"url"
+																						],
+																						"type": "object"
+																					},
+																					"type": "array"
+																				}
+																			}
+																		}
+																	},
+																	"runAfter": {
+																		"Traverse_List_of_Malicious_URLs": [
+																			"Succeeded"
+																		]
+																	},
+																	"expression": {
+																		"and": [{
+																			"greaterOrEquals": [
+																				"@length(variables('malicious_urls'))",
+																				1
+																			]
+																		}]
+																	},
+																	"type": "If"
+																},
+																"Parse_List_of_URLs": {
+																	"runAfter": {},
+																	"type": "ParseJson",
+																	"inputs": {
+																		"content": "@items('Traverse_Split_Lists')",
+																		"schema": {
+																			"items": {
+																				"type": "string"
+																			},
+																			"type": "array"
+																		}
+																	}
+																},
+																"Repute": {
+																	"runAfter": {
+																		"Parse_List_of_URLs": [
+																			"Succeeded"
+																		]
+																	},
+																	"type": "ApiConnection",
+																	"inputs": {
+																		"body": {
+																			"urls": "@body('Parse_List_of_URLs')"
+																		},
+																		"host": {
+																			"connection": {
+																				"name": "@parameters('$connections')['SlashNext']['connectionId']"
+																			}
+																		},
+																		"method": "post",
+																		"path": "/api/v1/urls/repute"
+																	}
+																},
+																"Traverse_List_of_Malicious_URLs": {
+																	"foreach": "@body('Repute')?['malicious_urls_details']",
+																	"actions": {
+																		"Add_Malicious_URL": {
+																			"runAfter": {
+																				"Parse_Malicious_URL_Details": [
+																					"Succeeded"
+																				]
+																			},
+																			"type": "AppendToArrayVariable",
+																			"inputs": {
+																				"name": "malicious_urls",
+																				"value": "@body('Parse_Malicious_URL_Details')?['scanned_url']"
+																			}
+																		},
+																		"Parse_Malicious_URL_Details": {
+																			"runAfter": {},
+																			"type": "ParseJson",
+																			"inputs": {
+																				"content": "@items('Traverse_List_of_Malicious_URLs')",
+																				"schema": {
+																					"properties": {
+																						"active": {
+																							"type": "string"
+																						},
+																						"associated_urls": {
+																							"type": "array"
+																						},
+																						"match_type": {
+																							"type": "string"
+																						},
+																						"scanned_url": {
+																							"type": "string"
+																						},
+																						"scanned_url_type": {
+																							"type": "string"
+																						}
+																					},
+																					"type": "object"
+																				}
+																			}
+																		}
+																	},
+																	"runAfter": {
+																		"Repute": [
+																			"Succeeded"
+																		]
+																	},
+																	"type": "Foreach"
+																}
+															},
+															"runAfter": {
+																"Split_List_of_URLs": [
+																	"Succeeded"
+																]
+															},
+															"type": "Foreach"
+														}
+													},
+													"runAfter": {},
+													"expression": {
+														"and": [{
+															"not": {
+																"equals": [
+																	"@items('Fetch_Data_from_Each_Table_')",
+																	"SecurityIncident"
+																]
+															}
+														}]
+													},
+													"type": "If"
+												}
+											},
+											"runAfter": {
+												"Parse_Table_Names": [
+													"Succeeded"
+												]
+											},
+											"type": "Foreach"
+										},
+										"Parse_Table_Names": {
+											"runAfter": {},
+											"type": "ParseJson",
+											"inputs": {
+												"content": "@items('For_each')",
+												"schema": {
+													"items": {
+														"type": "string"
+													},
+													"type": "array"
+												}
+											}
+										}
+									},
+									"runAfter": {},
+									"type": "Foreach"
+								}
+							},
+							"runAfter": {
+								"Parse_JSON": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach"
+						},
+						"Workspace_Id": {
+							"runAfter": {
+								"Subscription_Id": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "workspace_id",
+									"type": "string",
+									"value": "[parameters('Workspace Id')]"
+								}]
+							}
+						},
+						"Workspace_Name": {
+							"runAfter": {
+								"Resource_Group": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [{
+									"name": "workspace_name",
+									"type": "string",
+									"value": "[parameters('Workspace Name')]"
+								}]
+							}
+						}
+					},
+					"outputs": {}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"SlashNext": {
+								"connectionId": "[concat('/subscriptions/', subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/connections/',variables('slashnext_connection_name'))]",
+								"connectionName": "[variables('slashnext_connection_name')]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('customApis_slashnext_name'))]"
+							}
+						}
+					}
+				}
+			},
+			"name": "[parameters('PlaybookName')]",
+			"type": "Microsoft.Logic/workflows",
+			"location": "[resourceGroup().location]",
+			"tags": {
+				"hidden-SentinelTemplateName": "SlashnextProcessLogs",
+				"hidden-SentinelTemplateVersion": "1.0"
+			},
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"apiVersion": "2017-07-01",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('slashnext_connection_name'))]"
+			]
+		}
+	]
+}

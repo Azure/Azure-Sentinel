@@ -1,0 +1,39 @@
+id: e7cdfacc-d112-45c7-9e8f-2b52948d075c
+name: Dormant Service Principal Update Creds and Logs In
+description: |
+  'This query look for Service Principal accounts that are no longer used where a user has added or updated credentials for them before logging in with the Service Principal.
+   Threat actors may look to re-activate dormant accounts and use them for access in the hope that changes to such dormant accounts may go un-noticed.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+      - AADServicePrincipalSignInLogs
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = endtime - 14d;
+  let sp_active_users = AADServicePrincipalSignInLogs
+  | where TimeGenerated between(lookback..starttime)
+  | where ResultType  == 0
+  | summarize by ServicePrincipalId;
+  AuditLogs
+  | where TimeGenerated between(starttime..endtime)
+  // Looking for new creds added to an SP rather than MFA
+  | where OperationName in ("Add service principal credentials", "Update application - Certificates and secrets management")
+  | extend ServicePrincipalId = tostring(TargetResources[0].id)
+  | where ServicePrincipalId !in (sp_active_users)
+  | join kind=inner (SigninLogs | where TimeGenerated between(starttime..endtime) | where ResultType == 0) on ServicePrincipalId
+  | extend AccountCustomEntity = ServicePrincipalId, IPCustomEntity = IPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

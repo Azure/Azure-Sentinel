@@ -1,0 +1,93 @@
+id: aba0b08c-aace-40c5-a21d-39153023dcaa
+name: Excessive share permissions
+description: |
+  The query searches for event 5143, which is triggered when a share is created or changed and includes de share permissions.
+  First it checks to see if this is a whitelisted share for the system (e.g. domaincontroller netlogon, printserver print$ etc.).
+  The share permissions are then checked against 'allow' rule (A) for a number of well known overly permissive groups, like all users, guests, authenticated users etc.
+  If these are found, an alert is raised so the share creation may be audited.
+  Note: this rule only checks for changed permissions, to prevent repeat alerts if for example a comment is changed, but the permissions are not altered.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+  - Discovery
+relevantTechniques:
+  - T1039
+  - T1135
+query: |
+  let timeframe=1h;
+  let system_roles = datatable(role:string, system:string)                  // Link roles to systems.
+    ["DC","dc1.corp.local",
+    "DC","dc2.corp.local",
+    "PRINT","printer.corp.local"
+    ];
+  let share_roles = datatable(role:string, share:string)                    // Link roles to shares.
+    ["DC", @"\\*\sysvol",
+    "DC",@"\\*\netlogon",
+    "PRINT",@"\\*\print$"];
+  let allowed_system_shares = system_roles                                  // Link systems to shares.
+    | join kind=inner share_roles on role
+    | extend system = tolower(system), share = tolower(share)
+    | project-away role
+    | summarize allowed_shares = make_set(share) by system;
+  let monitored_principals=datatable(identifier:string, Group_Name:string)  // Define a data-table with groups to monitor.
+    ["AN", "Anonymous Logon",            // We accept the 'alias' for these well-known SIDS.
+    "AU", "Authenticated Users",
+    "BG","Built-in guests",
+    "BU","Built-in users",
+    "DG","Domain guests",
+    "DU","Domain users",
+    "WD","Everyone",
+    "IU","Interactively Logged-on users",
+    "LG","Local Guest",
+    "NU","Network logon users",
+    "513", "Domain Users",                                                  // Support matching on the last part of a SID.
+    "514", "Domain Guests",
+    "545", "Builtin Users",
+    "546", "Builtin Guests",
+    "S-1-5-7", "Anonymous Logon"                                            // For the global SIDS, we accept them as-is.
+    ];
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 5143
+  | extend EventXML = parse_xml(EventData)
+  | extend OldSD = tostring(EventXML["EventData"]["Data"][13]["#text"])     // Grab the previous Security Descriptor.
+  | extend NewSD = tostring(EventXML["EventData"]["Data"][14]["#text"])     // Grab the new Security Descriptor.
+  | project-away EventXML
+  | where tostring(OldSD) !~ tostring(NewSD)                                // Don't bother with unchanged permissions.
+  | extend system = tolower(Computer), share=tolower(ShareName)             // Normalize system and share name for matching with whitelist.
+  | join kind=leftouter allowed_system_shares on system                     // Retrieve the allowed shares per system.
+  | where not(set_has_element(allowed_shares, share))                       // Check if the current share is an allowed share.
+  | project-away system, share, allowed_shares                              // Get rid of temporary fields.
+  | extend DACLS = extract_all(@"(D:(?:\((?:[\w\-]*;){5}(?:[\w\-]*)\))*)", tostring(NewSD)) // Grab all instances of D:(DACL), in case there are multiple sets.
+  | project-away OldSD, NewSD                                               // Get rid of data we no longer need.
+  | mv-expand DACLS to typeof(string)                                       // In case there are any duplicate/subsequent D: entries (e.g., D:<dacls>S:<sacls>D:<dacls>) split them out to individual D: sets.
+  | extend DACLS = substring(DACLS,2)                                       // Strip the leading D:.
+  | extend DACLS = split(DACLS, ")")                                        // Split the sets of DACLS ()() to an array of individual DACLS (). This removes the trailing ) character.
+  | mv-expand DACLS to typeof(string)                                       // Duplicate the records in such a way that only 1 DACL per record exist. We will aggregate them back later.
+  | extend DACLS = substring(DACLS, 1)                                      // Also remove the leading ( character.
+  | where not(isempty(DACLS)) and DACLS startswith "A;"                     // Remove any empty or non-allow DACLs.
+  | extend allowed_principal = tostring(split(DACLS,";",5)[0])              // Grab the SID what is affected by this DACL.
+  | extend allowed_principal = iff(not(allowed_principal startswith "S-" and string_size(allowed_principal) > 15), allowed_principal, split(allowed_principal,"-",countof(allowed_principal,"-"))[0]) // This line takes only the last part (e.g., 513) of a long SID, so you can refer to groups/users without needing to supply the full SID above.
+  | join kind=inner monitored_principals on $left.allowed_principal == $right.identifier // Join the found groups to the table of groups to be monitored above. Adds the more readable 'group_name).
+  | project-away allowed_principal, identifier, DACLS
+  | summarize Authorized_Public_Principals = make_set(Group_Name), take_any(*) by TimeGenerated, SourceComputerId, EventData // Summarize the fields back, making a set of the various group_name values for this record.
+  | project-away Group_Name
+  // Begin client-specific filter.
+  // End client-specific filter.
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.0
+kind: Scheduled

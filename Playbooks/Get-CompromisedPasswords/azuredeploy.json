@@ -1,0 +1,941 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "<PlaybookName>",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "ClientID": {
+            "defaultValue": "****REPLACE WITH CLIENT ID ****",
+            "type": "string"
+        },
+        "TenantID": {
+            "defaultValue": "****REPLACE WITH TENANT ID ****",
+            "type": "string"
+        },
+        "DeHashed-Username": {
+            "defaultValue": "****REPLACE WITH DEHASHED USERNAME ****",
+            "type": "string"
+        },
+        "KeyVaultClientCredentialsURL-DeHashed-Password": {
+            "defaultValue": "****REPLACE WITH KEY VAULT URI FOR DEHASHED PASSWORD ****",
+            "type": "string"
+        },
+        "KeyVaultClientCredentialsURL-GraphAPI": {
+            "defaultValue": "****REPLACE WITH KEY VAULT URI FOR GRAPH API KEY ****",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "ClientID": {
+                            "defaultValue": "[parameters('ClientID')]",
+                            "type": "String"
+                        },
+                        "DeHashed-Username": {
+                            "defaultValue": "[parameters('DeHashed-Username')]",
+                            "type": "String"
+                        },
+                        "KeyVaultClientCredentialsURL-DeHashed-Password": {
+                            "defaultValue": "[parameters('KeyVaultClientCredentialsURL-DeHashed-Password')]",
+                            "type": "String"
+                        },
+                        "KeyVaultClientCredentialsURL-GraphAPI": {
+                            "defaultValue": "[parameters('KeyVaultClientCredentialsURL-GraphAPI')]",
+                            "type": "String"
+                        },
+                        "TenantId": {
+                            "defaultValue": "[parameters('TenantID')]",
+                            "type": "String"
+                        },
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "Extract_Password_List": {
+                            "runAfter": {
+                                "Parse_Password_Settings": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Parse_Password_Settings')?['values']",
+                                "where": "@equals(item()?['name'], 'BannedPasswordList')"
+                            }
+                        },
+                        "For_Each_Account": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "If_AAD_User_ID_is_Not_Null": {
+                                    "actions": {
+                                        "Get_Passwords": {
+                                            "runAfter": {
+                                                "Parse_AAD_User_Info": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "password": "@body('Parse_Response_from_Key_Vault_-_Dehashed_Password')?['value']",
+                                                    "type": "Basic",
+                                                    "username": "@parameters('DeHashed-Username')"
+                                                },
+                                                "headers": {
+                                                    "Accept": "application/json"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.dehashed.com/search?query=@{body('Parse_AAD_User_Info')?['mail']}"
+                                            }
+                                        },
+                                        "Graph_-_Get_AAD_User_Info": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://graph.microsoft.com",
+                                                    "clientId": "@parameters('ClientID')",
+                                                    "secret": "@body('Parse_Response_from_Key_Vault_-_Graph_API')?['value']",
+                                                    "tenant": "@parameters('TenantId')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_Each_Account')?['AadUserId']}"
+                                            }
+                                        },
+                                        "If_Passwords_Found_Greater_Then_0_-_Update_Banned_Password_List": {
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)_2": {
+                                                    "runAfter": {
+                                                        "Update_Password_Settings": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                            "message": "<p>The following compromised passwords @{variables('foundPasswords')} were found for @{body('Parse_AAD_User_Info')?['mail']}. These passwords have been succesfully added to the Azure AD Banned Password list.</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Compose_Password_Array": {
+                                                    "runAfter": {
+                                                        "For_Each_Result": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "@intersection(variables('dehashedPasswordArray'),variables('dehashedPasswordArray'))"
+                                                },
+                                                "For_Each_Result": {
+                                                    "foreach": "@body('Parse_Dehashed_Data')?['entries']",
+                                                    "actions": {
+                                                        "Condition": {
+                                                            "actions": {
+                                                                "Append_to_array_variable": {
+                                                                    "runAfter": {},
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "dehashedPasswordArray",
+                                                                        "value": "@items('For_Each_Result')?['password']"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Set_Password": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "not": {
+                                                                            "equals": [
+                                                                                "@items('For_Each_Result')?['password']",
+                                                                                "@null"
+                                                                            ]
+                                                                        }
+                                                                    },
+                                                                    {
+                                                                        "greaterOrEquals": [
+                                                                            "@length(variables('password'))",
+                                                                            4
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "lessOrEquals": [
+                                                                            "@length(variables('password'))",
+                                                                            16
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Set_Password": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "password",
+                                                                "value": "@{items('For_Each_Result')?['password']}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_Dehashed_Data": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_Each_Unique_Password": {
+                                                    "foreach": "@outputs('Compose_Password_Array')",
+                                                    "actions": {
+                                                        "Check_for_Null_password": {
+                                                            "actions": {
+                                                                "Append_to_string_variable": {
+                                                                    "runAfter": {},
+                                                                    "type": "AppendToStringVariable",
+                                                                    "inputs": {
+                                                                        "name": "bannedPasswordList",
+                                                                        "value": "@{items('For_Each_Unique_Password')}\t"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "not": {
+                                                                            "equals": [
+                                                                                "@items('For_Each_Unique_Password')",
+                                                                                ""
+                                                                            ]
+                                                                        }
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Bad_Passwords_String": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "Join_Bad_Passwords_String": {
+                                                    "runAfter": {
+                                                        "Compose_Password_Array": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Join",
+                                                    "inputs": {
+                                                        "from": "@outputs('Compose_Password_Array')",
+                                                        "joinWith": ":"
+                                                    }
+                                                },
+                                                "Parse_Dehashed_Data": {
+                                                    "runAfter": {},
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_Passwords')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "balance": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "entries": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "address": {},
+                                                                            "email": {},
+                                                                            "hashed_password": {},
+                                                                            "id": {},
+                                                                            "ip_address": {},
+                                                                            "name": {},
+                                                                            "obtained_from": {},
+                                                                            "password": {},
+                                                                            "phone": {},
+                                                                            "username": {},
+                                                                            "vin": {}
+                                                                        },
+                                                                        "required": [],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "success": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "took": {
+                                                                    "type": "string"
+                                                                },
+                                                                "total": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_Bad_Passwords_String": {
+                                                    "runAfter": {
+                                                        "Join_Bad_Passwords_String": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "foundPasswords",
+                                                        "value": "@body('Join_Bad_Passwords_String')"
+                                                    }
+                                                },
+                                                "Update_Password_Settings": {
+                                                    "runAfter": {
+                                                        "For_Each_Unique_Password": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "authentication": {
+                                                            "audience": "https://graph.microsoft.com",
+                                                            "clientId": "@parameters('ClientID')",
+                                                            "secret": "@body('Parse_Response_from_Key_Vault_-_Graph_API')?['value']",
+                                                            "tenant": "@parameters('TenantId')",
+                                                            "type": "ActiveDirectoryOAuth"
+                                                        },
+                                                        "body": {
+                                                            "templateId": "5cf42378-d67d-4f36-ba46-e8b86229381d",
+                                                            "values": [
+                                                                {
+                                                                    "name": "BannedPasswordCheckOnPremisesMode",
+                                                                    "value": "@{variables('BannedPasswordCheckOnPremisesMode')}"
+                                                                },
+                                                                {
+                                                                    "name": "EnableBannedPasswordCheckOnPremises",
+                                                                    "value": "@{variables('EnableBannedPasswordCheckOnPremises')}"
+                                                                },
+                                                                {
+                                                                    "name": "EnableBannedPasswordCheck",
+                                                                    "value": "@{variables('EnableBannedPasswordCheck')}"
+                                                                },
+                                                                {
+                                                                    "name": "LockoutDurationInSeconds",
+                                                                    "value": "@{variables('LockoutDurationInSeconds')}"
+                                                                },
+                                                                {
+                                                                    "name": "LockoutThreshold",
+                                                                    "value": "@{variables('LockoutThreshold')}"
+                                                                },
+                                                                {
+                                                                    "name": "BannedPasswordList",
+                                                                    "value": "@{substring(variables('bannedPasswordList'),0,sub(length(variables('bannedPasswordList')),1))}"
+                                                                }
+                                                            ]
+                                                        },
+                                                        "method": "PATCH",
+                                                        "uri": "https://graph.microsoft.com/beta/settings//5bfc75a9-c4cb-42d5-9abc-56d458ab560d"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_Number_of_Passwords_found": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Add_comment_to_incident_(V3)": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                                                "message": "<p>No passwords were found for @{body('Parse_AAD_User_Info')?['mail']}. &nbsp;The Azure AD Banned Password list remains unchanged.</p>"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/Incidents/Comment"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@variables('numPasswords')",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Parse_AAD_User_Info": {
+                                            "runAfter": {
+                                                "Graph_-_Get_AAD_User_Info": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Graph_-_Get_AAD_User_Info')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "@@odata.context": {
+                                                            "type": "string"
+                                                        },
+                                                        "businessPhones": {},
+                                                        "displayName": {},
+                                                        "givenName": {},
+                                                        "id": {},
+                                                        "jobTitle": {},
+                                                        "mail": {},
+                                                        "mobilePhone": {},
+                                                        "officeLocation": {},
+                                                        "preferredLanguage": {},
+                                                        "surname": {},
+                                                        "userPrincipalName": {}
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Set_Number_of_Passwords_found": {
+                                            "runAfter": {
+                                                "Get_Passwords": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "numPasswords",
+                                                "value": "@body('Get_Passwords')['total']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@items('For_Each_Account')?['AadUserId']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Passwords": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Client_Secret_from_Vault_-_Dehashed": {
+                            "runAfter": {
+                                "Parse_Response_from_Key_Vault_-_Graph_API": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://vault.azure.net",
+                                    "identity": "Managed Identity",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "api-version": "2016-10-01"
+                                },
+                                "uri": "@parameters('KeyVaultClientCredentialsURL-DeHashed-Password')"
+                            }
+                        },
+                        "Get_Client_Secret_from_Vault_-_Graph_API": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://vault.azure.net",
+                                    "identity": "Managed Identity",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "queries": {
+                                    "api-version": "2016-10-01"
+                                },
+                                "uri": "@parameters('KeyVaultClientCredentialsURL-GraphAPI')"
+                            }
+                        },
+                        "Get_Password_Settings": {
+                            "runAfter": {
+                                "Parse_Response_from_Key_Vault_-_Dehashed_Password": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com",
+                                    "clientId": "@parameters('ClientID')",
+                                    "secret": "@body('Parse_Response_from_Key_Vault_-_Graph_API')?['value']",
+                                    "tenant": "@parameters('TenantId')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/beta/settings/5bfc75a9-c4cb-42d5-9abc-56d458ab560d"
+                            }
+                        },
+                        "Initialize_BannedPasswordCheckOnPremisesMode": {
+                            "runAfter": {
+                                "Initialize_deHashedPasswordArray": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "BannedPasswordCheckOnPremisesMode",
+                                        "type": "string",
+                                        "value": "@{body('Parse_Password_Settings')['values'][0]['value']}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Banned_Password_List": {
+                            "runAfter": {
+                                "Initialize_LockoutThreshold": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "bannedPasswordList",
+                                        "type": "string",
+                                        "value": "@{body('Parse_Password_Settings')['values'][5]['value']}\t"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_EnableBannedPasswordCheck": {
+                            "runAfter": {
+                                "Initialize_EnableBannedPasswordCheckOnPremises": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EnableBannedPasswordCheck",
+                                        "type": "string",
+                                        "value": "@{body('Parse_Password_Settings')['values'][2]['value']}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_EnableBannedPasswordCheckOnPremises": {
+                            "runAfter": {
+                                "Initialize_BannedPasswordCheckOnPremisesMode": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EnableBannedPasswordCheckOnPremises",
+                                        "type": "string",
+                                        "value": "@body('Parse_Password_Settings')['values'][1]['value']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Found_Password": {
+                            "runAfter": {
+                                "Initialize_Banned_Password_List": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "foundPasswords",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_JSON_Sample": {
+                            "runAfter": {
+                                "Extract_Password_List": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dehashedJSONOutput",
+                                        "type": "string",
+                                        "value": "{\n  \"balance\": 997,\n  \"entries\": [\n    {\n      \"id\": \"6KZt3HhQ9U1SzdowCnwMjrx3Owk88bqBFiA=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": \"d41049959f5978944462a0ea0\",\n      \"password\": null,\n      \"hashed_password\": \"\",\n      \"name\": \"officechris@gmail.com\",\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"ShareThis\"\n    },\n    {\n      \"id\": \"wz61JTRosVazC-sk0OegPq1XTKvF3ZC6q94=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": \"\",\n      \"password\": \"sp937215\",\n      \"hashed_password\": \"\",\n      \"name\": \"\",\n      \"vin\": \"\",\n      \"address\": \"\",\n      \"ip_address\": \"\",\n      \"phone\": \"\",\n      \"obtained_from\": \"BreachCompilation\"\n    },\n    {\n      \"id\": \"CUEf2whaDI437NljaHO2DunouWsSa33D86c=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": \"\",\n      \"password\": \"sp937215\",\n      \"hashed_password\": \"\",\n      \"name\": \"\",\n      \"vin\": \"\",\n      \"address\": \"\",\n      \"ip_address\": \"\",\n      \"phone\": \"\",\n      \"obtained_from\": \"UnkownCombo\"\n    },\n    {\n      \"id\": \"4sO57I4-lQ85z0lAQsj8IFF6y1N-4Z_KAs4=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": \"\",\n      \"password\": \"\",\n      \"hashed_password\": \"\",\n      \"name\": \"sp937215\",\n      \"vin\": \"\",\n      \"address\": \"\",\n      \"ip_address\": \"\",\n      \"phone\": \"\",\n      \"obtained_from\": \"Gmail\"\n    },\n    {\n      \"id\": \"yQfoKoUy8u1jQeFt68OfuTWT14bCRcsjCSw=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": null,\n      \"password\": \"sp937215\",\n      \"hashed_password\": null,\n      \"name\": null,\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"Pemiblanc\"\n    },\n    {\n      \"id\": \"1uk1LFfa7o--G5zO0CdxK6hslB_StjXN4RLy\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": null,\n      \"password\": \"aa123456\",\n      \"hashed_password\": null,\n      \"name\": null,\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"Collections\"\n    },\n    {\n      \"id\": \"0EFTjGdiwGmzCtYrjfkEA-DleYQY6FRnRcU=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": null,\n      \"password\": \"sp937215\",\n      \"hashed_password\": null,\n      \"name\": null,\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"Plex.tv\"\n    },\n    {\n      \"id\": \"A4zLoUW6OioZqbnQWqDpU3N1bpvRVdo_1i_Q\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": null,\n      \"password\": \"sp937215\",\n      \"hashed_password\": null,\n      \"name\": null,\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"Collections\"\n    },\n    {\n      \"id\": \"to8M1ilcmX-GreUdDIVY550H8yfrATdm6et1\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": null,\n      \"password\": \"sp937215\",\n      \"hashed_password\": null,\n      \"name\": null,\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"Collections\"\n    },\n    {\n      \"id\": \"xfH14-GqLuOMvoo5zvqCB7HSOjq4iyWQu9w=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": \"\",\n      \"password\": \"enferm@69\",\n      \"hashed_password\": \"\",\n      \"name\": \"\",\n      \"vin\": \"\",\n      \"address\": \"\",\n      \"ip_address\": \"\",\n      \"phone\": \"\",\n      \"obtained_from\": \"BreachCompilation\"\n    },\n    {\n      \"id\": \"WWaVWYskc3tYQg-2BKGKNRG6vZDoXFin_nE=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": null,\n      \"password\": null,\n      \"hashed_password\": \"1aa165ed11a5f735e90cf4db440276f4f48e1853\",\n      \"name\": null,\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"Dropbox\"\n    },\n    {\n      \"id\": \"4E--WTW39vSHY6YVtOx71PiN0laxgpeL0Wbo\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": null,\n      \"password\": \"enferm@69\",\n      \"hashed_password\": null,\n      \"name\": null,\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"Collections\"\n    },\n    {\n      \"id\": \"0m4wjEcA1EfXypoJ35cEgKndPQRaY3l43wU=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": \"106710246\",\n      \"password\": null,\n      \"hashed_password\": \"0x1B36321292BA83462C9BFAD700D2473115CA8412\",\n      \"name\": null,\n      \"vin\": null,\n      \"address\": null,\n      \"ip_address\": null,\n      \"phone\": null,\n      \"obtained_from\": \"MySpace\"\n    },\n    {\n      \"id\": \"Z7CaqJToX_eQ_wsvHWFhbiPKWxdxOPirj0w=\",\n      \"email\": \"officechris@gmail.com\",\n      \"username\": \"\",\n      \"password\": \"\",\n      \"hashed_password\": \"61865fe0c1f6207323add65470a18760:jrNuz\",\n      \"name\": \"officechris\",\n      \"vin\": \"\",\n      \"address\": \"\",\n      \"ip_address\": \"199.60.239.10\",\n      \"phone\": \"\",\n      \"obtained_from\": \"PlexTV\"\n    }\n  ],\n  \"success\": true,\n  \"took\": \"8µs\",\n  \"total\": 14\n}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_LockoutDurationInSeconds": {
+                            "runAfter": {
+                                "Initialize_EnableBannedPasswordCheck": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "LockoutDurationInSeconds",
+                                        "type": "string",
+                                        "value": "@body('Parse_Password_Settings')['values'][3]['value']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_LockoutThreshold": {
+                            "runAfter": {
+                                "Initialize_LockoutDurationInSeconds": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "LockoutThreshold",
+                                        "type": "string",
+                                        "value": "@body('Parse_Password_Settings')['values'][4]['value']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Number_of_Passwords": {
+                            "runAfter": {
+                                "Initialize_Found_Password": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "numPasswords",
+                                        "type": "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Passwords": {
+                            "runAfter": {
+                                "Initialize_Number_of_Passwords": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "password",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_deHashedPasswordArray": {
+                            "runAfter": {
+                                "Initialize_emailAddress": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dehashedPasswordArray",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_emailAddress": {
+                            "runAfter": {
+                                "Initialize_JSON_Sample": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "emailAddress",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Password_Settings": {
+                            "runAfter": {
+                                "Get_Password_Settings": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Password_Settings')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "displayName": {
+                                            "type": "string"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "templateId": {
+                                            "type": "string"
+                                        },
+                                        "values": {
+                                            "items": {
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "value": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "name",
+                                                    "value"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_Response_from_Key_Vault_-_Dehashed_Password": {
+                            "runAfter": {
+                                "Get_Client_Secret_from_Vault_-_Dehashed": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Client_Secret_from_Vault_-_Dehashed')",
+                                "schema": {
+                                    "properties": {
+                                        "attributes": {
+                                            "properties": {
+                                                "created": {
+                                                    "type": "integer"
+                                                },
+                                                "enabled": {
+                                                    "type": "boolean"
+                                                },
+                                                "recoveryLevel": {
+                                                    "type": "string"
+                                                },
+                                                "updated": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_Response_from_Key_Vault_-_Graph_API": {
+                            "runAfter": {
+                                "Get_Client_Secret_from_Vault_-_Graph_API": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Client_Secret_from_Vault_-_Graph_API')",
+                                "schema": {
+                                    "properties": {
+                                        "attributes": {
+                                            "properties": {
+                                                "created": {
+                                                    "type": "integer"
+                                                },
+                                                "enabled": {
+                                                    "type": "boolean"
+                                                },
+                                                "recoveryLevel": {
+                                                    "type": "string"
+                                                },
+                                                "updated": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

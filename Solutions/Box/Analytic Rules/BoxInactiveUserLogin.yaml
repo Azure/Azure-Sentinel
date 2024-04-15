@@ -1,0 +1,42 @@
+id: edbf38d7-e170-4af2-ad50-1a05b374611b
+name: Box - Inactive user login
+description: |
+  'Detects user login after long inactivity period.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: BoxDataConnector
+    dataTypes:
+      - BoxEvents_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let lbperiod_start = 14d;
+  let lbperiod_end = 7d;
+  let lbtime = 1h;
+  let active_users = BoxEvents
+  | where TimeGenerated between (ago(lbperiod_end) .. ago(lbtime))
+  | where EventType =~ 'LOGIN'
+  | summarize makeset(SourceName);
+  let inactive_users = BoxEvents
+  | where TimeGenerated between (ago(lbperiod_start) .. ago(lbperiod_end))
+  | where EventType =~ 'LOGIN'
+  | where SourceName !in (active_users)
+  | summarize makeset(SourceName);
+  BoxEvents
+  | where EventType == 'LOGIN'
+  | where SourceName in (inactive_users)
+  | extend AccountCustomEntity = SourceName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,43 @@
+id: e15944a8-4172-4208-a928-631e01920d9c
+name: CDM_ContinuousDiagnostics&Mitigation_Posture
+description: |
+  'This hunting query is designed to monitor Azure policies aligned with the Continuous Diagnostics & Mitigation (CDM) Program. It provides a policy check assessment of current CDM policy status across capability areas.'
+severity: Medium
+requiredDataConnectors: []
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  SecurityRecommendation
+  | where RecommendationDisplayName <> ""
+  | extend MaturityLevel=iff(RecommendationDisplayName has_any("log", "defender", "asset", "arc"), "Hardware Asset Management (HWAM)",
+      iff(RecommendationDisplayName has_any("allow", "software", "application"), "Software Asset Management (SWAM)",
+      iff(RecommendationDisplayName has_any("account", "user", "identity", "trust"), "User Trust (TRUST)",
+      iff(RecommendationDisplayName has_any("access", "auth", "key", "cert", "token"), "Credentials & Authenticators (CRED)",
+      iff(RecommendationDisplayName has_any("priv", "admin", "root"), "Privileges (PRIV)",
+      iff(RecommendationDisplayName has_any("network", "internet", "traffic", "firewall", "intrusion", "bound", "tls", "gateway", "subnet", "web", "url", "proxy", "just", "port", "JIT", "http"), "Boundary Protection (BOUND)",
+      iff(RecommendationDisplayName has_any("event", "agent", "incident", "back", "privacy", "audit", "collect"), "Manage Events (MNGEVT)",
+      iff(RecommendationDisplayName has_any("edr", "malware", "endpoint protection", "detect", "respon"), "Endpoint Detection & Response (EDR)",
+      iff(RecommendationDisplayName has_any("aks", "contain", "kube", "supply"), "Design & Build in Security (DBS)",
+      iff(RecommendationDisplayName has_any("data", "storage", "sql", "cmk", "key"), "Data Protection Management (DPM)", "Other"))))))))))
+  | where MaturityLevel in ('Hardware Asset Management (HWAM)', 'Software Asset Management (SWAM)', 'User Trust (TRUST)', 'Credentials & Authenticators (CRED)', 'Privileges (PRIV)', 'Boundary Protection (BOUND)', 'Manage Events (MNGEVT)', 'Endpoint Detection & Response (EDR)', 'Design & Build in Security (DBS)', 'Data Protection Management (DPM)')
+  | summarize arg_max(TimeGenerated, *) by AssessedResourceId, RecommendationDisplayName
+  | summarize
+      Failed = countif(RecommendationState == "Unhealthy"),
+      Passed = countif(RecommendationState == "Healthy"),
+      NotApplicable = countif(RecommendationState == "NotApplicable" or RecommendationState == "Removed"),
+      Applicable = countif(RecommendationState == "Unhealthy" or RecommendationState == "Healthy"),
+      Total = countif(RecommendationState == "Unhealthy" or RecommendationState == "Healthy" or RecommendationState == "NotApplicable" or RecommendationState == "Removed")
+      by MaturityLevel
+  | extend PassedControls = (Passed / todouble(Applicable)) * 100
+  | project MaturityLevel, Total, PassedControls, Passed, Failed, Applicable, NotApplicable
+  | sort by Total, Passed desc
+  | project CapabilityArea=MaturityLevel, Total, PassedControls, Passed, Failed, LastObserved=now()
+entityMappings:
+  - entityType: []
+    fieldMappings:
+      - identifier: []
+        columnName: []
+version: 1.0.0
+kind: Scheduled

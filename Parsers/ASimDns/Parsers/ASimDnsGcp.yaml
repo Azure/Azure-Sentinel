@@ -1,0 +1,73 @@
+Parser:
+  Title: DNS activity ASIM parser for GCP 
+  Version: '0.4'
+  LastUpdated: Dec 11 2022
+Product:
+  Name: GCP Cloud DNS
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Google cloud platform (GCP) DNS logs to the ASIM Dns normalized schema.
+ParserName: ASimDnsGcp
+EquivalentBuiltInParser: _ASim_Dns_Gcp
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  // https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry
+  let GCPSeverityTable=datatable(severity_s:string,EventSeverity:string)
+  ["DEFAULT","Informational",
+  "DEBUG","Informational",
+  "INFO","Informational",
+  "NOTICE","Medium",
+  "WARNING","Medium",
+  "ERROR","High",
+  "CRITICAL","High",
+  "ALERT","High",
+  "EMERGENCY","High"
+  ];
+  let DNSQuery_GcpDns=(disabled:bool=false){
+    GCP_DNS_CL | where not(disabled)
+    | project-away MG, ManagementGroupName, RawData, SourceSystem, Computer
+    | where resource_type_s == "dns_query"
+    | lookup GCPSeverityTable on severity_s
+    | project-rename
+        DnsQueryTypeName=payload_queryType_s,
+        DnsResponseName=payload_rdata_s, 
+        EventResultDetails=payload_responseCode_s,
+        NetworkProtocol=payload_protocol_s, 
+        SrcIpAddr=payload_sourceIP_s,
+        EventOriginalUid=insert_id_s,
+        EventOriginalSeverity=severity_s    
+    | extend
+        DnsQuery=trim_end(@'\.',payload_queryName_s), 
+        EventCount=int(1),
+        EventProduct='Cloud DNS',
+        EventVendor='GCP',
+        EventSchema = 'Dns',
+        EventSchemaVersion="0.1.3",
+        Dvc="GCPDNS" ,
+        EventType = iif (resource_type_s == "dns_query", "Query", resource_type_s),
+        EventResult=iff(EventResultDetails=~'NOERROR','Success','Failure'),
+        EventSubType='response',
+        EventEndTime=todatetime(timestamp_t)
+    | extend
+        EventStartTime = EventEndTime,
+        EventResult = iff (EventResultDetails=~'NOERROR','Success','Failure')
+   // -- Aliases
+    | extend 
+        DnsResponseCodeName=EventResultDetails, 
+        Domain=DnsQuery,
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr
+   // Backward Computability
+    | project-away *_s, *_d, *_b, *_t
+    };
+    DNSQuery_GcpDns(disabled=disabled)

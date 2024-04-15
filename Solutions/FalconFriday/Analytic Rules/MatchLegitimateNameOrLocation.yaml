@@ -1,0 +1,62 @@
+id: dd22dc4f-ab7c-4d0a-84ad-cc393638ba31
+name: Match Legitimate Name or Location - 2
+description: |
+  Attackers often match or approximate the name or location of legitimate files to avoid detection rules that are based trust of certain operating system processes.
+  This query detects mismatches in the parent-child relationship of core operating system processes to uncover different masquerading attempts.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1036.005
+query: |
+  let ProcessRelations=datatable(ImageFile:string,ExpectedParent:dynamic) [
+    "smss.exe", dynamic(["smss.exe", "ntoskrnl.exe", ""]),
+    "crmss.exe", dynamic(["smss.exe"]),
+    "wininit.exe", dynamic(["smss.exe"]),
+    "winlogon.exe", dynamic(["smss.exe"]),
+    "services.exe", dynamic(["wininit.exe"]),
+    "lsaiso.exe", dynamic(["wininit.exe"]),
+    "lsass.exe", dynamic(["wininit.exe"]),
+    "spoolsv.exe", dynamic(["services.exe"]),
+    "dllhost.exe", dynamic(["svchost.exe", "services.exe"]),
+    "lsm.exe", dynamic(["wininit.exe"]),
+    "svchost.exe", dynamic(["services.exe", "msmpeng.exe"]),
+    "runtimebroker.exe", dynamic(["svchost.exe"]),
+    "taskhostw.exe", dynamic(["svchost.exe"]),
+    "userinit.exe", dynamic(["winlogon.exe"])
+    // Explorer can have a lot of parents in some environments
+    //,"explorer.exe", dynamic(["userinit.exe"])
+  ];
+  DeviceProcessEvents
+  | extend ImageFile = tostring(tolower(parse_path(tostring(FolderPath)).Filename))
+  | extend ParentFile = tostring(tolower(parse_path(tostring(InitiatingProcessFolderPath)).Filename))
+  | lookup kind=inner ProcessRelations on ImageFile
+  | where not(set_has_element(ExpectedParent,ParentFile))
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: AccountSid 
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+kind: Scheduled

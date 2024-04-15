@@ -1,0 +1,32 @@
+Id: 7f3989bf-1558-4d3c-bb5e-e17ac2a67a87
+DisplayName: Office activity IPs for this account
+Description: Summary of IP addresses seen in Office Activity
+InputFields:
+  - Name
+OutputEntityTypes:
+  - Ip
+QueryPeriodBefore: 12h
+QueryPeriodAfter: 12h
+DataSources:
+  - OfficeActivity
+Tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+  let OfficeActivityExpansion = (v_Account_Name:string){
+  OfficeActivity
+  | extend v_Account_Name = case(
+    v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+    v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+    v_Account_Name
+   )
+  | where UserId has v_Account_Name
+  | extend info = pack('ClientIP', ClientIP, 'UserType', UserType, 'Operation', Operation, 'OfficeWorkload', OfficeWorkload, 'ResultStatus', ResultStatus)
+  | summarize min(TimeGenerated), max(TimeGenerated), IP_Aux_info = makeset(info) by ClientIP
+  | project IP_Aux_StartTime = min_TimeGenerated, IP_Aux_EndTime = max_TimeGenerated, ClientIP, IP_Aux_info
+  | project-rename IP_Address=ClientIP
+  | top 10 by IP_Aux_StartTime desc nulls last
+  };
+  OfficeActivityExpansion('<Name>')

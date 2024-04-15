@@ -1,0 +1,56 @@
+id: 9acb3664-72c4-4676-80fa-9f81912e347e
+name: Detection of Malicious URLs in Syslog Events
+description: |
+  'Identifies a match in Syslog from Recorded Future URLs Recently Reported as malicious by Insikt Group.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Impact
+relevantTechniques:
+query: |
+  // Identifies a match in Syslog from the Recorded Future URLs Recently Reported by Insikt Group
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 1d;
+  ThreatIntelligenceIndicator
+  // Picking up only Recorded Future IOC's that have been recently reported as malicious by Insikt Group
+  | where Description == 'Recorded Future - URL - Recently Reported by Insikt Group'
+  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
+  | where Active == true
+  // Picking up only IOC's that contain the entities we want
+  | where isnotempty(Url)
+  | join (
+    Syslog
+    | where TimeGenerated >= ago(dt_lookBack)
+    // Extract URL from the Syslog message but only take messages that include URLs
+    | extend Url = extract("(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+)", 1,SyslogMessage)
+    | where isnotempty(Url)
+    | extend Syslog_TimeGenerated = TimeGenerated
+    ) 
+  on Url
+  | where Syslog_TimeGenerated >= TimeGenerated and Syslog_TimeGenerated < ExpirationDateTime
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Syslog_TimeGenerated, SyslogMessage, Computer, ProcessName, Url, AdditionalInformation, HostIP
+  | extend timestamp = Syslog_TimeGenerated, HostCustomEntity = Computer, IPCustomEntity = HostIP, URLCustomEntity = Url
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+version: 1.0.0
+kind: Scheduled

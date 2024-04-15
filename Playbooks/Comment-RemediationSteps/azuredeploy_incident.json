@@ -1,0 +1,379 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Comment_RemediationSteps",
+            "type": "String"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "AzureSentinelLogAnalyticsWorkspaceName": {
+            "defaultValue": "yourAzureSentinelworkspacename",
+            "type": "string"
+        },
+        "AzureSentinelLogAnalyticsWorkspaceResourceGroupName": {
+            "defaultValue": "yourAzureSentinelworkspaceRGname",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "For_each_2": {
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "For_each": {
+                                            "actions": {
+                                                "Condition_2": {
+                                                    "actions": {
+                                                        "Add_comment_to_incident_(V3)": {
+                                                            "description": "Post remediation steps as a comment on the related incident. Remediation steps has been reformatted to be string friendly with programmatic JSON characters removed.",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "message": "<p>Recommended Remediation Steps:<br>\n@{replace(replace(replace(replace(items('For_each')['RemediationSteps'], '[',''), ']', ''), '\"', ''), '.,', '.')}</p>"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/Incidents/Comment"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection"
+                                                        }
+                                                    },
+                                                    "description": "Determine whether alert is for Microsoft Defender for Endpoint or not",
+                                                    "else": {
+                                                        "actions": {
+                                                            "Condition_3": {
+                                                                "actions": {
+                                                                    "Add_comment_to_incident_(V3)_2": {
+                                                                        "description": "Post remediation steps as a comment on the related incident. Remediation steps has been reformatted to be string friendly with programmatic JSON characters removed.",
+                                                                        "inputs": {
+                                                                            "body": {
+                                                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                                "message": "<p>Recommended Remediation Steps:<br>\n@{\r\nreplace(replace(replace(replace(replace(replace(items('For_each')['RemediationSteps'], '{', ''),'}',''),'\"',''), '\\r\\n', '\r\n'),'[', ''),']', '')}<br>\n</p>"
+                                                                            },
+                                                                            "host": {
+                                                                                "connection": {
+                                                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                }
+                                                                            },
+                                                                            "method": "post",
+                                                                            "path": "/Incidents/Comment"
+                                                                        },
+                                                                        "runAfter": {},
+                                                                        "type": "ApiConnection"
+                                                                    }
+                                                                },
+                                                                "description": "Determine whether alert is for ASC (Azure Defender) or not",
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "equals": [
+                                                                                "@items('For_each')['ProviderName']",
+                                                                                "Azure Security Center"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "runAfter": {},
+                                                                "type": "If"
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "equals": [
+                                                                    "@items('For_each')['ProviderName']",
+                                                                    "MDATP"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "If"
+                                                }
+                                            },
+                                            "foreach": "@body('Parse_JSON')",
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Parse_JSON": {
+                                            "description": "Parse event to surface attribute that contains Remediation Steps",
+                                            "inputs": {
+                                                "content": "@body('Run_query_and_list_results')?['value']",
+                                                "schema": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "AlertLink": {
+                                                                "type": "string"
+                                                            },
+                                                            "AlertName": {
+                                                                "type": "string"
+                                                            },
+                                                            "AlertSeverity": {
+                                                                "type": "string"
+                                                            },
+                                                            "AlertType": {
+                                                                "type": "string"
+                                                            },
+                                                            "CompromisedEntity": {
+                                                                "type": "string"
+                                                            },
+                                                            "ConfidenceLevel": {
+                                                                "type": "string"
+                                                            },
+                                                            "ConfidenceScore": {},
+                                                            "Description": {
+                                                                "type": "string"
+                                                            },
+                                                            "DisplayName": {
+                                                                "type": "string"
+                                                            },
+                                                            "EndTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "Entities": {
+                                                                "type": "string"
+                                                            },
+                                                            "ExtendedLinks": {
+                                                                "type": "string"
+                                                            },
+                                                            "ExtendedProperties": {
+                                                                "type": "string"
+                                                            },
+                                                            "IsIncident": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "ProcessingEndTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "ProductComponentName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ProductName": {
+                                                                "type": "string"
+                                                            },
+                                                            "ProviderName": {
+                                                                "type": "string"
+                                                            },
+                                                            "RemediationSteps": {
+                                                                "type": "string"
+                                                            },
+                                                            "ResourceId": {
+                                                                "type": "string"
+                                                            },
+                                                            "SourceComputerId": {
+                                                                "type": "string"
+                                                            },
+                                                            "SourceSystem": {
+                                                                "type": "string"
+                                                            },
+                                                            "StartTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "Status": {
+                                                                "type": "string"
+                                                            },
+                                                            "SystemAlertId": {
+                                                                "type": "string"
+                                                            },
+                                                            "Tactics": {
+                                                                "type": "string"
+                                                            },
+                                                            "TenantId": {
+                                                                "type": "string"
+                                                            },
+                                                            "TimeGenerated": {
+                                                                "type": "string"
+                                                            },
+                                                            "Type": {
+                                                                "type": "string"
+                                                            },
+                                                            "VendorName": {
+                                                                "type": "string"
+                                                            },
+                                                            "VendorOriginalId": {
+                                                                "type": "string"
+                                                            },
+                                                            "WorkspaceResourceGroup": {
+                                                                "type": "string"
+                                                            },
+                                                            "WorkspaceSubscriptionId": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Run_query_and_list_results": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson"
+                                        },
+                                        "Run_query_and_list_results": {
+                                            "description": "Searches for the raw SecurityAlert event in the workspace to surface the Remediation Steps related to the event",
+                                            "inputs": {
+                                                "body": "SecurityAlert\n| summarize arg_max(TimeGenerated, *) by SystemAlertId\n| where SystemAlertId in(\"@{items('For_each_2')?['properties']?['systemAlertId']}\") ",
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/queryData",
+                                                "queries": {
+                                                    "resourcegroups": "[parameters('AzureSentinelLogAnalyticsWorkspaceResourceGroupName')]",
+                                                    "resourcename": "[parameters('AzureSentinelLogAnalyticsWorkspaceName')]",
+                                                    "resourcetype": "Log Analytics Workspace",
+                                                    "subscriptions": "[subscription().id]",
+                                                    "timerange": "@items('For_each_2')?['properties']?['timeGenerated']"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "description": "Determine if Alert comes from ASC (Azure Defender) or Microsoft Defender for Endpoint as these data sources contain recommended remediation steps.",
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each_2')?['properties']?['productName']",
+                                                    "Azure Security Center"
+                                                ]
+                                            },
+                                            {
+                                                "equals": [
+                                                    "@items('For_each_2')?['properties']?['productName']",
+                                                    "Microsoft Defender Advanced Threat Protection"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "runAfter": {},
+                            "type": "Foreach"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

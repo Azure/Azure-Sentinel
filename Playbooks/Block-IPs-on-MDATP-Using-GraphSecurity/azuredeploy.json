@@ -1,0 +1,299 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "comments": "This playbook will get the IP information from an Azure Sentinel incident when the security incident triggers in Azure Sentinel. The IP info will then be sent to a security analyst over email. The analyst will either approve or reject the blocking of the IP. If approved, the IP will then be pushed to be blocked on Microsoft Defender ATP using the Graph Security TI indicator Post method.",
+    "author": "Chi Nguyen"
+  },
+  "parameters": {
+    "PlaybookName": {
+      "defaultValue": "Block_IPs_on_MDATP_Using_GraphSecurity",
+      "type": "string"
+    },
+    "UserName": {
+      "defaultValue": "<username>@<domain>",
+      "type": "string"
+    },
+    "EmailApprovalContact": {
+      "defaultValue": "Email address of an SOC analyst who can approve to block IP address of an incident",
+      "type": "string"
+    }
+  },
+  "variables": {
+    "GraphSecurityConnectionName": "[concat('microsoftgraphsecurity-', parameters('PlaybookName'))]",
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "Office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('GraphSecurityConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('UserName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('AzureSentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('UserName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('Office365ConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "[parameters('UserName')]",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "LogicAppsCategory": "security"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('GraphSecurityConnectionName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            },
+            "emailcontact": {
+              "defaultValue": "[parameters('EmailApprovalContact')]",
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_alert": {
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/subscribe"
+              },
+              "type": "ApiConnectionWebhook"
+            }
+          },
+          "actions": {
+            "Alert_-_Get_IPs": {
+              "inputs": {
+                "body": "@triggerBody()?['Entities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/ip"
+              },
+              "runAfter": {
+                "Alert_-_Get_incident": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection"
+            },
+            "Alert_-_Get_incident": {
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+              },
+              "runAfter": {
+                "Initialize_IPAddress": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ApiConnection"
+            },
+            "For_each_IP_in_the_incident": {
+              "actions": {
+                "Condition": {
+                  "actions": {
+                    "Submit_TiIndicator_to_MDATP_to_block_IP": {
+                      "inputs": {
+                        "body": {
+                          "action": "block",
+                          "description": "IP to block",
+                          "expirationDateTime": "2021-04-23T19:53:10.2071263Z",
+                          "networkDestinationIPv4": "@variables('IPAddress')",
+                          "targetProduct": "Microsoft Defender ATP"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['microsoftgraphsecurity']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/beta/security/tiIndicators"
+                      },
+                      "runAfter": {},
+                      "type": "ApiConnection"
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "contains": [
+                          "@body('Send_approval_email')?['SelectedOption']",
+                          "Approve"
+                        ]
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Send_approval_email": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "If"
+                },
+                "Parse_JSON": {
+                  "inputs": {
+                    "content": "@items('For_each_IP_in_the_incident')",
+                    "schema": {
+                      "properties": {
+                        "$id": {
+                          "type": "string"
+                        },
+                        "Address": {
+                          "type": "string"
+                        },
+                        "Type": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "runAfter": {},
+                  "type": "ParseJson"
+                },
+                "Send_approval_email": {
+                  "inputs": {
+                    "body": {
+                      "Message": {
+                        "Body": "Please approve to block @{variables('IPAddress')} \nIncident case number: @{body('Alert_-_Get_incident')?['properties']?['CaseNumber']}",
+                        "Importance": "High",
+                        "Options": "Approve, Reject",
+                        "Subject": "Approval Request",
+                        "To": "[parameters('EmailApprovalContact')]"
+                      },
+                      "NotificationUrl": "@{listCallbackUrl()}"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['office365']['connectionId']"
+                      }
+                    },
+                    "path": "/approvalmail/$subscriptions"
+                  },
+                  "runAfter": {
+                    "Set_IPAddress": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnectionWebhook"
+                },
+                "Set_IPAddress": {
+                  "inputs": {
+                    "name": "IPAddress",
+                    "value": "@{body('Parse_JSON')?['Address']}"
+                  },
+                  "runAfter": {
+                    "Parse_JSON": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "SetVariable"
+                }
+              },
+              "foreach": "@body('Alert_-_Get_IPs')?['IPs']",
+              "runAfter": {
+                "Alert_-_Get_IPs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Initialize_IPAddress": {
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "IPAddress",
+                    "type": "string"
+                  }
+                ]
+              },
+              "runAfter": {},
+              "type": "InitializeVariable"
+            }
+          },
+          "outputs": {}
+          },
+          "parameters": {
+            "$connections": {
+              "value": {
+                "azuresentinel": {
+                  "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                  "connectionName": "[variables('AzureSentinelConnectionName')]",
+                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                },
+                "microsoftgraphsecurity": {
+                  "connectionId": "[resourceId('Microsoft.Web/connections', variables('GraphSecurityConnectionName'))]",
+                  "connectionName": "[variables('GraphSecurityConnectionName')]",
+                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/microsoftgraphsecurity')]"
+                },
+                "office365": {
+                  "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                  "connectionName": "[variables('Office365ConnectionName')]",
+                  "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+              }
+            }
+          }
+        }
+    }
+  ]
+}

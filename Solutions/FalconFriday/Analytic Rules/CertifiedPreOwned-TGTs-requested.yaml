@@ -1,0 +1,48 @@
+id: b838a13c-052e-45b8-a5ac-7d3eb62efa11
+name: Certified Pre-Owned - TGTs requested with certificate authentication
+description: |
+  This query identifies someone using machine certificates to request Kerberos Ticket Granting Tickets (TGTs).
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1036
+query: |
+  let timeframe=1h;
+  SecurityEvent
+  | where TimeGenerated >= ago(timeframe)
+  | where EventID == 4768
+  | project TimeGenerated, Computer, TargetAccount, EventData=parse_xml(EventData)
+  | mv-apply d=EventData.EventData.Data on
+  (
+    where d["@Name"]=="CertIssuerName"
+    | project CIN=tostring(d["#text"])
+  )
+  | where not(isempty(CIN))
+  // <DECISION - 1>
+  // In some environments, we see a lot of certs starting with a sid and containing live.com. Comment out the next line if you have that as well.
+  //| where not(CIN startswith "S-1-")
+  // <DECISION - 2>
+  // If you're seeing a significant number of machine accounts, it might be due to 802.1X or SCCM. https://twitter.com/MagnusMOD/status/1407800853088591872?s=20.
+  // The following line allows you to filter out all endpoints. This does introduce a blindspot, and you need a custom function which provides data about (on-prem) AD machines.
+  // Alternatively, you can use DeviceInfo, if you're ingesting that data from MDE.
+  | parse CIN with "CN=" MachineName
+  //| join kind=leftouter  MyCustomLookupFunction on $left.MachineName == $right.CN
+  //| where not(OperatingSystem startswith "Windows 10")
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetAccount
+version: 1.0.0
+kind: Scheduled

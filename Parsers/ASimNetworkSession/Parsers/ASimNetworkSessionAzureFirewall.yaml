@@ -1,0 +1,99 @@
+Parser:
+  Title: Network Session ASIM parser for Azure Firewall logs
+  Version: '0.1.2'
+  LastUpdated: Jan 05 2023
+Product:
+  Name: Azure Firewall
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Azure Firewall logs to the ASIM Network Session normalized schema. This parser is partially based on a work by [Koos Goossens](https://github.com/TheCloudScout).
+ParserName: ASimNetworkSessionAzureFirewall
+EquivalentBuiltInParser: _ASim_NetworkSession_AzureFirewall
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false) {
+      let AzureFirewallNetworkRuleLogs = 
+          AzureDiagnostics
+          | where not(disabled)
+          | where Category == "AzureFirewallNetworkRule"
+          | where isnotempty(msg_s)
+          | project msg_s, OperationName, SubscriptionId, ResourceId, TimeGenerated, Type, _ResourceId;
+      let AzureFirewallSessionLogs = 
+          AzureFirewallNetworkRuleLogs
+          | where OperationName in ("AzureFirewallNetworkRuleLog","AzureFirewallThreatIntelLog")
+          | parse-where
+              msg_s with           NetworkProtocol:string 
+              " request from "     SrcIpAddr:string
+              ":"                  SrcPortNumber:int
+              " to "               DstIpAddr:string
+              ":"                  DstPortNumber:int
+              ". Action: "         DvcAction:string
+              "."                  *
+          | project-away msg_s
+          | extend NetworkIcmpCode = iff(NetworkProtocol startswith "ICMP", toint(extract ("type=(\\d+)",1,NetworkProtocol)), int(null))
+          | extend NetworkIcmpType = iff(isnotnull(NetworkIcmpCode), _ASIM_LookupICMPType(NetworkIcmpCode), "")
+          | extend NetworkProtocol = iff(NetworkProtocol startswith "ICMP", "ICMP", NetworkProtocol)
+          | extend EventSeverity = case (
+              OperationName  == "AzureFirewallThreatIntelLog", "Medium",
+              DvcAction == "Deny", "Low",
+              "Informational")
+          | extend EventResult = iff(DvcAction == "Allow", "Success", "Failure")
+          ;
+      let AzureFirewallNATLogs = 
+          AzureFirewallNetworkRuleLogs
+          | where OperationName == "AzureFirewallNatRuleLog"
+          | parse-where
+              msg_s with           NetworkProtocol:string 
+              " request from "     SrcIpAddr:string
+              ":"                  SrcPortNumber:int
+              " to "               DstIpAddr:string
+              ":"                  DstPortNumber:int
+              " was DNAT'ed to "   DstNatIpAddr:string
+              ":"                  DstNatPortNumber:int
+          | project-away msg_s
+          | extend EventSeverity = "Informational"
+          | extend EventResult = "Success"
+          | extend DvcAction = "Allow"
+          ;
+      union AzureFirewallSessionLogs, AzureFirewallNATLogs
+      | extend
+          EventVendor="Microsoft",
+          EventProduct="Azure Firewall",
+          EventType="NetworkSession",
+          EventCount=toint(1),
+          EventSchemaVersion="0.2.2",
+          EventSchema="NetworkSession",
+          DvcIdType = "AzureResourceId"
+      | project-rename
+          DvcSubscriptionId = SubscriptionId,
+          DvcId = ResourceId
+      // -- Aliases
+      | extend
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          Dvc = DvcId,
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated
+      | project-keep
+          Src*,
+          Dst*,
+          Event*,
+          Dvc*,
+          Network*,
+          IpAddr,
+          Type,
+          _ResourceId,
+          TimeGenerated
+  };
+  parser (disabled)

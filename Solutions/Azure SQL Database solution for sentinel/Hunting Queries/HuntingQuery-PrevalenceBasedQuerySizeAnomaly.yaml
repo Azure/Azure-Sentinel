@@ -1,0 +1,81 @@
+id: 2a21303e-be48-404f-a6f6-883a6acfe5ad
+name: Prevalence Based SQL Query Size Anomaly
+description: |
+  'Applications using SQL will generally make repeated similar requests for data as users interact with the application, this hunting query will find instances where an unusual number of tokens have been seen grouped on the client application and username. The query will calculate the prevalence for the token sizes based on historical activity from grouped application and user and show instances where an unusual number of tokens were observed. This query is designed to be run against application and username combinations that are used by SQL applications, such as content management systems (Wordpress, Joomla, TYPO3, etc.).'
+requiredDataConnectors:
+  - connectorId: AzureSql
+    dataTypes:
+      - AzureDiagnostics
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - SQL
+query: |
+  let timeRange = 14d;
+  //How frequently the query averages data for an average execution time
+  let timeSliceSize = 1h;
+  //Anomaly decompose threshold, 2 by default
+  let parameterJitter = 3; //The number of different parameters seen with the anomalous query
+  let prevalenceThreshold = 10; // %
+  let dayThreshold = 1;
+  let processedData = materialize (
+      AzureDiagnostics
+      | where TimeGenerated > ago(timeRange)
+      | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
+      | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
+      ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
+      IsSuccess = succeeded_s, DurationMs = duration_milliseconds_d, AffectedRows = affected_rows_d,
+      ResponseRows = response_rows_d, Statement = statement_s,
+      Error = case( additional_information_s has 'error_code', toint(extract("<error_code>([0-9.]+)", 1, additional_information_s))
+                        , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+)", 1, additional_information_s))
+                        , 0),
+      State = case( additional_information_s has 'error_state', toint(extract("<error_state>([0-9.]+)", 1, additional_information_s))
+                        , additional_information_s has 'failure_reason', toint(extract("<failure_reason>Err ([0-9.]+), Level ([0-9.]+)", 2, additional_information_s))
+                        , 0),
+      AdditionalInfo = additional_information_s, timeSlice = floor(TimeGenerated, timeSliceSize));
+  let total =
+  processedData
+  | summarize count() by PrincipalName, ApplicationName
+  | extend key = strcat(PrincipalName, ApplicationName);
+  let anomalyData = processedData
+  //Splitting on "=" provides a good estimate to the parameters
+  | extend parameters = countof(Statement, "=")
+  //Splitting on space provides a good estimate to the tokens in the query
+  | extend tokens = array_length(split(Statement, " "))
+  | summarize count(), make_set(parameters, 10000), make_list(TimeGenerated, 10000), make_list(ClientIp, 10000), dcount(ClientIp), min(TimeGenerated), max(TimeGenerated), make_list(Statement, 10000) by tokens, PrincipalName, ApplicationName
+  | extend key = strcat(PrincipalName, ApplicationName)
+  | join kind=leftouter (total) on key
+  | extend prevalence = toreal(count_) / toreal(count_1) * 100
+  | where prevalence <= prevalenceThreshold
+  //Optional; Filter to instances where multiple parameters were seen
+  //| where array_length(set_parameters) >= parameterJitter
+  | extend dayKey = hash_md5(strcat(tokens, set_parameters));
+  //Calculate the period anomalous queries were active
+  anomalyData
+  | join kind=leftouter  (
+      anomalyData
+      | mv-expand list_TimeGenerated
+      | summarize by bin(todatetime(list_TimeGenerated), 1d), dayKey
+      | summarize Days=count() by dayKey
+  ) on dayKey
+  //Optional; The maximum number of days the anomaly activity spanned
+  //| where Days <= dayThreshold
+  | project min_TimeGenerated, max_TimeGenerated, Days, prevalence, count_, set_parameters, tokens, dcount_ClientIp, ApplicationName, PrincipalName, list_Statement
+  | extend Name = tostring(split(PrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(PrincipalName, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend CloudApplication_0_Name = ApplicationName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ApplicationName
+version: 1.0.1

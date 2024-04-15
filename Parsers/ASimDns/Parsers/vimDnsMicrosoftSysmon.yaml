@@ -1,0 +1,216 @@
+Parser:
+  Title: DNS activity ASIM filtering parser for Sysmon for Windows
+  Version: '0.4'
+  LastUpdated: Jan 3 2023
+Product:
+  Name: Microsoft Windows Events Sysmon
+Normalization:
+  Schema: Dns
+  Version: '0.1.6'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Sysmon for Windows DNS logs (event number 22),collected using the Log Analytics agent, to the ASIM Dns normalized schema.<br>The parser supports events collected to both the Event and WindowsEvent tables.The parser supports events collected to both the Event and WindowsEvent tables.
+ParserName: vimDnsMicrosoftSysmon
+EquivalentBuiltInParser: _Im_Dns_MicrosoftSysmon
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+
+ParserQuery: | 
+  let RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[
+    // See https://docs.microsoft.com/windows/win32/debug/system-error-codes--9000-11999-
+    0, 'NOERROR'
+  , 9001, "FORMERR"
+  , 9002,"SERVFAIL"
+  , 9003,'NXDOMAIN'
+  , 9004,'NOTIMP'
+  , 9005,'REFUSED'
+  , 9006,'YXDOMAIN'
+  , 9007,'YXRRSET'
+  , 9008,'NXRRSET'
+  , 9009,'NOTAUTH'
+  , 9010,'NOTZONE'
+  , 9011,'DSOTYPENI'
+  , 9016,'BADVERS'
+  , 9016,'BADSIG'
+  , 9017,'BADKEY'
+  , 9018,'BADTIME'
+  , 9019,'BADMODE'
+  , 9020,'BADNAME'
+  , 9021,'BADALG'
+  , 9022,'BADTRUNC'
+  , 9023,'BADCOOKIE'
+  , 1460, 'TIMEOUT'
+  ];
+  let ParsedDnsEvent_Event =(
+    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*', response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='Query'
+    , disabled:bool=false
+  ) 
+  {
+    Event | where not(disabled)
+      | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
+      | where Source == "Microsoft-Windows-Sysmon" and EventID==22
+      | project-away Source, EventID
+      // -- Pre-parsing filtering (srcipaddr not available, responsecodename not optimizable)
+      | where
+        (eventtype in~ ('Query', 'lookup'))
+        and (srcipaddr=='*')
+        and (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and (array_length(domain_has_any) ==0 or EventData has_any (domain_has_any))
+        and (response_has_ipv4=='*' or has_ipv4(EventData,response_has_ipv4) )
+        and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(EventData, response_has_any_prefix))
+      // --
+      | parse-kv EventData as (
+          RuleName:string,
+          UtcTime:datetime, 
+          ProcessGuid:string,
+          ProcessId:string,
+          QueryName:string,
+          QueryStatus:int,
+          QueryResults:string,
+          Image:string,
+          User:string
+        )
+        with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+      | project-rename 
+          EventEndTime = UtcTime,
+          SrcProcessId = ProcessId,
+          SrcProcessGuid = ProcessGuid,
+          DnsQuery = QueryName,
+          DnsResponseCode = QueryStatus,
+          DnsResponseName = QueryResults,
+          SrcProcessName = Image,
+          SrcUsername = User
+      | project-away EventData      
+      // -- Post-filtering tests differnt for Event and WindowsEvent
+      | lookup RCodeTable on DnsResponseCode
+      | where  (responsecodename=="*" or DnsResponseCodeName has responsecodename) // -- filter is not optimized
+      // --
+    };
+  let ParsedDnsEvent_WindowsEvent =(
+    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*', response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
+    , disabled:bool=false
+  ) 
+  {
+    WindowsEvent | where not(disabled)
+    | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Provider, Type //, _ItemId 
+    | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
+    | project-away Provider, EventID
+      // -- Pre-parsing filtering (srcipaddr not available)
+    | where
+      (eventtype=='lookup')
+      and (srcipaddr=='*')
+      and (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime)
+      and (array_length(domain_has_any) ==0 or EventData has_any (domain_has_any))
+      and (response_has_ipv4=='*' or has_ipv4(EventData,response_has_ipv4) )
+      and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(EventData, response_has_any_prefix))
+    | extend DnsResponseCode = toint(EventData.QueryStatus)
+    | lookup RCodeTable on DnsResponseCode
+    | where  (responsecodename=="*" or DnsResponseCodeName has responsecodename) // -- filter is not optimized
+    // --
+    | extend 
+        RuleName = tostring(EventData.RuleName),
+        EventEndTime = todatetime(EventData.UtcTime),
+        SrcProcessGuid = tostring(EventData.ProcessGuid),
+        SrcProcessId = tostring(EventData.ProcessId),  
+        DnsQuery = tostring(EventData.QueryName),
+        DnsResponseName = tostring(EventData.QueryResults),
+        SrcProcessName = tostring(EventData.Image),
+        SrcUsername = tostring(EventData.User)
+    | project-away EventData
+    | parse SrcProcessGuid with '{' SrcProcessGuid '}'
+  };
+  let ParsedDnsEvent=(
+    starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+    , srcipaddr:string='*'
+    , domain_has_any:dynamic=dynamic([]) 
+    , responsecodename:string='*', response_has_ipv4:string='*'
+    , response_has_any_prefix:dynamic=dynamic([]) , eventtype:string='lookup'
+    , disabled:bool=false
+  ) 
+  {
+    union isfuzzy=true 
+      ParsedDnsEvent_Event        (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled),
+      ParsedDnsEvent_WindowsEvent (starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)
+  // -- Post-filtering accurately now that message is parsed
+  | where
+    (array_length(domain_has_any) == 0 or DnsQuery has_any (domain_has_any))
+    and (response_has_ipv4=='*' or has_ipv4(DnsResponseName,response_has_ipv4) )
+    and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(DnsResponseName, response_has_any_prefix))
+  // --
+  | project-rename 
+      DvcHostname = Computer,
+      //EventUid = _ItemId,
+      DvcScopeId = _SubscriptionId,
+      DvcId = _ResourceId
+  | extend
+      EventOriginalType = '22',
+      EventCount=int(1),
+      EventProduct = 'Sysmon',
+      EventVendor = 'Microsoft',
+      EventSchema = 'Dns',
+      EventSchemaVersion="0.1.6",
+      EventType = 'Query',
+      EventResult = iff (DnsResponseCode == 0,'Success','Failure'),
+      EventStartTime = EventEndTime,
+      EventSubType= 'response',
+      EventSeverity= iif (DnsResponseCode == 0, 'Informational', 'Low'),
+      SrcUsernameType = 'Windows',
+      RuleName = iff (RuleName == "-", "", RuleName),
+      DnsResponseName = iff (DnsResponseName == "-", "", DnsResponseName),
+      DnsResponseCodeName = iff (DnsResponseCodeName == "", "NA", DnsResponseCodeName),
+      DvcIdType = iff (DvcId != "", "AzureResourceId", "")
+  // -- Aliases
+  | extend 
+      EventResultDetails = DnsResponseCodeName,
+      Domain = DnsQuery,
+      Dvc = DvcHostname,
+      SrcHostname = DvcHostname,
+      Src = DvcHostname,
+      Hostname=DvcHostname,
+      DnsResponseCode = toint(iff (DnsResponseCode > 9000 and DnsResponseCode < 9100, DnsResponseCode-9000, DnsResponseCode)),
+      User = SrcUsername,
+      Process = SrcProcessName,
+      Rule = RuleName,
+      DvcAzureResourceId = DvcId
+  };
+  ParsedDnsEvent (starttime=starttime, endtime=endtime, srcipaddr=srcipaddr, domain_has_any=domain_has_any, responsecodename=responsecodename, response_has_ipv4=response_has_ipv4, response_has_any_prefix=response_has_any_prefix, eventtype=eventtype, disabled=disabled)

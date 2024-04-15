@@ -1,0 +1,298 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[parameters('location')]",
+            "metadata": {
+                "description": "Region to deploy solution resources"
+            }
+        },
+        "workspace": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "The workspace name should include 4-63 letters, digits or '-'. The '-' shouldn't be the first or the last symbol"
+            }
+        },
+        "formattedTimeNow": {
+            "type": "string",
+            "defaultValue": "[utcNow('g')]",
+            "metadata": {
+                "description": "Appended to workbook displayNames to make them unique"
+            }
+        },
+        "workbook1-name": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Name for the workbook"
+            }
+        },
+        "playbook1-PlaybookName": {
+            "defaultValue": "Get-GeoFromIpAndTagIncident",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Resource name for the logic app playbook.  No spaces are allowed"
+            }
+        }
+    },
+    "variables": {
+        "_artifactsLocation": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/Training/Azure-Sentinel-Training-Lab/",
+        "sourceId": "azuresentinel.azure-sentinel-solution-azuretraininglab",
+        "_sourceId": "[variables('sourceId')]",
+        "workbookContentId": "ATLInvestigationInsights",
+        "_workbookContentId": "[variables('workbookContentId')]",
+        "alertRuleContentId1": "ATLSolorigateNetworkBeacon",
+        "_alertRuleContentId1": "[variables('alertRuleContentId1')]",
+        "alertRuleContentId2": "ATLSign-insfromIPsthatattemptsign-instodisabledaccounts",
+        "_alertRuleContentId2": "[variables('alertRuleContentId2')]",
+        "alertRuleContentId3": "ATLMaliciousInboxRule",
+        "_alertRuleContentId3": "[variables('alertRuleContentId3')]",
+        "playbookContentId1": "ATLGet-GeoFromIpAndTagIncident",
+        "_playbookContentId1": "[variables('playbookContentId1')]",
+        "watchlistContentId1": "ATLHighRiskApps",
+        "_watchlistContentId1": "[variables('watchlistContentId1')]",
+        "huntingQueryContentId1": "ATLOAuthApplications",
+        "_huntingQueryContentId1": "[variables('huntingQueryContentId1')]",
+        "huntingQueryContentId2": "ATLsolorigateInventoryCheck",
+        "_huntingQueryContentId2": "[variables('huntingQueryContentId2')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2021-04-01",
+            "name": "pid-176a034f-b9bf-4a4a-b1e3-059033b9b394-partnercenter",
+            "type": "Microsoft.Resources/deployments",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": []
+                }
+            }
+        },
+        {
+            "name": "workspaceCreation",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/workspace.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                        "value": "[parameters('workspace')]"
+                    },
+                    "pricingTier": {
+                        "value": "PerGB2018"
+                    },
+                    "dataRetention": {
+                        "value": 90
+                    },
+                    "location": {
+                        "value": "[parameters('workspace-location')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "ingestEvents",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'workspaceCreation')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/ingestEvents.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "WorkspaceId": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceIdOutput.value]"
+                    },
+                    "SharedKey": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceKeyOutput.value]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "alertRules",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','workbook')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/alertRules.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                        "value": "[parameters('workspace')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "playbook",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','workspaceCreation')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/playbook.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "PlaybookName": {
+                        "value": "[parameters('playbook1-PlaybookName')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "workbook",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','ingestEvents')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/workbook.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workbookDisplayName": {
+                        "value": "[concat(parameters('workbook1-name'),' - ',parameters('formattedTimeNow'))]"
+                    },
+                    "workbookSourceId": {
+                        "value": "[reference('workspaceCreation').outputs.workspaceResourceIdOutput.value]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "watchlist",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2021-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments','workspaceCreation')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('_artifactsLocation'), 'Artifacts/LinkedTemplates/watchlist.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "workspaceName": {
+                       "value": "[parameters('workspace')]"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "apiVersion": "2021-03-01-preview",
+            "properties": {
+                "version": "1.0.5",
+                "kind": "Solution",
+                "contentId": "[variables('_sourceId')]",
+                "parentId": "[variables('_sourceId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "Microsoft Sentinel Training Lab",
+                    "sourceId": "[variables('_sourceId')]"
+                },
+                "author": {
+                    "name": "Eli Forbes",
+                    "email": "v-eliforbes@microsoft.com"
+                },
+                "support": {
+                    "tier": "Microsoft",
+                    "email": "support@microsoft.com",
+                    "name": "Microsoft Sentinel, Microsoft Corporation",
+                    "link": "https://support.microsoft.com/"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "Workbook",
+                            "contentId": "[variables('_workbookContentId')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "AnalyticsRule",
+                            "contentId": "[variables('_alertRuleContentId1')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "AnalyticsRule",
+                            "contentId": "[variables('_alertRuleContentId2')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "AnalyticsRule",
+                            "contentId": "[variables('_alertRuleContentId3')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "Playbook",
+                            "contentId": "[variables('_playbookContentId1')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "Watchlist",
+                            "contentId": "[variables('_watchlistContentId1')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "HuntingQuery",
+                            "contentId": "[variables('_huntingQueryContentId1')]",
+                            "version": "1.0.5"
+                        },
+                        {
+                            "kind": "HuntingQuery",
+                            "contentId": "[variables('_huntingQueryContentId2')]",
+                            "version": "1.0.5"
+                        }
+                    ]
+                },
+                "providers": [
+                    "Microsoft"
+                ],
+                "categories": {
+                    "domains": [ "Training and Tutorials" ]
+                }
+            },
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_sourceId'))]"
+        }
+    ],
+    "outputs": {
+    }
+}

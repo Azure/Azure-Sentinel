@@ -1,0 +1,43 @@
+id: 5fe1af14-cd40-48ff-b581-3a12a1f90785
+name: VMware ESXi - Multiple VMs stopped
+description: |
+  'Detects when multiple VMs ware stopped by user.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: VMwareESXi
+    dataTypes:
+      - VMwareESXi
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1529
+query: |
+  let threshold = 5;
+  VMwareESXi
+  | where SyslogMessage has ('VmPoweredOffEvent')
+  | extend SrcUsername = extract(@'\[info\]\s+\[(.*?)\]', 1, SyslogMessage)
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | summarize st_vm = make_set(DstHostname,200) by SrcUsername, bin(TimeGenerated, 5m)
+  | where array_length(st_vm) > threshold
+  | extend hostname = iff(array_length(st_vm) > 0, st_vm[0], "")
+  | extend NTDomain = tostring(split(hostname, '\\', 0)[0]), Name = tostring(split(SrcUsername, '\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0]), DnsDomain = tostring(split(SrcUsername, '\\', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: NTDomain
+version: 1.0.1
+kind: Scheduled

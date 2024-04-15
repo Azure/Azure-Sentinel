@@ -1,0 +1,34 @@
+id: 97ff9459-dade-404a-b90e-d93b9acde1a4
+name: Potential Process Doppelganging
+description: |
+   'This query detects Process Doppelganging, a technique that calls several APIs related to NTFS transactions which allow to substitute the PE content before the process is even created.
+   Ref: https://attack.mitre.org/techniques/T1055/013/'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1055.013
+query: |
+  // Enter a reference list of trusted processes
+  let TrustedProcessList = dynamic (["c:\\windows\\system32\\svchost.exe","c:\\windows\\system32\\lsass.exe","c:\\windows\\servicing\\TrustedInstaller.exe","c:\\windows\\system32\\poqexec.exe","TiWorker.exe","C:\\Windows\\System32\\inetsrv\\appcmd.exe","C:\\Windows\\System32\\inetsrv\\InetMgr.exe","C:\\Windows\\System32\\wsmprovhost.exe","C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Enterprise\\Common7\\IDE\\devenv.exe"]);
+  SecurityEvent
+  | where EventID == 4985 and not (ProcessName has_any (TrustedProcessList)) and SubjectLogonId !="0x3e7"
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventID, Computer, ProcessName, SubjectUserName
+entityMappings:
+- entityType: Account
+  fieldMappings:
+    - identifier: FullName
+      columnName: SubjectUserName
+- entityType: Host
+  fieldMappings:
+    - identifier: FullName
+      columnName: Computer
+- entityType: Process
+  fieldMappings:
+    - identifier: CommandLine
+      columnName: ProcessName
+version: 1.0.0
+kind: Scheduled

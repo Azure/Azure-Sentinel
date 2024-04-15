@@ -1,0 +1,391 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-NamedLocations",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "AAD_TenantID": {
+            "defaultValue": "Azure AD Tenant ID",
+            "type": "string"
+        },
+        "AAD_ApplicationID": {
+            "defaultValue": "Application ID of application with Policy.Read.All permissions",
+            "type": "string"
+        },
+        "AAD_ApplicationSecret": {
+            "defaultValue": "Application Secret of application",
+            "type": "string"
+        },
+        "workspaceKey": {
+            "type": "securestring"
+        },
+        "workspaceID": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureLogAnalyticsConnectionName": "[concat('azureloganalytics-', parameters('PlaybookName'))]",
+        "hostingPlanName": "[concat(parameters('PlaybookName'),'hostingPlan')]",
+        "siteName": "[concat(parameters('PlaybookName'),'fnct')]",
+        "storageName":"[concat('deploy', uniqueString(resourceGroup().id))]",
+        "packageURL":"https://github.com/Azure/Azure-Sentinel/master/Playbooks/Save-NamedLocations/CidrIpRange.zip?raw=true",
+        "sites_CidrIpRange_externalid" : "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('siteName') )]",
+        "Sentinel_LogName": "sentinel_namedLocations"
+    },
+    "resources": [
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "accountType": "Standard_LRS"
+            }
+        },
+        {
+            "apiVersion": "2015-08-01",
+            "name": "[variables('hostingPlanName')]",
+            "kind": "functionapp",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                    "name": "Y1",
+                    "tier": "Dynamic",
+                    "size": "Y1",
+                    "family": "Y",
+                    "capacity": 0
+            },
+            "properties": {
+            "name": "[variables('hostingPlanName')]"
+            }
+        },
+        {
+            "apiVersion": "2015-08-01",
+            "name": "[variables('siteName')]",
+            "type": "Microsoft.Web/sites",
+            "location": "[resourceGroup().location]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+            ],
+            "properties": {
+            "serverFarmId": "[variables('hostingPlanName')]",
+            "siteConfig": {
+                        "appSettings": [
+                            {
+                                "name": "AzureWebJobsDashboard",
+                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2015-05-01-preview').key1)]"
+                            },
+                            {
+                                "name": "AzureWebJobsStorage",
+                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2015-05-01-preview').key1)]"
+                            },
+                            {
+                                "name": "FUNCTIONS_EXTENSION_VERSION",
+                                "value": "~3"
+                            },
+                            {
+                                "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                                "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2015-05-01-preview').key1)]"
+                            },
+                            {
+                                "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                                "value": "~10"
+                            },
+                            {
+                                "name": "WEBSITE_CONTENTSHARE",
+                                "value": "[toLower(variables('siteName'))]"
+                            }
+                        ]
+                    }
+            },
+            "resources": [
+                {
+                    "name": "MSDeploy",
+                    "type": "extensions",
+                    "location": "[resourceGroup().location]",
+                    "apiVersion": "2015-08-01",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('siteName'))]"
+                    ],
+                    "properties": {
+                    "packageUri": "[variables('packageURL')]"
+                    }
+                }
+            ]         
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "parameterValues": {
+                    "username":"[parameters('workspaceID')]",
+                    "password":"[parameters('workspaceKey')]"
+                },
+                
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsConnectionName'))]",
+                "[concat('Microsoft.Web/sites/', variables('siteName'),'/extensions/MSDeploy')]"
+            ],
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Month",
+                                "interval": 3
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Create_IPList_variable": {
+                            "runAfter": {
+                                "Parse_named_locations": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IPList",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Get_named_locations": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com",
+                                    "clientId": "[parameters('AAD_ApplicationID')]",
+                                    "secret": "[parameters('AAD_ApplicationSecret')]",
+                                    "tenant": "[parameters('AAD_TenantID')]",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/beta/identity/conditionalAccess/namedLocations?$select=displayName,microsoft.graph.ipNamedLocation/ipRanges/&$filter=microsoft.graph.ipNamedLocation/isTrusted"
+                            }
+                        },
+                        "Loop_formatted_IP_information": {
+                            "foreach": "@variables('IPList')",
+                            "actions": {
+                                "Send_data_to_LogAnalytics": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{items('Loop_formatted_IP_information')}",
+                                        "headers": {
+                                            "Log-Type": "[variables('Sentinel_LogName')]"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Loop_named_locations": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Loop_named_locations": {
+                            "foreach": "@body('Parse_named_locations')?['value']",
+                            "actions": {
+                                "Loop_cidr_ranges": {
+                                    "foreach": "@body('Parse_IP_ranges')?['ipRanges']",
+                                    "actions": {
+                                        "CidrRanges": {
+                                            "runAfter": {},
+                                            "type": "Function",
+                                            "inputs": {
+                                                "function": {
+                                                    "id": "[concat(variables('sites_CidrIpRange_externalid'), '/functions/CidrRanges')]"
+                                                },
+                                                "queries": {
+                                                    "cidr": "@items('Loop_cidr_ranges')?['cidrAddress']"
+                                                }
+                                            }
+                                        },
+                                        "Loop_function_reuslts": {
+                                            "foreach": "@body('CidrRanges')",
+                                            "actions": {
+                                                "Append_to_array_variable_2": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "IPList",
+                                                        "value": {
+                                                            "ip": "@{items('Loop_function_reuslts')}",
+                                                            "location": "@{items('Loop_named_locations')['DisplayName']}"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "CidrRanges": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_IP_ranges": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_IP_ranges": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('Loop_named_locations')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.type": {
+                                                    "type": "string"
+                                                },
+                                                "displayName": {
+                                                    "type": "string"
+                                                },
+                                                "ipRanges": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "@@odata.type": {
+                                                                "type": "string"
+                                                            },
+                                                            "cidrAddress": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "@@odata.type",
+                                                            "cidrAddress"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Create_IPList_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Parse_named_locations": {
+                            "runAfter": {
+                                "Get_named_locations": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_named_locations')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "@@odata.type": {
+                                                        "type": "string"
+                                                    },
+                                                    "ipRanges": {
+                                                        "items": {
+                                                            "properties": {
+                                                                "@@odata.type": {
+                                                                    "type": "string"
+                                                                },
+                                                                "cidrAddress": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "@@odata.type",
+                                                                "cidrAddress"
+                                                            ],
+                                                            "type": "object"
+                                                        },
+                                                        "type": "array"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "@@odata.type",
+                                                    "ipRanges"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+									"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsConnectionName'))]",
+									"connectionName": "[variables('AzureLogAnalyticsConnectionName')]",
+									"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+								}
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

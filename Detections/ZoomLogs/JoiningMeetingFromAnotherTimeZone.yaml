@@ -1,0 +1,54 @@
+id: 58fc0170-0877-4ea8-a9ff-d805e361cfae
+name: User joining Zoom meeting from suspicious timezone
+description: |
+  'The alert shows users that join a Zoom meeting from a time zone other than the one the meeting was created in.
+  You can also whitelist known good time zones in the tz_whitelist value using the tz database name format https://en.wikipedia.org/wiki/List_of_tz_database_time_zones'
+severity: Low
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let schedule_lookback = 14d;
+  let join_lookback = 1d;
+  // If you want to whitelist specific timezones include them in a list here
+  let tz_whitelist = dynamic([]);
+  let meetings = (
+  ZoomLogs
+  | where TimeGenerated >= ago(schedule_lookback)
+  | where Event =~ "meeting.created"
+  | extend MeetingId = tostring(parse_json(MeetingEvents).MeetingId)
+  | extend SchedTimezone = tostring(parse_json(MeetingEvents).Timezone));
+  ZoomLogs
+  | where TimeGenerated >= ago(join_lookback)
+  | where Event =~ "meeting.participant_joined"
+  | extend JoinedTimeZone = tostring(parse_json(MeetingEvents).Timezone)
+  | extend MeetingName = tostring(parse_json(MeetingEvents).MeetingName)
+  | extend MeetingId = tostring(parse_json(MeetingEvents).MeetingId)
+  | where JoinedTimeZone !in (tz_whitelist)
+  | join (meetings) on MeetingId
+  | where SchedTimezone != JoinedTimeZone
+  | project TimeGenerated, MeetingName, JoiningUser=payload_object_participant_user_name_s, JoinedTimeZone, SchedTimezone, MeetingScheduler=User1
+  | extend timestamp = TimeGenerated, AccountCustomEntity = JoiningUser
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.3
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

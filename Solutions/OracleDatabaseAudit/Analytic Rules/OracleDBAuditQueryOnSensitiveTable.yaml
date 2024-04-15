@@ -1,0 +1,33 @@
+id: d7fdcad5-ce96-4db6-9a5e-4a86a5166e5e
+name: OracleDBAudit - Query on Sensitive Table
+description: |
+  'Detects when user queries sensitive tables.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+query: |
+  let sensitive_tbls = dynamic(['table_name1', 'table_name2']);
+  OracleDatabaseAuditEvent
+  | where isnotempty(DstUserName)
+  | where isnotempty(Action)
+  | extend TableName = replace(@'[,\(\)]', '', extract(@'(?i)SELECT(.*?)FROM\s(.*?)\s', 2, Action))
+  | where isnotempty(TableName)
+  | where TableName in (sensitive_tbls)
+  | project TableName, DstUserName, DbAction
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

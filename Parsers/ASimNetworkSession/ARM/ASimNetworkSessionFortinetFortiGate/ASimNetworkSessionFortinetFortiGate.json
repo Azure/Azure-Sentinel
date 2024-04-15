@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionFortinetFortiGate",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for Fortinet FortiGate",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionFortinetFortiGate",
+            "query": "let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventResultDetails:string)\n[\n  \"accept\",\"Allow\",\"Success\",\"\"\n  , \"client-rst\",\"Reset Source\",\"Failure\",\"\"\n  , \"close\",\"\",\"Success\",\"\"\n  , \"deny\",\"Deny\",\"Failure\",\"\"\n  , \"ip-conn\",\"\",\"Failure\",\"IP connection error\"\n  , \"server-rst\",\"Reset Destination\",\"Failure\",\"\"\n  , \"timeout\",\"\",\"Failure\",\"\"\n];\n// -- See https://docs.fortinet.com/document/fortigate/7.2.4/fortios-log-message-reference/671442/cef-priority-levels\nlet SeverityLookup = datatable (EventOriginalSeverity:string, EventSeverity:string)\n[\n  \"1\", \"Informational\", // Debug\n  \"2\", \"Informational\", // Information\n  \"3\", \"Informational\", // Notification\n  \"4\", \"Low\", // Warning\n  \"5\", \"Low\", // Error\n  \"6\", \"Critical\", // High\n  \"7\", \"Alert\", // Medium\n  \"8\", \"High\" // Emergency\n];\nlet Parser=(disabled:bool=false){\n   CommonSecurityLog\n  | where not(disabled)\n  | where DeviceVendor == \"Fortinet\" and DeviceProduct startswith \"FortiGate\" and (column_ifexists(\"DeviceEventCategory\",\"\") has \"traffic\"  or AdditionalExtensions has \"cat=traffic\")\n  | where DeviceAction != \"dns\" and Activity !has \"dns\" \n  | parse Activity with \"traffic:forward \" temp_DeviceAction:string \n  | extend DeviceAction = coalesce(DeviceAction, temp_DeviceAction)  \n  | lookup EventLookup on DeviceAction \n  | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction\n  | project-rename DstBytes = ReceivedBytes\n    , DstInterfaceName = DeviceOutboundInterface\n    , DstIpAddr = DestinationIP\n    , DstPortNumber = DestinationPort\n    , Dvc = Computer\n    , EventMessage = Activity\n    , EventOriginalSeverity = LogSeverity\n    , EventProduct = DeviceProduct\n    , EventProductVersion = DeviceVersion\n    , SrcBytes = SentBytes\n    , SrcInterfaceName = DeviceInboundInterface\n    , SrcIpAddr = SourceIP\n    , SrcPortNumber = SourcePort\n    , DvcId = DeviceExternalID\n    , EventUid = _ItemId\n  | invoke _ASIM_ResolveNetworkProtocol ('Protocol')\n  | project-rename DvcOriginalAction = DeviceAction\n  | parse-kv AdditionalExtensions as (\n          FortinetFortiGatestart:datetime,\n          FortinetFortiGatesrcintfrole:string,\n          FortinetFortiGatedstintfrole:string,\n          FortinetFortiGateexternalID:string,\n          FortinetFortiGatepolicyid:int,\n          FortinetFortiGatedstcountry:string,\n          FortinetFortiGatesrccountry:string,\n          FortinetFortiGatecrscore:string,\n          FortinetFortiGateduration:int,\n          FortinetFortiGatesentpkt:long,\n          FortinetFortiGatercvdpkt:long\n      ) with (pair_delimiter=';', kv_delimiter='=')\n  | project-rename\n      EventStartTime          = FortinetFortiGatestart,\n      SrcZone                 = FortinetFortiGatesrcintfrole,\n      DstZone                 = FortinetFortiGatedstintfrole,\n      NetworkSessionId        = FortinetFortiGateexternalID,\n      NetworkRuleNumber       = FortinetFortiGatepolicyid,\n      NetworkDuration         = FortinetFortiGateduration,\n      DstGeoCountry           = FortinetFortiGatedstcountry,\n      SrcGeoCountry           = FortinetFortiGatesrccountry,\n      ThreatOriginalRiskLevel = FortinetFortiGatecrscore,\n      SrcPackets              = FortinetFortiGatesentpkt,\n      DstPackets              = FortinetFortiGatercvdpkt\n  | extend EventCount = int(1)\n    , EventSchema = \"NetworkSession\"\n    , EventSchemaVersion = \"0.2.3\"\n    , EventType = \"NetworkSession\"\n    , EventVendor = \"Fortinet\"\n    , DvcIdType = \"Other\"\n    , NetworkBytes = DstBytes + SrcBytes\n    , EventEndTime = TimeGenerated\n    , EventStartTime = coalesce(EventStartTime, TimeGenerated)\n    , NetworkProtocolVersion = case(DstIpAddr contains \".\", \"IPv4\"\n        , DstIpAddr contains \":\", \"IPv6\"\n        , \"\")\n    , NetworkPackets = DstPackets + SrcPackets\n    | lookup SeverityLookup on EventOriginalSeverity\n    | extend \n        Src = SrcIpAddr,\n        Dst = DstIpAddr,\n        SessionId = NetworkSessionId,\n        IpAddr = SrcIpAddr,\n        Duration = NetworkDuration,\n        Rule = tostring(NetworkRuleNumber)\n  | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber\n};\nParser (disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

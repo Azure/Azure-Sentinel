@@ -1,0 +1,29 @@
+id: 5bf4b982-a9e6-4877-b2c0-bdbe4d0f27db
+name: Ubiquiti - Unusual number of subdomains for top level domain (TLD)
+description: |
+  'Query counts the number of unique subdomains for each TLD.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: UbiquitiUnifi
+    dataTypes:
+      - UbiquitiAuditEvent
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let threshold = 100;
+  UbiquitiAuditEvent
+  | where TimeGenerated > ago(24h)
+  | where isnotempty(DnsQuery)
+  | extend replaced = replace(@'\.$', @'', DnsQuery)
+  | extend Domain = extract(@'.*\.(.*\.[a-z]+)', 1, replaced)
+  | extend fqdn = extract(@'(.*)\..*\.[a-z]+', 1, replaced)
+  | summarize FQDNs = dcount(fqdn) by Domain
+  | where FQDNs > threshold
+  | extend HostCustomEntity = Domain
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

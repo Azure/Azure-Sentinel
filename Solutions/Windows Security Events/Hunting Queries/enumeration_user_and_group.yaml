@@ -1,0 +1,46 @@
+id: a1e993de-770a-4434-83e9-9e3b47a6e470
+name: Enumeration of users and groups
+description: |
+  'Finds attempts to list users or groups using the built-in Windows 'net' tool '
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Discovery
+query: |
+  let ProcessCreationEvents=() {
+  let processEvents=SecurityEvent
+  | where EventID==4688
+  | project TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName,AccountDomain=SubjectDomainName,
+  FileName=tostring(split(NewProcessName, '\\')[-1]),
+  ProcessCommandLine = CommandLine, 
+  FolderPath = "",
+  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+  processEvents};
+  ProcessCreationEvents
+  | where FileName == 'net.exe' and AccountName != "" and ProcessCommandLine !contains '\\'  and ProcessCommandLine !contains '/add' 
+  | where (ProcessCommandLine contains ' user ' or ProcessCommandLine contains ' group ') and (ProcessCommandLine endswith ' /do' or ProcessCommandLine endswith ' /domain') 
+  | extend Target = extract("(?i)[user|group] (\"*[a-zA-Z0-9-_ ]+\"*)", 1, ProcessCommandLine) | filter Target  != '' 
+  | summarize minTimeGenerated=min(TimeGenerated), maxTimeGenerated=max(TimeGenerated), count() by AccountName, Target, ProcessCommandLine, ComputerName
+  | project minTimeGenerated, maxTimeGenerated, count_, AccountName, Target, ProcessCommandLine, ComputerName
+  | sort by AccountName, Target
+  | extend HostName = tostring(split(ComputerName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(ComputerName, '.'), 1, -1), '.'))
+  | extend Account_0_Name = AccountName
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 2.0.1

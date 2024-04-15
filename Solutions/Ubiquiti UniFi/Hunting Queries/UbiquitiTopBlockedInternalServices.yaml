@@ -1,0 +1,49 @@
+id: f81cdd1a-9d8b-4a64-8a11-68d11e9ce9a3
+name: Ubiquiti - Top blocked internal services
+description: |
+  'Query shows list of top blocked connections to internal services.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: UbiquitiUnifi
+    dataTypes:
+      - UbiquitiAuditEvent
+tactics:
+  - InitialAccess
+  - CommandAndControl
+relevantTechniques:
+  - T1595
+  - T1572
+  - T1571
+  - T1071
+query: |
+  UbiquitiAuditEvent
+  | where TimeGenerated > ago(24h)
+  | where EventCategory =~ 'firewall'
+  | where DvcAction =~ 'Blocked'
+  | where isnotempty(DstPortNumber)
+  | where ipv4_is_private(DstIpAddr)
+  | extend svc_name = case(DstPortNumber in ('20', '21'), 'FTP',
+                          DstPortNumber == '22', 'SSH',
+                          DstPortNumber == '23', 'Telnet',
+                          DstPortNumber == '25', 'SMTP',
+                          DstPortNumber == '53', 'DNS',
+                          DstPortNumber in ('67', '68'), 'DHCP',
+                          DstPortNumber == '110', 'POP3',
+                          DstPortNumber == '123', 'NTP',
+                          DstPortNumber in ('137', '138', '139'), 'NeTBIOS',
+                          DstPortNumber == '143', 'IMAP',
+                          DstPortNumber == '220', 'IMAPv3',
+                          DstPortNumber == '389', 'LDAP',
+                          DstPortNumber == '3389', 'RDP',
+                          DstPortNumber == '514', 'Syslog',
+                          DstPortNumber == '80', 'HTTP',
+                          DstPortNumber == '443', 'HTTPS',
+                          DstPortNumber )
+  | summarize count() by svc_name, SrcIpAddr
+  | top 10 by count_
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

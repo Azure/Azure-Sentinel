@@ -1,0 +1,235 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Watchlist - Change Incident Severity and Title if User VIP - Incident Trigger",
+        "description":  "This playbook leverages Microsoft Sentinel Watchlists in order to adapt the incidents severity which include User entity and check it against VIP user list",
+        "prerequisites":  ["None"],
+        "mainSteps": ["**Logical flow to use this playbook**",
+            "For each User account included in the incident or alert (entities of type User):",
+            "1. Check if User is included in the watchlist.",
+            "2. If user is in the watchlist: ",
+            "a. Change the incident severity to Critical",
+            "b. Modify the incident title that include the User name and the text- **VIP User!!!**"
+        ],
+        "postDeployment": ["Assign Microsoft Sentinel Contributor role to the Playbook's Managed Identity"],
+        "lastUpdateTime":  "2022-07-21T00:00:00.000Z",
+        "entities": [],
+        "tags":  [],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Yaniv Shaha"
+        },
+        "releaseNotes": [
+        {
+            "version": "1.0.0",
+            "title": "Watchlist - Change Incident Severity and Title if User VIP - Incident Trigger",
+            "notes": [
+            "Initial version"
+            ]
+        }
+        ]
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Watchlist-ChangeIncidentSeverityandTitleIFUserVIP",
+            "type":  "string"
+        },
+        "WatchlistAlias":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for Watchlist Alias"
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('microsoftsentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "WatchlistAlias":  {
+                            "defaultValue":  "[parameters('WatchlistAlias')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Entities_-_Get_Accounts":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/entities/account"
+                            }
+                        },
+                        "For_each":  {
+                            "foreach":  "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions":  {
+                                "Condition_-_if_User_Is_VIP_":  {
+                                    "actions":  {
+                                        "Change_incident_severity":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "put",
+                                                "path":  "/Case/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/Severity/@{encodeURIComponent('Critical')}"
+                                            }
+                                        },
+                                        "Change_incident_title_(V2)":  {
+                                            "runAfter":  {
+                                                "Change_incident_severity":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "body":  {
+                                                    "Value":  "@{triggerBody()?['object']?['properties']?['title']}; VIP USER - @{items('For_each')?['Name']}"
+                                                },
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "put",
+                                                "path":  "/Case/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/@{encodeURIComponent(triggerBody()?['workspaceId'])}/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/@{encodeURIComponent('Incident')}/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/Title"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Watchlists_-_Get_all_watchlist_Items_for_a_given_watchlist":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "contains":  [
+                                                    "@string(body('Watchlists_-_Get_all_watchlist_items_for_a_given_watchlist'))",
+                                                    "@items('For_each')?['Name']"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If",
+                                    "description":  "This condition returns true if IP was found in watchlist."
+                                },
+                                "Watchlists_-_Get_all_watchlist_Items_for_a_given_watchlist":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "get",
+                                        "path":  "/Watchlists/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/workspaces/@{encodeURIComponent(triggerBody()?['workspaceId'])}/watchlists/@{encodeURIComponent(parameters('WatchlistAlias'))}/watchlistItems"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Entities_-_Get_Accounts":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "microsoftsentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Watchlist-ChangeIncidentSeverityandTitleIFUserVIP-IncidentTrigger",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

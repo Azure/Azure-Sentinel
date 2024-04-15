@@ -1,0 +1,258 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Get-ProofpointTapEvents",
+        "description": "This playbook ingests events from ProofPoint TAP to Log Analytics/MicroSoft Sentinel.",
+        "prerequisites": [
+            "To get Proofpoint TAP API credentials follow the instructions:",
+            "1. Log in to your Proofpoint TAP dashboard.",
+            "2. Click the *Settings* tab.",
+            "3. Click *Connected Applications*.",
+            "4. In the *Name* section, select *Create New Credential*.",
+            "5. Type the name and click the *Generate* button.",
+            "6. In the *Generated Service Credential* pop-up, the *Service Principal* and *Secret* values are shown."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1.Click the MicroSoft Sentinel connection resource",
+            "2.Click edit API connection",
+            "3.Click Authorize",
+            "4.Sign in",
+            "5.Click Save",
+            "6.Repeat steps for Proofpoint TAP connector API Connection. Provide the Service Principal and the secret for authorizing.",
+            "**b. Configurations in Sentinel**",
+            "1.In MicroSoft Sentinel, analytical rules should be configured to trigger an incident with risky user account.",
+            "2.Configure the automation rules to trigger the playbooks."
+        ],
+        "lastUpdateTime": "2022-08-04T00:00:00.000Z",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Cristhofer Romeo Munoz"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Get-ProofpointTapEvents",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-ProofpointTAPEvents",
+            "type": "String"
+        },
+        "ProofPointUserName": {
+            "defaultValue": "<Enter Username>",
+            "type": "String"
+        },
+        "ProofPointPassword": {
+            "defaultValue": "<Enter Password>",
+            "type": "secureString"
+        },
+        "LogAnalyticsDisplayName": {
+            "defaultValue": "<LogAnalyticsWorkspaceName>",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "LogAnalyticsConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('LogAnalyticsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('LogAnalyticsDisplayName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('LogAnalyticsConnectionName'))]"
+            ],
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "ProofPointPasswordPB": {
+                            "type": "securestring"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "HTTP": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@parameters('ProofPointPasswordPB')",
+                                    "type": "Basic",
+                                    "username": "[parameters('ProofPointUserName')]"
+                                },
+                                "method": "GET",
+                                "uri": "https://tap-api-v2.proofpoint.com/v2/siem/clicks/blocked?format=json&sinceSeconds=3600"
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "clicksBlocked": {
+                                            "items": {
+                                                "properties": {
+                                                    "campaignId": {
+                                                        "type": "string"
+                                                    },
+                                                    "classification": {
+                                                        "type": "string"
+                                                    },
+                                                    "clickIP": {
+                                                        "type": "string"
+                                                    },
+                                                    "clickTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "messageID": {
+                                                        "type": "string"
+                                                    },
+                                                    "recipient": {
+                                                        "type": "string"
+                                                    },
+                                                    "sender": {
+                                                        "type": "string"
+                                                    },
+                                                    "senderIP": {
+                                                        "type": "string"
+                                                    },
+                                                    "threatID": {
+                                                        "type": "string"
+                                                    },
+                                                    "threatTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "threatURL": {
+                                                        "type": "string"
+                                                    },
+                                                    "url": {
+                                                        "type": "string"
+                                                    },
+                                                    "userAgent": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "campaignId",
+                                                    "classification",
+                                                    "clickIP",
+                                                    "clickTime",
+                                                    "messageID",
+                                                    "recipient",
+                                                    "sender",
+                                                    "senderIP",
+                                                    "threatID",
+                                                    "threatTime",
+                                                    "threatURL",
+                                                    "url",
+                                                    "userAgent"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "queryEndTime": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "clicksBlocked": {
+                            "foreach": "@body('Parse_JSON')?['clicksBlocked']",
+                            "actions": {
+                                "Send_Data": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{items('clicksBlocked')}",
+                                        "headers": {
+                                            "Log-Type": "ProofPointData"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "ProofPointPasswordPB": {
+                        "value": "[parameters('ProofPointPassword')]"
+                    },
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('LogAnalyticsConnectionName'))]",
+                                "connectionName": "[variables('LogAnalyticsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

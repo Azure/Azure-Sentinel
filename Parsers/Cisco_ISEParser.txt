@@ -1,0 +1,43 @@
+// KQL Parser for Cisco ISE (Identity Services Engine) Syslog
+// Last Updated Date: Sept 20, 2020
+//
+// Parser Notes: 
+// 1. Extracts common fields based on Regex
+//      TimeStamp, hostname, ise_type, sessionkey, Segments,Segnumber
+// 2. Common Json Property bag to hold all the remaining key value pairs. 
+//     - (Easily extractable using mv-expand and parse_json on demand)
+//     - Some of the keys are duplicate in logs hence we can`t use directly make_bag, using make_list. 
+// 3. Regular expression in this parser assumes field names in alphanumeric format (a-zA-Z0-9- ) and values in alphanumeric 
+//      and some special characters format (a-zA-Z0-9-_:/@.#{};= ) which covers most cases per initial testing. 
+//      To include any additional special chars modify regex accordingly.
+// 4. Parser expects Syslog to be of below format in the same order and in a field - RawData. 
+//    For any changes, adjust the regex accordingly or submit an issue of Github with the format you are trying.
+//    Expected Format - (SYSLOGTIMESTAMP:timestamp} {HOSTNAME:hostname} {DATA:cisco_ise_type} {INT:session_key} {INT:total_segments} {INT:seg_number} %{GREEDYDATA:message- key-value pairs}
+// 5. Reference - Documentation Cisco ISE PSN Logs Remote Format: Below link is for US-English, you can change locale from the top-right hand corner of webpage for other regions and languages.
+//  https://www.cisco.com/c/en/us/td/docs/security/ise/2-6/Cisco_ISE_Syslogs/Cisco_ISE_Syslogs/Cisco_ISE_Syslogs_chapter_00.html#id_101580
+// 
+//
+// Usage Instruction : 
+// Paste below query in log analytics, click on Save button and select as Function from drop down by specifying function name and alias (e.g. CommonSecurityLogs_Parsed).
+// Function usually takes 10-15 minutes to activate. You can then use function alias from any other queries (e.g. CommonSecurityLogs_Parsed | take 10).
+// Reference :
+// Using functions in Azure monitor log queries : https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Tech Community Blog on KQL Functions : https://techcommunity.microsoft.com/t5/Azure-Sentinel/Using-KQL-functions-to-speed-up-analysis-in-Azure-Sentinel/ba-p/712381
+//
+Cisco_ISE_PSN_CL
+| extend  TimeStamp = extract( "(\\w+\\s\\d{2}\\s\\d{2}:\\d{2}:\\d{2}) (.*)",1,RawData)
+| extend  HostName = extract( "(\\w+\\s\\d{2}\\s\\d{2}:\\d{2}:\\d{2}) (\\S+) (.*)",2,RawData)
+| extend  ISE_Type = extract( "(\\w+\\s\\d{2}\\s\\d{2}:\\d{2}:\\d{2}) (\\S+) (\\S+) (.*)",3,RawData)
+| extend  SessionKey = extract( "(\\w+\\s\\d{2}\\s\\d{2}:\\d{2}:\\d{2}) (\\S+) (\\S+) (\\d{10}) (.*)",4,RawData)
+| extend  TotalSegments = extract( "(\\w+\\s\\d{2}\\s\\d{2}:\\d{2}:\\d{2}) (\\S+) (\\S+) (\\d{10}) (\\d{1,2}) (.*)",5,RawData)
+| extend  SegmentNumber = extract( "(\\w+\\s\\d{2}\\s\\d{2}:\\d{2}:\\d{2}) (\\S+) (\\S+) (\\d{10}) (\\d{1,2}) (\\d{1,2}) (.*)",6,RawData)
+| extend  Remainder = extract( "(\\w+\\s\\d{2}\\s\\d{2}:\\d{2}:\\d{2}) (\\S+) (\\S+) (\\d{10}) (\\d{1,2}) (\\d{1,2}) (.*)",7,RawData)
+| extend  TimeStamp2 = extract( "(\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}.\\d{3}) (.*)",1,Remainder)
+| extend  SessionKey2 = extract( "(\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}.\\d{3}) (-\\d{2}:\\d{2}) (\\d{10}) (.*)",3,Remainder)
+| extend  Segment2 = extract( "(\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}.\\d{3}) (-\\d{2}:\\d{2}) (\\d{10}) (\\d{4}) (.*)",4,Remainder)
+| extend  Message = tostring(split(extract( "(\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}.\\d{3}) (-\\d{2}:\\d{2}) (\\d{10}) (\\d{4}) (.*)",5,Remainder),',')[0])
+| extend JsonProperies = extract_all(@"(?P<key>[a-zA-Z0-9- ]+)=(?P<value>[a-zA-Z0-9-_:/@.#{};= ]+)", dynamic(["key","value"]), Remainder)
+| mv-apply JsonProperies on (
+    summarize JsonProperies = make_list(pack(tostring(JsonProperies[0]), JsonProperies[1]))
+    )
+| project TimeStamp, HostName, ISE_Type, SessionKey, TotalSegments, SegmentNumber, TimeStamp2,SessionKey2, Segment2, Message, Remainder, JsonProperies

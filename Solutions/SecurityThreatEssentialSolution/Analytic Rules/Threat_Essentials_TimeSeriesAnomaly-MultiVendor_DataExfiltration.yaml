@@ -1,0 +1,118 @@
+id: b49a1093-cbf6-4973-89ac-2eef98f533c6
+name: Threat Essentials - Time series anomaly for data size transferred to public internet
+description: |
+  'Identifies anomalous data transfer to public networks. The query leverages built-in KQL anomaly detection algorithms that detects large deviations from a baseline pattern.
+  A sudden increase in data transferred to unknown public networks is an indication of data exfiltration attempts and should be investigated.
+  The higher the score, the further it is from the baseline value.
+  The output is aggregated to provide summary view of unique source IP to destination IP address and port bytes sent traffic observed in the flagged anomaly hour.
+  The source IP addresses which were sending less than bytessentperhourthreshold have been exluded whose value can be adjusted as needed .
+  You may have to run queries for individual source IP addresses from SourceIPlist to determine if anything looks suspicious'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+tags:
+  - DEV-0537
+query: |
+  let starttime = 14d;
+  let endtime = 1d;
+  let timeframe = 1h;
+  let scorethreshold = 5;
+  let bytessentperhourthreshold = 10;
+  let PrivateIPregex = @'^127\.|^10\.|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-1]\.|^192\.168\.';
+  let TimeSeriesData = (union isfuzzy=true
+  (
+  VMConnection
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where isnotempty(DestinationIp) and isnotempty(SourceIp)
+  | extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,"private" ,"public" )
+  | where DestinationIpType == "public" | extend DeviceVendor = "VMConnection"
+  | project TimeGenerated, BytesSent, DeviceVendor
+  | make-series TotalBytesSent=sum(BytesSent) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor
+  ),
+  (
+  CommonSecurityLog
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where isnotempty(DestinationIP) and isnotempty(SourceIP)
+  | extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
+  | where DestinationIpType == "public"
+  | project TimeGenerated, SentBytes, DeviceVendor
+  | make-series TotalBytesSent=sum(SentBytes) on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor
+  )
+  );
+  //Filter anomolies against TimeSeriesData
+  let TimeSeriesAlerts = materialize(TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalBytesSent, scorethreshold, -1, 'linefit')
+  | mv-expand TotalBytesSent to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0 | extend AnomalyHour = TimeGenerated
+  | extend TotalBytesSentinMBperHour = round(((TotalBytesSent / 1024)/1024),2), baselinebytessentperHour = round(((baseline / 1024)/1024),2), score = round(score,2)
+  | project DeviceVendor, AnomalyHour, TimeGenerated, TotalBytesSentinMBperHour, baselinebytessentperHour, anomalies, score);
+  let AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);
+  //Union of all BaseLogs aggregated per hour
+  let BaseLogs = (union isfuzzy=true
+  (
+  CommonSecurityLog
+  | where isnotempty(DestinationIP) and isnotempty(SourceIP)
+  | where TimeGenerated > ago(2d)
+  | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
+  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
+  | extend DestinationIpType = iff(DestinationIP matches regex PrivateIPregex,"private" ,"public" )
+  | where DestinationIpType == "public"
+  | extend SentBytesinMB = ((SentBytes / 1024)/1024), ReceivedBytesinMB = ((ReceivedBytes / 1024)/1024)
+  | summarize HourlyCount = count(), TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort,100), TotalSentBytesinMB = sum(SentBytesinMB), TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)
+  | where TotalSentBytesinMB > bytessentperhourthreshold
+  | sort by TimeGeneratedHour asc, TotalSentBytesinMB desc
+  | extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition
+  | where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour
+  | project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank
+  ),
+  (
+  VMConnection
+  | where isnotempty(DestinationIp) and isnotempty(SourceIp)
+  | where TimeGenerated > ago(2d)
+  | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
+  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
+  | extend SourceIP = SourceIp, DestinationIP = DestinationIp
+  | extend DestinationIpType = iff(DestinationIp matches regex PrivateIPregex,"private" ,"public" )
+  | where DestinationIpType == "public" | extend DeviceVendor = "VMConnection"
+  | extend SentBytesinMB = ((BytesSent / 1024)/1024), ReceivedBytesinMB = ((BytesReceived / 1024)/1024)
+  | summarize HourlyCount = count(),TimeGeneratedMax=arg_max(TimeGenerated, *), DestinationIPList=make_set(DestinationIP, 100), DestinationPortList = make_set(DestinationPort, 100), TotalSentBytesinMB = sum(SentBytesinMB),TotalReceivedBytesinMB = sum(ReceivedBytesinMB) by SourceIP, DeviceVendor, TimeGeneratedHour=bin(TimeGenerated,1h)
+  | where TotalSentBytesinMB > bytessentperhourthreshold
+  | sort by TimeGeneratedHour asc, TotalSentBytesinMB desc
+  | extend Rank=row_number(1, prev(TimeGeneratedHour) != TimeGeneratedHour) // Ranking the dataset per Hourly Partition
+  | where Rank < 10  // Selecting Top 10 records with Highest BytesSent in each Hour
+  | project DeviceVendor, TimeGeneratedHour, TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, Rank
+  )
+  );
+  // Join against base logs to retrive records associated with the hour of anomoly
+  TimeSeriesAlerts
+  | where TimeGenerated > ago(2d)
+  | join (
+      BaseLogs | extend AnomalyHour = TimeGeneratedHour
+  ) on DeviceVendor, AnomalyHour | sort by score desc
+  | project DeviceVendor, AnomalyHour,TimeGeneratedMax, SourceIP, DestinationIPList, DestinationPortList, TotalSentBytesinMB, TotalReceivedBytesinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies
+  | summarize EventCount = count(), StartTimeUtc= min(TimeGeneratedMax), EndTimeUtc= max(TimeGeneratedMax), SourceIPMax= arg_max(SourceIP,*), TotalBytesSentinMB = sum(TotalSentBytesinMB), TotalBytesReceivedinMB = sum(TotalReceivedBytesinMB), SourceIPList = make_set(SourceIP, 100), DestinationIPList = make_set(DestinationIPList, 100) by AnomalyHour,TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies
+  | project DeviceVendor, AnomalyHour, StartTimeUtc, EndTimeUtc, SourceIPMax, SourceIPList, DestinationIPList, DestinationPortList, TotalBytesSentinMB, TotalBytesReceivedinMB, TotalBytesSentinMBperHour, baselinebytessentperHour, score, anomalies, EventCount
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPMax
+version: 1.0.3
+kind: Scheduled

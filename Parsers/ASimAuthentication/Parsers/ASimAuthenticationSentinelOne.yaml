@@ -1,0 +1,232 @@
+Parser:
+  Title: ASIM Authentication parser for SentinelOne
+  Version: '0.1.0'
+  LastUpdated: Sep 18 2023
+Product:
+  Name: SentinelOne
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: SentinelOne Documentation
+  Link: https://<SOneInstanceDomain>.sentinelone.net/api-doc/overview
+Description: |
+  This ASIM parser supports normalizing SentinelOne logs to the ASIM Authentication normalized schema. SentinelOne events are captured through SentinelOne data connector which ingests SentinelOne server objects such as Threats, Agents, Applications, Activities, Policies, Groups, and more events into Microsoft Sentinel through the REST API.
+ParserName: ASimAuthenticationSentinelOne
+EquivalentBuiltInParser: _ASim_Authentication_SentinelOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventResultDetailsLookup = datatable (comments_s: string, EventResultDetails: string)
+    [
+        "invalid 2FA code", "Incorrect password",
+        "IP/User mismatch", "No such user or password",
+        "invalid password", "Incorrect password",
+        "user temporarily locked 2FA attempt", "User locked",
+        "no active site", "Other"
+    ];
+    let EventFieldsLookup = datatable (
+        activityType_d: real,
+        EventType: string,
+        EventResult: string,
+        EventOriginalResultDetails: string
+    )
+    [
+        27, "Logon", "Success", "User Logged In",
+        33, "Logoff", "Success", "User Logged Out",
+        133, "Logon", "Failure", "Existing User Login Failure",
+        134, "Logon", "Failure", "Unknown User Login",
+        139, "Logon", "Failure", "User Failed to Start an Unrestricted Session",
+        3629, "Logon", "Success", "Login Using Saved 2FA Recovery Code"
+    ];
+    let EventTypeLookup = datatable (alertInfo_eventType_s: string, EventType: string)
+    [
+        "WINLOGONATTEMPT", "Logon",
+        "WINLOGOFFATTEMPT", "Logoff"
+    ];
+    let EventSubTypeLookup = datatable (alertInfo_loginType_s: string, EventSubType: string)
+    [
+        "BATCH", "System",
+        "CACHED_INTERACTIVE", "Interactive",
+        "CACHED_REMOTE_INTERACTIVE", "RemoteInteractive",
+        "CACHED_UNLOCK", "System",
+        "INTERACTIVE", "Interactive",
+        "NETWORK_CLEAR_TEXT", "Remote",
+        "NETWORK_CREDENTIALS", "Remote",
+        "NETWORK", "Remote",
+        "REMOTE_INTERACTIVE", "RemoteInteractive",
+        "SERVICE", "Service",
+        "SYSTEM", "System",
+        "UNLOCK", "System"
+    ];
+    let DeviceTypeLookup = datatable (
+        agentDetectionInfo_machineType_s: string,
+        SrcDeviceType: string
+    )
+    [
+        "desktop", "Computer",
+        "server", "Computer",
+        "laptop", "Computer",
+        "kubernetes node", "Other",
+        "unknown", "Other"
+    ];
+    let ThreatConfidenceLookup_undefined = datatable(
+        alertInfo_analystVerdict_s: string,
+        ThreatConfidence_undefined: int
+    )
+    [
+        "FALSE_POSITIVE", 5,
+        "Undefined", 15,
+        "SUSPICIOUS", 25,
+        "TRUE_POSITIVE", 33 
+    ];
+    let ThreatConfidenceLookup_suspicious = datatable(
+        alertInfo_analystVerdict_s: string,
+        ThreatConfidence_suspicious: int
+    )
+    [
+        "FALSE_POSITIVE", 40,
+        "Undefined", 50,
+        "SUSPICIOUS", 60,
+        "TRUE_POSITIVE", 67 
+    ];
+    let ThreatConfidenceLookup_malicious = datatable(
+        alertInfo_analystVerdict_s: string,
+        ThreatConfidence_malicious: int
+    )
+    [
+        "FALSE_POSITIVE", 75,
+        "Undefined", 80,
+        "SUSPICIOUS", 90,
+        "TRUE_POSITIVE", 100 
+    ];
+    let TargetUserTypesList = dynamic(["Regular", "Machine", "Admin", "System", "Application", "Service Principal", "Service", "Anonymous"]);
+    let parser = (disabled: bool=false) {
+        let alldata = SentinelOne_CL
+            | where not(disabled);
+        let activitydata = alldata
+            | where event_name_s == "Activities."
+                and activityType_d in (27, 33, 133, 134, 139, 3629)
+            | parse-kv DataFields_s as (ipAddress: string, username: string, userScope: string, accountName: string, fullScopeDetails: string, fullScopeDetailsPath: string, role: string, scopeLevel: string, source: string, sourceType: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
+            | lookup EventFieldsLookup on activityType_d
+            | lookup EventResultDetailsLookup on comments_s
+            | extend 
+                SrcIpAddr = iff(ipAddress == "null", "", ipAddress),
+                EventOriginalType = tostring(toint(activityType_d)),
+                TargetUsername = username,
+                TargetUserScope = userScope,
+                AdditionalFields = bag_pack(
+                      "accountName", accountName,
+                      "fullScopeDetails", fullScopeDetails,
+                      "fullScopeDetailsPath", fullScopeDetailsPath,
+                      "scopeLevel", scopeLevel,
+                      "source", source,
+                      "sourceType", sourceType
+                  ),
+                TargetOriginalUserType = role,
+                TargetUserType = case(
+                                role in (TargetUserTypesList), role,
+                                role == "null", "",
+                                "Other"
+                            )
+            | project-rename
+                EventStartTime = createdAt_t,
+                TargetUserId = userId_s,
+                EventOriginalUid = activityUuid_g,
+                EventMessage = primaryDescription_s
+            | extend TargetUserIdType = iff(isnotempty(TargetUserId), "Other", "");
+        let alertdata = alldata
+            | where event_name_s == "Alerts."
+                and alertInfo_eventType_s in ("WINLOGONATTEMPT", "WINLOGOFFATTEMPT")
+            | lookup EventTypeLookup on alertInfo_eventType_s
+            | lookup EventSubTypeLookup on alertInfo_loginType_s
+            | lookup DeviceTypeLookup on agentDetectionInfo_machineType_s;
+        let undefineddata = alertdata
+            | where ruleInfo_treatAsThreat_s == "UNDEFINED"
+            | lookup ThreatConfidenceLookup_undefined on alertInfo_analystVerdict_s;
+        let suspiciousdata = alertdata
+            | where ruleInfo_treatAsThreat_s == "Suspicious"
+            | lookup ThreatConfidenceLookup_suspicious on alertInfo_analystVerdict_s;
+        let maliciousdata = alertdata
+            | where ruleInfo_treatAsThreat_s == "Malicious"
+            | lookup ThreatConfidenceLookup_malicious on alertInfo_analystVerdict_s;
+        let alertdatawiththreatfield = union undefineddata, suspiciousdata, maliciousdata
+            | invoke _ASIM_ResolveDvcFQDN('agentDetectionInfo_name_s')
+            | invoke _ASIM_ResolveSrcFQDN('alertInfo_loginAccountDomain_s')
+            | extend
+                EventResult = iff(alertInfo_loginIsSuccessful_s == "true", "Success", "Failure"),
+                EventSeverity = iff(ruleInfo_severity_s == "Critical", "High", ruleInfo_severity_s),
+                ThreatConfidence = coalesce(ThreatConfidence_undefined, ThreatConfidence_suspicious, ThreatConfidence_malicious)
+            | project-rename
+                EventStartTime = alertInfo_createdAt_t,
+                SrcIpAddr = alertInfo_srcMachineIp_s,
+                ActingAppName = sourceProcessInfo_name_s,
+                DvcId = agentDetectionInfo_uuid_g,
+                DvcOs = agentDetectionInfo_osName_s,
+                DvcOsVersion = agentDetectionInfo_osRevision_s,
+                EventOriginalSeverity = ruleInfo_severity_s,
+                EventOriginalType = alertInfo_eventType_s,
+                EventOriginalSubType = alertInfo_loginType_s,
+                RuleName = ruleInfo_name_s,
+                TargetUserId = alertInfo_loginAccountSid_s,
+                TargetUsername = alertInfo_loginsUserName_s,
+                ThreatOriginalConfidence = ruleInfo_treatAsThreat_s
+            | extend
+                Rule = RuleName,
+                ActingAppType = iff(isnotempty(ActingAppName), "Process", ""),
+                DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+                TargetUserType = _ASIM_GetUserType(TargetUsername, TargetUserId),
+                TargetUserIdType = iff(isnotempty(TargetUserId), "SID", "");
+        union activitydata, alertdatawiththreatfield
+        | extend
+            EventCount = int(1),
+            EventProduct = "SentinelOne",
+            EventSchemaVersion = "0.1.3",
+            EventVendor = "SentinelOne",
+            EventSchema = "Authentication"
+        | extend
+            Dvc = coalesce(DvcHostname, EventProduct),
+            EventEndTime = EventStartTime,
+            EventUid = _ItemId,
+            User = TargetUsername,
+            TargetHostname = SrcHostname,
+            TargetDomain = SrcDomain,
+            TargetDomainType = SrcDomainType,
+            TargetFQDN = SrcFQDN,
+            TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
+        | extend
+            IpAddr = SrcIpAddr,
+            Src = SrcIpAddr
+        | project-away
+            *_b,
+            *_d,
+            *_g,
+            *_s,
+            *_t,
+            ipAddress,
+            username,
+            accountName,
+            fullScopeDetails,
+            fullScopeDetailsPath,
+            role,
+            scopeLevel,
+            source,
+            sourceType,
+            userScope,
+            Computer,
+            MG,
+            ManagementGroupName,
+            RawData,
+            SourceSystem,
+            TenantId,
+            _ItemId,
+            _ResourceId,
+            ThreatConfidence_*
+    };
+    parser(disabled=disabled)

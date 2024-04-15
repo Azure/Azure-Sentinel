@@ -1,0 +1,90 @@
+id: f9e0ae98-6828-4d5a-b596-7c4586bb14f6
+name: M2131_RecommendedDatatableNotLogged_EL1
+description: |
+  'This alert audits your logging architecture for recommended data tables aligned to Basic Event Logging (EL1) of the Maturity Model for Event Log Management (M-21-31) standard. The alert triggers when recommended data tables in EL1 are not present.'
+severity: Medium
+requiredDataConnectors: []
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  let M2131Mapping = datatable(DataTable:string, MaturityLevel:string)
+  [
+  "SigninLogs",	"Event Logging (EL0)",
+  "AADManagedIdentitySignInLogs", "Event Logging (EL0)",
+  "AADServicePrincipalSignInLogs",	"Event Logging (EL0)",
+  "StorageBlobLogs",	"Event Logging (EL0)",
+  "StorageFileLogs",	"Event Logging (EL0)",
+  "AzureMetrics",	"Event Logging (EL0)",
+  "AuditLogs",	"Event Logging (EL0)",
+  "IdentityInfo",	"Event Logging (EL0)",
+  "CommonSecurityLog",	"Event Logging (EL0)",
+  "ThreatIntelligenceIndicator",	"Event Logging (EL0)",
+  "DeviceNetworkInfo",	"Event Logging (EL0)",
+  "DnsEvents",	"Event Logging (EL0)",
+  "DeviceNetworkEvents",	"Event Logging (EL0)",
+  "AzureDiagnostics",	"Event Logging (EL0)",
+  "Usage",	"Event Logging (EL0)",
+  "SecurityIncident",	"Event Logging (EL0)",
+  "SecurityAlert",	"Event Logging (EL0)",
+  "AzureActivity",	"Event Logging (EL0)",
+  "Heartbeat",	"Event Logging (EL0)",
+  "OfficeActivity",	"Event Logging (EL0)",
+  "SecurityEvent",	"Event Logging (EL0)",
+  "Syslog",	"Event Logging (EL0)",
+  "AWSCloudTrail",	"Event Logging (EL0)",
+  "GWorkspaceActivityReports",	"Event Logging (EL0)",
+  "AWSGuardDuty",	"Event Logging (EL0)",
+  "AWSVPCFlow",	"Event Logging (EL0)",
+  "Perf",	"Basic Event Logging (EL1)",
+  "SentinelHealth",	"Basic Event Logging (EL1)",
+  "DeviceLogonEvents",	"Basic Event Logging (EL1)",
+  "DeviceEvents",	"Basic Event Logging (EL1)",
+  "DeviceNetworkEvents",	"Basic Event Logging (EL1)",
+  "DeviceFileEvents",	"Basic Event Logging (EL1)",
+  "DeviceRegistryEvents",	"Basic Event Logging (EL1)",
+  "DeviceProcessEvents",	"Basic Event Logging (EL1)",
+  "VMConnection",	"Basic Event Logging (EL1)",
+  "EmailEvents",	"Basic Event Logging (EL1)",
+  "ThreatIntelligenceIndicator",	"Basic Event Logging (EL1)",
+  "SecurityRecommendation",	"Basic Event Logging (EL1)",
+  "DeviceProcessEvents",	"Basic Event Logging (EL1)",
+  "ConfigurationData",	"Basic Event Logging (EL1)",
+  "ConfigurationChange",	"Basic Event Logging (EL1)",
+  "GatewayDiagnosticLog",	"Basic Event Logging (EL1)",
+  "TunnelDiagnosticLog",	"Basic Event Logging (EL1)",
+  "IKEDiagnosticLog",	"Basic Event Logging (EL1)",
+  "RouteDiagnosticLog",	"Basic Event Logging (EL1)",
+  "PS2DiagnosticLog",	"Basic Event Logging (EL1)",
+  "Event",	"Basic Event Logging (EL1)",
+  "SqlAtpStatus",	"Basic Event Logging (EL1)",
+  "ConstainerInstanceLog_CL",	"Basic Event Logging (EL1)",
+  "ContainerEvent_CL",	"Basic Event Logging (EL1)",
+  "InsightsMetrics",	"Intermediate Event Logging (EL2)",
+  "EmailUrlInfo",	"Intermediate Event Logging (EL2)",
+  "EmailAttachmentInfo",	"Intermediate Event Logging (EL2)",
+  "InformationProtectionLogs_CL",	"Intermediate Event Logging (EL2)",
+  "CloudAppEvents",	"Intermediate Event Logging (EL2)",
+  "ContainerInventory",	"Intermediate Event Logging (EL2)",
+  "Update",	"Advanced Event Logging (EL3)",
+  "BehaviorAnalytics",	"Advanced Event Logging (EL3)",
+  "Anomalies",	"Advanced Event Logging (EL3)",
+  "SecurityRegulatoryCompliance",	"Advanced Event Logging (EL3)"
+  ];
+  Usage
+    | summarize Entries = count(), Size = sum(Quantity), last_log = datetime_diff("second",now(), max(TimeGenerated)) by DataType
+    | join kind=fullouter(M2131Mapping) on $left.DataType == $right.DataTable
+    | project RecommendedDataTable=DataTable, ExistingDataTable=DataType, MaturityLevel, Size
+    | summarize Logged = countif(Size > 0), NotLogged = countif(isempty(Size)) by RecommendedDataTable, MaturityLevel
+    | where NotLogged > 0 and MaturityLevel == "Basic Event Logging (EL1)" and RecommendedDataTable <> "Usage"
+    //| where RecommendedDataTable <> "Data Table Name"
+    | project RecommendedDataTable, MaturityLevel, NotLogged, TimeObserved=now()
+    | extend CloudApplication = RecommendedDataTable
+entityMappings:
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: RecommendedDataTable
+version: 1.0.0
+kind: Scheduled

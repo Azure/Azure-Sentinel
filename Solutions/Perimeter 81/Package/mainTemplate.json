@@ -1,0 +1,520 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Perimeter 81",
+    "comments": "Solution template for Perimeter 81"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "workbook1-name": {
+      "type": "string",
+      "defaultValue": "Perimeter 81 Overview",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name for the workbook"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "perimeter811605117499319.perimeter_81___mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "Perimeter81ActivityLogs",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Perimeter81ActivityLogs",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "workbookVersion1": "1.0.0",
+    "workbookContentId1": "Perimeter81OverviewWorkbook",
+    "workbookId1": "[resourceId('Microsoft.Insights/workbooks', variables('workbookContentId1'))]",
+    "workbookTemplateSpecName1": "[concat(parameters('workspace'),'-wb-',uniquestring(variables('_workbookContentId1')))]",
+    "_workbookContentId1": "[variables('workbookContentId1')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Perimeter 81 data connector with template",
+        "displayName": "Perimeter 81 template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Perimeter 81 data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Perimeter 81 Activity Logs",
+                  "publisher": "Perimeter 81",
+                  "descriptionMarkdown": "The Perimeter 81 Activity Logs connector allows you to easily connect your Perimeter 81 activity logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Perimeter81_CL",
+                      "baseQuery": "Perimeter81_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "User login failures",
+                      "query": "Perimeter81_CL | where eventName_s == \"api.activity.login.fail\""
+                    },
+                    {
+                      "description": "Application authorization failures",
+                      "query": "Perimeter81_CL | where eventName_s == \"api.activity.application.auth.fail\""
+                    },
+                    {
+                      "description": "Application session start",
+                      "query": "Perimeter81_CL | where eventName_s == \"api.activity.application.session.start\""
+                    },
+                    {
+                      "description": "Authentication failures by IP & email (last 24 hours)",
+                      "query": "Perimeter81_CL\n| where TimeGenerated > ago(24h) and eventName_s in (\"api.activity.login.fail\", \"api.activity.vpn.auth.fail\", \"api.activity.application.auth.fail\")\n| summarize count(releasedBy_email_s) by ip_s, releasedBy_email_s\n| where count_releasedBy_email_s > 1"
+                    },
+                    {
+                      "description": "Resource deletions by IP & email (last 24 hours)",
+                      "query": "Perimeter81_CL\n| where TimeGenerated > ago(24h) and eventName_s matches regex \"api.activity.*.remove*|api.activity.*.delete*|api.activity.*.destroy*\"  \n| summarize count(releasedBy_email_s) by ip_s, releasedBy_email_s\n| where count_releasedBy_email_s > 1"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Perimeter81_CL",
+                      "lastDataReceivedQuery": "Perimeter81_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "Perimeter81_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Please note the values below and follow the instructions <a href='https://support.perimeter81.com/hc/en-us/articles/360012680780'>here</a> to connect your Perimeter 81 activity logs with Microsoft Sentinel.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    }
+                  ],
+                  "metadata": {
+                    "id": "1d855d54-0f17-43b3-ad33-93a0ab7b6ce8",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Perimeter 81"
+                    },
+                    "support": {
+                      "name": "Perimeter 81",
+                      "link": "https://support.perimeter81.com/",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Perimeter 81",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Perimeter 81"
+                },
+                "support": {
+                  "name": "Perimeter 81",
+                  "tier": "Partner",
+                  "link": "https://support.perimeter81.com/docs"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Perimeter 81",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Perimeter 81"
+        },
+        "support": {
+          "name": "Perimeter 81",
+          "tier": "Partner",
+          "link": "https://support.perimeter81.com/docs"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Perimeter 81 Activity Logs",
+          "publisher": "Perimeter 81",
+          "descriptionMarkdown": "The Perimeter 81 Activity Logs connector allows you to easily connect your Perimeter 81 activity logs with Microsoft Sentinel, to view dashboards, create custom alerts, and improve investigation.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Perimeter81_CL",
+              "baseQuery": "Perimeter81_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Perimeter81_CL",
+              "lastDataReceivedQuery": "Perimeter81_CL\n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "Perimeter81_CL\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "User login failures",
+              "query": "Perimeter81_CL | where eventName_s == \"api.activity.login.fail\""
+            },
+            {
+              "description": "Application authorization failures",
+              "query": "Perimeter81_CL | where eventName_s == \"api.activity.application.auth.fail\""
+            },
+            {
+              "description": "Application session start",
+              "query": "Perimeter81_CL | where eventName_s == \"api.activity.application.session.start\""
+            },
+            {
+              "description": "Authentication failures by IP & email (last 24 hours)",
+              "query": "Perimeter81_CL\n| where TimeGenerated > ago(24h) and eventName_s in (\"api.activity.login.fail\", \"api.activity.vpn.auth.fail\", \"api.activity.application.auth.fail\")\n| summarize count(releasedBy_email_s) by ip_s, releasedBy_email_s\n| where count_releasedBy_email_s > 1"
+            },
+            {
+              "description": "Resource deletions by IP & email (last 24 hours)",
+              "query": "Perimeter81_CL\n| where TimeGenerated > ago(24h) and eventName_s matches regex \"api.activity.*.remove*|api.activity.*.delete*|api.activity.*.destroy*\"  \n| summarize count(releasedBy_email_s) by ip_s, releasedBy_email_s\n| where count_releasedBy_email_s > 1"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Please note the values below and follow the instructions <a href='https://support.perimeter81.com/hc/en-us/articles/360012680780'>here</a> to connect your Perimeter 81 activity logs with Microsoft Sentinel.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('workbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "properties": {
+        "description": "Perimeter 81 Workbook with template",
+        "displayName": "Perimeter 81 workbook template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('workbookTemplateSpecName1'),'/',variables('workbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Workbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('workbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Perimeter81OverviewWorkbookWorkbook Workbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('workbookVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Insights/workbooks",
+              "name": "[variables('workbookContentId1')]",
+              "location": "[parameters('workspace-location')]",
+              "kind": "shared",
+              "apiVersion": "2021-08-01",
+              "metadata": {
+                "description": "Gain insights and comprehensive monitoring into your Perimeter 81 account by analyzing activities."
+              },
+              "properties": {
+                "displayName": "[parameters('workbook1-name')]",
+                "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perimeter81_CL \\n| where eventName_s == \\\"api.activity.login.fail\\\"\\n| summarize count(releasedBy_email_s) by ip_s, releasedBy_email_s\\n| project LoginFailures=count_releasedBy_email_s, Email=releasedBy_email_s, IP=ip_s\\n| top 10 by LoginFailures desc nulls last\\n| render columnchart kind=stacked\",\"size\":0,\"title\":\"Top 10 Login Failures by Email (last 24 hours)\",\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Email\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Email\",\"sortOrder\":2}],\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"Email\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"LoginFailures\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"Email\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"LoginFailures\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"mapSettings\":{\"locInfo\":\"LatLong\",\"sizeSettings\":\"LoginFailures\",\"sizeAggregation\":\"Sum\",\"legendMetric\":\"LoginFailures\",\"legendAggregation\":\"Sum\",\"itemColorSettings\":{\"type\":\"heatmap\",\"colorAggregation\":\"Sum\",\"nodeColorField\":\"LoginFailures\",\"heatmapPalette\":\"greenRed\"}}},\"customWidth\":\"50\",\"name\":\"LoginFailures - By Email\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perimeter81_CL \\n| where eventName_s == \\\"api.activity.login.fail\\\"\\n| summarize LoginFailures=count() by Name=strcat(releasedBy_firstName_s, \\\" \\\", releasedBy_lastName_s)\\n| top 10 by LoginFailures desc nulls last\\n| render columnchart kind=stacked\\n\\n\\n\",\"size\":0,\"title\":\"Top 10 Login Failures by Name (last 24 hours)\",\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"barchart\",\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"Email\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"LoginFailures\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"Email\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"LoginFailures\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"mapSettings\":{\"locInfo\":\"LatLong\",\"sizeSettings\":\"LoginFailures\",\"sizeAggregation\":\"Sum\",\"legendMetric\":\"LoginFailures\",\"legendAggregation\":\"Sum\",\"itemColorSettings\":{\"type\":\"heatmap\",\"colorAggregation\":\"Sum\",\"nodeColorField\":\"LoginFailures\",\"heatmapPalette\":\"greenRed\"}}},\"customWidth\":\"50\",\"name\":\"LoginFailures - By Name\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perimeter81_CL \\n| where eventName_s == \\\"api.activity.application.session.start\\\"\\n| summarize count() by application_name_s\\n| project SessionStart=count_, App=application_name_s\\n| top 10 by SessionStart desc nulls last\",\"size\":0,\"title\":\"Top 10 Applications (by session start, last 24 hours)\",\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Email\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Email\",\"sortOrder\":2}],\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"Email\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"LoginFailures\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"Email\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"LoginFailures\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"mapSettings\":{\"locInfo\":\"LatLong\",\"sizeSettings\":\"LoginFailures\",\"sizeAggregation\":\"Sum\",\"legendMetric\":\"LoginFailures\",\"legendAggregation\":\"Sum\",\"itemColorSettings\":{\"type\":\"heatmap\",\"colorAggregation\":\"Sum\",\"nodeColorField\":\"LoginFailures\",\"heatmapPalette\":\"greenRed\"}}},\"customWidth\":\"50\",\"name\":\"ApplicationSessionStart\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"Perimeter81_CL \\n| where eventName_s == \\\"api.activity.vpn.auth\\\"\\n| summarize count() by vpnLocation_name_s\\n| project SessionStart=count_, Network=vpnLocation_name_s\\n| top 10 by SessionStart desc nulls last\",\"size\":0,\"title\":\"Top 10 Networks (by auth, last 24 hours)\",\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"piechart\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Email\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Email\",\"sortOrder\":2}],\"tileSettings\":{\"showBorder\":false,\"titleContent\":{\"columnMatch\":\"Email\",\"formatter\":1},\"leftContent\":{\"columnMatch\":\"LoginFailures\",\"formatter\":12,\"formatOptions\":{\"palette\":\"auto\"},\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"Email\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"LoginFailures\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}},\"mapSettings\":{\"locInfo\":\"LatLong\",\"sizeSettings\":\"LoginFailures\",\"sizeAggregation\":\"Sum\",\"legendMetric\":\"LoginFailures\",\"legendAggregation\":\"Sum\",\"itemColorSettings\":{\"type\":\"heatmap\",\"colorAggregation\":\"Sum\",\"nodeColorField\":\"LoginFailures\",\"heatmapPalette\":\"greenRed\"}}},\"customWidth\":\"50\",\"name\":\"NetworkAuth\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let starttime = 14d;\\nlet endtime = 0d;\\nlet timeframe = 1h;\\nlet TimeSeriesData =\\nPerimeter81_CL\\n| where eventName_s == \\\"api.activity.vpn.auth\\\"\\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\\n| project TimeGenerated, Network=vpnLocation_name_s \\n| make-series Total=count() on TimeGenerated from ago(starttime) to ago(endtime) step timeframe by Network;\\nTimeSeriesData\\n| render timechart \",\"size\":0,\"title\":\"Network Connections over time (last 14 days)\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"NetworkUsage\"},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"let starttime = 14d;\\nlet endtime = 0d;\\nlet timeframe = 1h;\\nlet TimeSeriesData =\\nPerimeter81_CL\\n| where eventName_s == \\\"api.activity.application.session.start\\\"\\n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\\n| project TimeGenerated, Application=application_name_s \\n| make-series Total=count() on TimeGenerated from ago(starttime) to ago(endtime) step timeframe by Application;\\nTimeSeriesData\\n| render timechart \",\"size\":0,\"title\":\"Application Connections over time (last 14 days)\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"ApplicationUsage\"}],\"fromTemplateId\":\"sentinel-Perimeter81OverviewWorkbook\",\"$schema\":\"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"}\r\n",
+                "version": "1.0",
+                "sourceId": "[variables('workspaceResourceId')]",
+                "category": "sentinel"
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Workbook-', last(split(variables('workbookId1'),'/'))))]",
+              "properties": {
+                "description": "@{workbookKey=Perimeter81OverviewWorkbook; logoFileName=Perimeter81_Logo.svg; description=Gain insights and comprehensive monitoring into your Perimeter 81 account by analyzing activities.; dataTypesDependencies=System.Object[]; dataConnectorsDependencies=System.Object[]; previewImagesFileNames=System.Object[]; version=1.0.0; title=Perimeter 81 Overview; templateRelativePath=Perimeter81OverviewWorkbook.json; subtitle=; provider=Perimeter 81}.description",
+                "parentId": "[variables('workbookId1')]",
+                "contentId": "[variables('_workbookContentId1')]",
+                "kind": "Workbook",
+                "version": "[variables('workbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Perimeter 81",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Perimeter 81"
+                },
+                "support": {
+                  "name": "Perimeter 81",
+                  "tier": "Partner",
+                  "link": "https://support.perimeter81.com/docs"
+                }
+              },
+              "description": "The workbook installed with the Perimeter 81 solution provide insights into login failures, application activities and network applications. After installing the solution, start using the workbook in Manage solution view."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Perimeter 81",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Perimeter 81"
+        },
+        "support": {
+          "name": "Perimeter 81",
+          "tier": "Partner",
+          "link": "https://support.perimeter81.com/docs"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Workbook",
+              "contentId": "[variables('_workbookContentId1')]",
+              "version": "[variables('workbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-06",
+        "providers": [
+          "Perimeter 81"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

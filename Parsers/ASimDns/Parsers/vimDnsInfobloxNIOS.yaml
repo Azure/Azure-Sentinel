@@ -1,0 +1,209 @@
+Id: d3ff27e1-714b-491e-8274-cf34e48cfee5
+Parser:
+  Title: DNS activity ASIM filtering parser for Infoblox NIOS
+  Version: '0.5.1'
+  LastUpdated: Dec 11 2022
+Product:
+  Name: Infoblox NIOS
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Infoblox NIOS DNS logs to the ASIM Dns normalized schema.
+ParserName: vimDnsInfobloxNIOS
+EquivalentBuiltInParser: _Im_Dns_InfobloxNIOS
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let SyslogProjected = Syslog | project SyslogMessage, ProcessName, TimeGenerated, Computer, HostIP;
+  let response = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    srcipaddr:string="*", 
+    domain_has_any:dynamic=dynamic([]), 
+    responsecodename:string="*", 
+    response_has_ipv4:string="*",
+    response_has_any_prefix:dynamic=dynamic([]),
+    eventtype:string="Query",
+    disabled:bool=false
+  ) 
+  {
+    SyslogProjected
+    | where not(disabled)
+      and (eventtype in~ ('lookup', 'Query'))
+    // -- Pre filtering
+    | where
+      (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime) 
+    | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
+    | where 
+      (srcipaddr=="*" or has_ipv4(SyslogMessage, srcipaddr))
+      and (array_length(domain_has_any) == 0 or SyslogMessage has_any (domain_has_any))
+      and (responsecodename=="*" or SyslogMessage has responsecodename)
+      and (array_length(response_has_any_prefix)==0 or has_any_ipv4_prefix(SyslogMessage, response_has_any_prefix))
+      and (response_has_ipv4=='*' or has_ipv4(SyslogMessage,response_has_ipv4))
+    | parse SyslogMessage with *
+        "client " SrcIpAddr: string
+        "#" SrcPortNumber: string
+        " " NetworkProtocol: string
+        ": query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " response: " DnsResponseCodeName: string
+        " " DnsFlags: string
+    | extend DnsResponseNameIndex= indexof(DnsFlags, " ")
+    | extend DnsResponseName =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
+    | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
+    | extend SrcPortNumber = iif(SrcPortNumber has ':',replace_string(SrcPortNumber,':',''),SrcPortNumber)
+    | extend SrcPortNumber = toint(SrcPortNumber)
+    | extend EventSubType = "response"
+    | project-away SyslogMessage, ProcessName, DnsResponseNameIndex
+  };
+  let request =(
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    srcipaddr:string="*", 
+    domain_has_any:dynamic=dynamic([]), 
+    responsecodename:string="*", 
+    response_has_ipv4:string="*",
+    response_has_any_prefix:dynamic=dynamic([]),
+    eventtype:string="Query",
+    disabled:bool=false
+  ) 
+  {
+    SyslogProjected 
+    | where not(disabled)
+    // -- Pre filtering
+      and (eventtype in~ ('lookup', 'Query'))
+      and (responsecodename=="*")
+      and (array_length(response_has_any_prefix)==0)
+      and (response_has_ipv4=='*')
+    | where
+      (isnull(starttime) or TimeGenerated >= starttime)
+      and (isnull(endtime) or TimeGenerated <= endtime) 
+    | where ProcessName == "named" and SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
+    | where 
+      (srcipaddr=="*" or has_ipv4(SyslogMessage, srcipaddr))
+      and (array_length(domain_has_any) == 0 or SyslogMessage has_any (domain_has_any))
+    | extend SyslogMessage = (split(SyslogMessage,"client "))[1]
+    | extend SyslogMessage = iif(SyslogMessage startswith "@", (substring(SyslogMessage, indexof(SyslogMessage, " ")+1)), SyslogMessage)
+    | extend SyslogMessage = replace_string(SyslogMessage,"\\ ","@@@")
+    | parse SyslogMessage with 
+        SrcIpAddr: string
+        "#" SrcPortNumber: int *
+        "query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " " DnsFlags: string
+    | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
+    | extend DnsFlags= tostring((split(DnsFlags," "))[0])
+    | extend 
+        EventSubType = "request",
+        DnsResponseCodeName = "NA"
+    | project-away SyslogMessage, ProcessName
+  };
+  let parser = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    srcipaddr:string="*", 
+    domain_has_any:dynamic=dynamic([]), 
+    responsecodename:string="*", 
+    response_has_ipv4:string="*",
+    response_has_any_prefix:dynamic=dynamic([]),
+    eventtype:string="Query",
+    disabled:bool=false
+  ) 
+  {
+    union 
+      response (
+        starttime=starttime, 
+        endtime=endtime, 
+        srcipaddr=srcipaddr,
+        domain_has_any=domain_has_any,
+        responsecodename=responsecodename, 
+        response_has_ipv4=response_has_ipv4, 
+        response_has_any_prefix=response_has_any_prefix, 
+        eventtype=eventtype, 
+        disabled=disabled
+      ),
+      request (
+        starttime=starttime, 
+        endtime=endtime, 
+        srcipaddr=srcipaddr,
+        domain_has_any=domain_has_any,
+        responsecodename=responsecodename, 
+        response_has_ipv4=response_has_ipv4, 
+        response_has_any_prefix=response_has_any_prefix, 
+        eventtype=eventtype, 
+        disabled=disabled
+      )    
+    // -- Post-filtering
+    | where
+        (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
+        and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))
+        and (responsecodename=="*" or DnsResponseCodeName has responsecodename)
+        and (array_length(response_has_any_prefix) ==0 or has_any_ipv4_prefix(DnsResponseName, response_has_any_prefix))
+        and (response_has_ipv4 == '*' or has_ipv4(DnsResponseName,response_has_ipv4))
+    | extend
+        EventCount=int(1),
+        EventStartTime=todatetime(TimeGenerated),
+        EventEndTime=todatetime(TimeGenerated),
+        EventProduct="NIOS",
+        EventVendor="Infoblox",
+        EventSchema="Dns",
+        EventSchemaVersion="0.1.3",
+        EventType="Query", 
+        EventResult=iff(EventSubType=="request" or DnsResponseCodeName=="NOERROR","Success","Failure"),
+        DvcIpAddr=iff (HostIP == "Unknown IP", "", HostIP)
+    // -- Aliases
+    | invoke _ASIM_ResolveDvcFQDN ("Computer")
+    | project-away Computer
+    | extend
+        Dvc=DvcHostname,
+        Domain=DnsQuery,
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr,
+        EventResultDetails = DnsResponseCodeName
+    | project-away HostIP
+  };
+  parser  (
+    starttime=starttime, 
+    endtime=endtime, 
+    srcipaddr=srcipaddr,
+    domain_has_any=domain_has_any,
+    responsecodename=responsecodename, 
+    response_has_ipv4=response_has_ipv4, 
+    response_has_any_prefix=response_has_any_prefix, 
+    eventtype=eventtype, 
+    disabled=disabled)

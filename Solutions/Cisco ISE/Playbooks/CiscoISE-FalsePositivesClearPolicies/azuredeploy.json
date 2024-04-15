@@ -1,0 +1,519 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "CiscoISE-False Positives Clear Policies",
+        "description": "This playbook gets triggered when a new sentinel incident is created\n1.For each MAC address (MACAddress provided in the alert custom entities) in the incident checks if it is was rejected in Cisco ISE.\n2.If MAC address was rejected, checks if it is in the safe list (safe list is a custom [Watchlist](https://docs.microsoft.com/azure/sentinel/watchlists) that contains safe MAC addresses). If it is in safe list, releases endpoint with this MAC address in Cisco ISE.\n3.Adds comment to the incident with information about the released endpoints.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, Cisco ISE Connector needs to be deployed under the same subscription.",
+            "2. Obtain Cisco ISE ERS API credentials. Refer to Cisco ISE Custom Connector documentation.",
+            "3. [Watchlist](https://docs.microsoft.com/azure/sentinel/watchlists) with safe MAC addresses list needs to be created."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Click the Microsoft Sentinel connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**b. Configurations in Sentinel**",
+            "1. In Microsoft sentinel, analytical rules should be configured to trigger an incident. An incident should have the *MACAddress* custom entity that contains MAC address of an endpoint in Cisco ISE. It can be obtained from the corresponding field in Cisco ISE logs. Check the [documentation](https://docs.microsoft.com/azure/sentinel/surface-custom-details-in-alerts) to learn more about adding custom entities to incidents.",
+            "2. Configure the automation rules to trigger the playbook."
+        ],
+        "lastUpdateTime": "2022-08-03T00:00:00.000Z",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Vitalii Uslystyi"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CiscoISE-FalsePositivesClearPolicies",
+            "type": "String"
+        },
+        "WatchlistName": {
+            "defaultValue": "safe_MAC_addresses_list",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Watchlist that contains safe MAC addresses list"
+            }
+        },
+        "WatchlistFieldName": {
+            "defaultValue": "Watchlist field name that contains MAC address",
+            "type": "String",
+            "metadata": {
+                "description": "Watchlist field name that contains MAC address"
+            }
+        },
+        "customApis_ciscoise_name": {
+            "defaultValue": "CiscoISE",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "CiscoISEConnectionName": "[concat('ciscoise-connection-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CiscoISEConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('CiscoISEConnectionName')]",
+                "parameterValues": {
+                    "authType": "basic"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/',  parameters('customApis_ciscoise_name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CiscoISEConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p><strong></strong><strong>@{outputs('Create_logo')}</strong><strong> CiscoISE-FalsePositivesClearPolicies</strong><br>\nThe following endpoints were released as they are in safe list @{variables('watchlist')}:<br>\n@{body('Create_released_endpoints_HTML_table')}<br>\nThe following endpoints were not released because of errors although they are in safe list @{variables('watchlist')}:<br>\n@{body('Create_not_released_endpoints_HTML_table')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            },
+                            "runAfter": {
+                                "Create_logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Create_logo": {
+                            "inputs": "<img src=\"https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20ISE/Playbooks/cisco-logo.png\"  width=\"32\" height=\"32\">",
+                            "runAfter": {
+                                "Create_not_released_endpoints_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose"
+                        },
+                        "Create_not_released_endpoints_HTML_table": {
+                            "inputs": {
+                                "columns": [
+                                    {
+                                        "header": "MACaddress",
+                                        "value": "@item()"
+                                    }
+                                ],
+                                "format": "HTML",
+                                "from": "@variables('not_released_endpoints')"
+                            },
+                            "runAfter": {
+                                "Create_released_endpoints_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Create_released_endpoints_HTML_table": {
+                            "inputs": {
+                                "columns": [
+                                    {
+                                        "header": "MACaddress",
+                                        "value": "@item()"
+                                    }
+                                ],
+                                "format": "HTML",
+                                "from": "@variables('released_endpoints')"
+                            },
+                            "runAfter": {
+                                "For_each_MACAddress": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table"
+                        },
+                        "Filter_array": {
+                            "inputs": {
+                                "from": "@variables('mac_addresses')",
+                                "where": "@contains(variables('rejected_endpoints'), item())"
+                            },
+                            "runAfter": {
+                                "For_each_alert_in_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query"
+                        },
+                        "For_each_MACAddress": {
+                            "actions": {
+                                "Find_MAC_in_watchlist": {
+                                    "inputs": {
+                                        "body": "let ls = _GetWatchlist('@{variables('watchlist')}'); find in (ls) where @{variables('watchlist_mac_field')}==\"@{items('For_each_MACAddress')}\" | take 1",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                            "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+                                            "timerange": "1d"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ApiConnection"
+                                },
+                                "If_MAC_is_in_watchlist": {
+                                    "actions": {
+                                        "Append_MAC_to_not_released_endpoints_variable": {
+                                            "inputs": {
+                                                "name": "not_released_endpoints",
+                                                "value": "@items('For_each_MACAddress')"
+                                            },
+                                            "runAfter": {
+                                                "Release_rejected_endpoint": [
+                                                    "Failed",
+                                                    "TimedOut"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Append_MAC_to_released_endpoints_variable": {
+                                            "inputs": {
+                                                "name": "released_endpoints",
+                                                "value": "@items('For_each_MACAddress')"
+                                            },
+                                            "runAfter": {
+                                                "Append_MAC_to_not_released_endpoints_variable": [
+                                                    "Skipped"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable"
+                                        },
+                                        "Release_rejected_endpoint": {
+                                            "inputs": {
+                                                "headers": {
+                                                    "Accept": "application/json",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['ciscoise']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/ers/config/endpoint/@{encodeURIComponent(items('For_each_MACAddress'))}/releaserejectedendpoint"
+                                            },
+                                            "runAfter": {},
+                                            "type": "ApiConnection"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Find_MAC_in_watchlist'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Find_MAC_in_watchlist": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@variables('mac_addresses')",
+                            "runAfter": {
+                                "Filter_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_alert_in_incident": {
+                            "actions": {
+                                "Append_MACAddress_to_mac_addresses_array": {
+                                    "inputs": {
+                                        "name": "mac_addresses",
+                                        "value": "@body('Parse_alert_custom_details')?['MACAddress'][0]"
+                                    },
+                                    "runAfter": {
+                                        "Parse_alert_custom_details": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable"
+                                },
+                                "Parse_alert_custom_details": {
+                                    "inputs": {
+                                        "content": "@items('For_each_alert_in_incident')?['properties']?['additionalData']?['Custom Details']",
+                                        "schema": {
+                                            "properties": {
+                                                "MACAddress": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "ParseJson"
+                                }
+                            },
+                            "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                            "runAfter": {
+                                "For_each_rejected_endpoint": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_rejected_endpoint": {
+                            "actions": {
+                                "Append_to_rejected_endpoints_variable": {
+                                    "inputs": {
+                                        "name": "rejected_endpoints",
+                                        "value": "@items('For_each_rejected_endpoint')?['value']"
+                                    },
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable"
+                                }
+                            },
+                            "foreach": "@body('Get_rejected_endpoints')?['OperationResult']?['resultValue']",
+                            "runAfter": {
+                                "Get_rejected_endpoints": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_rejected_endpoints": {
+                            "inputs": {
+                                "headers": {
+                                    "Accept": "application/json",
+                                    "Content-Type": "application/json"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['ciscoise']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/ers/config/endpoint/getrejectedendpoints"
+                            },
+                            "runAfter": {
+                                "Initialize_variable_not_released_endpoints": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection"
+                        },
+                        "Initialize_variable_MAC_addresses": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "mac_addresses",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_rejected_endpoints": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_not_released_endpoints": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "not_released_endpoints",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_released_endpoints": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_rejected_endpoints": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "rejected_endpoints",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_watchlist_mac_field": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_released_endpoints": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "released_endpoints",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_MAC_addresses": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_watchlist": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "watchlist",
+                                        "type": "string",
+                                        "value": "[parameters('WatchlistName')]"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable_watchlist_mac_field": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "watchlist_mac_field",
+                                        "type": "string",
+                                        "value": "[parameters('WatchlistFieldName')]"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_watchlist": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        }
+                    },
+                    "contentVersion": "1.0.0.0",
+                    "outputs": {},
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuremonitorlogs')]"
+                            },
+                            "ciscoise": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CiscoISEConnectionName'))]",
+                                "connectionName": "[variables('CiscoISEConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/',  parameters('customApis_ciscoise_name'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

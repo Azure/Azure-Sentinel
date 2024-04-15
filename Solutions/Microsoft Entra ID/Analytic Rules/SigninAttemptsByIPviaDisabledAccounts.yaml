@@ -1,0 +1,87 @@
+id: 500c103a-0319-4d56-8e99-3cec8d860757
+name: Sign-ins from IPs that attempt sign-ins to disabled accounts
+description: |
+  'Identifies IPs with failed attempts to sign in to one or more disabled accounts using the IP through which successful signins from other accounts have happened.
+  This could indicate an attacker who obtained credentials for a list of accounts and is attempting to login with those accounts, some of which may have already been disabled.
+  References: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+  50057 - User account is disabled. The account has been disabled by an administrator.
+  This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+  let aadFunc = (tableName: string) {
+  let failed_signins = table(tableName)
+  | where ResultType == "50057"
+  | where ResultDescription == "User account is disabled. The account has been disabled by an administrator.";
+  let disabled_users = failed_signins | summarize by UserPrincipalName;
+  table(tableName)
+    | where ResultType == 0
+    | where isnotempty(UserPrincipalName)
+    | where UserPrincipalName !in (disabled_users)
+  | summarize
+          successfulAccountsTargettedCount = dcount(UserPrincipalName),
+          successfulAccountSigninSet = make_set(UserPrincipalName, 100),
+          successfulApplicationSet = make_set(AppDisplayName, 100)
+      by IPAddress, Type
+      // Assume IPs associated with sign-ins from 100+ distinct user accounts are safe
+      | where successfulAccountsTargettedCount < 50
+      | where isnotempty(successfulAccountsTargettedCount)
+    | join kind=inner (failed_signins
+  | summarize
+      StartTime = min(TimeGenerated),
+      EndTime = max(TimeGenerated),
+      totalDisabledAccountLoginAttempts = count(),
+      disabledAccountsTargettedCount = dcount(UserPrincipalName),
+      applicationsTargeted = dcount(AppDisplayName),
+      disabledAccountSet = make_set(UserPrincipalName, 100),
+      disabledApplicationSet = make_set(AppDisplayName, 100)
+  by IPAddress, Type
+  | order by totalDisabledAccountLoginAttempts desc) on IPAddress
+  | project StartTime, EndTime, IPAddress, totalDisabledAccountLoginAttempts, disabledAccountsTargettedCount, disabledAccountSet, disabledApplicationSet, successfulApplicationSet, successfulAccountsTargettedCount, successfulAccountSigninSet, Type
+  | order by totalDisabledAccountLoginAttempts};
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+  | join kind=leftouter (
+      BehaviorAnalytics
+      | where ActivityType in ("FailedLogOn", "LogOn")
+      | where EventSource =~ "Azure AD"
+      | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress, UserPrincipalName
+      | project-rename IPAddress = SourceIPAddress
+      | summarize
+          Users = make_set(UserPrincipalName, 100),
+          UsersInsights = make_set(UsersInsights, 100),
+          DevicesInsights = make_set(DevicesInsights, 100),
+          IPInvestigationPriority = sum(InvestigationPriority)
+      by IPAddress
+  ) on IPAddress
+  | extend SFRatio = toreal(toreal(disabledAccountsTargettedCount)/toreal(successfulAccountsTargettedCount))
+  | where SFRatio >= 0.5
+  | sort by IPInvestigationPriority desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 2.1.3
+kind: Scheduled

@@ -1,0 +1,1075 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This Logic App will run weekly and create/update a Risky User watchlist with users from Microsoft Defender for cloud app with additional data for threatscore, information, and a url",
+        "author": "Jhonny Paulino, Nathan Swift"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Update-RiskyUserWatchlist",
+            "type": "string"
+        },
+        "CloudAppAADServicePrincipal": {
+            "defaultValue": "Azure AD Service principal AppId",
+            "type": "securestring"
+        },
+        "KeyVaultName": {
+            "defaultValue": "kevaultname-to-create",
+            "type": "string"
+        },
+        "CloudAppAADServicePrincipalSecretKey": {
+            "defaultValue": "Azure AD Service principal key for keyvault secret",
+            "type": "securestring"
+        },
+        "MCASURL": {
+            "defaultValue": "https://xxxxxxx.yyy.portal.cloudappsecurity.com",
+            "type": "string"
+        },
+        "SubscriptionID": {
+            "defaultValue": "Your Subscription ID of Microsoft Sentinel",
+            "type": "string"
+        },
+        "WorkspaceID": {
+            "defaultValue": "Your Log analytics workspace ID of Microsoft Sentinel",
+            "type": "string"
+        },
+        "WorkspaceName": {
+            "defaultValue": "Your Log analytics workspace Name of Microsoft Sentinel",
+            "type": "string"
+        },
+        "WorkspaceRGName": {
+            "defaultValue": "Your Log analytics workspace resource group of Microsoft Sentinel",
+            "type": "string"
+        },
+        "TenantID": {
+            "defaultValue": "Your Tenant ID of Defender for Cloud App",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "secretName": "cloudapplist",
+        "azuresentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvaultConnectionName": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "SentinelMSI",
+                "parameterValueType": "Alternative",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }              
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "KeyvaultMSI",
+                "parameterValueType": "Alternative",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },                
+        {
+            "type": "Microsoft.KeyVault/vaults",
+            "apiVersion": "2021-11-01-preview",
+            "name": "[parameters('KeyVaultName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "Standard"
+                },
+                "tenantId": "[parameters('TenantID')]",
+                "accessPolicies": [],
+                "enabledForDeployment": false,
+                "enabledForDiskEncryption": false,
+                "enabledForTemplateDeployment": false,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 90,
+                "enableRbacAuthorization": true,
+                "publicNetworkAccess": "Enabled"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "apiVersion": "2021-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('KeyVaultName'), variables('secretName'))]",
+            "properties": {
+              "value": "[parameters('CloudAppAADServicePrincipalSecretKey')]"
+            },
+            "dependsOn": [
+              "[resourceId('Microsoft.KeyVault/vaults', parameters('KeyVaultName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "CloudAppAADServicePrincipal": {
+                            "defaultValue": "[parameters('CloudAppAADServicePrincipal')]",
+                            "type": "String"
+                        },
+                        "KeyVaultName": {
+                            "defaultValue": "[parameters('KeyVaultName')]",
+                            "type": "String"
+                        },
+                        "MCASURL": {
+                            "defaultValue": "[parameters('MCASURL')]",
+                            "type": "String"
+                        },
+                        "SubscriptionID": {
+                            "defaultValue": "[parameters('SubscriptionID')]",
+                            "type": "String"
+                        },
+                        "TenantID": {
+                            "defaultValue": "[parameters('TenantID')]",
+                            "type": "String"
+                        },
+                        "WorkspaceID": {
+                            "defaultValue": "[parameters('WorkspaceID')]",
+                            "type": "String"
+                        },
+                        "WorkspaceName": {
+                            "defaultValue": "[parameters('WorkspaceName')]",
+                            "type": "String"
+                        },
+                        "WorkspaceRGName": {
+                            "defaultValue": "[parameters('WorkspaceRGName')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Week",
+                                "interval": 1,
+                                "schedule": {
+                                    "hours": [
+                                        "6"
+                                    ]
+                                }
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Week",
+                                "interval": 1,
+                                "schedule": {
+                                    "hours": [
+                                        "6"
+                                    ]
+                                }
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Watchlists_-_Create_a_new_watchlist_with_data": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "contentType": "text/csv",
+                                            "description": "Cloud App risky users with threatscore, information, and user url",
+                                            "displayName": "CloudAppRiskyUsers",
+                                            "itemsSearchKey": "emailAddress",
+                                            "numberOfLinesToSkip": 1,
+                                            "provider": "Microsoft",
+                                            "rawContent": "emailAddress, isAdmin, isExternal, threatScore, userCloudAppUrl\r\ntest, False, True, 0, https",
+                                            "source": "Local file",
+                                            "watchlistAlias": "cloudappriskyusers",
+                                            "watchlistId": "@{guid()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('WorkspaceRGName'))}/workspaces/@{encodeURIComponent(parameters('WorkspaceID'))}/watchlists/@{encodeURIComponent('cloudappriskyusers')}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Watchlists_-_Get_a_watchlist_by_alias": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Delay": {
+                                        "runAfter": {
+                                            "Watchlists_-_Delete_a_watchlist": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Wait",
+                                        "inputs": {
+                                            "interval": {
+                                                "count": 2,
+                                                "unit": "Minute"
+                                            }
+                                        }
+                                    },
+                                    "Watchlists_-_Create_a_new_watchlist_with_data_2": {
+                                        "runAfter": {
+                                            "Delay": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "contentType": "text/csv",
+                                                "description": "Cloud App risky users with threatscore, information, and user url",
+                                                "displayName": "CloudAppRiskyUsers",
+                                                "itemsSearchKey": "emailAddress",
+                                                "numberOfLinesToSkip": 1,
+                                                "provider": "Microsoft",
+                                                "rawContent": "emailAddress, isAdmin, isExternal, threatScore, userCloudAppUrl\r\ntest, False, True, 0, https",
+                                                "source": "Local file",
+                                                "watchlistAlias": "cloudappriskyusers",
+                                                "watchlistId": "@{guid()}"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                }
+                                            },
+                                            "method": "put",
+                                            "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('WorkspaceRGName'))}/workspaces/@{encodeURIComponent(parameters('WorkspaceID'))}/watchlists/@{encodeURIComponent('cloudappriskyusers')}"
+                                        }
+                                    },
+                                    "Watchlists_-_Delete_a_watchlist": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                }
+                                            },
+                                            "method": "delete",
+                                            "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('WorkspaceRGName'))}/workspaces/@{encodeURIComponent(parameters('WorkspaceID'))}/watchlists/@{encodeURIComponent('cloudappriskyusers')}"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Watchlists_-_Get_a_watchlist_by_alias')?['StatusCode']",
+                                            "NotFound"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_2": {
+                            "actions": {
+                                "Until": {
+                                    "actions": {
+                                        "Condition_3": {
+                                            "actions": {
+                                                "Delay_3": {
+                                                    "runAfter": {},
+                                                    "type": "Wait",
+                                                    "inputs": {
+                                                        "interval": {
+                                                            "count": 2,
+                                                            "unit": "Minute"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_variable_4": {
+                                                    "runAfter": {
+                                                        "Delay_3": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "backOffCounter",
+                                                        "value": 0
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Increment_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Increment_variable_2": {
+                                                        "runAfter": {},
+                                                        "type": "IncrementVariable",
+                                                        "inputs": {
+                                                            "name": "backOffCounter",
+                                                            "value": 1
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@variables('backOffCounter')",
+                                                            29
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Filter_array_2": {
+                                            "runAfter": {
+                                                "HTTP2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('HTTP2')?['data']",
+                                                "where": "@equals(item()?['type'], 2)"
+                                            }
+                                        },
+                                        "For_each_2": {
+                                            "foreach": "@body('Filter_array_2')",
+                                            "actions": {
+                                                "Compose_2": {
+                                                    "runAfter": {
+                                                        "Set_variable_7": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "emailAddress": "@{body('Parse_JSON_2')?['email']}",
+                                                        "isAdmin": "@{body('Parse_JSON_2')?['isAdmin']}",
+                                                        "isExternal": "@{body('Parse_JSON_2')?['isExternal']}",
+                                                        "threatScore": "@{body('Parse_JSON_2')?['threatScore']}",
+                                                        "userCloudAppUrl": "@{variables('userCloudAppUrl')}"
+                                                    }
+                                                },
+                                                "Parse_JSON_2": {
+                                                    "runAfter": {},
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@items('For_each_2')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "_id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "actions": {
+                                                                    "type": "array"
+                                                                },
+                                                                "appData": {
+                                                                    "properties": {
+                                                                        "appId": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "instance": {
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "saas": {
+                                                                            "type": "integer"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "displayName": {
+                                                                    "type": "string"
+                                                                },
+                                                                "domain": {},
+                                                                "email": {},
+                                                                "id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "idType": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "identifiers": {
+                                                                    "type": "array"
+                                                                },
+                                                                "ii": {
+                                                                    "type": "string"
+                                                                },
+                                                                "isAdmin": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "isExternal": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "isFake": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "organization": {},
+                                                                "role": {},
+                                                                "scoreTrends": {},
+                                                                "sctime": {},
+                                                                "sid": {},
+                                                                "status": {},
+                                                                "subApps": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "appId": {
+                                                                                "type": "integer"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "appId",
+                                                                            "name"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "threatScore": {},
+                                                                "type": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "userGroups": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "_id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "description": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "usersCount": {
+                                                                                "type": "integer"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "_id",
+                                                                            "id",
+                                                                            "name",
+                                                                            "description",
+                                                                            "usersCount"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "username": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_variable_5": {
+                                                    "runAfter": {
+                                                        "Parse_JSON_2": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "userCloudAppB64Input",
+                                                        "value": "{\"id\":\"@{body('Parse_JSON_2')?['id']}\",\"saas\":@{body('Parse_JSON_2')?['appData']?['saas']},\"inst\":@{body('Parse_JSON_2')?['appData']?['instance']}}"
+                                                    }
+                                                },
+                                                "Set_variable_6": {
+                                                    "runAfter": {
+                                                        "Set_variable_5": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "userCloudAppB64Output",
+                                                        "value": "@{base64(variables('userCloudAppB64Input'))}"
+                                                    }
+                                                },
+                                                "Set_variable_7": {
+                                                    "runAfter": {
+                                                        "Set_variable_6": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "userCloudAppUrl",
+                                                        "value": "@{parameters('MCASURL')}/#/users/@{variables('userCloudAppB64Output')}"
+                                                    }
+                                                },
+                                                "Watchlists_-_Add_a_new_watchlist_item_2": {
+                                                    "runAfter": {
+                                                        "Compose_2": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": "@outputs('Compose_2')",
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('WorkspaceRGName'))}/workspaces/@{encodeURIComponent(parameters('WorkspaceID'))}/watchlists/@{encodeURIComponent('cloudappriskyusers')}/watchlistItem"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_array_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach",
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            }
+                                        },
+                                        "HTTP2": {
+                                            "runAfter": {
+                                                "Condition_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "05a65629-4c1b-48c1-a78b-804c4abdd4af",
+                                                    "clientId": "@parameters('CloudAppAADServicePrincipal')",
+                                                    "secret": "@body('Get_secret')?['value']",
+                                                    "tenant": "@parameters('TenantID')",
+                                                    "type": "ActiveDirectoryOAuth"
+                                                },
+                                                "body": {
+                                                    "filters": {
+                                                        "type": {
+                                                            "eq": [
+                                                                2
+                                                            ]
+                                                        }
+                                                    },
+                                                    "skip": "@variables('SkipCounter')"
+                                                },
+                                                "method": "POST",
+                                                "uri": "@{parameters('MCASURL')}/api/v1/entities/"
+                                            }
+                                        },
+                                        "Increment_variable": {
+                                            "runAfter": {},
+                                            "type": "IncrementVariable",
+                                            "inputs": {
+                                                "name": "SkipCounter",
+                                                "value": 100
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": "@equals(body('HTTP2')['hasNext'], false)",
+                                    "limit": {
+                                        "count": 60,
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('HTTP')?['hasNext']",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Delay_2": {
+                            "runAfter": {
+                                "Filter_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Wait",
+                            "inputs": {
+                                "interval": {
+                                    "count": 2,
+                                    "unit": "Minute"
+                                }
+                            }
+                        },
+                        "Filter_array": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('HTTP')?['data']",
+                                "where": "@equals(item()?['type'], 2)"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Filter_array')",
+                            "actions": {
+                                "Compose": {
+                                    "runAfter": {
+                                        "Set_variable_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": {
+                                        "emailAddress": "@{body('Parse_JSON')?['email']}",
+                                        "isAdmin": "@{body('Parse_JSON')?['isAdmin']}",
+                                        "isExternal": "@{body('Parse_JSON')?['isExternal']}",
+                                        "threatScore": "@{body('Parse_JSON')?['threatScore']}",
+                                        "userCloudAppUrl": "@{variables('userCloudAppUrl')}"
+                                    }
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each')",
+                                        "schema": {
+                                            "properties": {
+                                                "_id": {
+                                                    "type": "string"
+                                                },
+                                                "actions": {
+                                                    "type": "array"
+                                                },
+                                                "appData": {
+                                                    "properties": {
+                                                        "appId": {
+                                                            "type": "integer"
+                                                        },
+                                                        "instance": {
+                                                            "type": "integer"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "saas": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "displayName": {
+                                                    "type": "string"
+                                                },
+                                                "domain": {},
+                                                "email": {},
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "idType": {
+                                                    "type": "integer"
+                                                },
+                                                "identifiers": {
+                                                    "type": "array"
+                                                },
+                                                "ii": {
+                                                    "type": "string"
+                                                },
+                                                "isAdmin": {
+                                                    "type": "boolean"
+                                                },
+                                                "isExternal": {
+                                                    "type": "boolean"
+                                                },
+                                                "isFake": {
+                                                    "type": "boolean"
+                                                },
+                                                "organization": {},
+                                                "role": {},
+                                                "scoreTrends": {},
+                                                "sctime": {},
+                                                "sid": {},
+                                                "status": {},
+                                                "subApps": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "appId": {
+                                                                "type": "integer"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "appId",
+                                                            "name"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "threatScore": {},
+                                                "type": {
+                                                    "type": "integer"
+                                                },
+                                                "userGroups": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "_id": {
+                                                                "type": "string"
+                                                            },
+                                                            "description": {
+                                                                "type": "string"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "usersCount": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "_id",
+                                                            "id",
+                                                            "name",
+                                                            "description",
+                                                            "usersCount"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "username": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Set_variable": {
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "userCloudAppB64Input",
+                                        "value": "{\"id\":\"@{body('Parse_JSON')?['id']}\",\"saas\":@{body('Parse_JSON')?['appData']?['saas']},\"inst\":@{body('Parse_JSON')?['appData']?['instance']}}"
+                                    }
+                                },
+                                "Set_variable_2": {
+                                    "runAfter": {
+                                        "Set_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "userCloudAppB64Output",
+                                        "value": "@{base64(variables('userCloudAppB64Input'))}"
+                                    }
+                                },
+                                "Set_variable_3": {
+                                    "runAfter": {
+                                        "Set_variable_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "userCloudAppUrl",
+                                        "value": "@{parameters('MCASURL')}/#/users/@{variables('userCloudAppB64Output')}"
+                                    }
+                                },
+                                "Watchlists_-_Add_a_new_watchlist_item": {
+                                    "runAfter": {
+                                        "Compose": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@outputs('Compose')",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('WorkspaceRGName'))}/workspaces/@{encodeURIComponent(parameters('WorkspaceID'))}/watchlists/@{encodeURIComponent('cloudappriskyusers')}/watchlistItem"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Delay_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Initialize_variable_6": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('cloudapplist')}/value"
+                            }
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "05a65629-4c1b-48c1-a78b-804c4abdd4af",
+                                    "clientId": "@parameters('CloudAppAADServicePrincipal')",
+                                    "secret": "@body('Get_secret')?['value']",
+                                    "tenant": "@parameters('TenantID')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "body": {
+                                    "filters": {
+                                        "type": {
+                                            "eq": [
+                                                2
+                                            ]
+                                        }
+                                    }
+                                },
+                                "headers": {
+                                    "Content-Type ": "multipart/form-data"
+                                },
+                                "method": "POST",
+                                "uri": "@{parameters('MCASURL')}/api/v1/entities/"
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "userCloudAppB64Input",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_2": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "userCloudAppB64Output",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_3": {
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "userCloudAppUrl",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_4": {
+                            "runAfter": {
+                                "Initialize_variable_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ThreatScoreUsers",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_5": {
+                            "runAfter": {
+                                "Initialize_variable_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SkipCounter",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_6": {
+                            "runAfter": {
+                                "Initialize_variable_5": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "backOffCounter",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Watchlists_-_Get_a_watchlist_by_alias": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SubscriptionID'))}/resourceGroups/@{encodeURIComponent(parameters('WorkspaceRGName'))}/workspaces/@{encodeURIComponent(parameters('WorkspaceID'))}/watchlists/@{encodeURIComponent('cloudappriskyusers')}"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinelConnectionName'))]",
+                                "connectionName": "[variables('azuresentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "keyvault_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvaultConnectionName'))]",
+                                "connectionName": "[variables('keyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

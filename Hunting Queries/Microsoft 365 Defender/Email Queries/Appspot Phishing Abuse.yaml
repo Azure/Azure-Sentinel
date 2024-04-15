@@ -1,0 +1,26 @@
+id: cdac93ef-56c0-45bf-9e7f-9cbf0ad06808
+name: Appspot Phishing Abuse
+description: |
+  This query helps surface phishing campaigns associated with Appspot abuse. These emails frequently contain phishing links that utilize the recipients' own email address as a unique identifier in the URI.
+  This campaign was published on Twitter by @MsftSecIntel at this link: https://twitter.com/MsftSecIntel/status/1374148156301004800
+  Reference - https://twitter.com/MsftSecIntel
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailUrlInfo
+  - EmailEvents
+tactics:
+- Initial access
+query: |
+  EmailUrlInfo
+  // Detect URLs with a subdomain on appspot.com
+  | where UrlDomain matches regex @'\b[\w\-]+-dot-[\w\-\.]+\.appspot\.com\b'
+  // Enrich results with sender and recipient data
+  | join kind=inner EmailEvents on $left.NetworkMessageId==$right.NetworkMessageId
+  // Phishing attempts from Appspot related campaigns typically contain the recipient's email address in the URI
+  // Example 1: https://example-dot-example.appspot.com/#recipient@domain.com
+  // Example 2: https://example-dot-example.appspot.com/index.html?user=recipient@domain.com
+  | where Url has RecipientEmailAddress
+      // Some phishing campaigns pass recipient email as a Base64 encoded string in the URI
+      or Url has base64_encode_tostring(RecipientEmailAddress)
+  | project-away Timestamp1, NetworkMessageId1, ReportId1 

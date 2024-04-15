@@ -1,0 +1,34 @@
+id: 5ed33eee-0ab6-4bf5-9e9b-6100db83d39a
+name: Snowflake - User granted admin privileges
+description: |
+  'Detects when user asigned admin privileges.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Snowflake
+    dataTypes:
+      - Snowflake
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let adm_roles = dynamic(['SECURITYADMIN', 'SYSADMIN', 'ACCOUNTADMIN']);
+  Snowflake
+  | where QUERY_TYPE_s =~ 'GRANT'
+  | where QUERY_TEXT_s startswith 'GRANT ROLE'
+  | extend granted_role = extract(@'GRANT ROLE\s(\S+)\sto\suser', 1, QUERY_TEXT_s)
+  | where granted_role in~ (adm_roles)
+  | extend usr = extract(@'GRANT ROLE\s(\S+)\sto\suser(\S+)', 2, QUERY_TEXT_s)
+  | extend AccountCustomEntity = usr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

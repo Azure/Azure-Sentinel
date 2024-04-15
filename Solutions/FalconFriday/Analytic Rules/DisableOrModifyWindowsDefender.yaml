@@ -1,0 +1,48 @@
+id: 20d52a04-b5d8-402d-88e2-7929d12cbdcd
+name: Disable or Modify Windows Defender
+description: |
+  This detection watches the commandline logs for known commands that are used to disable the Defender AV. This is based on research performed by @olafhartong on a large sample of malware for varying purposes. 
+  Note that this detection is imperfect and is only meant to serve as basis for building a more resilient detection rule. 
+  Make the detection more resilient, currently the order of parameters matters. You don't want that for a production rule. 
+  See blogpost (https://medium.com/falconforce/falconfriday-av-manipulation-0xff0e-67ed4387f9ab?source=friends_link&sk=3c7c499797bbb4d74879e102ef3ecf8f) 
+  for more resilience considerations. The current approach can easily be bypassed by not using the powershell.exe executable. 
+  Consider adding more ways to detect this behavior.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562.001
+query: |
+  let defendertampering=dynamic(["Set-MpPreference -DisableRealtimeMonitoring $true","sc stop WinDefend","sc delete WinDefend","Set-MpPreference -DisableBehaviorMonitoring $true","Set-MpPreference -ExclusionProcess", "Set-MpPreference -ExclusionExtension dll","net stop security center"]);
+  DeviceProcessEvents
+  | where ProcessCommandLine has_any (defendertampering)
+  // If you have a lot of false positives coming from JetBrains, you can use the line below. 
+  //| where InitiatingProcessFolderPath !startswith @"c:\program files\jetbrains\" and InitiatingProcessVersionInfoProductName !~ ("Android Studio")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: AccountSid 
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+kind: Scheduled

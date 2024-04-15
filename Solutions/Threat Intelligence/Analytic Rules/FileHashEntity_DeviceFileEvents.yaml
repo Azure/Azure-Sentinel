@@ -1,0 +1,64 @@
+id: bc0eca2e-db50-44e6-8fa3-b85f91ff5ee7
+name: TI map File Hash to DeviceFileEvents Event
+description: |
+  'Identifies a match in DeviceFileEvents Event data from any FileHash IOC from TI'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+  - connectorId: ThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
+  - connectorId: MicrosoftDefenderThreatIntelligence
+    dataTypes:
+      - ThreatIntelligenceIndicator
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  let dt_lookBack = 1h;
+  let ioc_lookBack = 14d;
+  let DeviceFileEvents_ = (union
+  (DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA1) | extend FileHashValue = SHA1),
+  (DeviceFileEvents | where TimeGenerated > ago(dt_lookBack) | where isnotempty(SHA256) | extend FileHashValue = SHA256));
+  let Hashes = DeviceFileEvents_ | distinct FileHashValue;
+  ThreatIntelligenceIndicator
+  | where isnotempty(FileHashValue)
+  | where TimeGenerated > ago(ioc_lookBack)
+  | where FileHashValue in (Hashes)
+  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+  | where Active == true and ExpirationDateTime > now()
+  | where Description !contains_cs "State: inactive;" and Description !contains_cs "State: falsepos;"
+  | join kind=innerunique (DeviceFileEvents_) on $left.FileHashValue == $right.FileHashValue
+  | where TimeGenerated < ExpirationDateTime
+  | summarize TimeGenerated = arg_max(TimeGenerated, *) by  IndicatorId, DeviceId
+  | project TimeGenerated, TrafficLightProtocolLevel, Description, ActivityGroupNames, IndicatorId, ThreatType, FileHashValue, FileHashType, ExpirationDateTime, ConfidenceScore, ActionType, DeviceId, DeviceName, FolderPath, RequestAccountDomain, RequestAccountName, RequestAccountSid, MachineGroup
+  | extend timestamp = TimeGenerated
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: RequestAccountName
+      - identifier: Sid
+        columnName: RequestAccountSid
+      - identifier: NTDomain
+        columnName: RequestAccountDomain
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Value
+        columnName: FileHashValue
+      - identifier: Algorithm
+        columnName: FileHashType
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+version: 1.0.0
+kind: Scheduled

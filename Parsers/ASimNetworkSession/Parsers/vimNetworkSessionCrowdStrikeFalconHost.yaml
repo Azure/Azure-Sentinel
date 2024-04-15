@@ -1,0 +1,393 @@
+Parser:
+  Title: NetworkSession ASIM Parser for CrowdStrike Falcon Endpoint Protection
+  Version: '0.1.0'
+  LastUpdated: Oct 26, 2023
+Product:
+  Name: CrowdStrike Falcon Endpoint Protection
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM NetworkSession Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: CrowdStrike Falcon Endpoint Protection Documentation
+  Link: 
+    https://falcon.us-2.crowdstrike.com/documentation/page/d88d9ed6/streaming-api-event-dictionary
+    https://falcon.us-2.crowdstrike.com/documentation/page/d88d9ed6/streaming-api-event-dictionary#x9b9e3b3
+    https://falcon.us-2.crowdstrike.com/documentation/page/e3ce0b24/events-data-dictionary#AssociateIndicator
+    https://falcon.us-2.crowdstrike.com/documentation/page/eb1587d1/siem-connector#mc98af8f
+Description: |
+  This ASIM parser supports normalizing CrowdStrike Falcon Endpoint Protection logs to the ASIM Network Session normalized schema. These events are captured through CrowdStrike Falcon Endpoint Protection data connector which allows you to easily connect your CrowdStrike Falcon Event Stream with Microsoft Sentinel.
+ParserName: vimNetworkSessionCrowdStrikeFalconHost
+EquivalentBuiltInParser: _Im_NetworkSession_CrowdStrikeFalconHost
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+  [
+      "0", "Informational",
+      "1", "Informational",
+      "2", "Low",
+      "3", "Medium",
+      "4", "High",
+      "5", "High"
+  ];
+  let EventFieldsLookup = datatable (
+      ruleAction: int,
+      DvcOriginalAction: string,
+      DvcAction: string,
+      EventResult: string
+  )
+  [
+      0, "invalid", "Deny", "Failure",
+      1, "allowed", "Allow", "Success",
+      2, "blocked", "Deny", "Failure"
+  ];
+  //ActionLokkup is prepapred by considering facts as below:
+  //Response bit: KILL PROCESS, modifier bit: '', DvcAction: Deny
+  //Response bit: KILL PROCESS, modifier bit: POLICY_DISABLED, DvcAction: Allow as here process would have been killed or blocked if policy was enabled so current event is not killed.
+  let ActionLookup = datatable (
+      EventOutcome: string,
+      DvcOriginalAction: string,
+      DvcAction: string,
+      EventResult: string
+  )
+  [
+      "0", "Detection", "Allow", "Success",
+      "2", "Detection", "Allow", "Success",
+      "16", "Prevention-killed", "Deny", "Failure",
+      "128", "Quarantine", "Allow", "Success",
+      "144", "Prevention-killed,quarantine", "Deny", "Failure",
+      "272", "Detection", "Allow", "Success",
+      "400", "Detection-quarantine", "Allow", "Success",
+      "512", "Prevention-killed", "Deny", "Failure",
+      "640", "Prevention-killed,quarantine", "Deny", "Failure",
+      "768", "Detection", "Allow", "Success", 
+      "1024", "Prevention-blocked", "Deny", "Failure",
+      "1040", "Prevention-killed,blocked", "Deny", "Failure",
+      "1152", "Prevention-blocked,quarantine", "Deny", "Failure",
+      "1168", "Prevention-killed,blocked,quarnatine", "Deny", "Failure",
+      "1280", "Detection", "Allow", "Success",
+      "1296", "Detection", "Allow", "Success",
+      "2048", "Prevention-blocked", "Deny", "Failure",
+      "2176", "Prevention-quarantine,blocked ", "Deny", "Failure",
+      "2304", "Detection", "Allow", "Success",
+      "2432", "Detection-quarantine", "Allow", "Success",
+      "4096", "Prevention-blocked", "Deny", "Failure",
+      "4112", "Prevention-blocked,killed", "Deny", "Failure",
+      "4224", "Prevention-blocked,quarantine", "Deny", "Failure",
+      "4240", "Prevention-killed,blocked,quarantine", "Deny", "Failure",
+      "4352", "Detection", "Allow", "Success",
+      "4368", "Detection", "Allow", "Success",
+      "4638", "Detection", "Allow", "Success",
+      "5120", "Prevention-blocked", "Deny", "Failure",
+      "8192", "Disabled", "Allow", "Success",
+      "8208", "Detection", "Allow", "Success",
+      "8320", "Detection-quarnatine", "Allow", "Success",
+      "8704", "Detection", "Allow", "Success",
+      "9216", "Detection", "Allow", "Success",
+      "10240", "Detection", "Allow", "Success",
+      "12304", "Detection", "Allow", "Success",
+      "16400", "Killed", "Deny", "Failure",
+      "32768", "Prevention-blocked", "Deny", "Failure",
+      "32896", "Prevention-blocked,quarantine", "Deny", "Failure",
+      "33024", "Detection", "Allow", "Success",
+      "65536", "Downgraded", "Allow", "Success",
+      "65552", "Prevention-killed", "Deny", "Failure",
+      "65792", "Detection-downgraded", "Allow", "Success",
+      "65808", "Detection-downgraded", "Allow", "Success",
+      "73728", "Detection-downgraded", "Allow", "Success",
+      "73744", "Detection-downgraded", "Allow", "Success",
+      "131088", "Prevention-killed", "Deny", "Failure",
+      "131216", "Prevention-killed,quarantine", "Deny", "Failure",
+      "131584", "Prevention-killed", "Deny", "Failure",
+      "131712", "Prevention-killed,quarantine", "Deny", "Failure",
+      "2099200", "Prevention-blocked", "Deny", "Failure",
+      "2099328", "Prevention-blocked,quarantine", "Deny", "Failure",
+      "4196352", "Prevention-blocked", "Deny", "Failure",
+      "4196480", "Prevention-blocked,quarantine", "Deny", "Failure",
+      "1048576", "Prevention-suspend", "Deny", "Failure",
+      "524288", "Prevention-suspend", "Deny", "Failure",
+      "262144", "Blocking Disabled", "Allow", "Success",
+      "16384", "Safeguard Enabled", "Allow", "Success",
+      "131072", "Kill Failed", "Deny", "Failure",
+      "256", "Policy Disabled", "Allow", "Success",
+      "2097152", "Response Action Already Applied", "Deny", "Failure",
+      "4194304", "Response Failed", "Deny", "Failure"
+  ];
+  let parser = (starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null),
+      srcipaddr_has_any_prefix: dynamic=dynamic([]), 
+      dstipaddr_has_any_prefix: dynamic=dynamic([]), 
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      dstportnumber: int=int(null), 
+      hostname_has_any: dynamic=dynamic([]), 
+      dvcaction: dynamic=dynamic([]), 
+      eventresult: string='*', 
+      disabled: bool=false) {
+      let src_or_any = set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let dst_or_any = set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+      let alldata = CommonSecurityLog
+          | where not(disabled)
+              and (isnull(starttime) or TimeGenerated >= starttime)
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | where DeviceVendor == "CrowdStrike" and DeviceProduct == "FalconHost"
+          | where DeviceEventClassID in ("Network Access In A Detection Summary Event", "FirewallMatchEvent")
+          | where (array_length(hostname_has_any) == 0 or DestinationHostName has_any (hostname_has_any))
+              and (isnull(dstportnumber) or (DestinationPort == dstportnumber) or (AdditionalExtensions has tostring(dstportnumber)))
+      ;
+      let firewalldata = alldata
+          | where DeviceEventClassID == "FirewallMatchEvent"
+          | parse-kv AdditionalExtensions as (deviceId: string, cmdLine: string, connectionDirection: int, eventType: string, hostName: string, icmpCode: int, icmpType: string, localAddress: string, localPort: int, matchCount: int, networkProfile: string, protocol: int, remoteAddress: string, remotePort: int, ruleAction: int, ruleDescription: string, ruleGroupName: string, ruleName: string, status: string) with (pair_delimiter=";", kv_delimiter="=")
+          | lookup EventFieldsLookup on ruleAction
+          | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+          | where ((eventresult == "*") or EventResult == eventresult)
+          | extend
+              EventCount = matchCount,
+              EventStartTime = unixtime_milliseconds_todatetime(tolong(ReceiptTime)),
+              NetworkDirection = case(
+                        connectionDirection == 1, "Inbound",
+                        connectionDirection == 2, "Outbound",
+                        ""
+                    ),
+                SrcIpAddr = case(
+                    connectionDirection == 1, remoteAddress,
+                    connectionDirection == 2, localAddress,
+                    ""
+                ),
+                SrcPortNumber = case(
+                        connectionDirection == 1, remotePort,
+                        connectionDirection == 2, localPort,
+                        int(null)
+                    ),
+                DstIpAddr = case(
+                    connectionDirection == 1, remoteAddress,
+                    connectionDirection == 2, localAddress,
+                    ""
+                ),
+                DstPortNumber = case(
+                        connectionDirection == 1, localPort,
+                        connectionDirection == 2, remotePort,
+                        int(null)
+                    )
+          | where (isnull(dstportnumber) or (DstPortNumber == dstportnumber))
+          | extend
+              temp_isSrcMatch = has_any_ipv4_prefix(SrcIpAddr, src_or_any), 
+              temp_isDstMatch = has_any_ipv4_prefix(DstIpAddr, dst_or_any)
+          | extend ASimMatchingIpAddr = case(
+                                    array_length(src_or_any) == 0 and array_length(dst_or_any) == 0,
+                                    "-", 
+                                    (temp_isSrcMatch and temp_isDstMatch),
+                                    "Both", 
+                                    temp_isSrcMatch,
+                                    "SrcIpAddr",
+                                    temp_isDstMatch,
+                                    "DstIpAddr",
+                                    "No match" 
+                                )        
+          | where ASimMatchingIpAddr != "No match"
+          | extend deviceIp = iff(hostName matches regex "(([0-9]{1,3})\\.([0-9]{1,3})\\.([0-9]{1,3})\\.(([0-9]{1,3})))", hostName, "")
+          | extend 
+              hostName = iff(isempty(deviceIp), hostName, ""),
+              AdditionalFields = bag_pack(
+                        "networkProfile", networkProfile,
+                        "ruleDescription", ruleDescription,
+                        "ruleGroupName", ruleGroupName,
+                        "cmdLine", cmdLine
+                    ),
+              NetworkIcmpCode = icmpCode
+          | invoke _ASIM_ResolveDvcFQDN('hostName')
+          | invoke _ASIM_ResolveNetworkProtocol('protocol')
+          | extend NetworkIcmpType = _ASIM_LookupICMPType('icmpType')
+          | project-rename
+              DvcId = deviceId,
+              DvcIpAddr = deviceIp,
+              EventOriginalSubType = eventType,
+              NetworkRuleName = ruleName
+          | extend
+              Rule = NetworkRuleName,
+              Dvc = coalesce(DvcId, DvcHostname, DvcIpAddr);
+      let networkaccessdata = alldata
+          | where DeviceEventClassID has "Network Access In A Detection Summary Event"
+          | lookup ActionLookup on EventOutcome
+          | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+          | where ((eventresult == "*") or EventResult == eventresult)
+          | extend
+              temp_isSrcMatch = has_any_ipv4_prefix(SourceIP, src_or_any), 
+              temp_isDstMatch = has_any_ipv4_prefix(DestinationIP, dst_or_any)
+          | extend ASimMatchingIpAddr = case(
+                                    array_length(src_or_any) == 0 and array_length(dst_or_any) == 0,
+                                    "-", 
+                                    (temp_isSrcMatch and temp_isDstMatch),
+                                    "Both", 
+                                    temp_isSrcMatch,
+                                    "SrcIpAddr",
+                                    temp_isDstMatch,
+                                    "DstIpAddr",
+                                    "No match" 
+                                )        
+          | where ASimMatchingIpAddr != "No match"
+          | parse-kv AdditionalExtensions as (CSMTRPatternDisposition: string, tactic: string, technique: string, objective: string) with (pair_delimiter=";", kv_delimiter="=")
+          | invoke _ASIM_ResolveSrcFQDN('DestinationHostName')
+          | extend ASimMatchingHostname = case(
+                                      array_length(hostname_has_any) == 0,
+                                      "-",
+                                      SrcHostname has_any (hostname_has_any),
+                                      "SrcHostname",
+                                      "No match"
+                                  )
+          | where ASimMatchingHostname != "No match"
+          | extend
+              EventStartTime = todatetime(DeviceCustomDate1),
+              DstIpAddr = coalesce(DestinationIP, DeviceCustomIPv6Address3),
+              SrcIpAddr = coalesce(SourceIP, DeviceCustomIPv6Address2),
+              EventCount = int(1),
+              SrcDomain = coalesce(SrcDomain, DestinationNTDomain),
+              EventOriginalResultDetails = CSMTRPatternDisposition,
+              SrcProcessId = tostring(FieldDeviceCustomNumber2),
+              SrcDomainType = iff(isnotempty(DestinationNTDomain), "Windows", SrcDomainType),
+              AdditionalFields = bag_pack(
+                        "CSMTRPatternDisposition", CSMTRPatternDisposition, 
+                        "Tactic", coalesce(tactic, Activity),
+                        "Technique", coalesce(technique, DeviceAction),
+                        "Objective", coalesce(objective, Reason),
+                        DeviceCustomString6Label, DeviceCustomString6
+                    )
+          | project-rename
+              DvcId = ExtID,
+              DstPortNumber = DestinationPort,
+              SrcPortNumber = SourcePort,
+              SrcMacAddr = SourceMACAddress,
+              SrcUsername = DestinationUserName,
+              SrcProcessName = FileName
+          | extend
+              Dvc = DvcId,
+              Hostname = SrcHostname,
+              User = SrcUsername,
+              SrcAppId = SrcProcessId,
+              SrcAppName = SrcProcessName,
+              SrcAppType = "Process",
+              SrcUserType = _ASIM_GetUserType(SrcUsername, ""),
+              SrcUsernameType = _ASIM_GetUsernameType(SrcUsername);
+      union firewalldata, networkaccessdata
+      | lookup EventSeverityLookup on LogSeverity
+      | extend NetworkProtocolVersion = case(
+                                        DstIpAddr contains ".", "IPv4",
+                                        DstIpAddr contains ":", "IPv6",
+                                        ""
+                                    )
+      | extend
+          EventSchema = "NetworkSession",
+          EventSchemaVersion = "0.2.6",
+          EventVendor = "CrowdStrike",
+          EventProduct = "FalconHost",
+          EventType = "EndpointNetworkSession"
+      | project-rename
+          EventOriginalType = DeviceEventClassID,
+          EventProductVersion = DeviceVersion,
+          EventUid = _ItemId,
+          EventOriginalSeverity= LogSeverity
+      | extend
+          EventEndTime = EventStartTime,
+          Dst = DstIpAddr,
+          Src = coalesce(SrcFQDN, SrcHostname, SrcIpAddr),
+          IpAddr = SrcIpAddr,
+          DvcIdType = iff(isnotempty(DvcId), "Other", "")
+      | project-away 
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          Computer,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          Protocol,
+          Activity,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          Threat*,
+          ExternalID,
+          ReportReferenceLink,
+          ReceiptTime,
+          Reason,
+          ApplicationProtocol,
+          _ResourceId,
+          ExtID,
+          Message,
+          EventOutcome,
+          IndicatorThreatType,
+          cmdLine,
+          connectionDirection,
+          hostName,
+          matchCount,
+          networkProfile,
+          protocol,
+          ruleAction,
+          ruleDescription,
+          ruleGroupName,
+          icmpCode,
+          icmpType,
+          status,
+          CSMTRPatternDisposition,
+          temp_*,
+          NetworkProtocolNumber,
+          localAddress,
+          localPort,
+          remoteAddress,
+          remotePort
+  };
+  parser(
+      starttime=starttime, 
+      endtime=endtime,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, 
+      dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, 
+      ipaddr_has_any_prefix=ipaddr_has_any_prefix,
+      dstportnumber=dstportnumber, 
+      hostname_has_any=hostname_has_any, 
+      dvcaction=dvcaction, 
+      eventresult=eventresult, 
+      disabled=disabled
+  )

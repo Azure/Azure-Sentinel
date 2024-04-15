@@ -1,0 +1,57 @@
+id: 726085be-fa36-4b0f-991a-b5bc8fe53d87
+name: detect-mailsniper
+description: |
+  This query was originally published in the threat analytics report, MailSniper Exchange attack tool.
+  MailSniper is a tool that targets Microsoft Exchange Server. The core function is to connect to Exchange Server and search through emails. In support of this, it can perform reconnaissance, collection, exfiltration, and credential theft. MailSniper is used both by red teams running penetration tests, and by malicious actors.
+  Microsoft Defender Security Center may record the following alerts during and after an attack:
+  1. Global mail search on Exchange using MailSniper
+  2. Exchange mailbox or mail folder search using MailSniper
+  3. Enumeration of Active Directory usernames using MailSniper
+  4. Enumeration of the Exchange GAL using MailSniper
+  5. Access to Exchange inboxes using MailSniper
+  6. Password spraying using MailSniper
+  7. Enumeration of domains and user accounts using MailSniper
+  The following query detects activity commonly associated with attacks run with MailSniper.
+  Reference - https://github.com/dafthack/MailSniper
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceNetworkEvents
+tactics:
+- Initial access
+- Credential Access
+- Collection
+- Exfiltration
+query: |
+  let dateRange = ago(10d);
+  //
+  let whoamiProcess = DeviceProcessEvents
+  | where ProcessCreationTime >= dateRange
+  | where FileName =~ 'whoami.exe' and InitiatingProcessParentFileName =~ 'powershell.exe'
+  | project DeviceId, whoamiTime = ProcessCreationTime, whoamiProcessName = FileName, 
+  whoamiParentName = InitiatingProcessParentFileName, whoamiParentPID = InitiatingProcessParentId;
+  //
+  let netProcess = DeviceProcessEvents 
+  | where ProcessCreationTime >= dateRange
+  | where FileName =~ 'net.exe' and InitiatingProcessParentFileName =~ 'powershell.exe'
+  | project DeviceId, netTime = ProcessCreationTime, ProcessCreationTime = FileName, 
+  netParentName = InitiatingProcessParentFileName, netParentPID = InitiatingProcessParentId;
+  //
+  let mailServerEvents = DeviceNetworkEvents
+  | where Timestamp >= dateRange
+  | where InitiatingProcessFileName =~ 'powershell.exe'
+  | where RemoteUrl contains 'onmicrosoft.com'
+  or RemoteUrl contains 'outlook.com'
+  | project DeviceId, mailTime = Timestamp, mailProcessName = InitiatingProcessFileName, 
+  mailPID = InitiatingProcessId;
+  //
+  mailServerEvents
+  | join netProcess on DeviceId 
+  | where netParentPID == mailPID and netParentName == mailProcessName 
+  | join whoamiProcess on DeviceId 
+  | where whoamiParentPID == mailPID and whoamiParentName == mailProcessName 
+  | where netTime < mailTime + 4h and netTime > mailTime - 4h
+  | where whoamiTime < mailTime + 4h and whoamiTime > mailTime - 4h
+  | project DeviceId, EstimatedIncidentTime = mailTime, ProcessName = mailProcessName, 
+  ProcessID = mailPID

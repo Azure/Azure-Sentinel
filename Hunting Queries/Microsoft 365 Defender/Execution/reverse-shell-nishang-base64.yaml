@@ -1,0 +1,28 @@
+id: 5d091733-0e7e-4331-b2f1-127cb36e516e
+name: reverse-shell-nishang-base64
+description: |
+  This query was originally published in the threat analytics report, "Exchange Server zero-days exploited in the wild".
+  In early March 2021, Microsoft released patches for four different zero-day vulnerabilities affecting Microsoft Exchange Server. The vulnerabilities were being used in a coordinated attack. For more information on the vulnerabilities, visit the following links:
+  1. CVE-2021-26855
+  2. CVE-2021-26857
+  3. CVE-2021-26858
+  4. CVE-2021-27065
+  The following query finds evidence of Base64-encoded commands used by the Nishang penetration testing framework to load a reverse TCP shell. This might indicate an attacker has remote access to the device.
+  More queries related to this threat can be found under the See also section of this page.
+  Reference - https://msrc-blog.microsoft.com/2021/03/02/multiple-security-updates-released-for-exchange-server/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+tactics:
+- Execution
+- Persistence
+- Exfiltration
+query: |
+  DeviceProcessEvents
+  | where FileName in("powershell.exe","powershell_ise.exe") and ProcessCommandLine contains "-e"
+  | mvexpand SS = split(ProcessCommandLine, " ")
+  | where SS matches regex "[A-Za-z0-9+/]{50,}[=]{0,2}"
+  | extend DecodeString = base64_decodestring(tostring(SS))
+  | extend FinalString = replace("\\0", "", DecodeString)
+  | where FinalString has "tcpclient" and FinalString contains "$" and (FinalString contains "invoke" or FinalString contains "iex")

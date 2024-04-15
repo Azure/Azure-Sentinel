@@ -1,0 +1,161 @@
+Parser:
+  Title: Process Create Event ASIM parser for Sysmon
+  Version: '0.3.2'
+  LastUpdated: Feb 23, 2022
+Product:
+  Name: Sysmon
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Sysmon process create events (event 1) collected using the Event or WEF (WindowsEvent table) connectors to the ASIM Process Event normalized schema. 
+ParserName: ASimProcessCreateMicrosoftSysmon
+EquivalentBuiltInParser: _ASim_ProcessEvent_CreateMicrosoftSysmon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: | 
+  let parser = (disabled:bool = false) {
+    // this is the parser for sysmon from Event table
+    let parser_Event = (disabled:bool=false) {
+    Event 
+      | where not(disabled)
+      | where Source == "Microsoft-Windows-Sysmon" and EventID==1
+      | parse-kv EventData as (
+            ProcessGuid:string, 
+            ProcessId:string,
+            Image:string,
+            FileVersion:string,
+            Description:string,
+            Product:string,
+            Company:string,
+            OriginalFileName:string,
+            CommandLine:string,
+            CurrentDirectory:string,
+            User:string,
+            LogonGuid:string, 
+            LogonId:string,
+            IntegrityLevel:string,
+            Hashes:string,
+            ParentProcessGuid:string, 
+            ParentProcessId:string,
+            ParentImage:string,
+            ParentCommandLine:string,
+            ParentUser:string
+          ) 
+          with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+        | parse-kv Hashes as (MD5:string, SHA1:string, SHA256:string, IMPHASH:string) with (quote='"')
+        | extend
+            Hash = coalesce (SHA256, SHA1, IMPHASH, MD5, "")
+        | extend
+            HashType = tostring(dynamic(["SHA256", "SHA1", "IMPHASH", "MD5"])[array_index_of(pack_array(SHA256, SHA1, IMPHASH, MD5),Hash)])
+        | project-rename
+            TargetProcessMD5 = MD5,
+            TargetProcessSHA1 = SHA1,
+            TargetProcessSHA256 = SHA256,
+            TargetProcessIMPHASH = IMPHASH
+        | project-away Hashes
+        | extend         
+            TargetUsername = User,
+            TargetProcessCommandLine = CommandLine
+        | project-rename 
+            DvcHostname = Computer,
+            TargetUserSessionGuid = LogonGuid,
+            TargetProcessId = ProcessId,
+            TargetUserSessionId = LogonId,  
+            TargetProcessGuid = ProcessGuid,
+            TargetProcessName = Image,
+            TargetProcessFilename = OriginalFileName,
+            TargetProcessCurrentDirectory = CurrentDirectory,
+            TargetProcessIntegrityLevel = IntegrityLevel,    
+            TargetProcessFileCompany = Company,
+            TargetProcessFileDescription = Description,
+            TargetProcessFileVersion = FileVersion,
+            TargetProcessFileProduct = Product,   
+            ActingProcessId = ParentProcessId,
+            ActingProcessGuid = ParentProcessGuid,                          
+            ActingProcessCommandLine = ParentCommandLine,
+            ActingProcessName = ParentImage,
+            ActorUsername = ParentUser
+        | extend 
+            TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', ''),
+            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+            EventProduct = "Sysmon",
+            // aliases
+            Process = TargetProcessName,
+            Dvc = DvcHostname
+        | project-away EventData, ParameterXml, AzureDeploymentID, EventCategory, EventID, EventLevel, EventLevelName, TenantId, EventLog, MG, ManagementGroupName, Message, Role, SourceSystem, Source, UserName, RenderedDescription
+    };
+    // this is the parser for sysmon from WindowsEvent table
+    let parser_WindowsEvent=(disabled:bool=false){
+        WindowsEvent
+        | where not(disabled)
+        | where Provider == "Microsoft-Windows-Sysmon" and EventID==1
+        | parse-kv tostring(EventData.Hashes) as (MD5:string, SHA1:string, SHA256:string, IMPHASH:string) with (quote='"')
+        | extend
+            Hash = coalesce (SHA256, SHA1, IMPHASH, MD5, "")
+        | extend
+            HashType = tostring(dynamic(["SHA256", "SHA1", "IMPHASH", "MD5"])[array_index_of(pack_array(SHA256, SHA1, IMPHASH, MD5),Hash)])
+        | project-rename
+            TargetProcessMD5 = MD5,
+            TargetProcessSHA1 = SHA1,
+            TargetProcessSHA256 = SHA256,
+            TargetProcessIMPHASH = IMPHASH
+        | extend 
+                EventOriginalType = tostring(EventID),
+                TargetUserSessionId = tostring(EventData.LogonId),           
+                TargetUsername = tostring(EventData.User),
+                TargetProcessCommandLine = tostring(EventData.CommandLine),
+                TargetProcessCurrentDirectory = tostring(EventData.CurrentDirectory),
+                TargetUserSessionGuid = extract ('^{(.*)}$', 1, tostring(EventData.LogonGuid), typeof(string)),
+                TargetProcessId = tostring(EventData.ProcessId),
+                TargetProcessGuid = extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
+                TargetProcessName = tostring(EventData.Image),
+                TargetProcessFilename = tostring(EventData.OriginalFileName),
+                TargetProcessIntegrityLevel = tostring(EventData.IntegrityLevel),
+                TargetProcessFileCompany = tostring(EventData.Company),
+                TargetProcessFileDescription = tostring(EventData.Description),
+                TargetProcessFileVersion = tostring(EventData.FileVersion),
+                TargetProcessFileProduct = tostring(EventData.Product),
+                ActingProcessId = tostring(EventData.ParentProcessId),  
+                ActingProcessGuid = extract ('^{(.*)}$', 1, tostring(EventData.ParentProcessGuid), typeof(string)),                 
+                ActingProcessCommandLine = tostring(EventData.ParentCommandLine),
+                ActingProcessName = tostring(EventData.ParentImage),
+                ActorUsername = tostring(EventData.ParentUser)
+        | extend 
+            TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', ''),
+            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+            EventProduct = "Security Events"
+        | project-rename
+            DvcHostname = Computer,
+            EventOriginalUid = EventOriginId
+        | extend // aliases 
+            Dvc = DvcHostname,
+            User = TargetUsername,
+            CommandLine = TargetProcessCommandLine,
+            Process = TargetProcessName
+        | project-away EventData, Provider, ManagementGroupName, RawEventData, SourceSystem, Task, TenantId,  EventID, Data, Channel, EventLevel, EventLevelName
+        }; 
+        union isfuzzy=true parser_Event(disabled=disabled), parser_WindowsEvent(disabled=disabled)
+        | extend 
+            EventType = "ProcessCreated",
+            EventOriginalType = "1",
+            EventStartTime = todatetime(TimeGenerated),
+            EventEndTime = todatetime(TimeGenerated),
+            EventCount = int(1),
+            EventVendor = "Microsoft",
+            EventSchemaVersion = "0.1.0",
+            EventSchema = 'ProcessEvent',
+            EventProduct = "Sysmon",
+            EventResult = 'Success',
+            DvcOs = "Windows",
+            TargetUsernameType = "Windows",
+            ActorUsernameType = "Windows"
+    };
+    parser (disabled=disabled)

@@ -1,0 +1,1376 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "location": {
+        "defaultValue": "[resourceGroup().location]",
+        "minLength": 1,
+        "type": "String",
+        "metadata": {
+          "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+        }
+      },
+      "workspace-location": {
+        "defaultValue": "[parameters('location')]",
+        "minLength": 1,
+        "type": "String",
+        "metadata": {
+          "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+        }
+      },
+      "workspace": {
+        "defaultValue": "<Enter Log Analytics Workspace>",
+        "minLength": 1,
+        "type": "String",
+        "metadata": {
+          "description": "Workspace name for Log Analytics where Sentinel is setup"
+        }
+      }
+    },
+    "variables": {
+      "sourceId": "azuresentinel.azure-sentinel-solution-cisco-meraki",
+      "_sourceId": "[variables('sourceId')]",
+      "solutionVersion": "1.0.0",
+      "parentId": "azuresentinel-ciscomeraki",
+      "_parentId": "[variables('parentId')]",
+      "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+      "dataConnectorTemplateSpecName": "[concat(parameters('workspace'),'-',variables('_dataConnectorContentId'))]",
+      "dataConnectorVersion": "1.0.0",
+      "dataConnectorContentId": "CiscoMerakiNativePoller",
+      "_dataConnectorContentId": "[variables('dataConnectorContentId')]",
+      "dataConnectorId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId'))]",
+      "_dataConnectorId": "[variables('dataConnectorId')]",
+      "dataCollectionRuleId": "CiscoMerakiRule",
+      "logAnalyticsTableId": "CiscoMerakiNativePoller_CL",
+      "streamName": "MyTableRawData",
+      "uiConfigId": "CiscoMerakiNativePolling",
+      "_uiConfigId": "[variables('uiConfigId')]"
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Resources/templateSpecs",
+        "apiVersion": "2021-05-01",
+        "name": "[variables('dataConnectorTemplateSpecName')]",
+        "location": "[parameters('workspace-location')]",
+        "tags": {
+          "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+          "hidden-sentinelContentType": "DataConnector"
+        },
+        "properties": {
+          "description": "Cisco Meraki data connector with template",
+          "displayName": "Cisco Meraki template"
+        }
+      },
+      {
+        "type": "Microsoft.Resources/templateSpecs/versions",
+        "apiVersion": "2021-05-01",
+        "name": "[concat(variables('dataConnectorTemplateSpecName'),'/',variables('dataConnectorVersion'))]",
+        "location": "[parameters('workspace-location')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName'))]"
+        ],
+        "tags": {
+          "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+          "hidden-sentinelContentType": "DataConnector"
+        },
+        "properties": {
+          "description": "Cisco Meraki data connector",
+          "mainTemplate": {
+            "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+            "contentVersion": "[variables('dataConnectorVersion')]",
+            "parameters": {},
+            "variables": {},
+            "resources": [
+              {
+                "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId'))]",
+                "apiVersion": "2021-03-01-preview",
+                "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                "location": "[parameters('workspace-location')]",
+                "kind": "APIPolling",
+                "properties": {
+                  "connectorUiConfig": {
+                    "id": "CiscoMerakiNativePoller",
+                    "title": "Cisco Meraki (using REST API)",
+                    "publisher": "Microsoft",
+                    "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki MX [security events](https://aka.ms/ciscomerakisecurityevents) to Microsoft Sentinel. The data connector uses [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch security events and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.\n\n **Supported ASIM schema:** \n 1. Network Session",
+                    "graphQueriesTableName": "[variables('logAnalyticsTableId')]",
+                    "graphQueries": [
+                      {
+                        "metricName": "Total events received",
+                        "legend": "Cisco Meraki Security Events",
+                        "baseQuery": "{{graphQueriesTableName}}"
+                      }
+                    ],
+                    "sampleQueries": [
+                      {
+                        "description": "Get Sample of Cisco Meraki Security Events",
+                        "query": "{{graphQueriesTableName}}\n | take 10"
+                      },
+                      {
+                        "description": "Total Events by Event Type",
+                        "query": "{{graphQueriesTableName}}\n | summarize count() by EventOriginalType"
+                      },
+                      {
+                        "description": "Get Rest API Data from Query Time Parser",
+                        "query": "CiscoMeraki\n| where Type == \"{{graphQueriesTableName}}\""
+                      }
+                    ],
+                    "dataTypes": [
+                      {
+                        "name": "{{graphQueriesTableName}}",
+                        "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                      }
+                    ],
+                    "connectivityCriterias": [
+                      {
+                        "type": "SentinelKindsV2",
+                        "value": []
+                      }
+                    ],
+                    "availability": {
+                      "status": 1,
+                      "isPreview": true
+                    },
+                    "permissions": {
+                      "resourceProvider": [
+                        {
+                          "provider": "Microsoft.OperationalInsights/workspaces",
+                          "permissionsDisplayText": "Read and Write permissions are required.",
+                          "providerDisplayName": "Workspace",
+                          "scope": "Workspace",
+                          "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                          }
+                        },
+                        {
+                          "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                          "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                          "providerDisplayName": "Keys",
+                          "scope": "Workspace",
+                          "requiredPermissions": {
+                            "action": true
+                          }
+                        }
+                      ],
+                      "customs": [
+                        {
+                          "name": "Cisco Meraki REST API Key",
+                          "description": "Enable API access in Cisco Meraki and generate API Key. Please refer to Cisco Meraki official [documentation](https://aka.ms/ciscomerakiapikey) for more information."
+                        },
+                        {
+                          "name": "Cisco Meraki Organization Id",
+                          "description": "Obtain your Cisco Meraki organization id to fetch security events. Follow the steps in the [documentation](https://aka.ms/ciscomerakifindorg) to obtain the Organization Id using the Meraki API Key obtained in previous step."
+                        }
+                      ]
+                    },
+                    "instructionSteps": [
+                      {
+                        "title": "Connect Cisco Meraki Security Events to Microsoft Sentinel",
+                        "description": "To enable Cisco Meraki Security Events for Microsoft Sentinel, provide the required information below and click on Connect.\n>This data connector depends on a parser based on a Kusto Function to render the content. [**CiscoMeraki**](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CiscoMeraki/Parsers/CiscoMeraki.txt) Parser currently support only \"**IDS Alert**\" and \"**File Scanned**\" Events.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "enable": "true",
+                              "userRequestPlaceHoldersInput": [
+                                {
+                                  "displayText": "Organization Id",
+                                  "requestObjectKey": "apiEndpoint",
+                                  "placeHolderName": "{{organization}}"
+                                }
+                              ],
+                              "transformation": {
+                                "transformationType": "predefinedTransformation",
+                                "outputStream": "[concat('Custom-', variables('streamName'))]",
+                                "dataCollectionRuleTemplateSpecName": "[variables('dataCollectionRuleId')]",
+                                "logAnalyticsTableTemplateSpecName": "[variables('logAnalyticsTableId')]"
+                              }
+                            },
+                            "type": "APIKey"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "pollingConfig": {
+                    "owner": "ASI",
+                    "version": "2.0",
+                    "source": "PaaS",
+                    "templateFilePath": "",
+                    "templateFileName": "",
+                    "auth": {
+                      "authType": "APIKey",
+                      "APIKeyName": "X-Cisco-Meraki-API-Key",
+                      "IsAPIKeyInPostPayload": false
+                    },
+                    "request": {
+                      "apiEndpoint": "https://api.meraki.com/api/v1/organizations/{{organization}}/appliance/security/events",
+                      "rateLimitQPS": 10,
+                      "queryWindowInMin": 5,
+                      "httpMethod": "GET",
+                      "queryTimeFormat": "UnixTimestamp",
+                      "startTimeAttributeName": "t0",
+                      "endTimeAttributeName": "t1",
+                      "queryParameters": {
+                        "perPage": 1000
+                      },
+                      "retryCount": 3,
+                      "timeoutInSeconds": 60,
+                      "headers": {
+                        "Accept": "application/json",
+                        "User-Agent": "Scuba"
+                      }
+                    },
+                    "paging": {
+                      "pagingType": "LinkHeader"
+                    },
+                    "response": {
+                      "eventsJsonPaths": [
+                        "$"
+                      ]
+                    }
+                  }
+                }
+              },
+              {
+                "name": "[variables('logAnalyticsTableId')]",
+                "type": "Microsoft.OperationalInsights/workspaces",
+                "apiVersion": "2021-03-01-privatepreview",
+                "location": "[parameters('workspace-location')]",
+                "tags": {},
+                "properties": {
+                  "schema": {
+                    "name": "[variables('logAnalyticsTableId')]",
+                    "columns": [
+                      {
+                        "name": "TimeGenerated",
+                        "type": "DateTime",
+                        "isDefaultDisplay": true,
+                        "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+                      },
+                      {
+                        "name": "EventCount",
+                        "type": "Int",
+                        "description": "This value is used when the source supports aggregation, and a single record may represent multiple events."
+                      },
+                      {
+                        "name": "EventSchemaVersion",
+                        "type": "String",
+                        "description": "The version of the schema."
+                      },
+                      {
+                        "name": "EventSchema",
+                        "type": "String",
+                        "description": "The name of the schema."
+                      },
+                      {
+                        "name": "DvcAction",
+                        "type": "String",
+                        "description": "The action taken on the network session."
+                      },
+                      {
+                        "name": "EventMessage",
+                        "type": "String",
+                        "description": "A general message or description."
+                      },
+                      {
+                        "name": "EventSeverity",
+                        "type": "String",
+                        "description": "The severity of the event. Valid values are: Informational, Low, Medium, or High."
+                      },
+                      {
+                        "name": "EventStartTime",
+                        "type": "DateTime",
+                        "description": "The time in which the event started. If the source supports aggregation and the record represents multiple events, the time that the first event was generated. If not provided by the source record, this field aliases the TimeGenerated field."
+                      },
+                      {
+                        "name": "EventEndTime",
+                        "type": "DateTime",
+                        "description": "The time in which the event ended. If the source supports aggregation and the record represents multiple events, the time that the last event was generated. If not provided by the source record, this field aliases the TimeGenerated field."
+                      },
+                      {
+                        "name": "DvcMacAddr",
+                        "type": "String",
+                        "description": "The MAC address of the device on which the event occurred or which reported the event. Example: 00:1B:44:11:3A:B7"
+                      },
+                      {
+                        "name": "Dvc",
+                        "type": "String",
+                        "description": "A unique identifier of the device on which the event occurred or which reported the event."
+                      },
+                      {
+                        "name": "DvcZone",
+                        "type": "String",
+                        "description": "The network on which the event occurred or which reported the event. The zone is defined by the reporting device."
+                      },
+                      {
+                        "name": "EventProductVersion",
+                        "type": "String",
+                        "description": "The version of the product generating the event."
+                      },
+                      {
+                        "name": "DvcOriginalAction",
+                        "type": "String",
+                        "description": "The original DvcAction as provided by the reporting device."
+                      },
+                      {
+                        "name": "DvcInterface",
+                        "type": "String",
+                        "description": "The network interface on which data was captured. This field is typically relevant to network related activity which is captured by an intermediate or tap device."
+                      },
+                      {
+                        "name": "DvcSubscriptionId",
+                        "type": "String",
+                        "description": "The cloud platform subscription ID the device belongs to. DvcSubscriptionId map to a subscription ID on Azure and to an account ID on AWS."
+                      },
+                      {
+                        "name": "EventOriginalSeverity",
+                        "type": "String",
+                        "description": "The original severity as provided by the reporting device. This value is used to derive EventSeverity."
+                      },
+                      {
+                        "name": "EventOriginalSubType",
+                        "type": "String",
+                        "description": "The original event subtype or ID, if provided by the source. For example, this field will be used to store the original Windows logon type. This value is used to derive EventSubType, which should have only one of the values documented for each schema."
+                      },
+                      {
+                        "name": "NetworkApplicationProtocol",
+                        "type": "String",
+                        "description": "The application layer protocol used by the connection or session."
+                      },
+                      {
+                        "name": "NetworkProtocolVersion",
+                        "type": "String",
+                        "description": "The version of NetworkProtocol."
+                      },
+                      {
+                        "name": "NetworkDirection",
+                        "type": "String",
+                        "description": "The direction of the connection or session."
+                      },
+                      {
+                        "name": "NetworkIcmpCode",
+                        "type": "Int",
+                        "description": "For an ICMP message, the ICMP message type numeric value as described in RFC 2780 for IPv4 network connections, or in RFC 4443 for IPv6 network connections."
+                      },
+                      {
+                        "name": "NetworkIcmpType",
+                        "type": "String",
+                        "description": "For an ICMP message, the ICMP message type text representation, as described in RFC 2780 for IPv4 network connections, or in RFC 4443 for IPv6 network connections."
+                      },
+                      {
+                        "name": "NetworkConnectionHistory",
+                        "type": "String",
+                        "description": "TCP flags and other potential IP header information."
+                      },
+                      {
+                        "name": "DstBytes",
+                        "type": "Long",
+                        "description": "The number of bytes sent from the destination to the source for the connection or session. If the event is aggregated, DstBytes is the sum over all aggregated sessions."
+                      },
+                      {
+                        "name": "SrcBytes",
+                        "type": "Long",
+                        "description": "The number of bytes sent from the source to the destination for the connection or session. If the event is aggregated, SrcBytes is the sum over all aggregated sessions."
+                      },
+                      {
+                        "name": "NetworkBytes",
+                        "type": "Long",
+                        "description": "Number of bytes sent in both directions. If both BytesReceived and BytesSent exist, BytesTotal should equal their sum. If the event is aggregated, NetworkBytes is the sum over all aggregated sessions."
+                      },
+                      {
+                        "name": "DstPackets",
+                        "type": "Long",
+                        "description": "The number of packets sent from the destination to the source for the connection or session. The meaning of a packet is defined by the reporting device. If the event is aggregated, DstPackets is the sum over all aggregated sessions."
+                      },
+                      {
+                        "name": "SrcPackets",
+                        "type": "Long",
+                        "description": "The number of packets sent from the source to the destination for the connection or session. The meaning of a packet is defined by the reporting device. If the event is aggregated, SrcPackets is the sum over all aggregated sessions."
+                      },
+                      {
+                        "name": "NetworkPackets",
+                        "type": "Long",
+                        "description": "The number of packets sent in both directions. If both PacketsReceived and PacketsSent exist, BytesTotal should equal their sum. The meaning of a packet is defined by the reporting device. If the event is aggregated, NetworkPackets is the sum over all aggregated sessions."
+                      },
+                      {
+                        "name": "NetworkSessionId",
+                        "type": "String",
+                        "description": "The session identifier as reported by the reporting device."
+                      },
+                      {
+                        "name": "DstZone",
+                        "type": "String",
+                        "description": "The network zone of the destination, as defined by the reporting device."
+                      },
+                      {
+                        "name": "DstInterfaceName",
+                        "type": "String",
+                        "description": "The network interface used for the connection or session by the destination device."
+                      },
+                      {
+                        "name": "DstInterfaceGuid",
+                        "type": "String",
+                        "description": "The GUID of the network interface used on the destination device.",
+                        "dataTypeHint": "GUID"
+                      },
+                      {
+                        "name": "DstMacAddr",
+                        "type": "String",
+                        "description": "The MAC address of the network interface used for the connection or session by the destination device."
+                      },
+                      {
+                        "name": "DstVlanId",
+                        "type": "String",
+                        "description": "The VLAN ID related to the destination device."
+                      },
+                      {
+                        "name": "DstSubscriptionId",
+                        "type": "String",
+                        "description": "The cloud platform subscription ID the destination device belongs to. DstSubscriptionId map to a subscription ID on Azure and to an account ID on AWS."
+                      },
+                      {
+                        "name": "DstGeoCountry",
+                        "type": "String",
+                        "description": "The country associated with the destination IP address."
+                      },
+                      {
+                        "name": "DstGeoRegion",
+                        "type": "String",
+                        "description": "The region, or state, within a country associated with the destination IP address."
+                      },
+                      {
+                        "name": "DstGeoCity",
+                        "type": "String",
+                        "description": "The city associated with the destination IP address."
+                      },
+                      {
+                        "name": "DstGeoLatitude",
+                        "type": "Double",
+                        "description": "The latitude of the geographical coordinate associated with the destination IP address."
+                      },
+                      {
+                        "name": "DstGeoLongitude",
+                        "type": "Double",
+                        "description": "The longitude of the geographical coordinate associated with the destination IP address."
+                      },
+                      {
+                        "name": "DstUserId",
+                        "type": "String",
+                        "description": "A machine-readable, alphanumeric, unique representation of the destination user."
+                      },
+                      {
+                        "name": "DstUserIdType",
+                        "type": "String",
+                        "description": "The type of the ID stored in the DstUserId field."
+                      },
+                      {
+                        "name": "DstUsername",
+                        "type": "String",
+                        "description": "The destination username, including domain information when available. Use the simple form only if domain information isn't available."
+                      },
+                      {
+                        "name": "DstUsernameType",
+                        "type": "String",
+                        "description": "Specifies the type of the username stored in the DstUsername field."
+                      },
+                      {
+                        "name": "DstUserType",
+                        "type": "String",
+                        "description": "The type of destination user."
+                      },
+                      {
+                        "name": "DstOriginalUserType",
+                        "type": "String",
+                        "description": "The original destination user type, if provided by the source."
+                      },
+                      {
+                        "name": "DstAppName",
+                        "type": "String",
+                        "description": "The name of the destination application."
+                      },
+                      {
+                        "name": "DstAppId",
+                        "type": "String",
+                        "description": "The ID of the destination application, as reported by the reporting device."
+                      },
+                      {
+                        "name": "DstAppType",
+                        "type": "String",
+                        "description": "The type of the destination application."
+                      },
+                      {
+                        "name": "SrcZone",
+                        "type": "String",
+                        "description": "The network zone of the source, as defined by the reporting device."
+                      },
+                      {
+                        "name": "SrcInterfaceName",
+                        "type": "String",
+                        "description": "The network interface used for the connection or session by the source device."
+                      },
+                      {
+                        "name": "SrcInterfaceGuid",
+                        "type": "String",
+                        "description": "The GUID of the network interface used on the source device.",
+                        "dataTypeHint": "GUID"
+                      },
+                      {
+                        "name": "SrcMacAddr",
+                        "type": "String",
+                        "description": "The MAC address of the network interface from which the connection or session originated."
+                      },
+                      {
+                        "name": "SrcVlanId",
+                        "type": "String",
+                        "description": "The VLAN ID related to the source device."
+                      },
+                      {
+                        "name": "SrcSubscriptionId",
+                        "type": "String",
+                        "description": "The cloud platform subscription ID the source device belongs to. SrcSubscriptionId map to a subscription ID on Azure and to an account ID on AWS."
+                      },
+                      {
+                        "name": "SrcGeoCountry",
+                        "type": "String",
+                        "description": "The country associated with the source IP address."
+                      },
+                      {
+                        "name": "SrcGeoRegion",
+                        "type": "String",
+                        "description": "The region within a country associated with the source IP address."
+                      },
+                      {
+                        "name": "SrcGeoCity",
+                        "type": "String",
+                        "description": "The city associated with the source IP address."
+                      },
+                      {
+                        "name": "SrcGeoLatitude",
+                        "type": "Double",
+                        "description": "The latitude of the geographical coordinate associated with the source IP address."
+                      },
+                      {
+                        "name": "SrcGeoLongitude",
+                        "type": "Double",
+                        "description": "The longitude of the geographical coordinate associated with the source IP address."
+                      },
+                      {
+                        "name": "SrcAppName",
+                        "type": "String",
+                        "description": "The name of the source application."
+                      },
+                      {
+                        "name": "SrcAppId",
+                        "type": "String",
+                        "description": "The ID of the source application, as reported by the reporting device."
+                      },
+                      {
+                        "name": "SrcAppType",
+                        "type": "String",
+                        "description": "The type of the source application."
+                      },
+                      {
+                        "name": "DstNatIpAddr",
+                        "type": "String",
+                        "description": "The DstNatIpAddr represents either of: The original address of the destination device if network address translation was used or the IP address used by the intermediary device for communication with the source."
+                      },
+                      {
+                        "name": "DstNatPortNumber",
+                        "type": "Int",
+                        "description": "If reported by an intermediary NAT device, the port used by the NAT device for communication with the source."
+                      },
+                      {
+                        "name": "SrcNatIpAddr",
+                        "type": "String",
+                        "description": "The SrcNatIpAddr represents either of: The original address of the source device if network address translation was used or the IP address used by the intermediary device for communication with the destination.",
+                        "dataTypeHint": "IP"
+                      },
+                      {
+                        "name": "SrcNatPortNumber",
+                        "type": "Int",
+                        "description": "If reported by an intermediary NAT device, the port used by the NAT device for communication with the destination."
+                      },
+                      {
+                        "name": "DvcInboundInterface",
+                        "type": "String",
+                        "description": "If reported by an intermediary device, the network interface used by the NAT device for the connection to the source device."
+                      },
+                      {
+                        "name": "DvcOutboundInterface",
+                        "type": "String",
+                        "description": "If reported by an intermediary device, the network interface used by the NAT device for the connection to the destination device."
+                      },
+                      {
+                        "name": "NetworkRuleName",
+                        "type": "String",
+                        "description": "The name or ID of the rule by which DvcAction was decided upon."
+                      },
+                      {
+                        "name": "NetworkRuleNumber",
+                        "type": "Int",
+                        "description": "The number of the rule by which DvcAction was decided upon."
+                      },
+                      {
+                        "name": "ThreatId",
+                        "type": "String",
+                        "description": "The ID of the threat or malware identified in the network session."
+                      },
+                      {
+                        "name": "ThreatName",
+                        "type": "String",
+                        "description": "The name of the threat or malware identified in the network session."
+                      },
+                      {
+                        "name": "ThreatCategory",
+                        "type": "String",
+                        "description": "The category of the threat or malware identified in the network session."
+                      },
+                      {
+                        "name": "ThreatRiskLevel",
+                        "type": "Int",
+                        "description": "The risk level associated with the session. The level is a number between 0 and 100."
+                      },
+                      {
+                        "name": "ThreatRiskLevelOriginal",
+                        "type": "String",
+                        "description": "The risk level as reported by the reporting device."
+                      },
+                      {
+                        "name": "EventType",
+                        "type": "String",
+                        "description": "The operation reported by the record."
+                      },
+                      {
+                        "name": "EventSubType",
+                        "type": "String",
+                        "description": "Additional description of the event type, if applicable."
+                      },
+                      {
+                        "name": "EventResult",
+                        "type": "String",
+                        "description": "The outcome of the event, represented by one of the following values: Success, Partial, Failure, NA (Not Applicable). The value may not be provided directly by the sources, in which case it is derived from other event fields, for example, the EventResultDetails field."
+                      },
+                      {
+                        "name": "EventResultDetails",
+                        "type": "String",
+                        "description": "Reason or details for the result reported in the EventResult field."
+                      },
+                      {
+                        "name": "EventOriginalType",
+                        "type": "String",
+                        "isDefaultDisplay": true,
+                        "description": "The original event type or ID, if provided by the source."
+                      },
+                      {
+                        "name": "EventProduct",
+                        "type": "String",
+                        "description": "The product generating the event."
+                      },
+                      {
+                        "name": "EventVendor",
+                        "type": "String",
+                        "description": "The vendor of the product generating the event."
+                      },
+                      {
+                        "name": "DvcIpAddr",
+                        "type": "String",
+                        "dataTypeHint": "IP",
+                        "description": "The IP Address of the device reporting the event."
+                      },
+                      {
+                        "name": "DvcHostname",
+                        "type": "String",
+                        "description": "The hostname of the device reporting the event."
+                      },
+                      {
+                        "name": "DvcDomain",
+                        "type": "String",
+                        "description": "The domain of the device reporting the event."
+                      },
+                      {
+                        "name": "DvcDomainType",
+                        "type": "String",
+                        "description": "The type of DvcDomain. Possible values include 'Windows' and 'FQDN'."
+                      },
+                      {
+                        "name": "DvcOs",
+                        "type": "String",
+                        "description": "The operating system running on the device reporting the event."
+                      },
+                      {
+                        "name": "DvcOsVersion",
+                        "type": "String",
+                        "description": "The version of the operating system on the device reporting the event."
+                      },
+                      {
+                        "name": "AdditionalFields",
+                        "type": "Dynamic",
+                        "description": "Additional information, represented using key/value pairs provided by the source which do not map to ASim."
+                      },
+                      {
+                        "name": "SrcIpAddr",
+                        "type": "String",
+                        "isDefaultDisplay": true,
+                        "dataTypeHint": "IP",
+                        "description": "The IP address from which the connection or session originated."
+                      },
+                      {
+                        "name": "SrcPortNumber",
+                        "type": "Int",
+                        "description": "The IP port from which the connection originated. Might not be relevant for a session comprising multiple connections."
+                      },
+                      {
+                        "name": "DstIpAddr",
+                        "type": "String",
+                        "isDefaultDisplay": true,
+                        "dataTypeHint": "IP",
+                        "description": "The IP address of the connection or session destination."
+                      },
+                      {
+                        "name": "NetworkProtocol",
+                        "type": "String",
+                        "description": "The IP protocol used by the connection or session as listed in IANA protocol assignment, which is typically TCP, UDP, or ICMP."
+                      },
+                      {
+                        "name": "EventOriginalUid",
+                        "type": "String",
+                        "description": "A unique ID of the original record, if provided by the source."
+                      },
+                      {
+                        "name": "EventReportUrl",
+                        "type": "String",
+                        "dataTypeHint": "URI",
+                        "description": "A URL provided in the event for a resource that provides more information about the event."
+                      },
+                      {
+                        "name": "DvcFQDN",
+                        "type": "String",
+                        "description": "The hostname of the device on which the event occurred or which reported the event."
+                      },
+                      {
+                        "name": "DvcId",
+                        "type": "String",
+                        "description": "The unique ID of the device on which the event occurred or which reported the event."
+                      },
+                      {
+                        "name": "DvcIdType",
+                        "type": "String",
+                        "description": "The type of DvcId."
+                      },
+                      {
+                        "name": "SrcHostname",
+                        "type": "String",
+                        "description": "The source device hostname, excluding domain information. If no device name is available, may store the relevant IP address."
+                      },
+                      {
+                        "name": "SrcDomain",
+                        "type": "String",
+                        "description": "The domain of the source device."
+                      },
+                      {
+                        "name": "SrcDomainType",
+                        "type": "String",
+                        "description": "The type of SrcDomain."
+                      },
+                      {
+                        "name": "SrcFQDN",
+                        "type": "String",
+                        "description": "The source device hostname, including domain information when available."
+                      },
+                      {
+                        "name": "SrcDvcId",
+                        "type": "String",
+                        "description": "The ID of the source device."
+                      },
+                      {
+                        "name": "SrcDvcIdType",
+                        "type": "String",
+                        "description": "The type of SrcDvcId."
+                      },
+                      {
+                        "name": "SrcDeviceType",
+                        "type": "String",
+                        "description": "The type of the source device."
+                      },
+                      {
+                        "name": "SrcUserId",
+                        "type": "String",
+                        "description": "A machine-readable, alphanumeric, unique representation of the source user."
+                      },
+                      {
+                        "name": "SrcUserIdType",
+                        "type": "String",
+                        "description": "The type of the ID stored in the SrcUserId field."
+                      },
+                      {
+                        "name": "SrcUsername",
+                        "type": "String",
+                        "description": "The source username, including domain information when available."
+                      },
+                      {
+                        "name": "SrcUsernameType",
+                        "type": "String",
+                        "description": "Specifies the type of the username stored in the SrcUsername field."
+                      },
+                      {
+                        "name": "SrcUserType",
+                        "type": "String",
+                        "description": "The type of the source user."
+                      },
+                      {
+                        "name": "SrcOriginalUserType",
+                        "type": "String",
+                        "description": "The original destination user type, if provided by the by the reporting device."
+                      },
+                      {
+                        "name": "DstPortNumber",
+                        "type": "Int",
+                        "description": "The destination IP port."
+                      },
+                      {
+                        "name": "DstHostname",
+                        "type": "String",
+                        "description": "The destination device hostname, excluding domain information."
+                      },
+                      {
+                        "name": "DstDomain",
+                        "type": "String",
+                        "description": "The domain of the destination device."
+                      },
+                      {
+                        "name": "DstDomainType",
+                        "type": "String",
+                        "description": "The type of DstDomain."
+                      },
+                      {
+                        "name": "DstFQDN",
+                        "type": "String",
+                        "description": "The destination device hostname, including domain information when available."
+                      },
+                      {
+                        "name": "DstDvcId",
+                        "type": "String",
+                        "description": "The ID of the destination device."
+                      },
+                      {
+                        "name": "DstDvcIdType",
+                        "type": "String",
+                        "description": "The type of DstDvcId."
+                      },
+                      {
+                        "name": "DstDeviceType",
+                        "type": "String",
+                        "description": "The type of the destination device."
+                      },
+                      {
+                        "name": "Url",
+                        "type": "String",
+                        "description": "The full HTTP request URL, including parameters."
+                      },
+                      {
+                        "name": "UrlCategory",
+                        "type": "String",
+                        "description": "The defined grouping of a URL or the domain part of the URL. The category is commonly provided by web security gateways and is based on the content of the site the URL points to."
+                      },
+                      {
+                        "name": "UrlOriginal",
+                        "type": "String",
+                        "description": "The original value of the URL, when the URL was modified by the reporting device and both values are provided."
+                      },
+                      {
+                        "name": "HttpVersion",
+                        "type": "String",
+                        "description": "The HTTP Request Version."
+                      },
+                      {
+                        "name": "HttpRequestMethod",
+                        "type": "String",
+                        "description": "The HTTP Method. The values are as defined in RFC 7231 and RFC 5789, and include GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, and PATCH."
+                      },
+                      {
+                        "name": "HttpStatusCode",
+                        "type": "String",
+                        "description": "The HTTP Status Code. Alias to EventResultDetails."
+                      },
+                      {
+                        "name": "HttpContentType",
+                        "type": "String",
+                        "description": "The HTTP Response content type header."
+                      },
+                      {
+                        "name": "HttpContentFormat",
+                        "type": "String",
+                        "description": "The content format part of the HttpContentType"
+                      },
+                      {
+                        "name": "HttpReferrer",
+                        "type": "String",
+                        "description": "The HTTP referrer header."
+                      },
+                      {
+                        "name": "HttpUserAgent",
+                        "type": "String",
+                        "description": "The HTTP user agent header."
+                      },
+                      {
+                        "name": "UserAgent",
+                        "type": "String",
+                        "description": "Alias to HttpUserAgent"
+                      },
+                      {
+                        "name": "HttpRequestXff",
+                        "type": "String",
+                        "description": "The HTTP X-Forwarded-For header."
+                      },
+                      {
+                        "name": "HttpRequestTime",
+                        "type": "Int",
+                        "description": "The amount of time, in milliseconds, it took to send the request to the server, if applicable."
+                      },
+                      {
+                        "name": "HttpResponseTime",
+                        "type": "Int",
+                        "description": "The amount of time, in milliseconds, it took to receive a response in the server, if applicable."
+                      },
+                      {
+                        "name": "FileName",
+                        "type": "String",
+                        "description": "For HTTP uploads, the name of the uploaded file."
+                      },
+                      {
+                        "name": "FileMD5",
+                        "type": "String",
+                        "description": "For HTTP uploads, the MD5 hash of the uploaded file."
+                      },
+                      {
+                        "name": "FileSHA1",
+                        "type": "String",
+                        "description": "For HTTP uploads, the SHA1 hash of the uploaded file."
+                      },
+                      {
+                        "name": "FileSHA256",
+                        "type": "String",
+                        "description": "For HTTP uploads, the SHA256 hash of the uploaded file."
+                      },
+                      {
+                        "name": "FileSHA512",
+                        "type": "String",
+                        "description": "For HTTP uploads, the SHA512 hash of the uploaded file."
+                      },
+                      {
+                        "name": "Hash",
+                        "type": "String",
+                        "description": "Alias to the available Hash field."
+                      },
+                      {
+                        "name": "FileHashType",
+                        "type": "String",
+                        "description": "The type of the hash in the Hash field. Possible values include: MD5, SHA1, SHA256, and SHA512."
+                      },
+                      {
+                        "name": "FileSize",
+                        "type": "Int",
+                        "description": "For HTTP uploads, the size in bytes of the uploaded file."
+                      },
+                      {
+                        "name": "FileContentType",
+                        "type": "String",
+                        "description": "For HTTP uploads, the content type of the uploaded file."
+                      },
+                      {
+                        "name": "RuleName",
+                        "type": "String",
+                        "description": "The name or ID of the rule by which DvcAction was decided upon."
+                      },
+                      {
+                        "name": "RuleNumber",
+                        "type": "Int",
+                        "description": "The number of the rule by which DvcAction was decided upon."
+                      },
+                      {
+                        "name": "Rule",
+                        "type": "String",
+                        "description": "Either NetworkRuleName or NetworkRuleNumber"
+                      },
+                      {
+                        "name": "NetworkDuration",
+                        "type": "Int",
+                        "description": "Duration of the network"
+                      },
+                      {
+                        "name": "IpAddr",
+                        "type": "String",
+                        "description": "Alias for SrcIpAddr"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "name": "[variables('dataCollectionRuleId')]",
+                "apiVersion": "2021-09-01-preview",
+                "type": "Microsoft.Insights/dataCollectionRules",
+                "location": "[parameters('workspace-location')]",
+                "properties": {
+                  "streamDeclarations": {
+                    "[concat('Custom-', variables('streamName'))]": {
+                      "columns": [
+                        {
+                          "name": "ts",
+                          "type": "datetime",
+                          "description": "The time at which the data was generated"
+                        },
+                        {
+                          "name": "eventType",
+                          "type": "string",
+                          "description": "Event Type of the security event."
+                        },
+                        {
+                          "name": "deviceMac",
+                          "type": "string",
+                          "description": "MAC address of Device"
+                        },
+                        {
+                          "name": "clientName",
+                          "type": "string",
+                          "description": "Client Machine name"
+                        },
+                        {
+                          "name": "clientMac",
+                          "type": "string",
+                          "description": "MAC address of Client"
+                        },
+                        {
+                          "name": "clientIp",
+                          "type": "string",
+                          "description": "Client IP Address"
+                        },
+                        {
+                          "name": "srcIp",
+                          "type": "string",
+                          "description": "Source IP Address"
+                        },
+                        {
+                          "name": "destIp",
+                          "type": "string",
+                          "description": "Destination IP Address"
+                        },
+                        {
+                          "name": "protocol",
+                          "type": "string",
+                          "description": "Protocol used"
+                        },
+                        {
+                          "name": "priority",
+                          "type": "string",
+                          "description": "Priority of the Security Event"
+                        },
+                        {
+                          "name": "uri",
+                          "type": "string",
+                          "description": "URI of the compromised entity"
+                        },
+                        {
+                          "name": "classification",
+                          "type": "string",
+                          "description": "Classification of the Security Event"
+                        },
+                        {
+                          "name": "canonicalName",
+                          "type": "string",
+                          "description": "Canonical Name of the Client Machine"
+                        },
+                        {
+                          "name": "destinationPort",
+                          "type": "int",
+                          "description": "Destination Port"
+                        },
+                        {
+                          "name": "blocked",
+                          "type": "boolean",
+                          "description": "If the action was blocked or not"
+                        },
+                        {
+                          "name": "message",
+                          "type": "string",
+                          "description": "Security Event message"
+                        },
+                        {
+                          "name": "signature",
+                          "type": "string",
+                          "description": "Signature used in the action"
+                        },
+                        {
+                          "name": "sigSource",
+                          "type": "string",
+                          "description": "Source of the signature"
+                        },
+                        {
+                          "name": "ruleId",
+                          "type": "string",
+                          "description": "RuleId in use"
+                        },
+                        {
+                          "name": "fileHash",
+                          "type": "string",
+                          "description": "File Hash of the Scanned File"
+                        },
+                        {
+                          "name": "fileType",
+                          "type": "string",
+                          "description": "File Type of the Scanned File"
+                        },
+                        {
+                          "name": "fileSizeBytes",
+                          "type": "int",
+                          "description": "File Size of the Scanned File"
+                        },
+                        {
+                          "name": "disposition",
+                          "type": "string",
+                          "description": "Disposition of the Scanned File"
+                        },
+                        {
+                          "name": "action",
+                          "type": "string",
+                          "description": "Action performed"
+                        }
+                      ]
+                    }
+                  },
+                  "destinations": {
+                    "logAnalytics": [
+                      {
+                        "workspaceResourceId": "[variables('workspaceResourceId')]",
+                        "name": "clv2ws1"
+                      }
+                    ]
+                  },
+                  "dataFlows": [
+                    {
+                      "streams": [
+                        "[concat('Custom-', variables('streamName'))]"
+                      ],
+                      "destinations": [
+                        "clv2ws1"
+                      ],
+                      "transformKql": "source \r\n    | extend srcIpSplit = split(srcIp,':'), dstIpSplit = split(destIp,':')\r\n    | extend \r\n        TimeGenerated = ts, \r\n        EventCount = toint(1), \r\n        EventResult = \"NA\", \r\n        EventResultDetails = \"NA\", \r\n        EventProduct = \"Meraki MX\", \r\n        EventVendor = \"Cisco\", \r\n        Dvc = \"Meraki MX\",\r\n        EventType = case(\r\n                            eventType == \"IDS Alert\", \"Notable\",\r\n                            \"\"\r\n                      ),\r\n        EventSchema = case(\r\n                            eventType == \"IDS Alert\", \"NetworkSession\",\r\n                            \"\"\r\n                      ), \r\n        EventSchemaVersion = case(\r\n                            eventType == \"IDS Alert\", \"0.2.2\",\r\n                            \"\"\r\n                      ),  \r\n        EventOriginalType = eventType, \r\n        DvcMacAddr = deviceMac, \r\n        SrcMacAddr = clientMac, \r\n        SrcIpAddr = iff(isnotempty(tostring(srcIpSplit[0])),tostring(srcIpSplit[0]),clientIp), \r\n        SrcPortNumber = iif(array_length(srcIpSplit) == 2, toint(srcIpSplit[1]), int(null)), \r\n        DstIpAddr = tostring(dstIpSplit[0]), \r\n        DstPortNumber = iff(array_length(dstIpSplit) == 2,toint(dstIpSplit[1]),toint(destinationPort)), \r\n        NetworkProtocol = iif(eventType == \"IDS Alert\", iif(protocol == \"tcp\/ip\", \"TCP\", \"UDP\"), \"\"), \r\n        NetworkApplicationProtocol = iif(eventType == \"File Scanned\", protocol, \"\"), \r\n        EventOriginalSeverity = iff(isnotempty(priority), tostring(priority), disposition), \r\n        EventSeverity = case(priority == \"0\", \"High\",\r\n                             priority == \"1\", \"Medium\",\r\n                             priority == \"2\", \"Low\",\r\n                             priority == \"3\", \"Informational\", \r\n                             disposition == \"Malicious\", \"High\",\r\n                             disposition == \"Clean\", \"Informational\", \r\n                             \"Low\"),\r\n        EventMessage = message, \r\n        DvcAction = case(\r\n                          eventType == \"File Scanned\" and action == \"Blocked\", \"Deny\",\r\n                          eventType == \"IDS Alert\" and blocked, \"Deny\",\r\n                          eventType == \"IDS Alert\" and not(blocked), \"Allow\",\r\n                          \"Allow\"\r\n                        ),\r\n        NetworkRuleName = ruleId, \r\n        SrcHostname = clientName, \r\n        Url = uri, \r\n        FileHashType = \"SHA256\", \r\n        Hash = fileHash, \r\n        FileContentType = fileType, \r\n        FileSize = fileSizeBytes, \r\n        AdditionalFields = strcat(\r\n                            iff(isnotempty(canonicalName),strcat(\"canonicalName=\",canonicalName,\";\"),\"\"),\r\n                            iff(isnotempty(classification),strcat(\"classification=\",classification,\";\"),\"\"),\r\n                            iff(isnotempty(signature),strcat(\"signature=\",signature,\";\"),\"\"),\r\n                            iff(isnotempty(sigSource),strcat(\"sigSource=\",sigSource,\";\"),\"\")\r\n                        )\r\n    | extend \r\n        Rule = NetworkRuleName, \r\n        EventStartTime = TimeGenerated, \r\n        EventEndTime = TimeGenerated\r\n    | project-away \r\n        srcIpSplit, dstIpSplit",
+                      "outputStream": "[concat('Custom-', variables('logAnalyticsTableId'))]"
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                "apiVersion": "2021-03-01-preview",
+                "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('dataConnectorVersion')))]",
+                "properties": {
+                  "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId'))]",
+                  "contentId": "[variables('_dataConnectorContentId')]",
+                  "kind": "DataConnector",
+                  "version": "[variables('dataConnectorVersion')]",
+                  "source": {
+                    "kind": "Solution",
+                    "name": "Cisco Meraki",
+                    "sourceId": "[variables('_sourceId')]"
+                  },
+                  "author": {
+                    "name": "Microsoft",
+                    "email": "support@microsoft.com",
+                    "link": "https://support.microsoft.com"
+                  },
+                  "support": {
+                    "tier": "Microsoft",
+                    "name": "Microsoft Corporation",
+                    "email": "support@microsoft.com",
+                    "link": "https://support.microsoft.com/"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId'))]",
+        "apiVersion": "2021-03-01-preview",
+        "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+        "location": "[parameters('workspace-location')]",
+        "kind": "APIPolling",
+        "properties": {
+          "connectorUiConfig": {
+            "id": "[variables('_uiConfigId')]",
+            "title": "Cisco Meraki (using REST API)",
+            "publisher": "Microsoft",
+            "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki MX [security events](https://aka.ms/ciscomerakisecurityevents) to Microsoft Sentinel. The data connector uses [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch security events and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received security event data into a custom columns so that queries don't need to parse it again, thus resulting in better performance.\n\n **Supported ASIM schema:** \n 1. Network Session",
+            "graphQueriesTableName": "[variables('logAnalyticsTableId')]",
+            "graphQueries": [
+              {
+                "metricName": "Total events received",
+                "legend": "Cisco Meraki Security Events",
+                "baseQuery": "{{graphQueriesTableName}}"
+              }
+            ],
+            "sampleQueries": [
+              {
+                "description": "Get Sample of Cisco Meraki Security Events",
+                "query": "{{graphQueriesTableName}}\n | take 10"
+              },
+              {
+                "description": "Total Events by Event Type",
+                "query": "{{graphQueriesTableName}}\n | summarize count() by EventOriginalType"
+              },
+              {
+                "description": "Get Rest API Data from Query Time Parser",
+                "query": "CiscoMeraki\n| where Type == \"{{graphQueriesTableName}}\""
+              }
+            ],
+            "dataTypes": [
+              {
+                "name": "{{graphQueriesTableName}}",
+                "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+              }
+            ],
+            "connectivityCriterias": [
+              {
+                "type": "SentinelKindsV2",
+                "value": []
+              }
+            ],
+            "availability": {
+              "status": 1,
+              "isPreview": true
+            },
+            "permissions": {
+              "resourceProvider": [
+                {
+                  "provider": "Microsoft.OperationalInsights/workspaces",
+                  "permissionsDisplayText": "Read and Write permissions are required.",
+                  "providerDisplayName": "Workspace",
+                  "scope": "Workspace",
+                  "requiredPermissions": {
+                    "write": true,
+                    "read": true,
+                    "delete": true
+                  }
+                },
+                {
+                  "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                  "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                  "providerDisplayName": "Keys",
+                  "scope": "Workspace",
+                  "requiredPermissions": {
+                    "action": true
+                  }
+                }
+              ],
+              "customs": [
+                {
+                  "name": "Cisco Meraki REST API Key",
+                  "description": "Enable API access in Cisco Meraki and generate API Key. Please refer to Cisco Meraki official [documentation](https://aka.ms/ciscomerakiapikey) for more information."
+                },
+                {
+                  "name": "Cisco Meraki Organization Id",
+                  "description": "Obtain your Cisco Meraki organization id to fetch security events. Follow the steps in the [documentation](https://aka.ms/ciscomerakifindorg) to obtain the Organization Id using the Meraki API Key obtained in previous step."
+                }
+              ]
+            },
+            "instructionSteps": [
+              {
+                "title": "Connect Cisco Meraki Security Events to Microsoft Sentinel",
+                "description": "To enable Cisco Meraki Security Events for Microsoft Sentinel, provide the required information below and click on Connect.\n>This data connector depends on a parser based on a Kusto Function to render the content. [**CiscoMeraki**](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CiscoMeraki/Parsers/CiscoMeraki.txt) Parser currently support only \"**IDS Alert**\" and \"**File Scanned**\" Events.",
+                "instructions": [
+                  {
+                    "parameters": {
+                      "enable": "true",
+                      "userRequestPlaceHoldersInput": [
+                        {
+                          "displayText": "Organization Id",
+                          "requestObjectKey": "apiEndpoint",
+                          "placeHolderName": "{{organization}}"
+                        }
+                      ],
+                      "transformation": {
+                        "transformationType": "predefinedTransformation",
+                        "outputStream": "[concat('Custom-', variables('streamName'))]",
+                        "dataCollectionRuleTemplateSpecName": "[variables('dataCollectionRuleId')]",
+                        "logAnalyticsTableTemplateSpecName": "[variables('logAnalyticsTableId')]"
+                      }
+                    },
+                    "type": "APIKey"
+                  }
+                ]
+              }
+            ]
+          },
+          "pollingConfig": {
+            "owner": "ASI",
+            "version": "2.0",
+            "source": "PaaS",
+            "templateFilePath": "",
+            "templateFileName": "",
+            "auth": {
+              "authType": "APIKey",
+              "APIKeyName": "X-Cisco-Meraki-API-Key",
+              "IsAPIKeyInPostPayload": false
+            },
+            "request": {
+              "apiEndpoint": "https://api.meraki.com/api/v1/organizations/{{organization}}/appliance/security/events",
+              "rateLimitQPS": 10,
+              "queryWindowInMin": 5,
+              "httpMethod": "GET",
+              "queryTimeFormat": "UnixTimestamp",
+              "startTimeAttributeName": "t0",
+              "endTimeAttributeName": "t1",
+              "queryParameters": {
+                "perPage": 1000
+              },
+              "retryCount": 3,
+              "timeoutInSeconds": 60,
+              "headers": {
+                "Accept": "application/json",
+                "User-Agent": "Scuba"
+              }
+            },
+            "paging": {
+              "pagingType": "LinkHeader"
+            },
+            "response": {
+              "eventsJsonPaths": [
+                "$"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+        "apiVersion": "2021-03-01-preview",
+        "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(variables('dataConnectorVersion')))]",
+        "properties": {
+          "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId'))]",
+          "contentId": "[variables('_dataConnectorContentId')]",
+          "kind": "DataConnector",
+          "version": "[variables('dataConnectorVersion')]",
+          "source": {
+            "kind": "Solution",
+            "name": "Cisco Meraki",
+            "sourceId": "[variables('_sourceId')]"
+          },
+          "author": {
+            "name": "Microsoft",
+            "email": "support@microsoft.com",
+            "link": "https://support.microsoft.com"
+          },
+          "support": {
+            "tier": "Microsoft",
+            "name": "Microsoft Corporation",
+            "email": "support@microsoft.com",
+            "link": "https://support.microsoft.com/"
+          }
+        }
+      }
+    ]
+  }

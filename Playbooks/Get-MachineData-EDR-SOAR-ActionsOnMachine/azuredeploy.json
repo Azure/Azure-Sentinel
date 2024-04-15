@@ -1,0 +1,1368 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"PlaybookName": {
+			"defaultValue": "PlaybookName",
+			"type": "string"
+		}
+	},
+	"variables": {
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+		"AzureKeyVaultConnectionName": "[concat('azurekeyvault-', parameters('PlaybookName'))]",
+		"SharepointOnlineConnectionName": "[concat('sharepointonline-', parameters('PlaybookName'))]",
+		"DefenderATPConnectionName": "[concat('defenderatp-', parameters('PlaybookName'))]",
+		"TeamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]"
+	},
+	"resources": [
+		{
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2017-07-01",
+			"name": "[parameters('PlaybookName')]",
+			"location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('SharepointOnlineConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('DefenderATPConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+			],
+			"properties": {
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						},
+						"tenantId": {
+							"defaultValue": "d1fd9326-4644-4e1c-8685-279bfbe2f5a0",
+							"type": "String"
+						}
+					},
+					"triggers": {
+						"Microsoft_Sentinel_alert": {
+							"type": "ApiConnectionWebhook",
+							"inputs": {
+								"body": {
+									"callback_url": "@{listCallbackUrl()}"
+								},
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+									}
+								},
+								"path": "/subscribe"
+							}
+						}
+					},
+					"actions": {
+						"Alert_-_Get_hosts": {
+							"runAfter": {},
+							"type": "ApiConnection",
+							"inputs": {
+								"body": "@triggerBody()?['Entities']",
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+									}
+								},
+								"method": "post",
+								"path": "/entities/host"
+							}
+						},
+						"For_each_Sentinel_host": {
+							"foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
+							"actions": {
+								"Create_new_subfolder_under_Documents_to_store_all_csv_files": {
+									"runAfter": {
+										"Machines_-_Get_list_of_machines": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"body": {
+											"path": "@variables('subfolderName')"
+										},
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['sharepointonline']['connectionId']"
+											}
+										},
+										"method": "post",
+										"path": "/datasets/@{encodeURIComponent(encodeURIComponent(''))}/tables/@{encodeURIComponent(encodeURIComponent('6a2a8bfc-17b5-42e8-8c34-47865fc48b1d'))}/createnewfolder"
+									}
+								},
+								"Create_sharing_link_for_the_subfolder_which_contains_all_csv_files": {
+									"runAfter": {
+										"For_each_MDATP_-_get_missing_KBs": [
+											"Succeeded"
+										],
+										"For_each_MDATP_-_get_software_inventory": [
+											"Succeeded"
+										],
+										"For_each_MDATP_host_-_get_alerts": [
+											"Succeeded"
+										],
+										"For_each_MDATP_host_-_get_recommendation": [
+											"Succeeded"
+										],
+										"For_each_MDATP_host_-_get_vulnerabilities": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"body": {
+											"scope": "organization",
+											"type": "view"
+										},
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['sharepointonline']['connectionId']"
+											}
+										},
+										"method": "post",
+										"path": "/datasets/@{encodeURIComponent(encodeURIComponent(''))}/codeless/_api/v2.0/sites/root/lists/@{encodeURIComponent(encodeURIComponent('6a2a8bfc-17b5-42e8-8c34-47865fc48b1d'))}/items/@{encodeURIComponent(encodeURIComponent(body('Create_new_subfolder_under_Documents_to_store_all_csv_files')?['ID']))}/driveItem/createLink"
+									}
+								},
+								"For_each_MDATP_-_get_missing_KBs": {
+									"foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
+									"actions": {
+										"Create_missing_KBs_CSV_table": {
+											"runAfter": {
+												"For_each_missing_KB": [
+													"Succeeded"
+												]
+											},
+											"type": "Table",
+											"inputs": {
+												"format": "CSV",
+												"from": "@variables('missingkbsvsc')"
+											}
+										},
+										"Create_missing_KBs_csv_file": {
+											"runAfter": {
+												"Create_missing_KBs_CSV_table": [
+													"Succeeded"
+												]
+											},
+											"type": "ApiConnection",
+											"inputs": {
+												"body": "@body('Create_missing_KBs_CSV_table')",
+												"host": {
+													"connection": {
+														"name": "@parameters('$connections')['sharepointonline']['connectionId']"
+													}
+												},
+												"method": "post",
+												"path": "/datasets/@{encodeURIComponent(encodeURIComponent(''))}/files",
+												"queries": {
+													"folderPath": "/Shared Documents/@{variables('subfolderName')}",
+													"name": "@{utcNow('s')}_@{items('For_each_MDATP_-_get_missing_KBs')?['computerDnsName']}-MissingKBs.csv",
+													"queryParametersSingleEncoded": true
+												}
+											},
+											"runtimeConfiguration": {
+												"contentTransfer": {
+													"transferMode": "Chunked"
+												}
+											}
+										},
+										"For_each_missing_KB": {
+											"foreach": "@body('Parse_JSON_get_missing_KBs_reponse')?['value']",
+											"actions": {
+												"Append_to_array_variable_to_missingkbscsv": {
+													"runAfter": {},
+													"type": "AppendToArrayVariable",
+													"inputs": {
+														"name": "missingkbsvsc",
+														"value": {
+															"CveAddressed": "@items('For_each_missing_KB')?['cveAddressed']",
+															"MachineMissedOn": "@items('For_each_missing_KB')?['machineMissedOn']",
+															"Name": "@items('For_each_missing_KB')?['name']",
+															"ProductsNames": "@items('For_each_missing_KB')?['productsNames']",
+															"Url": "@items('For_each_missing_KB')?['url']"
+														}
+													}
+												}
+											},
+											"runAfter": {
+												"Parse_JSON_get_missing_KBs_reponse": [
+													"Succeeded"
+												]
+											},
+											"type": "Foreach"
+										},
+										"HTTP_-_to_get_missing_KBs": {
+											"runAfter": {},
+											"type": "Http",
+											"inputs": {
+												"authentication": {
+													"audience": "https://securitycenter.onmicrosoft.com/windowsatpservice",
+													"clientId": "8e17c9c8-b76e-4faa-9493-dcb0207640c2",
+													"secret": "@body('Get_client_app_secret')?['value']",
+													"tenant": "@parameters('tenantId')",
+													"type": "ActiveDirectoryOAuth"
+												},
+												"method": "GET",
+												"uri": "https://api.securitycenter.windows.com/api/machines/@{items('For_each_MDATP_-_get_missing_KBs')?['id']}/getmissingkbs "
+											}
+										},
+										"Parse_JSON_get_missing_KBs_reponse": {
+											"runAfter": {
+												"HTTP_-_to_get_missing_KBs": [
+													"Succeeded"
+												]
+											},
+											"type": "ParseJson",
+											"inputs": {
+												"content": "@body('HTTP_-_to_get_missing_KBs')",
+												"schema": {
+													"properties": {
+														"@@odata.context": {
+															"type": "string"
+														},
+														"value": {
+															"items": {
+																"properties": {
+																	"cveAddressed": {
+																		"type": "integer"
+																	},
+																	"id": {
+																		"type": "string"
+																	},
+																	"machineMissedOn": {
+																		"type": "integer"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"productsNames": {
+																		"items": {
+																			"type": "string"
+																		},
+																		"type": "array"
+																	},
+																	"url": {
+																		"type": "string"
+																	}
+																},
+																"required": [
+																	"id",
+																	"name",
+																	"productsNames",
+																	"url",
+																	"machineMissedOn",
+																	"cveAddressed"
+																],
+																"type": "object"
+															},
+															"type": "array"
+														}
+													},
+													"type": "object"
+												}
+											}
+										}
+									},
+									"runAfter": {
+										"Create_new_subfolder_under_Documents_to_store_all_csv_files": [
+											"Succeeded"
+										]
+									},
+									"type": "Foreach"
+								},
+								"For_each_MDATP_-_get_software_inventory": {
+									"foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
+									"actions": {
+										"Create_installed_software_CSV_table": {
+											"runAfter": {
+												"For_each_installed_software": [
+													"Succeeded"
+												]
+											},
+											"type": "Table",
+											"inputs": {
+												"format": "CSV",
+												"from": "@variables('installedsoftwarecsv')"
+											}
+										},
+										"Create_installed_software_csv_file": {
+											"runAfter": {
+												"Create_installed_software_CSV_table": [
+													"Succeeded"
+												]
+											},
+											"type": "ApiConnection",
+											"inputs": {
+												"body": "@body('Create_installed_software_CSV_table')",
+												"host": {
+													"connection": {
+														"name": "@parameters('$connections')['sharepointonline']['connectionId']"
+													}
+												},
+												"method": "post",
+												"path": "/datasets/@{encodeURIComponent(encodeURIComponent(''))}/files",
+												"queries": {
+													"folderPath": "/Shared Documents/@{variables('subfolderName')}",
+													"name": "@{utcNow('s')}_@{items('For_each_MDATP_-_get_software_inventory')?['computerDnsName']}-InstalledSoftware.csv",
+													"queryParametersSingleEncoded": true
+												}
+											},
+											"runtimeConfiguration": {
+												"contentTransfer": {
+													"transferMode": "Chunked"
+												}
+											}
+										},
+										"For_each_installed_software": {
+											"foreach": "@body('Parse_JSON_get_software_inventory')?['value']",
+											"actions": {
+												"Append_to_array_variable_to_installedsoftwarecsv": {
+													"runAfter": {},
+													"type": "AppendToArrayVariable",
+													"inputs": {
+														"name": "installedsoftwarecsv",
+														"value": {
+															"ActiveAlert": "@items('For_each_installed_software')?['activeAlert']",
+															"ExposedMachines": "@items('For_each_installed_software')?['exposedMachines']",
+															"ImpactScore": "@items('For_each_installed_software')?['impactScore']",
+															"Name": "@items('For_each_installed_software')?['name']",
+															"PublicExploit": "@items('For_each_installed_software')?['publicExploit']",
+															"Vendor": "@items('For_each_installed_software')?['vendor']",
+															"Weaknesses": "@items('For_each_installed_software')?['weaknesses']"
+														}
+													}
+												}
+											},
+											"runAfter": {
+												"Parse_JSON_get_software_inventory": [
+													"Succeeded"
+												]
+											},
+											"type": "Foreach"
+										},
+										"HTTP_-_get_software_inventory": {
+											"runAfter": {},
+											"type": "Http",
+											"inputs": {
+												"authentication": {
+													"audience": "https://securitycenter.onmicrosoft.com/windowsatpservice",
+													"clientId": "8e17c9c8-b76e-4faa-9493-dcb0207640c2",
+													"secret": "@body('Get_client_app_secret')?['value']",
+													"tenant": "@parameters('tenantId')",
+													"type": "ActiveDirectoryOAuth"
+												},
+												"method": "GET",
+												"uri": "https://api.securitycenter.windows.com/api/machines/@{items('For_each_MDATP_-_get_software_inventory')?['id']}/software"
+											}
+										},
+										"Parse_JSON_get_software_inventory": {
+											"runAfter": {
+												"HTTP_-_get_software_inventory": [
+													"Succeeded"
+												]
+											},
+											"type": "ParseJson",
+											"inputs": {
+												"content": "@body('HTTP_-_get_software_inventory')",
+												"schema": {
+													"properties": {
+														"@@odata.context": {
+															"type": "string"
+														},
+														"value": {
+															"items": {
+																"properties": {
+																	"activeAlert": {
+																		"type": "boolean"
+																	},
+																	"exposedMachines": {
+																		"type": "integer"
+																	},
+																	"id": {
+																		"type": "string"
+																	},
+																	"impactScore": {
+																		"type": "number"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"publicExploit": {
+																		"type": "boolean"
+																	},
+																	"vendor": {
+																		"type": "string"
+																	},
+																	"weaknesses": {
+																		"type": "integer"
+																	}
+																},
+																"required": [
+																	"id",
+																	"name",
+																	"vendor",
+																	"weaknesses",
+																	"publicExploit",
+																	"activeAlert",
+																	"exposedMachines",
+																	"impactScore"
+																],
+																"type": "object"
+															},
+															"type": "array"
+														}
+													},
+													"type": "object"
+												}
+											}
+										}
+									},
+									"runAfter": {
+										"Create_new_subfolder_under_Documents_to_store_all_csv_files": [
+											"Succeeded"
+										]
+									},
+									"type": "Foreach"
+								},
+								"For_each_MDATP_-_restrict_app_execution": {
+									"foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
+									"actions": {
+										"HTTP_-_to_restrict_restrict_app_exection": {
+											"runAfter": {},
+											"type": "Http",
+											"inputs": {
+												"authentication": {
+													"audience": "https://securitycenter.onmicrosoft.com/windowsatpservice",
+													"clientId": "8e17c9c8-b76e-4faa-9493-dcb0207640c2",
+													"secret": "@body('Get_client_app_secret')?['value']",
+													"tenant": "@parameters('tenantId')",
+													"type": "ActiveDirectoryOAuth"
+												},
+												"body": {
+													"Comment": "Check machine for viruses alert"
+												},
+												"headers": {
+													"Content-type": "application/json"
+												},
+												"method": "POST",
+												"uri": "https://api.securitycenter.windows.com/api/machines/@{items('For_each_MDATP_-_restrict_app_execution')?['id']}/restrictCodeExecution"
+											}
+										}
+									},
+									"runAfter": {
+										"Create_new_subfolder_under_Documents_to_store_all_csv_files": [
+											"Succeeded"
+										]
+									},
+									"type": "Foreach"
+								},
+								"For_each_MDATP_-_start_antivirus_scan": {
+									"foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
+									"actions": {
+										"HTTP_-_to_start_machine_antivirus_scan": {
+											"runAfter": {},
+											"type": "Http",
+											"inputs": {
+												"authentication": {
+													"audience": "https://securitycenter.onmicrosoft.com/windowsatpservice",
+													"clientId": "8e17c9c8-b76e-4faa-9493-dcb0207640c2",
+													"secret": "@body('Get_client_app_secret')?['value']",
+													"tenant": "@parameters('tenantId')",
+													"type": "ActiveDirectoryOAuth"
+												},
+												"body": {
+													"Comment": "Check machine for viruses due alert",
+													"ScanType": "Quick"
+												},
+												"headers": {
+													"Content-type": "application/json"
+												},
+												"method": "POST",
+												"uri": "https://api.securitycenter.windows.com/api/machines/@{items('For_each_MDATP_-_start_antivirus_scan')?['id']}/runAntiVirusScan"
+											}
+										}
+									},
+									"runAfter": {
+										"Create_new_subfolder_under_Documents_to_store_all_csv_files": [
+											"Succeeded"
+										]
+									},
+									"type": "Foreach"
+								},
+								"For_each_MDATP_host_-_get_alerts": {
+									"foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
+									"actions": {
+										"Create_alert_CSV_table": {
+											"runAfter": {
+												"For_each_alert": [
+													"Succeeded"
+												]
+											},
+											"type": "Table",
+											"inputs": {
+												"format": "CSV",
+												"from": "@variables('alertcsv')"
+											}
+										},
+										"Create_alerts_csv_file": {
+											"runAfter": {
+												"Create_alert_CSV_table": [
+													"Succeeded"
+												]
+											},
+											"type": "ApiConnection",
+											"inputs": {
+												"body": "@body('Create_alert_CSV_table')",
+												"host": {
+													"connection": {
+														"name": "@parameters('$connections')['sharepointonline']['connectionId']"
+													}
+												},
+												"method": "post",
+												"path": "/datasets/@{encodeURIComponent(encodeURIComponent(''))}/files",
+												"queries": {
+													"folderPath": "/Shared Documents/@{variables('subfolderName')}",
+													"name": "@{utcNow('s')}_@{items('For_each_MDATP_host_-_get_alerts')?['computerDnsName']}-Alerts.csv",
+													"queryParametersSingleEncoded": true
+												}
+											},
+											"runtimeConfiguration": {
+												"contentTransfer": {
+													"transferMode": "Chunked"
+												}
+											}
+										},
+										"For_each_alert": {
+											"foreach": "@body('Parse_JSON_2_get_alerts_response')?['value']",
+											"actions": {
+												"Append_to_array_variable": {
+													"runAfter": {},
+													"type": "AppendToArrayVariable",
+													"inputs": {
+														"name": "alertcsv",
+														"value": {
+															"ComputerDnsName": "@items('For_each_alert')?['computerDnsName']",
+															"Description": "@items('For_each_alert')?['description']",
+															"DetectionSource": "@items('For_each_alert')?['detectionSource']",
+															"Severity": "@items('For_each_alert')?['severity']",
+															"Status": "@items('For_each_alert')?['status']",
+															"Title": "@items('For_each_alert')?['title']"
+														}
+													}
+												}
+											},
+											"runAfter": {
+												"Parse_JSON_2_get_alerts_response": [
+													"Succeeded"
+												]
+											},
+											"type": "Foreach"
+										},
+										"HTTP_-_To_get_alerts": {
+											"runAfter": {},
+											"type": "Http",
+											"inputs": {
+												"authentication": {
+													"audience": "https://securitycenter.onmicrosoft.com/windowsatpservice",
+													"clientId": "8e17c9c8-b76e-4faa-9493-dcb0207640c2",
+													"secret": "@body('Get_client_app_secret')?['value']",
+													"tenant": "@parameters('tenantId')",
+													"type": "ActiveDirectoryOAuth"
+												},
+												"method": "GET",
+												"uri": "https://api.securitycenter.windows.com/api/machines/@{items('For_each_MDATP_host_-_get_alerts')?['id']}/alerts"
+											}
+										},
+										"Parse_JSON_2_get_alerts_response": {
+											"runAfter": {
+												"HTTP_-_To_get_alerts": [
+													"Succeeded"
+												]
+											},
+											"type": "ParseJson",
+											"inputs": {
+												"content": "@body('HTTP_-_To_get_alerts')",
+												"schema": {
+													"properties": {
+														"@@odata.context": {
+															"type": "string"
+														},
+														"value": {
+															"items": {
+																"properties": {
+																	"aadTenantId": {
+																		"type": "string"
+																	},
+																	"alertCreationTime": {
+																		"type": "string"
+																	},
+																	"assignedTo": {},
+																	"category": {
+																		"type": "string"
+																	},
+																	"classification": {},
+																	"comments": {
+																		"type": "array"
+																	},
+																	"computerDnsName": {
+																		"type": "string"
+																	},
+																	"description": {
+																		"type": "string"
+																	},
+																	"detectionSource": {
+																		"type": "string"
+																	},
+																	"determination": {},
+																	"evidence": {
+																		"type": "array"
+																	},
+																	"firstEventTime": {
+																		"type": "string"
+																	},
+																	"id": {
+																		"type": "string"
+																	},
+																	"incidentId": {
+																		"type": "integer"
+																	},
+																	"investigationId": {
+																		"type": [
+																			"integer",
+																			"null"
+																		]
+																	},
+																	"investigationState": {
+																		"type": "string"
+																	},
+																	"lastEventTime": {
+																		"type": "string"
+																	},
+																	"lastUpdateTime": {
+																		"type": "string"
+																	},
+																	"machineId": {
+																		"type": "string"
+																	},
+																	"mitreTechniques": {
+																		"type": "array"
+																	},
+																	"rbacGroupName": {
+																		"type": "string"
+																	},
+																	"relatedUser": {},
+																	"resolvedTime": {},
+																	"severity": {
+																		"type": "string"
+																	},
+																	"status": {
+																		"type": "string"
+																	},
+																	"threatFamilyName": {},
+																	"threatName": {},
+																	"title": {
+																		"type": "string"
+																	}
+																},
+																"required": [
+																	"id",
+																	"incidentId",
+																	"investigationId",
+																	"assignedTo",
+																	"severity",
+																	"status",
+																	"classification",
+																	"determination",
+																	"investigationState",
+																	"detectionSource",
+																	"category",
+																	"threatFamilyName",
+																	"title",
+																	"description",
+																	"alertCreationTime",
+																	"firstEventTime",
+																	"lastEventTime",
+																	"lastUpdateTime",
+																	"resolvedTime",
+																	"machineId",
+																	"computerDnsName",
+																	"rbacGroupName",
+																	"aadTenantId",
+																	"threatName",
+																	"mitreTechniques",
+																	"relatedUser",
+																	"comments",
+																	"evidence"
+																],
+																"type": "object"
+															},
+															"type": "array"
+														}
+													},
+													"type": "object"
+												}
+											}
+										}
+									},
+									"runAfter": {
+										"Create_new_subfolder_under_Documents_to_store_all_csv_files": [
+											"Succeeded"
+										]
+									},
+									"type": "Foreach"
+								},
+								"For_each_MDATP_host_-_get_recommendation": {
+									"foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
+									"actions": {
+										"Create_recommendation_CSV_table": {
+											"runAfter": {
+												"For_each_recommendation": [
+													"Succeeded"
+												]
+											},
+											"type": "Table",
+											"inputs": {
+												"format": "CSV",
+												"from": "@variables('recommendationcsv')"
+											}
+										},
+										"Create_recommendation_csv_file": {
+											"runAfter": {
+												"Create_recommendation_CSV_table": [
+													"Succeeded"
+												]
+											},
+											"type": "ApiConnection",
+											"inputs": {
+												"body": "@body('Create_recommendation_CSV_table')",
+												"host": {
+													"connection": {
+														"name": "@parameters('$connections')['sharepointonline']['connectionId']"
+													}
+												},
+												"method": "post",
+												"path": "/datasets/@{encodeURIComponent(encodeURIComponent(''))}/files",
+												"queries": {
+													"folderPath": "/Shared Documents/@{variables('subfolderName')}",
+													"name": "@{utcNow('s')}_@{items('For_each_MDATP_host_-_get_recommendation')?['computerDnsName']}-Recommendations.csv",
+													"queryParametersSingleEncoded": true
+												}
+											},
+											"runtimeConfiguration": {
+												"contentTransfer": {
+													"transferMode": "Chunked"
+												}
+											}
+										},
+										"For_each_recommendation": {
+											"foreach": "@body('Parse_JSON_get_recommendation_response')?['value']",
+											"actions": {
+												"Append_to_array_variable_to_recommendationcsv": {
+													"runAfter": {},
+													"type": "AppendToArrayVariable",
+													"inputs": {
+														"name": "recommendationcsv",
+														"value": {
+															"ProductName": "@items('For_each_recommendation')?['productName']",
+															"RecommendationName": "@items('For_each_recommendation')?['recommendationName']",
+															"RemediationType": "@items('For_each_recommendation')?['remediationType']",
+															"Status": "@items('For_each_recommendation')?['status']",
+															"TotalMachineCount": "@items('For_each_recommendation')?['totalMachineCount']",
+															"Vendor": "@items('For_each_recommendation')?['vendor']",
+															"Weaknesses": "@items('For_each_recommendation')?['weaknesses']"
+														}
+													}
+												}
+											},
+											"runAfter": {
+												"Parse_JSON_get_recommendation_response": [
+													"Succeeded"
+												]
+											},
+											"type": "Foreach"
+										},
+										"HTTP_-_To_get_recommendations": {
+											"runAfter": {},
+											"type": "Http",
+											"inputs": {
+												"authentication": {
+													"audience": "https://securitycenter.onmicrosoft.com/windowsatpservice",
+													"clientId": "8e17c9c8-b76e-4faa-9493-dcb0207640c2",
+													"secret": "@body('Get_client_app_secret')?['value']",
+													"tenant": "@parameters('tenantId')",
+													"type": "ActiveDirectoryOAuth"
+												},
+												"method": "GET",
+												"uri": "https://api.securitycenter.windows.com/api/machines/@{items('For_each_MDATP_host_-_get_recommendation')?['id']}/recommendations"
+											}
+										},
+										"Parse_JSON_get_recommendation_response": {
+											"runAfter": {
+												"HTTP_-_To_get_recommendations": [
+													"Succeeded"
+												]
+											},
+											"type": "ParseJson",
+											"inputs": {
+												"content": "@body('HTTP_-_To_get_recommendations')",
+												"schema": {
+													"properties": {
+														"@@odata.context": {
+															"type": "string"
+														},
+														"value": {
+															"items": {
+																"properties": {
+																	"activeAlert": {
+																		"type": "boolean"
+																	},
+																	"associatedThreats": {
+																		"type": "array"
+																	},
+																	"configScoreImpact": {
+																		"type": "integer"
+																	},
+																	"exposedMachinesCount": {
+																		"type": "integer"
+																	},
+																	"exposureImpact": {
+																		"type": "integer"
+																	},
+																	"id": {
+																		"type": "string"
+																	},
+																	"nonProductivityImpactedAssets": {
+																		"type": "integer"
+																	},
+																	"productName": {
+																		"type": "string"
+																	},
+																	"publicExploit": {
+																		"type": "boolean"
+																	},
+																	"recommendationCategory": {
+																		"type": "string"
+																	},
+																	"recommendationName": {
+																		"type": "string"
+																	},
+																	"recommendedVersion": {
+																		"type": "string"
+																	},
+																	"relatedComponent": {
+																		"type": "string"
+																	},
+																	"remediationType": {
+																		"type": "string"
+																	},
+																	"severityScore": {
+																		"type": "integer"
+																	},
+																	"status": {
+																		"type": "string"
+																	},
+																	"subCategory": {
+																		"type": "string"
+																	},
+																	"totalMachineCount": {
+																		"type": "integer"
+																	},
+																	"vendor": {
+																		"type": "string"
+																	},
+																	"weaknesses": {
+																		"type": "integer"
+																	}
+																},
+																"required": [
+																	"id",
+																	"productName",
+																	"recommendationName",
+																	"weaknesses",
+																	"vendor",
+																	"recommendedVersion",
+																	"recommendationCategory",
+																	"subCategory",
+																	"severityScore",
+																	"publicExploit",
+																	"activeAlert",
+																	"associatedThreats",
+																	"remediationType",
+																	"status",
+																	"configScoreImpact",
+																	"exposureImpact",
+																	"totalMachineCount",
+																	"exposedMachinesCount",
+																	"nonProductivityImpactedAssets",
+																	"relatedComponent"
+																],
+																"type": "object"
+															},
+															"type": "array"
+														}
+													},
+													"type": "object"
+												}
+											}
+										}
+									},
+									"runAfter": {
+										"Create_new_subfolder_under_Documents_to_store_all_csv_files": [
+											"Succeeded"
+										]
+									},
+									"type": "Foreach"
+								},
+								"For_each_MDATP_host_-_get_vulnerabilities": {
+									"foreach": "@body('Machines_-_Get_list_of_machines')?['value']",
+									"actions": {
+										"Create_vulnerabilities_CSV_table": {
+											"runAfter": {
+												"For_each_vulnerability": [
+													"Succeeded"
+												]
+											},
+											"type": "Table",
+											"inputs": {
+												"format": "CSV",
+												"from": "@variables('vulnerabilitycsv')"
+											}
+										},
+										"Create_vulnerabilities_csv_file": {
+											"runAfter": {
+												"Create_vulnerabilities_CSV_table": [
+													"Succeeded"
+												]
+											},
+											"type": "ApiConnection",
+											"inputs": {
+												"body": "@body('Create_vulnerabilities_CSV_table')",
+												"host": {
+													"connection": {
+														"name": "@parameters('$connections')['sharepointonline']['connectionId']"
+													}
+												},
+												"method": "post",
+												"path": "/datasets/@{encodeURIComponent(encodeURIComponent(''))}/files",
+												"queries": {
+													"folderPath": "/Shared Documents/@{variables('subfolderName')}",
+													"name": "@{utcNow('s')}_@{items('For_each_MDATP_host_-_get_vulnerabilities')?['computerDnsName']}-Vulnerabilities.csv",
+													"queryParametersSingleEncoded": true
+												}
+											},
+											"runtimeConfiguration": {
+												"contentTransfer": {
+													"transferMode": "Chunked"
+												}
+											}
+										},
+										"For_each_vulnerability": {
+											"foreach": "@body('Parse_JSON_get_vulnerability_response')?['value']",
+											"actions": {
+												"Append_to_array_variable_to_vulnerabilitycsv": {
+													"runAfter": {},
+													"type": "AppendToArrayVariable",
+													"inputs": {
+														"name": "vulnerabilitycsv",
+														"value": {
+															"CVE": "@items('For_each_vulnerability')?['id']",
+															"CVSS": "@items('For_each_vulnerability')?['cvssV3']",
+															"Description": "@items('For_each_vulnerability')?['description']",
+															"Name": "@items('For_each_vulnerability')?['name']",
+															"Severity": "@items('For_each_vulnerability')?['severity']"
+														}
+													}
+												}
+											},
+											"runAfter": {
+												"Parse_JSON_get_vulnerability_response": [
+													"Succeeded"
+												]
+											},
+											"type": "Foreach"
+										},
+										"HTTP_-_to_get_vulnerabilities": {
+											"runAfter": {},
+											"type": "Http",
+											"inputs": {
+												"authentication": {
+													"audience": "https://securitycenter.onmicrosoft.com/windowsatpservice",
+													"clientId": "8e17c9c8-b76e-4faa-9493-dcb0207640c2",
+													"secret": "@body('Get_client_app_secret')?['value']",
+													"tenant": "@parameters('tenantId')",
+													"type": "ActiveDirectoryOAuth"
+												},
+												"method": "GET",
+												"uri": "https://api.securitycenter.windows.com/api/machines/@{items('For_each_MDATP_host_-_get_vulnerabilities')?['id']}/vulnerabilities"
+											}
+										},
+										"Parse_JSON_get_vulnerability_response": {
+											"runAfter": {
+												"HTTP_-_to_get_vulnerabilities": [
+													"Succeeded"
+												]
+											},
+											"type": "ParseJson",
+											"inputs": {
+												"content": "@body('HTTP_-_to_get_vulnerabilities')",
+												"schema": {
+													"properties": {
+														"@@odata.context": {
+															"type": "string"
+														},
+														"value": {
+															"items": {
+																"properties": {
+																	"cvssV3": {
+																		"type": "number"
+																	},
+																	"description": {
+																		"type": "string"
+																	},
+																	"exploitInKit": {
+																		"type": "boolean"
+																	},
+																	"exploitTypes": {
+																		"type": "array"
+																	},
+																	"exploitUris": {
+																		"type": "array"
+																	},
+																	"exploitVerified": {
+																		"type": "boolean"
+																	},
+																	"exposedMachines": {
+																		"type": "integer"
+																	},
+																	"id": {
+																		"type": "string"
+																	},
+																	"name": {
+																		"type": "string"
+																	},
+																	"publicExploit": {
+																		"type": "boolean"
+																	},
+																	"publishedOn": {
+																		"type": "string"
+																	},
+																	"severity": {
+																		"type": "string"
+																	},
+																	"updatedOn": {
+																		"type": "string"
+																	}
+																},
+																"required": [
+																	"id",
+																	"name",
+																	"description",
+																	"severity",
+																	"cvssV3",
+																	"exposedMachines",
+																	"publishedOn",
+																	"updatedOn",
+																	"publicExploit",
+																	"exploitVerified",
+																	"exploitInKit",
+																	"exploitTypes",
+																	"exploitUris"
+																],
+																"type": "object"
+															},
+															"type": "array"
+														}
+													},
+													"type": "object"
+												}
+											}
+										}
+									},
+									"runAfter": {
+										"Create_new_subfolder_under_Documents_to_store_all_csv_files": [
+											"Succeeded"
+										]
+									},
+									"type": "Foreach"
+								},
+								"Machines_-_Get_list_of_machines": {
+									"runAfter": {},
+									"type": "ApiConnection",
+									"inputs": {
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['wdatp']['connectionId']"
+											}
+										},
+										"method": "get",
+										"path": "/api/machines",
+										"queries": {
+											"$filter": "computerDnsName eq '@{items('For_each_Sentinel_host')?['FQDN']}' and healthStatus eq 'Active'"
+										}
+									}
+								},
+								"Post_a_message_on_Teams": {
+									"runAfter": {
+										"Create_sharing_link_for_the_subfolder_which_contains_all_csv_files": [
+											"Succeeded"
+										]
+									},
+									"type": "ApiConnection",
+									"inputs": {
+										"body": {
+											"body": {
+												"content": "<p>New Azure Sentinel Alert<br>\n<br>\nMachine Name: @{items('For_each_Sentinel_host')?['HostName']}<br>\nAccess the files at: <a href=@{body('Create_sharing_link_for_the_subfolder_which_contains_all_csv_files')?['link']?['webUrl']}>here</a></p>",
+												"contentType": "html"
+											}
+										},
+										"host": {
+											"connection": {
+												"name": "@parameters('$connections')['teams']['connectionId']"
+											}
+										},
+										"method": "post",
+										"path": "/v3/beta/teams/@{encodeURIComponent('f6c7b5f5-8377-4dff-ae43-83b441df6372')}/channels/@{encodeURIComponent('19:cc0d142530d74b97b4019b85a882cb22@thread.tacv2')}/messages"
+									}
+								}
+							},
+							"runAfter": {
+								"Get_client_app_secret": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach"
+						},
+						"Get_client_app_secret": {
+							"runAfter": {
+								"Initialize_subfolderName": [
+									"Succeeded"
+								]
+							},
+							"type": "ApiConnection",
+							"inputs": {
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['keyvault']['connectionId']"
+									}
+								},
+								"method": "get",
+								"path": "/secrets/@{encodeURIComponent('ClientAppSecret')}/value"
+							}
+						},
+						"Initialize_alertcsv": {
+							"runAfter": {
+								"Initialize_recommendationcsv": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "alertcsv",
+										"type": "array"
+									}
+								]
+							}
+						},
+						"Initialize_installedsoftwarecsv": {
+							"runAfter": {
+								"Initialize_missingkbsvsc": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "installedsoftwarecsv",
+										"type": "array"
+									}
+								]
+							}
+						},
+						"Initialize_machinename": {
+							"runAfter": {
+								"Initialize_installedsoftwarecsv": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "machinename",
+										"type": "string"
+									}
+								]
+							}
+						},
+						"Initialize_missingkbsvsc": {
+							"runAfter": {
+								"Initialize_vulnerabilitycsv": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "missingkbsvsc",
+										"type": "array"
+									}
+								]
+							}
+						},
+						"Initialize_recommendationcsv": {
+							"runAfter": {
+								"Alert_-_Get_hosts": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "recommendationcsv",
+										"type": "array"
+									}
+								]
+							}
+						},
+						"Initialize_subfolderName": {
+							"runAfter": {
+								"Initialize_machinename": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "subfolderName",
+										"type": "string",
+										"value": "@triggerBody()?['SystemAlertId']"
+									}
+								]
+							}
+						},
+						"Initialize_vulnerabilitycsv": {
+							"runAfter": {
+								"Initialize_alertcsv": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "vulnerabilitycsv",
+										"type": "array"
+									}
+								]
+							}
+						}
+					},
+					"outputs": {}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuresentinel": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+								"connectionName": "azuresentinel",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+							},
+							"keyvault": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureKeyVaultConnectionName'))]",
+								"connectionName": "keyvault",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+							},
+							"sharepointonline": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('SharepointOnlineConnectionName'))]",
+								"connectionName": "sharepointonline",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/sharepointonline')]"
+							},
+							"wdatp": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('DefenderATPConnectionName'))]",
+								"connectionName": "wdatp",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/wdatp')]"
+							},
+							"teams": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+								"connectionName": "teams",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+							}
+						}
+					}
+				}
+			}
+		},
+		{
+			"type": "MICROSOFT.WEB/CONNECTIONS",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/azuresentinel')]"
+				},
+				"displayName": "[variables('AzureSentinelConnectionName')]"
+			}
+		},
+		{
+			"type": "MICROSOFT.WEB/CONNECTIONS",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('AzureKeyVaultConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/keyvault')]"
+				},
+				"displayName": "[variables('AzureKeyVaultConnectionName')]"
+			}
+		},
+		{
+			"type": "MICROSOFT.WEB/CONNECTIONS",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('SharepointOnlineConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/sharepointonline')]"
+				},
+				"displayName": "[variables('SharepointOnlineConnectionName')]"
+			}
+		},
+		{
+			"type": "MICROSOFT.WEB/CONNECTIONS",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('DefenderATPConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/wdatp')]"
+				},
+				"displayName": "[variables('DefenderATPConnectionName')]"
+			}
+		},
+		{
+			"type": "MICROSOFT.WEB/CONNECTIONS",
+			"apiVersion": "2018-07-01-preview",
+			"name": "[variables('TeamsConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"api": {
+					"id": "[concat(subscription().id, '/providers/Microsoft.Web/locations/', resourceGroup().location,'/managedApis/teams')]"
+				},
+				"displayName": "[variables('TeamsConnectionName')]"
+			}
+		}
+	]
+}

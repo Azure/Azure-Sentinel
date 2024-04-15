@@ -1,0 +1,202 @@
+print Session = 'Best practices for hunting across domains with Microsoft 365 Defender', Presenter = 'Michael Melone, Tali Ash', Company = 'Microsoft' 
+
+// Schema Reference (upper right corner)
+ 
+// Explore identities data
+// From IdentityDirectoryEvents schema reference click one of the Action type
+IdentityDirectoryEvents  | where ActionType == 'SMB session'  
+
+// using extend to extract information form json column of AdditionalFields
+// From IdentityDirectoryEvents schema reference click sample query of “Group
+// modifications”
+let group = 'Domain Admins';
+IdentityDirectoryEvents
+| where ActionType == 'Group Membership changed'
+| extend AddedToGroup = AdditionalFields['TO.GROUP']
+| extend RemovedFromGroup = AdditionalFields['FROM.GROUP']
+| extend TargetAccount = AdditionalFields['TARGET_OBJECT.USER']
+| where AddedToGroup == group or RemovedFromGroup == group
+| project-reorder Timestamp, ActionType, AddedToGroup, RemovedFromGroup, TargetAccount
+| limit 100 
+
+// Explore emails data
+//Find who sent emails identified with malware/phishing
+EmailEvents
+| where (PhishFilterVerdict == "Phish" or MalwareFilterVerdict == "Malware") and DeliveryAction == "Delivered"
+//| where SenderFromDomain != "gmail.com" 
+| project DeliveryAction, MalwareFilterVerdict, PhishFilterVerdict, Timestamp, SenderFromAddress, RecipientEmailAddress, Subject, AttachmentCount
+
+// Finds the first appearance of files sent by a malicious sender in your organization
+let MaliciousSenders = pack_array("mtpdemos@juno.com");
+EmailAttachmentInfo
+| where SenderFromAddress in~(MaliciousSenders)
+| join kind=leftouter(
+DeviceFileEvents
+) on SHA256, $left.RecipientObjectId == $right.InitiatingProcessAccountObjectId 
+| summarize FirstAppearance = min(Timestamp1) by SenderFromAddress, RecipientEmailAddress, DeviceName, DeviceId, SHA256, FileName
+
+// Functions are a special sort of join which let you pull more static data about a file (more are 
+// planned in the future, stay tuned!). This is really helpful when you want to get information about 
+// file prevalence or antimalware detections. 
+// Get more details on the malicous files using FileProfile function enrichment
+let MaliciousSender = dynamic(["mtpdemos@juno.com"]);
+EmailAttachmentInfo
+| where SenderFromAddress in~ (MaliciousSender)
+| join (
+DeviceFileEvents
+) on SHA256
+| distinct SHA1
+| invoke FileProfile()
+| project SHA1, SHA256 , FileSize , GlobalFirstSeen , GlobalLastSeen , GlobalPrevalence , IsExecutable 
+
+//Get alerted every time an email from malicious sender was received
+let MaliciousSender = "mtpdemos@juno.com";
+EmailEvents
+| where SenderFromAddress =~ MaliciousSender and DeliveryAction == "Delivered"
+
+
+// Detection name - Email from malicious sender
+// Alert title - Email from malicious sender - mtpdemos@juno.com
+// Description - Email from malicious sender mtpdemos@juno.com was delivered to // users in the org
+
+/////////////////////////////
+// Get to know useful operators
+/////////////////////////////
+
+// Dealing with Phishing using Advanced Hunting
+
+// parse_url()
+//  Breaks down a URL into its individual parts – including each
+//  query parameter
+
+print url = parse_url("https://www.bing.com/search?q=tracking+the+adversary+mtp+advanced+hunting&qs=AS&pq=tracking+the+adversary+&sc=1-23&cvid=81318E9030D74B31A876FDE99603EE60&FORM=QBRE&sp=1") 
+| evaluate bag_unpack(url)
+
+// Let’s use parse_url() to analyze some phishing activity
+
+let Phishurls = toscalar(
+        EmailEvents
+        | where PhishFilterVerdict == "Phish"
+        | join EmailUrlInfo on NetworkMessageId 
+        | extend host = parse_url(Url).Host
+        | where isnotempty(host)
+        | summarize makeset(host)
+);
+DeviceNetworkEvents
+| where isnotempty(RemoteUrl)
+| extend NetworkEventHost = parse_url(RemoteUrl).Host
+| where isnotempty(NetworkEventHost)
+| extend PhishHost = Phishurls
+| mvexpand PhishHost to typeof(string)
+| where NetworkEventHost == PhishHost
+
+
+// In practice, you're likely to encounter a bunch of false positives
+// due to common domains being mixed with phish domains. To accommodateTo accomodate that
+// we can just reduce the dataset based on a threshold
+
+
+let MaxConnections = 10; // This will be our cutoff threshold
+let Phishurls = toscalar(
+EmailEvents
+| where PhishFilterVerdict == "Phish"
+| join EmailUrlInfo on NetworkMessageId 
+| extend host = parse_url(Url).Host
+| where isnotempty(host)
+        EmailEvents
+        | where PhishFilterVerdict == "Phish"
+        | join EmailUrlInfo on NetworkMessageId 
+        | extend host = parse_url(Url).Host
+        | where isnotempty(host)
+        | summarize makeset(host)
+);
+// We will use this portion of the query twice now - better to make it a variable
+let DeviceConnections = (
+DeviceNetworkEvents
+| where isnotempty(RemoteUrl)
+| extend NetworkEventHost = tostring(parse_url(RemoteUrl).Host)
+        DeviceNetworkEvents
+        | where isnotempty(RemoteUrl)
+        | extend NetworkEventHost = tostring(parse_url(RemoteUrl).Host)
+        | where isnotempty(NetworkEventHost)
+);
+DeviceConnections 
+| summarize count() by NetworkEventHost // Count the number of connections by FQDN
+| where count_ < MaxConnections // Filter to only domains with less than MaxConnections connections
+| join kind=rightsemi DeviceConnections on NetworkEventHost // Filter our dataset to only those FQDNs
+| extend PhishHost = Phishurls
+| mvexpand PhishHost to typeof(string)
+| where NetworkEventHost == PhishHost
+
+
+
+// Using the bin() function you can group events by a period of time. 
+// Let's take a look at some logon statistics on a daily basis 
+ 
+// Let's look at account logon activity over time on a 
+// daily basis by UPN. 
+ 
+IdentityLogonEvents  
+| where isnotempty(AccountUpn) 
+| summarize NumberOfLogons = count() by AccountUpn, bin(Timestamp, 1d) 
+| render timechart  
+ 
+// render - creates a chart
+ 
+// We can also use this bin'ed data to determine min, max, and average daily logons 
+ 
+IdentityLogonEvents  
+| where isnotempty(AccountUpn) 
+| summarize NumberOfLogons = count()  // first get a calculation of how many logons the user does per day
+    by AccountUpn 
+    , bin(Timestamp, 1d) 
+| summarize TotalLogons = sum(NumberOfLogons) // Then average all of them together to get average daily logons
+    , AverageDailyLogons = avg(NumberOfLogons) 
+    , FewestLogonsInADay = min(NumberOfLogons) 
+    , MostLogonsInADay = max(NumberOfLogons)  
+    by AccountUpn  
+| top 10 by TotalLogons desc  
+| render columnchart 
+
+// New Table - IdentityDirectoryEvents
+// Contains Active Directory \ domain controller operational information
+
+IdentityDirectoryEvents
+| distinct ActionType 
+
+IdentityDirectoryEvents
+| where ActionType == 'Directory Services replication'
+| summarize count() by IPAddress, tolower(DeviceName), AccountUpn 
+
+// Interesting - looks like a couple of replication attempts from workstations...
+
+IdentityDirectoryEvents
+| where ActionType == 'Directory Services replication' and DeviceName !startswith 'mtp-air-aad'
+| join kind=inner DeviceNetworkEvents on $left.IPAddress == $right.LocalIP  and $left.Port == $right.LocalPort  and $left.DestinationIPAddress == $right.RemoteIP  and $left .DestinationPort == $right.RemotePort 
+| project-reorder Timestamp1, DeviceName1, InitiatingProcessId, InitiatingProcessCommandLine
+
+
+// --------------------------- 
+ 
+// The FileProfile function lets you pull more static data about a file (more are planned in the future, stay tuned!).
+// This is really helpful when you want to get information about file prevalence or antimalware detections. 
+ 
+// Let's say we wanted information about rare files involved in a process creation event 
+ 
+DeviceProcessEvents 
+| invoke FileProfile() // Call the FileProfile function 
+| where isnotempty(GlobalPrevalence) and GlobalPrevalence < 1000 // Note that in the real world you might want to include empty GlobalPrevalence 
+| project-reorder DeviceName, FileName, ProcessCommandLine, FileSize, GlobalPrevalence, GlobalFirstSeen, GlobalLastSeen, ThreatName, Publisher, SoftwareName 
+| top 100 by GlobalPrevalence asc  
+
+// ---------------------------
+
+// AssignedIPAddresses() function
+// Lists last known IP addresses that were assigned to a given device around the date specified
+
+AssignedIPAddresses('6c27842721799deb6420b094044d26e15e87a37b', now())
+
+// ---------------------------
+
+// Go hunt from incidents. 
+

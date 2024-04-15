@@ -1,0 +1,32 @@
+// Title:           Infoblox parser for type - DHCP-Inform
+// Author:          Microsoft
+// Version:         1.1
+// Last Updated:    20/05/2022
+// Comment:         Updated to only parse the MSG (RFC3164) part of the Syslog message. Excluded the Header.
+//
+// DESCRIPTION:
+// This parser comprised of function - Infoblox_dhcpinform
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Infoblox NIOS logging formats: https://docs.infoblox.com/display/NAG8/Using+a+Syslog+Server
+//
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+// 
+//      May 13 12:05:52 10.0.0.0 dhcpd[30174]: DHCPDISCOVER from 0a:0b:0c:0d::0f via eth2 TransID 5daf9374: network 10.0.0.0/24: no free leases
+//      May 13 12:05:52 10.1.1.1 named[11325]: zone voip.abc.com/IN: ZRQ applied transaction 0101010 with SOA serial 9191919. Zone version is now 0202020
+let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
+let RawData = Syslog
+    | where Computer in (datasource)
+    | where SyslogMessage has "DHCPINFORM"
+    | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
+    | extend responseTime = todatetime(Parser[0]),
+            Log_Type = tostring(Parser[1]),
+            RawData_subString = tostring(Parser[3])
+    | project-away Parser;
+RawData
+    | extend dhcpinform = extract_all(@"\w+\s(\S+)\svia\s(\S+)\sTransID\s([a-z0-9]+)", dynamic([1,2,3]), RawData_subString)[0]
+    | extend SrcIpAddr = tostring(dhcpinform[0]), 
+        Relay = tostring(dhcpinform[1]), 
+        DhcpSessionId = tostring(dhcpinform[2])        
+    | project-away SyslogMessage, dhcpinform,RawData_subString;

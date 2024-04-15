@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionAppGateSDP",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for AppGate SDP",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionAppGateSDP",
+            "query": "let parser = (disabled:bool=false) \n{\n  let DirectionLookup = datatable (direction:string, NetworkDirection:string) \n  [\n    'up', 'Inbound',\n    'down', 'Outbound'\n  ];\n  let ActionLookup = datatable (DvcOriginalAction:string, DvcAction:string, EventSeverity:string, EventResult:string)\n  [\n    'allow', 'Allow', 'Informational', 'Success',\n    'drop', 'Drop', 'Low', 'Failure',\n    'reject', 'Deny', 'Low', 'Failure',\n    'block', 'Deny', 'Low', 'Failure',\n    'block_report', 'Deny', 'Low', 'Failure',\n    'allow_report', 'Allow', 'Informational', 'Success'\n  ];\n  let tcpupd_success = Syslog\n  | where \n    ProcessName in (\"cz-sessiond\", \"cz-vpnd\")\n    and SyslogMessage has_all (\"[AUDIT]\",\"ip_access\",'\"rule_name\"')\n    and SyslogMessage has_any ('\"protocol\":\"UDP\"','\"protocol\":\"TCP\"') \n  | project TimeGenerated, SyslogMessage, Computer\n  | extend type = extract (@'\"event_type\"\\:\\\"(.*?)\\\"', 1,  SyslogMessage)\n  | where type == \"ip_access\"\n  | parse-where SyslogMessage with \n      *\n      '\"action\":\"' DvcOriginalAction:string '\",' * \n      '\"client_ip\":\"' SrcIpAddr:string '\",' *\n      '\"client_port\":' SrcPortNumber:int ',' *\n      '\"destination_ip\":\"' DstIpAddr:string '\",' *\n      '\"destination_port\":' DstPortNumber:int ',' *\n      '\"direction\":\"' direction:string '\",' * \n      '\"distinguished_name_device_id\":\"' SrcDvcId:string '\",' *\n      '\"distinguished_name_user\":\"' SrcUsername:string '\",' *\n      '\"entitlement_token_id\":\"' NetworkSessionId:string '\",' *\n      '\"packet_size\":' SrcBytes:long ',' *\n      '\"protocol\":\"' NetworkProtocol:string '\",' *          \n      '\"rule_name\":\"' NetworkRuleName:string '\",' *  \n      '\"source_ip\":\"' SrcNatIpAddr:string '\",' *\n      '\"source_port\":' SrcNatPortNumber:int ',' * \n      '\"version\":' EventProductVersion:string '}' *\n  ;\n  let tcpupd_fail = \n    Syslog\n    | where \n      ProcessName in (\"cz-sessiond\", \"cz-vpnd\")\n      and SyslogMessage has_all (\"[AUDIT]\",\"ip_access\",'\"drop-reason\"')\n      and SyslogMessage has_any ('\"protocol\":\"UDP\"','\"protocol\":\"TCP\"') \n    | project TimeGenerated, SyslogMessage, Computer\n    | extend type = extract (@'\"event_type\"\\:\\\"(.*?)\\\"', 1,  SyslogMessage)\n    | where type == \"ip_access\"\n    | parse-where SyslogMessage with \n        *\n        '\"action\":\"' DvcOriginalAction:string '\",' * \n        '\"client_ip\":\"' SrcIpAddr:string '\",' *\n        '\"client_port\":' SrcPortNumber:int ',' *\n        '\"destination_ip\":\"' DstIpAddr:string '\",' *\n        '\"destination_port\":' DstPortNumber:int ',' *\n        '\"direction\":\"' direction:string '\",' * \n        '\"distinguished_name_device_id\":\"' SrcDvcId:string '\",' *\n        '\"distinguished_name_user\":\"' SrcUsername:string '\",' *\n        '\"drop-reason\":\"' EventOriginalResultDetails:string '\",' *\n        '\"entitlement_token_id\":\"' NetworkSessionId:string '\",' *\n        '\"packet_size\":' SrcBytes:long ',' *\n        '\"protocol\":\"' NetworkProtocol:string '\",' *\n        '\"source_ip\":\"' SrcNatIpAddr:string '\",' *\n        '\"source_port\":' SrcNatPortNumber:int ',' * \n        '\"version\":' EventProductVersion:string '}' *\n     ;\n  let icmp_success = Syslog\n  | where \n    ProcessName in (\"cz-sessiond\", \"cz-vpnd\")\n    and SyslogMessage has_all (\"[AUDIT]\",\"ip_access\",'\"protocol\":\"ICMP\"') \n  | project TimeGenerated, SyslogMessage, Computer\n  | extend type = extract (@'\"event_type\"\\:\\\"(.*?)\\\"', 1,  SyslogMessage)\n  | where type == \"ip_access\"\n  | parse-where SyslogMessage with \n      *\n      '\"action\":\"' DvcOriginalAction:string '\",' * \n      '\"client_ip\":\"' SrcIpAddr:string '\",' *\n      '\"client_port\":' SrcPortNumber:int ',' *\n      '\"destination_ip\":\"' DstIpAddr:string '\",' *\n      '\"direction\":\"' direction:string '\",' * \n      '\"distinguished_name_device_id\":\"' SrcDvcId:string '\",' *\n      '\"distinguished_name_user\":\"' SrcUsername:string '\",' *\n      '\"entitlement_token_id\":\"' NetworkSessionId:string '\",' *\n      '\"icmp_code\":' NetworkIcmpSubCode:int ',' *\n      '\"icmp_type\":' NetworkIcmpCode:int ',' *  \n      '\"packet_size\":' SrcBytes:long ',' *\n      '\"protocol\":\"' NetworkProtocol:string '\",' *          \n      '\"rule_name\":\"' NetworkRuleName:string '\",' *  \n      '\"source_ip\":\"' SrcNatIpAddr:string '\",' *\n      '\"version\":' EventProductVersion:string '}' *\n  ;\n  union  tcpupd_success, tcpupd_fail, icmp_success \n  | parse SyslogMessage with \n      *\n      '\"country_name\":\"' SrcGeoCountry:string '\",' *\n      '\"lat\":' SrcGeoLatitude:real ',' *        \n      '\"lon\":' SrcGeoLongitude:real '}' *\n  | parse SyslogMessage with \n       *\n      '\"city_name\":\"' SrcGeoCity:string '\",' *\n      '\"region_name\":\"' SrcGeoRegion:string '\",' *\n  | extend \n      SrcDvcIdType = 'AppGateId',\n      SrcUsernameType = 'UPN'\n  // -- Event fields\n  | project-rename \n      DvcHostname = Computer\n  | extend \n      EventCount = int(1),\n      EventEndTime = TimeGenerated,\n      EventStartTime = TimeGenerated,\n      EventSchema = 'NetworkSession',\n      EventSchemaVersion = '0.2.3',\n      EventVendor = 'AppGate',\n      EventProduct = 'SDP',\n      EventType = 'NetworkSession'\n  | lookup DirectionLookup on direction\n  | lookup ActionLookup on DvcOriginalAction\n  // -- Aliases\n  | extend \n      Src = SrcIpAddr,\n      Dst = DstIpAddr,\n      Dvc = DvcHostname,\n      SessionId = NetworkSessionId,\n      IpAddr = SrcIpAddr,\n      Rule = NetworkRuleName,\n  // -- Entity identifier explicit aliases\n      SrcUserUpn = SrcUsername\n  | project-away \n      SyslogMessage, type, direction\n};\nparser (disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

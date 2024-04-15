@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimDnsMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "DNS activity ASIM parser for Sysmon for Windows",
+            "category": "ASIM",
+            "FunctionAlias": "ASimDnsMicrosoftSysmon",
+            "query": "let parser = (disabled:bool=false) {\nlet RCodeTable=datatable(DnsResponseCode:int,DnsResponseCodeName:string)[\n    // See https://docs.microsoft.com/windows/win32/debug/system-error-codes--9000-11999-\n    0, 'NOERROR'\n  , 9001, \"FORMERR\"\n  , 9002,\"SERVFAIL\"\n  , 9003,'NXDOMAIN'\n  , 9004,'NOTIMP'\n  , 9005,'REFUSED'\n  , 9006,'YXDOMAIN'\n  , 9007,'YXRRSET'\n  , 9008,'NXRRSET'\n  , 9009,'NOTAUTH'\n  , 9010,'NOTZONE'\n  , 9011,'DSOTYPENI'\n  , 9016,'BADVERS'\n  , 9016,'BADSIG'\n  , 9017,'BADKEY'\n  , 9018,'BADTIME'\n  , 9019,'BADMODE'\n  , 9020,'BADNAME'\n  , 9021,'BADALG'\n  , 9022,'BADTRUNC'\n  , 9023,'BADCOOKIE'\n  , 1460, 'TIMEOUT'\n  ];\nlet ParsedDnsEvent_Event =(disabled:bool=false) {\n    Event | where not(disabled)\n    | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId \n    | where Source == \"Microsoft-Windows-Sysmon\" and EventID==22\n    | project-away Source, EventID\n    | parse-kv EventData as (\n        RuleName:string,\n        UtcTime:datetime, \n        ProcessGuid:string,\n        ProcessId:string,\n        QueryName:string,\n        QueryStatus:int,\n        QueryResults:string,\n        Image:string,\n        User:string\n      )\n      with (regex=@'<Data Name=\"(\\w+)\">{?([^<]*?)}?</Data>')\n    | project-rename \n        EventEndTime = UtcTime,\n        SrcProcessId = ProcessId,\n        SrcProcessGuid = ProcessGuid,\n        DnsQuery = QueryName,\n        DnsResponseCode = QueryStatus,\n        DnsResponseName = QueryResults,\n        SrcProcessName = Image,\n        SrcUsername = User\n    | project-away EventData\n};\nlet ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {\n    WindowsEvent | where not(disabled)\n    | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId,  Provider, Type // , _ItemId \n    | where Provider == \"Microsoft-Windows-Sysmon\" and EventID == 22\n    | project-away Provider, EventID      \n    | extend \n        RuleName = tostring(EventData.RuleName),\n        EventEndTime = todatetime(EventData.UtcTime),\n        SrcProcessGuid = tostring(EventData.ProcessGuid),\n        // extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),\n        SrcProcessId = tostring(EventData.ProcessId),  \n        DnsQuery = tostring(EventData.QueryName),\n        DnsResponseCode = toint(EventData.QueryStatus),\n        DnsResponseName = tostring(EventData.QueryResults),\n        SrcProcessName = tostring(EventData.Image),\n        SrcUsername = tostring(EventData.User)\n    | project-away EventData\n    | parse SrcProcessGuid with '{' SrcProcessGuid '}'\n};\nunion isfuzzy=true \n    //ParsedDnsEvent_Event(disabled), \n    ParsedDnsEvent_WindowsEvent(disabled)\n  | lookup RCodeTable on DnsResponseCode\n  | project-rename \n      DvcHostname = Computer,\n      // EventUid = _ItemId, \n      DvcScopeId = _SubscriptionId,\n      DvcId = _ResourceId\n  | extend\n      EventOriginalType = '22',\n      EventCount=int(1),\n      EventProduct = 'Sysmon',\n      EventVendor = 'Microsoft',\n      EventSchema = 'Dns',\n      EventSchemaVersion=\"0.1.6\",\n      EventType = 'Query',\n      EventResult = iff (DnsResponseCode == 0,'Success','Failure'),\n      EventStartTime = EventEndTime,\n      EventSubType= 'response',\n      EventSeverity= iif (DnsResponseCode == 0, 'Informational', 'Low'),\n      SrcUsernameType = 'Windows',\n      RuleName = iff (RuleName == \"-\", \"\", RuleName),\n      DnsResponseName = iff (DnsResponseName == \"-\", \"\", DnsResponseName),\n      DnsResponseCodeName = iff (DnsResponseCodeName == \"\", \"NA\", DnsResponseCodeName),\n      DvcIdType = iff (DvcId != \"\", \"AzureResourceId\", \"\")\n  // -- Aliases\n  | extend \n      EventResultDetails = DnsResponseCodeName,\n      Domain = DnsQuery,\n      Dvc = DvcHostname,\n      SrcHostname = DvcHostname,\n      Hostname=DvcHostname,\n      Src = DvcHostname,\n      DnsResponseCode = toint(iff (DnsResponseCode > 9000 and DnsResponseCode < 9100, DnsResponseCode-9000, DnsResponseCode)),\n      User = SrcUsername,\n      Process = SrcProcessName,\n      Rule = RuleName,\n      DvcAzureResourceId = DvcId\n};\nparser(disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+id: b7fe8f27-7010-404b-aec5-6e5245cea580
+name: The download of potentially risky files from the Discord Content Delivery Network (CDN) (ASIM Web Session)
+description: |
+  'This detection mechanism identifies instances where requests are made to Discord CDN addresses for file extensions that are considered risky.
+    It triggers when a callout is made to a Discord server that has only been encountered once in your environment. The uniqueness of Discord servers is determined based on the server ID present in the request URL (DiscordServerId in the query).
+    Discord CDN has been utilized in numerous campaigns to download additional payloads, highlighting the importance of monitoring such activities.
+    The query includes a sample set of popular web script extensions (scriptExtensions), which should be customized to align with the specific requirements of your environment'
+severity: Medium
+status: Available 
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071.001
+query: |
+  let lookback = 1d;
+  let connectionThreshold = 1;
+  let RiskyFileExtensions = materialize(externaldata(Extensions: string)
+      [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/RiskyFileExtensionsInUrl.csv"]
+      with(format="csv", ignoreFirstRecord=True));
+  let CustomRiskyFileExtensions = (_ASIM_GetWatchlistRaw("Web_RiskyFileExtensions") // Create new Watchlist and add your custom indicators(Optional)
+      | extend
+          Extensions = tostring(WatchlistItem["Extensions"])
+      | project Extensions
+      | where isnotempty(Extensions));
+  let CombinedRiskyFileExtensions = union RiskyFileExtensions, CustomRiskyFileExtensions;
+  let knownRiskyFileExtensions=toscalar(CombinedRiskyFileExtensions
+      | where isnotempty(Extensions)
+      | summarize make_set(Extensions, 1000));
+  let discord=dynamic(["cdn.discordapp.com", "media.discordapp.com"]);
+  let WebData = _Im_WebSession(starttime=ago(lookback), url_has_any=discord, eventresult='Success')
+      | where isnotempty(Url)
+      | project Url, SrcUsername, SrcIpAddr, TimeGenerated, SrcHostname
+      | where Url has "attachments"
+      | extend DiscordServerId = extract(@"\/attachments\/([0-9]+)\/", 1, Url);
+  WebData
+  | summarize
+      dcount(Url),
+      min(TimeGenerated),
+      max(TimeGenerated)
+      by DiscordServerId
+  | join kind=inner (WebData) on DiscordServerId
+  | where dcount_Url <= connectionThreshold and Url has_any (knownRiskyFileExtensions)
+  | summarize EventCount = count()
+      by
+      EventStartTime=min_TimeGenerated,
+      EventEndTime=max_TimeGenerated,
+      SrcUsername,
+      SrcHostname,
+      SrcIpAddr,
+      Url
+  | extend
+      Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+      UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  EventStartTime: EventStartTime
+  EventEndTime: EventEndTime
+alertDetailsOverride:
+  alertDisplayNameFormat: "User '{{SrcUsername}}' with the IP address '{{SrcIpAddr}}' has been detected downloading potentially risky files from the Discord CDN"
+  alertDescriptionFormat: " Client requested for URL '{{Url}}' that contains a files hosted on a recognized Discord Content Delivery Network (CDN) which are considered to be potentially risky. It is essential to investigate further to determine the nature of the files being requested and the intent of the users involved"
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,46 @@
+id: 875da588-4875-11ec-81d3-0242ac130003
+name: Tomcat - Server errors after multiple requests from same IP
+description: |
+  'Detects server errors after multiple requests from same IP address.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ApacheTomcat
+    dataTypes:
+      - TomcatEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+  - InitialAccess
+relevantTechniques:
+  - T1498
+  - T1190
+  - T1133
+query: |
+  let multi_errors = TomcatEvent
+  | where toint(HttpStatusCode) >= 500 and toint(HttpStatusCode) <= 599
+  | sort by EventStartTime asc
+  | summarize MultipleServerErrors = count() by SrcIpAddr, bin(EventStartTime, 5m)
+  | where MultipleServerErrors > 10;
+  let error_time_table = TomcatEvent
+  | where toint(HttpStatusCode) >= 500 and toint(HttpStatusCode) <= 599
+  | summarize error_time=min(EventStartTime) by SrcIpAddr
+  | join kind=innerunique (multi_errors) on SrcIpAddr;
+  TomcatEvent
+  | where toint(HttpStatusCode) >= 100 and toint(HttpStatusCode) <= 399
+  | summarize success_time=max(EventStartTime) by SrcIpAddr
+  | join kind=innerunique (error_time_table) on SrcIpAddr
+  | extend time_between_error_and_success = datetime_diff('second', error_time, success_time)
+  | where time_between_error_and_success between (1 .. 300)
+  | project time_between_error_and_success, error_time, success_time, SrcIpAddr
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

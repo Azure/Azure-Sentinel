@@ -1,0 +1,84 @@
+id: 9851c360-5fd5-4bae-a117-b66d8476bf5e
+name: Response rows stateful anomaly on database
+description: |
+  'Goal: To detect anomalous data exfiltration. This query detects SQL queries that accessed a large number of rows, which is significantly higher than normal for this database.
+   The calculation is made inside recent time window (defined by 'detectionWindow' parameter), and the anomaly is calculated based on previous training window 
+   (defined by 'trainingWindow' parameter). The user can set the minimal threshold for anomaly by changing the threshold parameters volThresholdZ and volThresholdQ (higher thresholds will detect only more severe anomalies).'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureSql
+    dataTypes:
+      - AzureDiagnostics
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1537 
+  - T1567
+tags:
+  - SQL
+query: |
+    let volumeThresholdZ = 3.0;                     // Minimal threshold for the Zscore to trigger anomaly (number of standard deviations above mean). If set higher, only very significant alerts will fire.
+    let volumeThresholdQ = volumeThresholdZ;        // Minimal threshold for the Qscore to trigger anomaly (number of Inter-Percentile Ranges above high percentile). If set higher, only very significant alerts will fire.
+    let volumeThresholdHardcoded = 500;             // Minimal value for the volume metric to trigger anomaly.
+    let detectionWindow = 1h;                       // The size of the recent detection window for detecting anomalies.  
+    let trainingWindow = detectionWindow + 14d;     // The size of the training window before the detection window for learning the normal state.
+    let monitoredColumn = 'ResponseRows';           // The name of the column for volumetric anomalies.
+    let processedData = materialize (
+        AzureDiagnostics
+        | where TimeGenerated >= ago(trainingWindow)
+        | where Category == 'SQLSecurityAuditEvents' and action_id_s has_any ("RCM", "BCM") // Keep only SQL affected rows
+        | project TimeGenerated, PrincipalName = server_principal_name_s, ClientIp = client_ip_s, HostName = host_name_s, ResourceId,
+                  ApplicationName = application_name_s, ActionName = action_name_s, Database = strcat(LogicalServerName_s, '/', database_name_s),
+                  IsSuccess = succeeded_s, AffectedRows = affected_rows_d,
+                  ResponseRows = response_rows_d, Statement = statement_s
+        | extend QuantityColumn = column_ifexists(monitoredColumn, 0)
+        | extend WindowType = case( TimeGenerated >= ago(detectionWindow), 'detection',
+                                               (ago(trainingWindow) <= TimeGenerated and TimeGenerated < ago(detectionWindow)), 'training', 'other')
+        | where WindowType in ('detection', 'training'));
+    let trainingSet =
+        processedData
+        | where WindowType == 'training'
+        | summarize AvgVal = round(avg(QuantityColumn), 2), StdVal = round(stdev(QuantityColumn), 2), N = count(),
+                    P99Val = round(percentile(QuantityColumn, 99), 2), P50Val = round(percentile(QuantityColumn, 50), 2)
+          by Database;
+    processedData
+    | where WindowType == 'detection'
+    | join kind = inner (trainingSet) on Database
+    | extend ZScoreVal = iff(N >= 20, round(todouble(QuantityColumn - AvgVal) / todouble(StdVal + 1), 2), 0.00),
+             QScoreVal = iff(N >= 20, round(todouble(QuantityColumn - P99Val) / todouble(P99Val - P50Val + 1), 2), 0.00)
+    | extend IsVolumeAnomalyOnVal = iff((ZScoreVal > volumeThresholdZ and QScoreVal > volumeThresholdQ and QuantityColumn > volumeThresholdHardcoded), true, false), AnomalyScore = round((ZScoreVal + QScoreVal)/2, 0)
+    | project TimeGenerated, Database, PrincipalName, ClientIp, HostName, ApplicationName, ActionName, Statement,
+              IsSuccess, ResponseRows, AffectedRows, IsVolumeAnomalyOnVal, AnomalyScore, ResourceId
+    | where IsVolumeAnomalyOnVal == 'true'
+    | sort by AnomalyScore desc, TimeGenerated desc
+    | extend Name = tostring(split(PrincipalName,'@',0)[0]), UPNSuffix = tostring(split(PrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ApplicationName
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.1.1
+kind: Scheduled

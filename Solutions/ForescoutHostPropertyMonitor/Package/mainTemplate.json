@@ -1,0 +1,976 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Julian Wang - julian.wang@forescout.com",
+    "comments": "Solution template for ForescoutHostPropertyMonitor"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "forescout.azure-sentinel-solution-forescout",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "julian.wang@forescout.com",
+    "_email": "[variables('email')]",
+    "analyticRuleVersion1": "1.0.0",
+    "analyticRulecontentId1": "d272e277-f285-4dbc-ae2d-7f65ba64a79e",
+    "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
+    "TemplateEmptyArray": "[json('[]')]",
+    "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
+    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1')))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "Playbooks": "Playbooks",
+    "_Playbooks": "[variables('Playbooks')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "Playbooks",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1')))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "uiConfigId1": "ForescoutHostPropertyMonitor",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "ForescoutHostPropertyMonitor",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('analyticRuleTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AnalyticsRule"
+      },
+      "properties": {
+        "description": "ForescoutHostPropertyMonitor Analytics Rule 1 with template",
+        "displayName": "ForescoutHostPropertyMonitor Analytics Rule template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('analyticRuleTemplateSpecName1'),'/',variables('analyticRuleVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "AnalyticsRule"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('analyticRuleTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ForeScout-DNSSniffEventMonitor_AnalyticalRules Analytics Rule with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('AnalyticRulecontentId1')]",
+              "apiVersion": "2022-04-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "This rule creates an incident when more than certain number of Dnsniff events are generated from a host",
+                "displayName": "Forescout-DNS_Sniff_Event_Monitor",
+                "enabled": false,
+                "query": "ForescoutHostProperties_CL | where HostProperties_DnsniffEvent_s matches regex \"DNS Query Type:.A;DNS Query/Response:.Query\" | extend ipaddress = iif(isnotempty(HostProperties_Ipv4Addr_s), HostProperties_Ipv4Addr_s, (iif(isnotempty(HostProperties_Ipv6Addr_s), HostProperties_Ipv6Addr_s, HostProperties_IpAddr_s))) | summarize NumEvents_d =count() by ipaddress, HostProperties_DnsniffEvent_s, HostProperties_EmIpAddr_s | where NumEvents_d > 2 | where isnotempty(ipaddress) and isnotempty(HostProperties_EmIpAddr_s) | sort by NumEvents_d asc | project NumEvents_d, ipaddress, HostProperties_EmIpAddr_s",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": "[variables('TemplateEmptyArray')]",
+                "customDetails": {
+                  "NumEvents": "NumEvents_d",
+                  "EmIp": "HostProperties_EmIpAddr_s",
+                  "Ip": "ipaddress"
+                },
+                "alertDetailsOverride": {
+                  "alertDisplayNameFormat": "Dnsniff-Address-Check",
+                  "alertDescriptionFormat": "Dnsniff-Address-Check alert"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
+              "properties": {
+                "description": "ForescoutHostPropertyMonitor Analytics Rule 1",
+                "parentId": "[variables('analyticRuleId1')]",
+                "contentId": "[variables('_analyticRulecontentId1')]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ForescoutHostPropertyMonitor",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Julian Wang",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Forescout Technologies",
+                  "email": "support@forescout.com",
+                  "tier": "Partner",
+                  "link": "https://www.forescout.com/support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "properties": {
+        "description": "Forescout-DNS_Sniff_Event_Playbook playbook",
+        "displayName": "Forescout-DNS_Sniff_Event_Playbook playbook"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('playbookTemplateSpecName1'),'/',variables('playbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Forescout-DNS_Sniff_Event_Playbook Playbook with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "PlaybookName": {
+              "defaultValue": "Forescout-DNS_Sniff_Event_Playbook",
+              "type": "string"
+            }
+          },
+          "variables": {
+            "MicrosoftSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+            "_connection-2": "[[variables('connection-2')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.@{variables('azureManagementUrl')}/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    }
+                  },
+                  "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "path": "/incident-creation"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "For_each": {
+                      "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                      "actions": {
+                        "Condition": {
+                          "actions": {
+                            "Set_variable_4": {
+                              "runAfter": {
+                                "Set_variable_6": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Info",
+                                "value": "\"block network access\""
+                              }
+                            },
+                            "Set_variable_6": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Action_group",
+                                "value": "\"restrict\""
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "For_each_5": [
+                              "Succeeded"
+                            ]
+                          },
+                          "else": {
+                            "actions": {
+                              "Set_variable_5": {
+                                "runAfter": {
+                                  "Set_variable_7": [
+                                    "Succeeded"
+                                  ]
+                                },
+                                "type": "SetVariable",
+                                "inputs": {
+                                  "name": "Info",
+                                  "value": "\"Unauthorized app detected\""
+                                }
+                              },
+                              "Set_variable_7": {
+                                "type": "SetVariable",
+                                "inputs": {
+                                  "name": "Action_group",
+                                  "value": "\"notify\""
+                                }
+                              }
+                            }
+                          },
+                          "expression": {
+                            "and": [
+                              {
+                                "greaterOrEquals": [
+                                  "@variables('CurNumEventVar')",
+                                  5
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "If"
+                        },
+                        "For_each_5": {
+                          "foreach": "@variables('NumEventsVar')",
+                          "actions": {
+                            "Set_variable": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "CurNumEventVar",
+                                "value": "@int(items('For_each_5'))"
+                              }
+                            }
+                          },
+                          "runAfter": {
+                            "Set_variable_2": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Foreach"
+                        },
+                        "Parse_JSON": {
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@items('For_each')?['properties']?['additionalData']?['Custom Details']",
+                            "schema": {
+                              "properties": {
+                                "EmIp": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "Ip": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                },
+                                "NumEvents": {
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
+                            }
+                          }
+                        },
+                        "Set_variable_2": {
+                          "runAfter": {
+                            "Set_variable_8": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "NumEventsVar",
+                            "value": "@body('Parse_JSON')?['NumEvents']"
+                          }
+                        },
+                        "Set_variable_3": {
+                          "runAfter": {
+                            "Parse_JSON": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "HostIpVar",
+                            "value": "@body('Parse_JSON')?['Ip']"
+                          }
+                        },
+                        "Set_variable_8": {
+                          "runAfter": {
+                            "Set_variable_3": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "EmIpVar",
+                            "value": "@body('Parse_JSON')?['EmIp']"
+                          }
+                        },
+                        "Update_incident": {
+                          "runAfter": {
+                            "Condition": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "description": "action_group=@{variables('Action_group')};endpoint_ip=@{body('Parse_JSON')?['Ip']};em_ip=@{body('Parse_JSON')?['EmIp']};info=@{variables('Info')}",
+                              "incidentArmId": "@triggerBody()?['object']?['id']"
+                            },
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                              }
+                            },
+                            "method": "put",
+                            "path": "/Incidents"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Initialize_variable_4": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Foreach",
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 1
+                        }
+                      }
+                    },
+                    "Initialize_variable": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "EmIpVar",
+                            "type": "array"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_2": {
+                      "runAfter": {
+                        "Initialize_variable": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "HostIpVar",
+                            "type": "array"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_3": {
+                      "runAfter": {
+                        "Initialize_variable_2": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "NumEventsVar",
+                            "type": "array"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_4": {
+                      "runAfter": {
+                        "Initialize_variable_6": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "Info",
+                            "type": "string",
+                            "value": "\"\""
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_5": {
+                      "runAfter": {
+                        "Initialize_variable_3": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "Action_group",
+                            "type": "string",
+                            "value": "\"notify\""
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_6": {
+                      "runAfter": {
+                        "Initialize_variable_5": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "CurNumEventVar",
+                            "type": "integer",
+                            "value": 0
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                        "connectionName": "[[variables('MicrosoftSentinelConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "name": "[[parameters('PlaybookName')]",
+              "type": "Microsoft.Logic/workflows",
+              "location": "[[variables('workspace-location-inline')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "apiVersion": "2019-05-01",
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+              ],
+              "tags": {
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              }
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('MicrosoftSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
+              "properties": {
+                "displayName": "[[variables('MicrosoftSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                  "id": "[[variables('_connection-2')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ForescoutHostPropertyMonitor",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Julian Wang",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Forescout Technologies",
+                  "email": "support@forescout.com",
+                  "tier": "Partner",
+                  "link": "https://www.forescout.com/support"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "Forescout-DNS_Sniff_Event_Playbook",
+            "description": "This playbook will update incident with action to perform on endpoint",
+            "prerequisites": "Forescout Sentinel plugin is installed and running",
+            "lastUpdateTime": "2022-10-26T00:00:00Z",
+            "entities": [
+              "host"
+            ],
+            "tags": [
+              "Incident management"
+            ],
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "ForescoutHostPropertyMonitor data connector with template",
+        "displayName": "ForescoutHostPropertyMonitor template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "ForescoutHostPropertyMonitor data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Forescout Host Property Monitor",
+                  "publisher": "Forescout",
+                  "descriptionMarkdown": "The Forescout Host Property Monitor connector allows you to connect host properties from Forescout platform with Microsoft Sentinel, to view, create custom incidents, and improve investigation. This gives you more insight into your organization network and improves your security operation capabilities.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "ForescoutHostProperties_CL",
+                      "baseQuery": "ForescoutHostProperties_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get 5 latest host property entries",
+                      "query": "ForescoutHostProperties_CL | take 5"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "ForescoutHostProperties_CL",
+                      "lastDataReceivedQuery": "ForescoutHostProperties_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "ForescoutHostProperties_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Forescout Plugin requirement",
+                        "description": "Please make sure Forescout Microsoft Sentinel plugin is running on Forescout platform"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Instructions on how to configure Forescout Microsoft Sentinel plugin are provided at Forescout Documentation Portal (https://docs.forescout.com/bundle/sentinel-1-0-h)",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "WorkspaceId"
+                            ],
+                            "label": "Workspace ID"
+                          },
+                          "type": "CopyableLabel"
+                        },
+                        {
+                          "parameters": {
+                            "fillWith": [
+                              "PrimaryKey"
+                            ],
+                            "label": "Primary Key"
+                          },
+                          "type": "CopyableLabel"
+                        }
+                      ]
+                    }
+                  ],
+                  "metadata": {
+                    "id": "1430b3a9-a48c-40d5-bb81-029f6c63c2ad",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Forescout Technologies"
+                    },
+                    "support": {
+                      "tier": "developer",
+                      "name": "Forescout Technologies",
+                      "link": "https://www.forescout.com/support"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "ForescoutHostPropertyMonitor",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Julian Wang",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Forescout Technologies",
+                  "email": "support@forescout.com",
+                  "tier": "Partner",
+                  "link": "https://www.forescout.com/support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ForescoutHostPropertyMonitor",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Julian Wang",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Forescout Technologies",
+          "email": "support@forescout.com",
+          "tier": "Partner",
+          "link": "https://www.forescout.com/support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Forescout Host Property Monitor",
+          "publisher": "Forescout",
+          "descriptionMarkdown": "The Forescout Host Property Monitor connector allows you to connect host properties from Forescout platform with Microsoft Sentinel, to view, create custom incidents, and improve investigation. This gives you more insight into your organization network and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "ForescoutHostProperties_CL",
+              "baseQuery": "ForescoutHostProperties_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "ForescoutHostProperties_CL",
+              "lastDataReceivedQuery": "ForescoutHostProperties_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "ForescoutHostProperties_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get 5 latest host property entries",
+              "query": "ForescoutHostProperties_CL | take 5"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Forescout Plugin requirement",
+                "description": "Please make sure Forescout Microsoft Sentinel plugin is running on Forescout platform"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Instructions on how to configure Forescout Microsoft Sentinel plugin are provided at Forescout Documentation Portal (https://docs.forescout.com/bundle/sentinel-1-0-h)",
+              "instructions": [
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "WorkspaceId"
+                    ],
+                    "label": "Workspace ID"
+                  },
+                  "type": "CopyableLabel"
+                },
+                {
+                  "parameters": {
+                    "fillWith": [
+                      "PrimaryKey"
+                    ],
+                    "label": "Primary Key"
+                  },
+                  "type": "CopyableLabel"
+                }
+              ]
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "ForescoutHostPropertyMonitor",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Julian Wang",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Forescout Technologies",
+          "email": "support@forescout.com",
+          "tier": "Partner",
+          "link": "https://www.forescout.com/support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRulecontentId1')]",
+              "version": "[variables('analyticRuleVersion1')]"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Playbooks')]",
+              "version": "[variables('playbookVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-06-28",
+        "providers": [
+          "Forescout"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

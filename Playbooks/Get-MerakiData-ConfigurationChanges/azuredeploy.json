@@ -1,0 +1,248 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This playbook will get data from the Meraki Cloud Dashboard API, specifically configurationChanges. You must first create an API key in the portal before you deploy this LogicApp.",
+        "author": "Rich Lilly"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-MerakiData-configurationChanges",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook to be deployed"
+            }
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "Meraki_APIKey": {
+            "type": "string",
+            "metadata": {
+                "description": "API Key to be used to authenticate to Meraki service"
+            }
+        },
+        "Meraki_OrgId": {
+            "type": "string",
+            "metadata": {
+                "description": "OrgId to be used"
+            }
+        },
+        "LogADisplayName": {
+            "defaultValue": "MerakiConfigurationChanges",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureLogAnalyticsDataCollectorConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('LogADisplayName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": 1,
+                                "startTime": "2021-01-01T00:00:00Z"
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "HTTP_-_Get_configurationChanges": {
+                            "runAfter": {
+                                "Initialize_variable_-_Timespan": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "X-Cisco-Meraki-API-Key": "@variables('API Key')"
+                                },
+                                "method": "GET",
+                                "uri": "https://api.meraki.com/api/v0/organizations/@{variables('OrgId')}/configurationChanges?timespan=@{variables('Timespan')}"
+                            }
+                        },
+                        "Initialize_variable_-_API_Key": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "API Key",
+                                        "type": "string",
+                                        "value": "[parameters('Meraki_APIKey')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_OrgId": {
+                            "runAfter": {
+                                "Initialize_variable_-_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "OrgId",
+                                        "type": "string",
+                                        "value": "[parameters('Meraki_OrgId')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_Timespan": {
+                            "runAfter": {
+                                "Initialize_variable_-_OrgId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Timespan",
+                                        "type": "integer",
+                                        "value": 60
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_Parse_configurationChanges": {
+                            "runAfter": {
+                                "HTTP_-_Get_configurationChanges": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_-_Get_configurationChanges')",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "adminId": {
+                                                "type": "string"
+                                            },
+                                            "adminName": {
+                                                "type": "string"
+                                            },
+                                            "label": {
+                                                "type": "string"
+                                            },
+                                            "networkId": {
+                                                "type": "string"
+                                            },
+                                            "networkName": {
+                                                "type": "string"
+                                            },
+                                            "newValue": {
+                                                "type": "string"
+                                            },
+                                            "oldValue": {
+                                                "type": "string"
+                                            },
+                                            "page": {
+                                                "type": "string"
+                                            },
+                                            "ssidName": {
+                                                "type": "string"
+                                            },
+                                            "ssidNumber": {
+                                                "type": "integer"
+                                            },
+                                            "ts": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "ts",
+                                            "adminName",
+                                            "page",
+                                            "label",
+                                            "oldValue",
+                                            "newValue"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Send_Data_-_configurationChanges": {
+                            "runAfter": {
+                                "Parse_JSON_-_Parse_configurationChanges": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{body('Parse_JSON_-_Parse_configurationChanges')}",
+                                "headers": {
+                                    "Log-Type": "MerakiConfigurationChanges"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsDataCollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureLogAnalyticsDataCollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

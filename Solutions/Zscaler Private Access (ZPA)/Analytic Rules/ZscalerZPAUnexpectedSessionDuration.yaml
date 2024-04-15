@@ -1,0 +1,52 @@
+id: e07846e0-43ad-11ec-81d3-0242ac130003
+name: Zscaler - Unexpected ZPA session duration
+description: |
+  'Detects Unexpected ZPA session duration.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ZscalerPrivateAccess
+    dataTypes:
+      - ZPAEvent
+queryFrequency: 1h
+queryPeriod: 24h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+  - T1133
+query: |
+  let dt_lookBack = 24h;
+  let time_treshhold = timespan(08:00:00);
+  let open_sessions =
+  ZPAEvent
+  | where TimeGenerated > ago(dt_lookBack)
+  | where DvcAction == 'open'
+  | summarize timestampstart = min(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId
+  | sort by timestampstart asc;
+  let closed_sessions =
+  ZPAEvent
+  | where TimeGenerated > ago(dt_lookBack)
+  | where DvcAction == 'close'
+  | summarize timestampend = max(TimeGenerated) by DstUserName, SrcIpAddr, NetworkSessionId
+  | sort by timestampend asc;
+  open_sessions
+  | join (closed_sessions) on DstUserName, SrcIpAddr, NetworkSessionId
+  | extend duration = timestampend - timestampstart
+  | where duration > time_treshhold
+  | where DstUserName !has "ZPA LSS"
+  | sort by timestampstart asc
+  | extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

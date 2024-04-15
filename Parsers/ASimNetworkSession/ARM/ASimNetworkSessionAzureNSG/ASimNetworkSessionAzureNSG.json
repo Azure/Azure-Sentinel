@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionAzureNSG",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for Azure NSG flows",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionAzureNSG",
+            "query": "let DvcActionLookup = datatable(FlowStatus_s:string, DvcAction:string, EventResult:string) [\n    'A', 'Allow', 'Success',\n    'D', 'Deny', 'Failure',\n];\nlet NetworkDirectionLookup = datatable(FlowDirection_s:string, NetworkDirection:string, isOutBound:bool) [\n    'I', 'Inbound', false,\n    'O', 'Outbound', true\n];\nlet NetworkProtocolLookup = datatable(L4Protocol_s:string, NetworkProtocol:string)[\n    'T', 'TCP',\n    'U', 'UDP'\n];\nlet parser = (disabled:bool=false) \n{\n  let AzureNetworkAnalytics = (FlowDirection: string) {\n    AzureNetworkAnalytics_CL\n    | where not(disabled) and isnotempty(FlowType_s)\n    | where FlowDirection == FlowDirection_s\n    | lookup NetworkDirectionLookup on FlowDirection_s\n  };\n  let AzureNetworkAnalyticsInbound =\n    AzureNetworkAnalytics ('I')\n    | where not(isOutBound)\n    | project-rename\n        DstMacAddr = MACAddress_s\n    | extend\n        DstBytes = tolong(OutboundBytes_d), // -- size fields seem not to be populated for inbound\n        DstPackets = tolong(OutboundPackets_d),\n        SrcBytes = tolong(InboundBytes_d),\n        SrcPackets = tolong(InboundPackets_d),\n        SrcInterfaceName = tostring(split(NIC_s, '/')[1]),\n        SrcGeoCountry = toupper(Country_s)\n    | extend hostelements=split(VM2_s,'/')\n    | extend \n        DstFQDN = strcat(hostelements[0], @\"\\\", hostelements[1]),\n        DstHostname = tostring(hostelements[1]),\n        DstDomain = tostring(hostelements[0]),\n        DstDomainType = \"ResourceGroup\"\n    | extend Hostname = DstHostname\n    | project-away hostelements, isOutBound\n  ;  \n  let AzureNetworkAnalyticsOutbound =\n    AzureNetworkAnalytics ('O')\n    | where isOutBound\n    | project-rename\n        SrcMacAddr = MACAddress_s\n    | extend\n        SrcBytes = tolong(OutboundBytes_d), \n        SrcPackets = tolong(OutboundPackets_d),\n        DstBytes = tolong(InboundBytes_d),\n        DstPackets = tolong(InboundPackets_d),\n        DstInterfaceName = tostring(split(NIC_s, '/')[1]),\n        DstGeoCountry = toupper(Country_s)\n    | extend hostelements=split(VM1_s,'/')\n    | extend \n        SrcFQDN = strcat(hostelements[0], @\"\\\", hostelements[1]),\n        SrcHostname = tostring(hostelements[1]),\n        SrcDomain = tostring(hostelements[0]),\n        SrcDomainType = \"ResourceGroup\"\n    | extend Hostname = SrcHostname\n    | project-away hostelements, isOutBound\n  ;\n  union AzureNetworkAnalyticsInbound, AzureNetworkAnalyticsOutbound\n  | project-rename\n      Dvc = NSGList_s,\n      DvcSubscriptionId = Subscription_g,\n      EventEndTime = FlowEndTime_t,\n      EventStartTime = FlowStartTime_t,\n      NetworkApplicationProtocol = L7Protocol_s,\n      NetworkRuleName = NSGRule_s,\n      NetworkSessionId = ConnectionName_s,\n      EventOriginalSubType = FlowType_s\n  | extend\n      DstPortNumber = toint(DestPort_d),\n      EventProduct = 'NSGFlow',\n      EventSchema = 'NetworkSession',\n      EventSchemaVersion='0.2.2',\n      EventSeverity = 'Informational', //??\n      EventType = 'Flow',\n      EventVendor = 'Microsoft',\n      EventCount = toint(AllowedInFlows_d+DeniedInFlows_d+AllowedOutFlows_d+DeniedOutFlows_d),\n      NetworkDuration = toint((((EventEndTime - datetime(1970-01-01)) / 1s) - ((EventStartTime - datetime(1970-01-01)) / 1s )) * 1000),\n      Rule = NetworkRuleName,\n      SessionId = NetworkSessionId\n  | lookup DvcActionLookup on FlowStatus_s\n  | extend \n      DstIpAddr = iff(isnotempty(DestIP_s),\n                      DestIP_s,\n                      split(DestPublicIPs_s, '|')[0]),\n      Duration = NetworkDuration,\n      NetworkBytes = tolong(DstBytes + SrcBytes),\n      NetworkPackets = tolong(DstPackets + SrcPackets),\n      SrcIpAddr = iff(isnotempty(SrcIP_s),\n                      SrcIP_s,\n                      split(SrcPublicIPs_s, '|')[0])\n  | extend\n      Dst = DstIpAddr,\n      IpAddr = SrcIpAddr,\n      Src = SrcIpAddr\n  | lookup NetworkProtocolLookup on L4Protocol_s\n  | project-keep\n      Src*,\n      Dst*,\n      Event*,\n      Dvc*,\n      Network*,\n      IpAddr,\n      Hostname,\n      Type,\n      Duration,\n      SessionId,\n      _ResourceId,\n      TimeGenerated\n  | project-away *_s\n  };\nparser (disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

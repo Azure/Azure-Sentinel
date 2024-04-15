@@ -1,0 +1,39 @@
+id: c4902121-7a7e-44d1-810b-88d26db622ff
+name: Zscaler - ZPA connections from new country
+description: |
+  'Detects ZPA connections from new country.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ZscalerPrivateAccess
+    dataTypes:
+      - ZPAEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let listCountries =
+  ZPAEvent 
+  | where TimeGenerated > ago(14d)
+  | where DvcAction == 'open'
+  | summarize ListofCountries = make_set(SrcGeoCountry) by DstUserName
+  | project ListofCountries;
+  ZPAEvent
+  | where isnotempty(SrcGeoCountry)
+  | where SrcGeoCountry !in (listCountries)
+  | summarize EventCount = count() by DstUserName, SrcGeoCountry
+  | project-away EventCount
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

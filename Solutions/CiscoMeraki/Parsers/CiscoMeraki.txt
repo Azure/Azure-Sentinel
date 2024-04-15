@@ -1,0 +1,252 @@
+// Title:           Cisco Meraki
+// Author:          Microsoft
+// Version:         3.3
+// Last Updated:    16/11/2022
+// Comment:         Update to existing version 1.1
+//
+// DESCRIPTION:
+// This parser takes raw Cisco Meraki (MX/MR/MS) logs from a Syslog stream or from custom table (meraki_CL) and parses the logs into a normalized schema.
+//
+// REFERENCES:
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+//
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+// 1374543213.342705328 MX84 urls src=192.168.1.186:63735 dst=69.58.188.40:80 mac=58:1F:AA:CE:61:F2 request: GET https://...
+// 1374543986.038687615 MX84 flows src=192.168.1.186 dst=8.8.8.8 mac=58:1F:AA:CE:61:F2 protocol=udp sport=55719 dport=53 pattern: allow all
+// 1377449842.514782056 MX84 ids-alerts signature=129:4:1 priority=3 timestamp=1377449842.512569 direction=ingress protocol=tcp/ip src=74.125.140.132:80
+// 1380664994.337961231 MX84 events type=vpn_connectivity_change vpn_type='site-to-site' peer_contact='98.68.191.209:51856' peer_ident='2814ee002c075181bb1b7478ee073860' connectivity='true'
+// 1377448470.246576346 MX84 ids-alerts signature=119:15:1 priority=2 timestamp=1377448470.238064 direction=egress protocol=tcp/ip src=192.168.111.254:56240 signature=1:28423:1 priority=1 timestamp=1468531589.810079 dhost=98:5A:EB:E1:81:2F direction=ingress protocol=tcp/ip src=151.101.52.238:80 dst=192.168.128.2:53023 message: EXPLOIT-KIT Multiple exploit kit single digit exe detection url=http://www.eicar.org/download/eicar.com.txt src=192.168.128.2:53150 dst=188.40.238.250:80 mac=98:5A:EB:E1:81:2F name='EICAR:EICAR_Test_file_not_a_virus-tpd'// 1563249630.774247467 remote_DC1_appliance security_event ids_alerted signature=1:41944:2 priority=1 timestamp=TIMESTAMPEPOCH.647461 dhost=74:86:7A:D9:D7:AA direction=ingress protocol=tcp/ip src=23.6.199.123:80 dst=10.1.10.51:56938 message: BROWSER-IE Microsoft Edge scripting engine security bypass css attempt
+// 1380653443.857790533 MR18 events type=device_packet_flood radio='0' state='end' alarm_id='4' reason='left_channel' airmarshal_events type= rogue_ssid_detected ssid='' bssid='02:18:5A:AE:56:00' src='02:18:5A:AE:56:00' dst='02:18:6A:13:09:D0' wired_mac='00:18:0A:AE:56:00' vlan_id='0' channel='157' rssi='21' fc_type='0' fc_subtype='5'
+// 1380653443.857790533 MS220_8P events type=8021x_eap_success port='' identity='employee@ikarem.com'
+//
+//
+// IMPORTANT NOTE:
+// If you have data in Syslog table then you need to change the Meraki device list in the query below
+let MerakiSyslogDevices = pack_array("server1", "server2"); // replace server1 and server2 with your actual Cisco Meraki device(s) and add more with comma separated
+union isfuzzy=true
+        (
+			meraki_CL
+			| project-rename LogMessage =  Message
+        ),
+        (
+			Syslog
+			| where Computer in (MerakiSyslogDevices)
+			| project-rename LogMessage =  SyslogMessage
+        ),
+        (
+            CiscoMerakiNativePoller_CL
+            | extend LogMessage = ""
+            | extend
+                     Action = DvcAction,
+                     Message = EventMessage,
+                     NetworkProtocol = coalesce(NetworkProtocol, NetworkApplicationProtocol),
+                     Sha256 = Hash
+            | extend Signature = extract(@"signature=(\S+);",1,tostring(AdditionalFields)),
+                     LogType = iff(EventOriginalType == "IDS Alert", "ids-alerts", "security_event")
+        )
+| extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
+| extend Epoch = tostring(Parser[0]),
+        DeviceName = coalesce(tostring(Parser[1]),column_ifexists("SrcHostname","")),
+        LogType = coalesce(column_ifexists("LogType",""),tostring(Parser[2])),
+        Substring = tostring(Parser[3])
+| extend EpochTimestamp = split(Epoch,".")
+| extend EventTimestamp = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
+| extend EventStartTime = coalesce(EventTimestamp,column_ifexists("EventStartTime",datetime(null)))
+| extend SrcIpAddr = case(
+                        isnotempty(column_ifexists("SrcIpAddr","")), column_ifexists("SrcIpAddr",""),
+                        LogType has "urls", extract(@"src=([0-9\.]+)\:",1,Substring),
+                        LogType has "flows", extract(@"src=([0-9\.]+)\s",1,Substring),
+                        LogType has "security_event", extract(@"src=([0-9\.]+)\:",1,Substring),
+                        LogType has "ids-alerts", extract(@"src=([0-9\.]+)\:",1,Substring),
+                        LogType has "events", extract(@"(peer_contact|ip_src)=\'([0-9\.]+)\:",2,Substring),
+                        ""
+                    ),
+		 SrcPortNumber = case(
+                            isnotnull(column_ifexists("SrcPortNumber",int(null))),
+                            column_ifexists("SrcPortNumber",int(null)),
+                            LogType has "urls", toint(extract(@"src=([0-9\.]+)\:(\d+)\s",2,Substring)),
+                            LogType has "flows", toint(extract(@"sport=(\S+)",1,Substring)),
+                            LogType has "security_event", toint(extract(@"src=([0-9\.]+)\:(\d+)",2,Substring)),
+                            LogType has "ids-alerts", toint(extract(@"src=([0-9\.]+)\:(\d+)",2,Substring)),
+                            LogType has "events", toint(extract(@"(peer_contact|ip_src)=\'([0-9\.]+)\:(\d+)\'",3,Substring)),
+                            int(null)
+                        ),
+		 DstIpAddr = case(
+                        isnotempty(column_ifexists("DstIpAddr","")), column_ifexists("DstIpAddr",""),
+                        LogType has "urls",extract(@"dst=([0-9\.]+)\:",1,Substring),
+                        LogType has "flows", extract(@"dst=([0-9\.]+)\s",1,Substring),
+                        LogType has "security_event", extract(@"dst=([0-9\.]+)\:",1,Substring),
+                        ""
+                    ),
+		 DstPortNumber = case(
+                            isnotnull(column_ifexists("DstPortNumber",int(null))),
+                            column_ifexists("DstPortNumber",int(null)),
+                            LogType has "urls", toint(extract(@"dst=([0-9\.]+)\:(\d+)\s",2,Substring)),
+                            LogType has "flows", toint(extract(@"dport=(\S+)",1,Substring)),
+                            LogType has "security_event", toint(extract(@"dst=([0-9\.]+)\:(\d+)",2,Substring)),
+                            int(null)
+                        ),
+		 HttpRequestMethod = iff(LogType has "urls", extract(@"request: (\w+)\s",1,Substring), dynamic("")),
+		 Url = case(
+                    isnotempty(column_ifexists("Url","")), column_ifexists("Url",""),
+                    LogType has "urls", extract(@"request: (\w+)\s(\S+)",2,Substring),
+                    LogType has "security_event", tostring(extract(@"url=(\S+)\s",1,Substring)),
+                    ""),
+		 SrcMacAddr = case(
+                        isnotempty(column_ifexists("SrcMacAddr","")), column_ifexists("SrcMacAddr",""),
+                        LogType has "airmarshal_events", tostring(extract(@"src=\'(\S+)\'",1,Substring)),
+                        LogType has "flows", tostring(extract(@"mac=(\S+)\s",1,Substring)),
+                        LogType has "security_event", tostring(extract(@"shost=(\S+)\s",1,Substring)),
+                        ""
+                    ),
+		 NetworkProtocol = case(
+                            isnotempty(column_ifexists("NetworkProtocol","")), column_ifexists("NetworkProtocol",""),
+                            LogType has "ids-alerts", tostring(extract(@"protocol=(\w+)\s",1,Substring)),
+                            LogType has "flows", extract(@"protocol=(\w+)\s",1,Substring),
+                            LogType has "security_event", tostring(extract(@"protocol=(\w+)\s",1,Substring)),
+                            ""
+                        ),
+		 Pattern = iff(LogType has "flows", extract(@"pattern\: ([\S\s]+)",1,Substring), dynamic("")),
+		 EventType = case(
+                        isnotempty(column_ifexists("EventOriginalType","")), column_ifexists("EventOriginalType",""),
+                        LogType has "airmarshal_events", tostring(extract(@"type= (\S+)",1,Substring)),
+                        LogType has "events", tostring(extract(@"type=(\S+)",1,Substring)),
+                        LogType has "security_event", tostring(extract(@"^(\S+)\s\w+\:",1,Substring)),
+                        ""
+                    ),
+		 Ssid = iff(LogType has "airmarshal_events", tostring(extract(@"ssid=\'(\S+)\'",1,Substring)),dynamic("")),
+		 Vap = case(
+                    LogType has "airmarshal_events", toint(extract(@"vap=\'(\S+)\'\s",1,Substring)),
+                    LogType has "events", toint(extract(@"vap=\'(\S+)\'\s",1,Substring)),
+                    dynamic("")
+                ),
+		 Bssid = iff(LogType has "airmarshal_events",tostring(extract(@"bssid=\'(\S+)\'",1,Substring)),dynamic("")),
+		 DstMacAddr = case(
+                        LogType has "airmarshal_events", tostring(extract(@"dst=\'(\S+)\'",1,Substring)),
+                        LogType has "security_event", tostring(extract(@"dhost=(\S+)\s",1,Substring)),
+                        ""
+                    ),
+		 WiredMacAddr = iff(LogType has "airmarshal_events", tostring(extract(@"wired_mac=\'(\S+)\'",1,Substring)), dynamic("")),
+		 Channel = case(
+                    LogType has "airmarshal_events", toint(extract(@"channel=\'(\d+)\'",1,Substring)),
+                    LogType has "events", toint(extract(@"channel=\'(\S+)\'",1,Substring)),
+                    dynamic("")
+                ),
+		 VlanId = iff(LogType has "airmarshal_events", toint(extract(@"vlan_id=\'(\d+)\'",1,Substring)), dynamic("")),
+		 Rssi = iff(LogType has "airmarshal_events" or LogType has "events", toint(extract(@"rssi=\'(\d+)\'",1,Substring)), int(null)),
+		 FcType = iff(LogType has "airmarshal_events", toint(extract(@"fc_type=\'(\S+)\'",1,Substring)), dynamic("")),
+		 FcSubType = iff(LogType has "airmarshal_events", toint(extract(@"fc_subtype=\'(\S+)\'",1,Substring)), dynamic("")),
+		 Signature = case(
+                    isnotempty(column_ifexists("Signature","")), column_ifexists("Signature",""),
+                    LogType has "security_event", tostring(extract(@"signature=(\S+)\s",1,Substring)),
+                    LogType has "ids-alerts", tostring(extract(@"signature=(\S+)\s",1,Substring)),
+                    ""
+                ),
+		 Priority = case(
+                    LogType has "security_event", toint(extract(@"priority=(\d+)\s",1,Substring)),
+                    LogType has "ids-alerts", toint(extract(@"priority=(\d+)\s",1,Substring)),
+                    dynamic("")
+                ),
+		 EventEpoch = case(
+                        LogType has "security_event", tostring(extract(@"timestamp=(\S+)\s",1,Substring)),
+                        LogType has "ids-alerts", tostring(extract(@"timestamp=(\S+)\s",1,Substring)),
+                        ""
+                    ),
+		 NetworkDirection = case(
+                            LogType has "security_event", tostring(extract(@"direction=(\S+)",1,Substring)),
+                            LogType has "ids-alerts", tostring(extract(@"direction=(\S+)",1,Substring)),
+                            ""
+                        ),
+		 Action = case(
+                            isnotempty(column_ifexists("Action","")), column_ifexists("Action",""),
+                            LogType has "security_event", tostring(extract(@"action=(\w+)",1,Substring)),
+                            ""
+                    ),
+		 Message = iff(LogType has "security_event", tostring(extract(@"message: ([\w\.\-\+\,\s]+)(\s\w+\=)?",1,Substring)), column_ifexists("Message","")),
+		 VpnType = iff(LogType has "events",  tostring(extract(@"vpn_type=\'(\S+)\'",1,Substring)), dynamic("")),
+		 PeerIdentity = iff(LogType has "events",  tostring(extract(@"peer_ident=\'(\S+)\'",1,Substring)), dynamic("")),
+		 Radio = iff(LogType has "events",  toint(extract(@"radio=\'(\d+)\'",1,Substring)), dynamic("")),
+		 Group = iff(LogType has "events",  toint(extract(@"group=\'(\S+)?\'",1,Substring)), dynamic("")),
+		 Attribute = iff(LogType has "events",  toint(extract(@"attr=\'(\S+)?\'",1,Substring)), dynamic("")),
+		 ClientMacAddr = case(
+                        isnotempty(column_ifexists("SrcMacAddr","")), column_ifexists("SrcMacAddr",""),
+                        LogType has "events",  tostring(extract(@"client_mac=\'(\S+)\'",1,Substring)),
+                        ""
+                ),
+		 Reason = iff(LogType has "events",  toint(extract(@"reason=\'(\S+)\'",1,Substring)), dynamic("")),
+		 AppleDaReason = iff(LogType has "events",  toint(extract(@"apple_da_reason=\'(\S+)\'",1,Substring)), dynamic("")),
+		 Duration = iff(LogType has "events",  tostring(extract(@"duration=\'(\S+)\'",1,Substring)), ""),
+		 FullConn = iff(LogType has "events",  tostring(extract(@"full_conn=\'(\S+)\'",1,Substring)), dynamic("")),
+		 IpResp = iff(LogType has "events",  tostring(extract(@"ip_resp=\'(\S+)\'\s",1,Substring)), dynamic("")),
+		 HttpResp = iff(LogType has "events",  tostring(extract(@"http_resp=\'(\S+)\'",1,Substring)), dynamic("")),
+		 ArpResp = iff(LogType has "events",  tostring(extract(@"arp_resp=\'(\S+)\'",1,Substring)), dynamic("")),
+		 ArpSrcIpAddr = case(
+                        isnotempty(column_ifexists("SrcIpAddr","")), column_ifexists("SrcIpAddr",""),
+                        LogType has "events",  tostring(extract(@"arp_src=\'(\S+)\'",1,Substring)),
+                        ""
+                ),
+		 Connectivity = iff(LogType has "events",  tostring(extract(@"connectivity=\'(\S+)\'",1,Substring)), dynamic("")),
+		 Rtt = iff(LogType has "events",  tostring(extract(@"rtt=\'([\w+\.\s]+)\'",1,Substring)), dynamic("")),
+		 UserName = iff(LogType has "events",  tostring(extract(@"identity=\'(\S+)\'",1,Substring)), dynamic("")),
+		 Aid = iff(LogType has "events",  tostring(extract(@"aid=\'(\S+)\'",1,Substring)), dynamic("")),
+		 Spi = iff(LogType has "events",  tostring(extract(@"spi=(\S+)$",1,Substring)), dynamic("")),
+		 DvcMacAddr = case(
+                        isnotempty(column_ifexists("DvcMacAddr","")), column_ifexists("DvcMacAddr",""),
+                        LogType has "events",  tostring(extract(@"device=\'(\S+)\'",1,Substring)),
+                        ""
+                ),
+		 State = iff(LogType has "events",  tostring(extract(@"state=\'(\S+)\'",1,Substring)), dynamic("")),
+		 AlarmId = iff(LogType has "events",  toint(extract(@"alarm_id=\'(\S+)\'",1,Substring)), dynamic("")),
+		 DosCount = iff(LogType has "events",  tostring(extract(@"dos_count=\'(\S+)\'",1,Substring)), dynamic("")),
+		 InterArrival = iff(LogType has "events",  tostring(extract(@"inter_arrival=\'(\S+)\'",1,Substring)), dynamic("")),
+		 LogTimestamp = case(
+                            isnotnull(column_ifexists("EventStartTime",datetime(null))), column_ifexists("EventStartTime",datetime(null)),
+                            LogType has "security_event", unixtime_seconds_todatetime(tolong(split(tostring(extract(@"timestamp=(\S+)\s",1,Substring)),".")[0])),
+                            LogType has "ids-alerts", unixtime_seconds_todatetime(tolong(split(tostring(extract(@"timestamp=(\S+)\s",1,Substring)),".")[0])),
+                            datetime(null)
+                        ),
+		 IpAddr = iff(LogType has "events", tostring(extract(@"dhcp lease of ip ([\d\.]+)", 1, Substring)), dynamic("")),
+		 ServerMacAddr = iff(LogType has "events", tostring(extract(@"server mac ([\w\:]+)", 1, Substring)), dynamic("")),
+		 RouterIpAddr = iff(LogType has "events", tostring(extract(@"router ([\d\.]+)", 1, Substring)), dynamic("")),
+		 Subnet = iff(LogType has "events",  tostring(extract(@"subnet ([\d\.]+)", 1, Substring)), dynamic("")),
+		 Dns = iff(LogType has "events",  split(extract(@"dns ([\d\.\,\:\s]+)", 1, Substring), ", "), dynamic(""))
+| extend
+            ClientMacAddr = iif(isempty(ClientMacAddr), tostring(extract(@"client mac ([\w\:]+)", 1, Substring)), ClientMacAddr),
+		    SrcPortNumber = iif(isempty(SrcPortNumber), toint(extract(@"port=\'(\S+)\'",1,Substring)), SrcPortNumber),
+            Dns = iif(Dns[0] == "", "", Dns)
+| extend LogType = case(
+                    isnotempty(LogType), LogType,
+                    LogType !in ("urls", "airmarshal_events","security_event","ids-alerts", "events") and LogType !contains "flows", iif(isempty(LogType), "", LogType),
+                    ""
+                ),
+         NetworkProtocol = case(NetworkProtocol has "tcp", "TCP",
+                                NetworkProtocol has "udp", "UDP",
+                                ""),
+         EventSeverity = case(
+                             isnotempty(column_ifexists("EventSeverity","")), column_ifexists("EventSeverity",""),
+                              Priority == 1, "High",
+                              Priority == 2, "Medium",
+                              Priority == 3, "Low",
+                              Priority == 4, "Infomational",
+                              ""),
+        Disposition = case(
+                            EventType contains "File Scanned", tolower(column_ifexists("EventOriginalSeverity","")),
+                            LogType has "security_event", tostring(extract(@"disposition=(\w+)",1,Substring)),
+                            ""
+                        ),
+        ThreatName = case(
+                            LogType has "security_event", tostring(extract(@"name=(\S+)",1,Substring)),
+                            ""
+                        ),
+        Sha256 = case (
+                            EventType == "File Scanned", column_ifexists("Sha256",""),
+                            LogType has "security_event",  tostring(extract(@"sha256=(\S+)?",1,Substring)),
+                            ""
+                        ),
+        Action = case(
+                            Action == "block", "deny",
+                            tolower(Action)
+            )
+| project-away Substring, Parser

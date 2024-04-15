@@ -1,0 +1,35 @@
+id: e0b49a22-1c63-4572-b913-b3f31b8e9edf
+name: OracleDBAudit - Action by user
+description: |
+  'Query searches actions made by user.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+  - Collection
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1005
+  - T1119
+  - T1078
+query: |
+  let lbtime = 24h;
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime)
+  | where isnotempty(DbAction)
+  | where isnotempty(DstUserName)
+  | where DbAction in~ ('SELECT', 'DROP', 'INSERT')
+  | extend TableName = replace(@'[,\(\)]', '', extract(@'(?i)SELECT(.*?)FROM\s(.*?)\s', 2, Action))
+  | where isnotempty(TableName)
+  | where TableName !~ 'select'
+  | summarize TablesAffected = makeset(TableName) by DstUserName, DbAction
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity

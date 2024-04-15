@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimNetworkSessionVectraAI",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM filtering parser for Vectra AI Streams",
+            "category": "ASIM",
+            "FunctionAlias": "vimNetworkSessionVectraAI",
+            "query": "let parser = (\n  starttime:datetime=datetime(null), \n  endtime:datetime=datetime(null),\n  srcipaddr_has_any_prefix:dynamic=dynamic([]), \n  dstipaddr_has_any_prefix:dynamic=dynamic([]),\n  ipaddr_has_any_prefix:dynamic=dynamic([]),\n  dstportnumber:int=int(null), \n  hostname_has_any:dynamic=dynamic([]),\n  dvcaction:dynamic=dynamic([]), \n  eventresult:string='*', \n  disabled:bool=false,\n  pack:bool=false)\n{\n  let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)[\n    false, true, 'Inbound',\n    true, false, 'Outbound',\n    true, true, 'Local',\n    false, false, 'External'];\n  let EventSubTypeLookup = datatable(conn_state_s:string, EventSubType:string)[\n    \"S1\", 'Start',\n    \"SF\", 'End'];\n  let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';\n  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); \n  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  \n  VectraStream_CL\n  | where (isnull(starttime) or TimeGenerated>=starttime)\n    and   (isnull(endtime) or TimeGenerated<=endtime)\n  | where not(disabled)\n  | where metadata_type_s == 'metadata_isession'\n  | project-away MG, ManagementGroupName, RawData, SourceSystem, TenantId\n  | where array_length(dvcaction) == 0\n  | where eventresult == \"*\"\n  | where  (isnull(dstportnumber) or dstportnumber==id_resp_p_d)\n    and (array_length(hostname_has_any)==0 \n      or resp_domain_s has_any (hostname_has_any)\n      or resp_hostname_s has_any (hostname_has_any)\n      or orig_hostname_s has_any (hostname_has_any)\n    )\n  | extend temp_SrcMatch=has_any_ipv4_prefix(id_orig_h_s,src_or_any)\n         , temp_DstMatch=has_any_ipv4_prefix(id_resp_h_s,dst_or_any)\n  | extend ASimMatchingIpAddr=case(\n                                array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,\"-\",\n                                temp_SrcMatch and temp_DstMatch, \"Both\",\n                                temp_SrcMatch, \"SrcIpAddr\",\n                                temp_DstMatch, \"DstIpAddr\",\n                                \"No match\"\n                            )\n  | where ASimMatchingIpAddr != \"No match\" \n  | project-away temp_*\n  | project-rename\n      DstIpAddr = id_resp_h_s,\n      DvcDescription = hostname_s,\n      DstDescription = resp_hostname_s,\n      SrcDescription = orig_hostname_s,\n      // -- huid does not seem to be unique per device and not mapped for now\n      // DstDvcId = resp_huid_s, \n      // SrcDvcId = orig_huid_s,\n      DvcId = sensor_uid_s,\n      // -- community id is just a hash of addresses and ports, and not unique for the session\n      // NetworkSessionId = community_id_s,\n      SrcIpAddr = id_orig_h_s,\n      EventUid = _ItemId\n  // -- the domain field may have invalid values. Most of them are IP addresses filtered out, but a small fraction are not filtered.\n  | extend resp_domain_s = iff (ipv4_is_match(resp_domain_s, \"0.0.0.0\",0), \"\", resp_domain_s)\n  | extend SplitRespDomain = split(resp_domain_s,\".\")\n  | extend \n      DstDomain = tostring(strcat_array(array_slice(SplitRespDomain, 1, -1), '.')),\n      DstFQDN = iif (array_length(SplitRespDomain) > 1, resp_domain_s, ''),\n      DstDomainType = iif (array_length(SplitRespDomain) > 1, 'FQDN', '')\n  | extend\n      DstHostname = case (\n          resp_domain_s != \"\", tostring(SplitRespDomain[0]),\n          DstDescription startswith \"IP-\" or not(DstDescription matches regex HostnameRegex), \"\",\n          DstDescription)\n  | project-away SplitRespDomain\n  | extend\n      SrcHostname = iff (SrcDescription startswith \"IP-\" or not(SrcDescription matches regex HostnameRegex), \"\", SrcDescription),\n      DvcHostname = iff (DvcDescription startswith \"IP-\" or not(DvcDescription matches regex HostnameRegex), \"\", DvcDescription),\n      NetworkApplicationProtocol = toupper(service_s),\n      NetworkProtocol = toupper(protoName_s),\n      NetworkProtocolVersion = toupper(id_ip_ver_s),\n      Dst = DstIpAddr,\n      DstBytes = tolong(resp_ip_bytes_d),\n      DstPackets = tolong(resp_pkts_d),\n      DstPortNumber = toint(id_resp_p_d),\n      DstVlanId = tostring(toint(resp_vlan_id_d)),\n      EventCount = toint(1),\n      EventEndTime = unixtime_milliseconds_todatetime(ts_d),\n      EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),\n      EventProduct = 'Vectra Stream',\n      EventResult = 'Success',\n      EventSchema = 'NetworkSession',\n      EventSchemaVersion='0.2.2',\n      EventSeverity = 'Informational',\n      EventStartTime = unixtime_milliseconds_todatetime(session_start_time_d),\n      EventType = 'NetworkSession',\n      EventVendor = 'Vectra AI',\n      SrcBytes = tolong(orig_ip_bytes_d),\n      SrcPackets = tolong(orig_pkts_d),\n      SrcPortNumber = toint(id_orig_p_d),\n      SrcVlanId = tostring(toint(orig_vlan_id_d)),\n      // -- No ID mapped, since huid found not to be unique\n      // SrcDvcIdType = 'VectraId',\n      // DstDvcIdType = 'VectraId',\n      DvcIdType = 'VectraId',\n      NetworkDuration = toint(duration_d)\n  | extend \n      Hostname = DstHostname,\n      IpAddr = SrcIpAddr,\n      // SessionId = NetworkSessionId,\n      Src = SrcIpAddr,\n      Dvc = DvcId,\n      Duration = NetworkDuration,\n      InnerVlanId = SrcVlanId,\n      NetworkBytes = SrcBytes + DstBytes,\n      NetworkPackets = SrcPackets + DstPackets,\n      OuterVlanId = DstVlanId\n  | lookup NetworkDirectionLookup on local_orig_b, local_resp_b\n  | lookup EventSubTypeLookup on conn_state_s\n  // -- preserving non-normalized important fields\n  | extend AdditionalFields = iff (\n      pack, \n      bag_pack (\n        \"first_orig_resp_data_pkt\", first_orig_resp_data_pkt_s,\n        \"first_resp_orig_data_pkt\", first_resp_orig_data_pkt_s,\n        \"orig_sluid\", orig_sluid_s, \n        \"resp_sluid\", resp_sluid_s,\n        \"orig_huid\", orig_huid_s,\n        \"resp_huid\", resp_huid_s,\n        \"community_id\", community_id_s,\n        \"resp_multihome\", resp_multihomed_b,\n        \"host_multihomed\", host_multihomed_b,\n        \"first_orig_resp_data_pkt_time\", unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),\n        \"first_orig_resp_pkt_time\", unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),\n        \"first_resp_orig_data_pkt_time\", unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),\n        \"first_resp_orig_pkt_time\", unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)\n      ),\n      dynamic([])\n    )\n  | project-away\n      *_d, *_s, *_b, *_g, Computer\n};\nparser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled, pack=pack)\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),dstipaddr_has_any_prefix:dynamic=dynamic([]),ipaddr_has_any_prefix:dynamic=dynamic([]),dstportnumber:int=int(null),hostname_has_any:dynamic=dynamic([]),dvcaction:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False,pack:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

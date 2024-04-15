@@ -1,0 +1,29 @@
+id: 2ae93e20-8b92-4cd5-8bf7-e815ce472d0d
+Function:
+  Title: Parser for Infoblox_dhcpoffer
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: Infoblox_dhcpoffer
+FunctionAlias: Infoblox_dhcpoffer
+FunctionQuery: |
+    let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
+    let RawData = Syslog
+        | where Computer in (datasource)
+        | where SyslogMessage has "DHCPOFFER"
+        | extend Parser = extract_all(@"^(\d{2}\-[a-zA-Z]{3}\-\d{4}\s[0-9\.\:]+)?\s?([a-zA-Z-_]+)(\s|\:)?(.*)", dynamic([1,2,3,4]), SyslogMessage)[0]
+        | extend responseTime = todatetime(Parser[0]),
+                Log_Type = tostring(Parser[1]),
+                RawData_subString = tostring(Parser[3])
+        | project-away Parser;
+    RawData
+        | extend dhcpoffer = extract_all(@"\w+\s(\S+)(\s\w+\s((\S+)(\s\(\S+\))?))?\svia\s(\S+)(\srelay\s(\S+))?(\slease-duration\s(\d+))?(\soffered-duration\s(\d+))?(\sUID\s(\S+))?", dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13,14]), RawData_subString)[0]
+        | extend SrcIpAddr = tostring(dhcpoffer[0]),  
+            SrcMacAddr = tostring(dhcpoffer[3]),
+            Interface = tostring(dhcpoffer[5]),
+            Relay = tostring(dhcpoffer[7]), 
+            LeaseDuration = tostring(dhcpoffer[9]),
+            OfferedDuration = tostring(dhcpoffer[11]),
+            SrcHostname = tostring(dhcpoffer[4]),
+            SrcUserIdType = tostring(dhcpoffer[13])
+           | project-away SyslogMessage, dhcpoffer,RawData_subString;

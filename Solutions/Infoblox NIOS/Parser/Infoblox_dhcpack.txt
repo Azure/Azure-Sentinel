@@ -1,0 +1,35 @@
+// Title:           Infoblox parser for type - DHCPACK
+// Author:          Microsoft
+// Version:         1.2
+// Last Updated:    15 oct 2022
+// Comment:         Actually updated to only parse the MSG (RFC3164) part of the Syslog message and excluded the header. Fixed parser to accept for message formats within this message type not previously accounted for.  Added Relay field in output, excluded by final parse-away to maintain consistent output format.
+//
+// DESCRIPTION:
+// This parser comprised of function - Infoblox_dhcpack
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// Infoblox NIOS logging formats: https://docs.infoblox.com/display/NAG8/Using+a+Syslog+Server
+//
+// LOG SAMPLES:
+// This parser assumes the log messages are formatted as these examples:
+// 
+//      DHCPACK on 10.1.2.3 to 9c:99:99:99:99:da (hostname-pc) via eth2 relay 11.22.33.44 lease-duration 1234 (RENEW) uid 01:9c:99:99:99:99:da
+//      DHCPACK on 172.21.7.17 to 7e:88:88:88:88:76 via eth3 relay 1.22.33.44 lease-duration 4321 uid 01:7e:88:88:88:88:76
+//      DHCPACK to 10.4.5.67 (f8:99:99:99:99:b5) via eth2
+//
+let datasource = (_GetWatchlist('Sources_by_SourceType')| where SearchKey == 'InfobloxNIOS' | project Source);
+Syslog
+    | where Computer in (datasource) 
+    | where SyslogMessage startswith_cs "DHCPACK"
+    | extend Parser = extract_all(@"^([^\s]+)\s(?:on\s([\d\.]+)\s)?(?:to\s([^\s]+)(?:\s\(([^\)]+)\))?)(?:\svia\s([^\s]+))?(?:\srelay\s([^\s]+))?(?:\slease-duration\s([\d]+))?(?:\s\(([^\)]+)\))?(?:\suid\s([^\s]+))?", dynamic([1,2,3,4,5,6,7,8,9]), SyslogMessage)[0]
+    | extend responseTime = EventTime,
+            Log_Type = tostring(Parser[0]),
+            IPAddress = tostring(Parser[1]), 
+            SrcMacAddr = tostring(Parser[2]),
+            SrcHostname = tostring(Parser[3]),
+            Interface = tostring(Parser[4]),
+            Relay = tostring(Parser[5]), 
+            LeaseDuration = tostring(Parser[6]),
+            State = tostring(Parser[8])
+    | project-away Parser

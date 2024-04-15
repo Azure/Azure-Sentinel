@@ -1,0 +1,37 @@
+// Title:           Squid Proxy Parser
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    10/26/2020
+// Comment:         Inital Release
+//  
+// DESCRIPTION:
+// This parser takes raw Squid Proxy logs from a Custom Log stream and parses the data into a normalized schema
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+// 28/Feb/2023:08:12:59 +0000 199 146.105.105.3 TCP_TUNNEL/200 16807 CONNECT germanywestcentral-gas.guestconfiguration.azure.com:443 - HIER_DIRECT/germanywestcentral-gas.guestconfiguration.azure.com -
+//
+// cache.log:
+// 2020/04/11 00:28:57 kid1| Set Current Directory to /var/cache/squid
+//
+// access.log:
+// 1603399381.121    346 ::1 TCP_MISS/301 419 GET http://httpvshttps.com/ - HIER_DIRECT/11.44.22.33 text/html
+// 
+// 
+SquidProxy_CL
+| parse RawData with * " " EpochTimeExtended " " Duration " " SrcIpAddr " " ResultStatusCode " " Bytes " " HttpRequestMethod " " Url " " Username " " PeerStatusHost " " ContentType
+| parse EpochTimeExtended with * "+" EpochTime
+| parse ResultStatusCode with ResultCode "/" StatusCode
+| parse PeerStatusHost with PeerHost "/" StatusHost
+| extend EventEpochTime = tolong(replace(@"\.","",EpochTime))
+| extend EventTime = datetime(1970-01-01) + tolong(EventEpochTime/1000) * 1sec
+| extend CacheRawLog = extract_all(@"^([0-9\/]+\s[0-9\:]+)\s(\S+)\s([\S\s]+)", dynamic([1,2,3]), RawData)
+| mv-expand CacheRawLog
+| extend CacheEventTime = todatetime(replace("/","-",tostring(CacheRawLog[0]))),
+         Description = tostring(CacheRawLog[2])
+| extend EventTime = iif(isempty(EventTime), CacheEventTime, EventTime)
+| project-away RawData, EpochTime, EventEpochTime, CacheRawLog, CacheEventTime

@@ -1,0 +1,595 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Cisco UCS"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-ciscoucs",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "CiscoUCS",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "CiscoUCS",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-DataConnector-',variables('_dataConnectorContentId1'))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "CiscoUCS-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "CiscoUCS",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-Parser-',variables('_parserContentId1'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Cisco UCS data connector with template",
+        "displayName": "Cisco UCS template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Cisco UCS data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Cisco UCS",
+                  "publisher": "Cisco",
+                  "descriptionMarkdown": "The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/products/servers-unified-computing/index.html) connector allows you to easily connect your Cisco UCS logs with Microsoft Sentinel This gives you more insight into your organization's network and improves your security operation capabilities.",
+                  "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "CiscoUCS",
+                      "baseQuery": "CiscoUCS"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Target User Names for Audit Events",
+                      "query": "CiscoUCS \n | where Mneumonic == \"AUDIT\" \n | summarize count() by DstUserName \n | top 10 by DstUserName"
+                    },
+                    {
+                      "description": "Top 10 Devices generating Audit Events",
+                      "query": "CiscoUCS \n | where Mneumonic == \"AUDIT\" \n | summarize count() by Computer \n | top 10 by Computer"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Syslog (CiscoUCS)",
+                      "lastDataReceivedQuery": "CiscoUCS \n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "CiscoUCS \n      | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "write permission is required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Cisco UCS",
+                        "description": "must be configured to export logs via Syslog"
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias CiscoUCS and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20UCS/Parsers/CiscoUCS.txt). The function usually takes 10-15 minutes to activate after solution installation/update."
+                    },
+                    {
+                      "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux"
+                    },
+                    {
+                      "description": "Configure the facilities you want to collect and their severities.\n 1. Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n 2. Select **Apply below configuration to my machines** and select the facilities and severities.\n 3.  Click **Save**.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenSyslogSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "2. Configure the logs to be collected"
+                    },
+                    {
+                      "description": "[Follow these instructions](https://www.cisco.com/c/en/us/support/docs/servers-unified-computing/ucs-manager/110265-setup-syslog-for-ucs.html#configsremotesyslog) to configure the Cisco UCS to forward syslog. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+                      "title": "3. Configure and connect the Cisco UCS"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cisco UCS",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cisco UCS",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Cisco UCS",
+          "publisher": "Cisco",
+          "descriptionMarkdown": "The [Cisco Unified Computing System (UCS)](https://www.cisco.com/c/en/us/products/servers-unified-computing/index.html) connector allows you to easily connect your Cisco UCS logs with Microsoft Sentinel This gives you more insight into your organization's network and improves your security operation capabilities.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "CiscoUCS",
+              "baseQuery": "CiscoUCS"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (CiscoUCS)",
+              "lastDataReceivedQuery": "CiscoUCS \n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "CiscoUCS \n      | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Target User Names for Audit Events",
+              "query": "CiscoUCS \n | where Mneumonic == \"AUDIT\" \n | summarize count() by DstUserName \n | top 10 by DstUserName"
+            },
+            {
+              "description": "Top 10 Devices generating Audit Events",
+              "query": "CiscoUCS \n | where Mneumonic == \"AUDIT\" \n | summarize count() by Computer \n | top 10 by Computer"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission is required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Cisco UCS",
+                "description": "must be configured to export logs via Syslog"
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias CiscoUCS and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Cisco%20UCS/Parsers/CiscoUCS.txt). The function usually takes 10-15 minutes to activate after solution installation/update."
+            },
+            {
+              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux"
+            },
+            {
+              "description": "Configure the facilities you want to collect and their severities.\n 1. Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n 2. Select **Apply below configuration to my machines** and select the facilities and severities.\n 3.  Click **Save**.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            },
+            {
+              "description": "[Follow these instructions](https://www.cisco.com/c/en/us/support/docs/servers-unified-computing/ucs-manager/110265-setup-syslog-for-ucs.html#configsremotesyslog) to configure the Cisco UCS to forward syslog. Use the IP address or hostname for the Linux device with the Linux agent installed as the Destination IP address.",
+              "title": "3. Configure and connect the Cisco UCS"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "CiscoUCS Data Parser with template",
+        "displayName": "CiscoUCS Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "CiscoUCS Data Parser with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "CiscoUCS",
+                "category": "Samples",
+                "functionAlias": "CiscoUCS",
+                "query": "\nlet LogHeader = Syslog\r\n| where Computer in (\"UCSserver1\", \"UCSserver2\") // UCSserver1 and UCSserver2 are examples, replace this list with your Cisco UCS devices\r\n| extend Parser = extract_all(@\"^(\\d+\\s+[\\w]+\\s+\\d+\\s[0-9\\:]+)\\s\\w+\\:\\s([\\w%]+)\\-(\\d+)\\-([\\w\\_]+)\\:\\s([\\S\\s]+)?\", dynamic([1,2,3,4,5]), SyslogMessage)\r\n| mv-expand Parser\r\n| extend EventTime = tostring(Parser[0]),\r\n         Facility = tostring(Parser[1]),\r\n         SeverityNumber = tostring(Parser[2]),\r\n         Mneumonic = tostring(Parser[3]),\r\n         Substring = tostring(Parser[4])\r\n| project-away Parser;\r\nlet AuditLog = LogHeader\r\n| where Mneumonic == \"AUDIT\"\r\n| extend Parser = extract_all(@\"^\\[([\\w\\d\\.\\_\\-]+)?\\]\\[([\\w\\d\\.\\_\\-\\\\]+)?\\]\\[(\\w+)?\\]\\[([\\w+\\_\\-\\.]+)?\\]\\[?(\\w+)?\\]?\\[?([\\w\\d\\.\\_\\-\\\\\\/]+)?\\]?\\[?([\\w\\d\\.\\_\\-\\\\\\/]+)?\\]?\\[?([\\w\\d\\.\\_\\-\\\\\\/]+)?\\]?([\\S\\s]+)?\", dynamic([1,2,3,4,5,6,7,8,9]), Substring)\r\n| mv-expand Parser \r\n| extend SrcUserName = tostring(Parser[0]),\r\n         DstUserName = tostring(Parser[1]),\r\n         Action = tostring(Parser[2]),\r\n         System = tostring(Parser[5]),\r\n         Description = tostring(Parser[8])\r\n| project-away Substring, Parser;\r\nlet EventLog = LogHeader\r\n| where Mneumonic == \"EVENT\"\r\n| extend Parser = extract_all(@\"^\\[(\\w+)?\\]\\[(\\w+)?\\]\\[(\\w+)?\\]\\[([\\w\\-\\\\\\_]+)?\\]\\[(\\w+)?\\]\\s+\\[([\\w\\:\\-\\_]+)\\]\\:\\s?([\\S\\s]+)?\", dynamic([1,2,3,4,5,6,7]), Substring)\r\n| mv-expand Parser\r\n| extend EventId = tostring(Parser[0]),\r\n         Action = tostring(Parser[2]),\r\n         UserName = tostring(Parser[3]),\r\n         Status = tostring(Parser[5]),\r\n         Description = tostring(Parser[6])\r\n| project-away Substring, Parser;\r\nlet FaultLog = LogHeader\r\n| where Mneumonic !in (\"AUDIT\", \"EVENT\")\r\n| extend Parser = extract_all(@\"^\\[(\\w+)?\\]\\[(\\w+)?\\]\\[([\\w\\-\\_]+)?\\]\\[([\\w\\-\\_\\/]+)?\\]\\s+([\\s\\S]+)?\", dynamic([1,2,3,4,5]), Substring)\r\n| mv-expand Parser \r\n| extend EventId = tostring(Parser[0]),\r\n         EventSeverity = tostring(Parser[1]),\r\n         FaultType = tostring(Parser[2]),\r\n         System = tostring(Parser[3]),\r\n         Description = tostring(Parser[4])\r\n| project-away Substring, Parser;\r\nunion AuditLog, EventLog, FaultLog",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "CiscoUCS"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Cisco UCS",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "CiscoUCS",
+        "category": "Samples",
+        "functionAlias": "CiscoUCS",
+        "query": "\nlet LogHeader = Syslog\r\n| where Computer in (\"UCSserver1\", \"UCSserver2\") // UCSserver1 and UCSserver2 are examples, replace this list with your Cisco UCS devices\r\n| extend Parser = extract_all(@\"^(\\d+\\s+[\\w]+\\s+\\d+\\s[0-9\\:]+)\\s\\w+\\:\\s([\\w%]+)\\-(\\d+)\\-([\\w\\_]+)\\:\\s([\\S\\s]+)?\", dynamic([1,2,3,4,5]), SyslogMessage)\r\n| mv-expand Parser\r\n| extend EventTime = tostring(Parser[0]),\r\n         Facility = tostring(Parser[1]),\r\n         SeverityNumber = tostring(Parser[2]),\r\n         Mneumonic = tostring(Parser[3]),\r\n         Substring = tostring(Parser[4])\r\n| project-away Parser;\r\nlet AuditLog = LogHeader\r\n| where Mneumonic == \"AUDIT\"\r\n| extend Parser = extract_all(@\"^\\[([\\w\\d\\.\\_\\-]+)?\\]\\[([\\w\\d\\.\\_\\-\\\\]+)?\\]\\[(\\w+)?\\]\\[([\\w+\\_\\-\\.]+)?\\]\\[?(\\w+)?\\]?\\[?([\\w\\d\\.\\_\\-\\\\\\/]+)?\\]?\\[?([\\w\\d\\.\\_\\-\\\\\\/]+)?\\]?\\[?([\\w\\d\\.\\_\\-\\\\\\/]+)?\\]?([\\S\\s]+)?\", dynamic([1,2,3,4,5,6,7,8,9]), Substring)\r\n| mv-expand Parser \r\n| extend SrcUserName = tostring(Parser[0]),\r\n         DstUserName = tostring(Parser[1]),\r\n         Action = tostring(Parser[2]),\r\n         System = tostring(Parser[5]),\r\n         Description = tostring(Parser[8])\r\n| project-away Substring, Parser;\r\nlet EventLog = LogHeader\r\n| where Mneumonic == \"EVENT\"\r\n| extend Parser = extract_all(@\"^\\[(\\w+)?\\]\\[(\\w+)?\\]\\[(\\w+)?\\]\\[([\\w\\-\\\\\\_]+)?\\]\\[(\\w+)?\\]\\s+\\[([\\w\\:\\-\\_]+)\\]\\:\\s?([\\S\\s]+)?\", dynamic([1,2,3,4,5,6,7]), Substring)\r\n| mv-expand Parser\r\n| extend EventId = tostring(Parser[0]),\r\n         Action = tostring(Parser[2]),\r\n         UserName = tostring(Parser[3]),\r\n         Status = tostring(Parser[5]),\r\n         Description = tostring(Parser[6])\r\n| project-away Substring, Parser;\r\nlet FaultLog = LogHeader\r\n| where Mneumonic !in (\"AUDIT\", \"EVENT\")\r\n| extend Parser = extract_all(@\"^\\[(\\w+)?\\]\\[(\\w+)?\\]\\[([\\w\\-\\_]+)?\\]\\[([\\w\\-\\_\\/]+)?\\]\\s+([\\s\\S]+)?\", dynamic([1,2,3,4,5]), Substring)\r\n| mv-expand Parser \r\n| extend EventId = tostring(Parser[0]),\r\n         EventSeverity = tostring(Parser[1]),\r\n         FaultType = tostring(Parser[2]),\r\n         System = tostring(Parser[3]),\r\n         Description = tostring(Parser[4])\r\n| project-away Substring, Parser;\r\nunion AuditLog, EventLog, FaultLog",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cisco UCS",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cisco UCS",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-02",
+        "providers": [
+          "Cisco"
+        ],
+        "categories": {
+          "domains": [
+            "Platform"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

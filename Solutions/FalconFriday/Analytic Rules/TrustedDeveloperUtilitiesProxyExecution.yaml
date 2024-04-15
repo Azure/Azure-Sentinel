@@ -1,0 +1,48 @@
+id: 5c2bb446-926f-4160-a233-21e335c2c290
+name: Trusted Developer Utilities Proxy Execution
+description: |
+  This detection looks at process executions - in some cases with specific command line attributes to filter a lot of common noise.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1127
+query: |
+  let Timeframe = 1h;
+  DeviceProcessEvents
+  | where Timestamp > ago(Timeframe)
+  | where (FileName has_any ("msbuild.exe", "msxsl.exe")
+  or (FileName has_any ("vbc.exe","csc.exe","jsc.exe") and ProcessCommandLine has_any ("/exe","/dll","/pe64","-exe","-dll","-pe64"))
+  or (FileName == ("ilsasm.exe") and ProcessCommandLine has_any ("out","target","t:","reference","r:")))
+  // Filter initations by Visual Studio since this is expected behavior.
+    and not(FolderPath startswith "C:\\Program Files (x86)\\Microsoft Visual Studio" 
+    or InitiatingProcessFolderPath startswith "C:\\Program Files (x86)\\Microsoft Visual Studio" 
+    and (InitiatingProcessFileName == "devenv.exe" or InitiatingProcessFileName == "WDExpress.exe"))
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: AccountSid 
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+kind: Scheduled

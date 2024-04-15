@@ -1,0 +1,276 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Create-Opsgenie-Incident", 
+        "description": "This playbook will create an incident in Opsgenie with the information from a Microsoft Sentinel incident.",
+        "prerequisites": "1. An Opsgenie account with either a Standard or Enterprise plan, along with an integration API key for this account. 2. A Microsoft Azure key vault containing the Opsgenie API key must also be set up. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Create-Opsgenie-Incident",
+        "lastUpdateTime": "2023-03-31T3:09:07Z",
+        "tags": ["Microsoft Sentinel", "Incident", "Opsgenie", "Integration"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Create-Opsgenie-Incident",
+            "type": "string"
+        },
+        "OpsgenieEndpoint": {
+            "defaultValue": "/v1/incidents/create",
+            "type": "string",
+            "allowedValues": [
+                "/v1/incidents/create",
+                "/v2/alerts"
+            ],
+            "metadata" : {
+                "description" : "Select the incident or alert endpoint for the Opsgenie API"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the name of the key vault that stores your Opsgenie API key"
+            }
+        },
+        "KeySecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of the key vault Secret that contains the value of your Opsgenie API key"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Secret_API_Key": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeySecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Initialize_variable_-_Incident_priority": {
+                            "runAfter": {
+                                "Get_Secret_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident Priority",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "Maps MS Sentinel incident severity to Opsgenie incident priority - default in Opsgenie is P3"
+                        },
+                        "Switch_-_Map_Sentinel_severity_to_Opsgenie_priority": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_priority": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "Case_-_High_severity": {
+                                    "case": "High",
+                                    "actions": {
+                                        "Set_variable_-_P2_priority": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Incident Priority",
+                                                "value": "P2"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_-_Low_severity": {
+                                    "case": "Low",
+                                    "actions": {
+                                        "Set_variable_-_P4_priority": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Incident Priority",
+                                                "value": "P4"
+                                            }
+                                        }
+                                    }
+                                },
+                                "Case_-_Medium_severity": {
+                                    "case": "Medium",
+                                    "actions": {
+                                        "Set_variable_-_P3_priority": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Incident Priority",
+                                                "value": "P3"
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {
+                                    "Set_variable_-_P5_priority": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "Incident Priority",
+                                            "value": "P5"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": "@triggerBody()?['object']?['properties']?['severity']",
+                            "type": "Switch"
+                        },
+                        "HTTP_-_Create_Opsgenie_incident": {
+                            "runAfter": {
+                                "Switch_-_Map_Sentinel_severity_to_Opsgenie_priority": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "description": "@{triggerBody()?['object']?['properties']?['description']}",
+                                    "details": {
+                                        "Incident URL": "@{triggerBody()?['object']?['properties']?['incidentUrl']}",
+                                        "Status": "@{triggerBody()?['object']?['properties']?['status']}"
+                                    },
+                                    "message": "@{triggerBody()?['object']?['properties']?['title']}",
+                                    "priority": "@{variables('Incident Priority')}"
+                                },
+                                "headers": {
+                                    "Authorization": "GenieKey @{body('Get_Secret_API_Key')?['value']}",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "[concat('https://api.opsgenie.com', parameters('OpsgenieEndpoint'))]"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+    ]
+}

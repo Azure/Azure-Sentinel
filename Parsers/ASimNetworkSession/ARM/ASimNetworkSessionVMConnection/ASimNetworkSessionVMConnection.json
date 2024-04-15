@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionVMConnection",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for VM connection information collected using the Log Analytics agent",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionVMConnection",
+            "query": "let SeverityLookup = datatable (EventOriginalSeverity: string, EventSeverity:string) [\n  '', 'Informational', \n  '0', 'Informational',\n  '1', 'Low',\n  '2', 'Medium',\n  '3', 'High'\n];\nlet VMConnectionProjected = VMConnection | project-away AdditionalInformation, AgentId, TenantId, TLPLevel, SourceSystem, IsActive, *ReportedDateTime, LinksFailed, LinksLive, LinksTerminated, Description, Responses, ResponseTimeMin, ResponseTimeMax, RemoteClassification, RemoteDnsQuestions;\nlet outbound = (disabled:bool=false) {\n  VMConnectionProjected\n  | where not (disabled)\n  | where Direction == \"outbound\"\n  | extend\n      SrcAppType = \"Process\",\n      SrcDvcIdType = \"VMConnectionId\",\n      SrcHostnameType = \"Simple\",\n      DstGeoCountry = RemoteCountry,\n      DstGeoLongitude = RemoteLongitude,\n      DstGeoLatitude = RemoteLatitude,\n      SrcAppId = Process,\n      SrcAppName = ProcessName,\n      SrcDvcId = Machine,\n      ThreatField = iff (MaliciousIp != \"\", \"DstIpAddr\", \"\")\n  | invoke _ASIM_ResolveSrcFQDN (\"Computer\")\n  | extend FQDN = iff(RemoteDnsCanonicalNames == \"\", \"\", todynamic(RemoteDnsCanonicalNames)[0])\n  | invoke _ASIM_ResolveDstFQDN(\"FQDN\")\n  | project-away Computer, RemoteDnsCanonicalNames\n  | extend\n      RemoteFQDN = DstFQDN,\n      RemoteHostname = DstHostname,\n      RemoteDomain = DstDomain,\n      RemoteDomainType = DstDomainType,\n      LocalFQDN = SrcFQDN,\n      LocalHostname = SrcHostname,\n      LocalDomain = SrcDomain,\n      LocalDomainType = SrcDomainType,\n      LocalIpAddr = SourceIp\n};\nlet inbound = (disabled:bool=false) {\n  VMConnectionProjected\n  | where not (disabled)\n  | where Direction == \"inbound\"\n  | extend\n      DstAppType = \"Process\",\n      DstDvcIdType = \"VMConnectionId\",\n      SrcGeoCountry = RemoteCountry,\n      SrcGeoLongitude = RemoteLongitude,\n      SrcGeoLatitude = RemoteLatitude,\n      DstAppId = Process,\n      DstAppName = ProcessName,\n      DstDvcId = Machine,\n      ThreatField = iff (MaliciousIp != \"\", \"SrcIpAddr\", \"\")\n  | invoke _ASIM_ResolveDstFQDN (\"Computer\")\n  | extend FQDN = iff(RemoteDnsCanonicalNames == \"\", \"\", todynamic(RemoteDnsCanonicalNames)[0])\n  | invoke _ASIM_ResolveSrcFQDN(\"FQDN\")\n  | project-away Computer, RemoteDnsCanonicalNames\n  | extend\n      RemoteFQDN = SrcFQDN,\n      RemoteHostname = SrcHostname,\n      RemoteDomain = SrcDomain,\n      RemoteDomainType = SrcDomainType,\n      LocalFQDN = DstFQDN,\n      LocalHostname = DstHostname,\n      LocalDomain = DstDomain,\n      LocalDomainType = DstDomainType,\n      LocalIpAddr = DestinationIp\n};\nlet parser=(disabled:bool=false){\n  union outbound(disabled), inbound(disabled)\n  // Event fields\n  | extend \n    EventCount = toint(LinksEstablished), // -- prioritized over LinksLive and LinksTerminated\n    EventStartTime = TimeGenerated,\n    EventVendor = \"Microsoft\",\n    EventProduct = \"VMConnection\",\n    EventSchema = \"NetworkSession\",\n    EventSchemaVersion = \"0.2.2\",\n    EventType = \"EndpointNetworkSession\",\n    DvcIdType = \"VMConnectionId\",\n    NetworkDirection = iff(Direction==\"inbound\", \"Inbound\", \"Outbound\"),\n    EventEndTime = TimeGenerated\n  | project-rename\n    DstIpAddr = DestinationIp,\n    DstPortNumber = DestinationPort, \n    SrcIpAddr = SourceIp, \n    NetworkSessionId = ConnectionId,\n    ThreatName = IndicatorThreatType,\n    RemoteGeoCountry = RemoteCountry,\n    RemoteGeoLatitude = RemoteLatitude, \n    RemoteGeoLongitude = RemoteLongitude,\n    LocalAppId = Process,\n    LocalAppName = ProcessName,\n    DvcId = Machine,\n    RemoteIpAddr = RemoteIp,\n    EventReportUrl = ReportReferenceLink,\n    ThreatIpAddr = MaliciousIp\n  // -- Calculated fields\n  | extend EventOriginalSeverity = tostring(Severity)\n  | lookup SeverityLookup on EventOriginalSeverity\n  | extend\n    EventResult = \"Success\",\n    LocalAppType = \"Process\",\n    NetworkDuration = toint(ResponseTimeSum/LinksEstablished) ,\n    ThreatRiskLevel = toint(Confidence),\n    NetworkProtocol = toupper(Protocol),\n    SrcBytes = tolong(BytesSent),\n    DstBytes = tolong(BytesReceived)\n  | project-away BytesSent, BytesReceived, Confidence, ResponseTimeSum, Protocol, Direction, Severity, LinksEstablished\n  // -- Aliases\n  | extend\n    IpAddr = RemoteIpAddr,\n    Src = SrcIpAddr,\n    Local = LocalIpAddr,\n    DvcIpAddr = LocalIpAddr,\n    Dst = DstIpAddr,\n    Remote = RemoteIpAddr,\n    Dvc = LocalHostname,\n    DvcHostname = LocalHostname,\n    DvcDomain = LocalDomain,\n    DvcDomainType = LocalDomainType,\n    DvcFQDN = LocalFQDN,\n    Hostname = RemoteHostname,\n    Duration = NetworkDuration,\n    SessionId = NetworkSessionId\n};\nparser (disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

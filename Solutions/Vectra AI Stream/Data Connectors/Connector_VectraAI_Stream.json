@@ -1,0 +1,162 @@
+{
+  "id": "AIVectraStream",
+  "title": "AI Vectra Stream",
+  "publisher": "Vectra AI",
+  "descriptionMarkdown": "The AI Vectra Stream connector allows to send Network Metadata collected by Vectra Sensors accross the Network and Cloud to Microsoft Sentinel",
+  "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**VectraStream**](https://aka.ms/sentinel-aivectrastream-parser) which is deployed with the Microsoft Sentinel Solution.",
+  "graphQueries": [
+    {
+      "metricName": "Total data received",
+      "legend": "VectraStream_CL",
+      "baseQuery": "VectraStream_CL"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "List all DNS Queries",
+      "query": "VectraStream \n| where metadata_type == \"metadat_dns\" \n| project orig_hostname, id_orig_h, resp_hostname, id_resp_h, id_resp_p, qtype_name, ['query'], answers"
+    },
+    {
+      "description": "Number of DNS requests per type",
+      "query": "VectraStream \n| where metadata_type == \"metadat_dns\" \n| summarize count() by qtype_name"
+    },
+    {
+      "description": "Top 10 of query to non existing domain",
+      "query": "VectraStream \n| where metadata_type == \"metadat_dns\" \n| where rcode_name == \"NXDomain\"\n| summarize Count=count() by tostring(query)\n| order by Count desc\n| limit 10"
+    },
+    {
+      "description": "Host and Web sites using non-ephemeral Diffie-Hellman key exchange",
+      "query": "VectraStream \n| where metadata_type == \"metadat_dns\" \n| where cipher contains \"TLS_RSA\"\n| distinct orig_hostname, id_orig_h, id_resp_h, server_name, cipher\n| project orig_hostname, id_orig_h, id_resp_h, server_name, cipher"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "VectraStream_CL",
+      "lastDataReceivedQuery": "\nVectraStream\n |  summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "\nVectraStream\n| summarize LastLogReceived = max(TimeGenerated)\n| project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "write": true,
+          "read": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ],
+    "customs": [
+      {
+        "name": "Vectra AI Brain",
+        "description": "must be configured to export Stream metadata in JSON"
+      }
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "",
+      "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected **VectraStream** which is deployed with the Microsoft Sentinel Solution.",
+      "instructions": [
+      ]
+    },
+    {
+      "title": "1. Install and onboard the agent for Linux",
+      "description": "Install the Linux agent on sperate Linux instance.\n\n> Logs are collected only from **Linux** agents.",
+      "instructions": [
+        {
+          "parameters": {
+            "title": "Choose where to install the Linux agent:",
+            "instructionSteps": [
+              {
+                "title": "Install agent on Azure Linux Virtual Machine",
+                "description": "Select the machine to install the agent on and then click **Connect**.",
+                "instructions": [
+                  {
+                    "parameters": {
+                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                    },
+                    "type": "InstallAgent"
+                  }
+                ]
+              },
+              {
+                "title": "Install agent on a non-Azure Linux Machine",
+                "description": "Download the agent on the relevant machine and follow the instructions.",
+                "instructions": [
+                  {
+                    "parameters": {
+                      "linkType": "InstallAgentOnLinuxNonAzure"
+                    },
+                    "type": "InstallAgent"
+                  }
+                ]
+              }
+            ]
+          },
+          "type": "InstructionStepsGroup"
+        }
+      ]
+    },
+    {
+      "title": "2. Configure the logs to be collected",
+      "description": "Follow the configuration steps below to get Vectra Stream metadata into Microsoft Sentinel. The Log Analytics agent is leveraged to send custom JSON into Azure Monitor, enabling the storage of the metadata into a custom table. For more information, refer to the [Azure Monitor Documentation](https://docs.microsoft.com/azure/azure-monitor/agents/data-sources-json).\n1. Download config file for the log analytics agent: VectraStream.conf (located in the Connector folder within the Vectra solution: https://aka.ms/sentinel-aivectrastream-conf).\n2. Login to the server where you have installed Azure Log Analytics agent.\n3. Copy VectraStream.conf to the /etc/opt/microsoft/omsagent/**workspace_id**/conf/omsagent.d/ folder.\n4. Edit VectraStream.conf as follows:\n\n\t i. configure an alternate port to send data to, if desired. Default port is 29009.\n\n\t ii. replace **workspace_id** with real value of your Workspace ID.\n5. Save changes and restart the Azure Log Analytics agent for Linux service with the following command:\n\t\tsudo /opt/microsoft/omsagent/bin/service_control restart",
+      "instructions": [
+        {
+          "parameters": {
+            "fillWith": [
+              "WorkspaceId"
+            ],
+            "label": "Workspace ID"
+          },
+          "type": "CopyableLabel"
+        }
+      ]
+    },
+    {
+      "title": "3. Configure and connect Vectra AI Stream",
+      "description": "Configure Vectra AI Brain to forward Stream metadata in JSON format to your Microsoft Sentinel workspace via the Log Analytics Agent.\n\nFrom the Vectra UI, navigate to Settings > Cognito Stream and Edit the destination configuration:\n\n- Select Publisher: RAW JSON\n\n- Set the server IP or hostname (which is the host which run the Log Analytics Agent)\n\n- Set all the port to **29009** (this port can be modified if required)\n\n- Save\n\n- Set Log types (Select all log types available)\n\n- Click on **Save**\n\n"
+    }
+  ],
+  "metadata": {
+    "id": "ec069726-811c-4f50-b141-295057367f49",
+    "kind": "dataConnector",
+    "source": {
+      "kind": "solution",
+      "name": "Vectra AI"
+    },
+    "author": {
+      "name": "Vectra AI Technical Marketing"
+    },
+    "support": {
+      "tier": "developer",
+      "name": "Vectra AI",
+      "email": "tme@vectra.ai",
+      "link": "https://www.vectra.ai/support"
+    }
+  }
+} 

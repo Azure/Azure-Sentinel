@@ -1,0 +1,33 @@
+id: 427e4c9e-8cf4-4094-a684-a2d060dbca38
+name: Port Scan Detected
+description: |
+  'This alert creates an incident when a source IP addresses attempt to communicate with a large amount of distinct ports within a short period.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SophosXGFirewall
+    dataTypes:
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1046
+query: |
+  let threshold = 50;
+  SophosXGFirewall
+  | where Log_Type =~ "Firewall"
+  | where not(ipv4_is_match("10.0.0.0",Src_IP,8) or ipv4_is_match("172.16.0.0",Src_IP,12) or ipv4_is_match("192.168.0.0",Src_IP,16))
+  | summarize dcount(Dst_Port) by Src_IP, bin(TimeGenerated, 5m)
+  | where dcount_Dst_Port > threshold
+  | extend timestamp = TimeGenerated, IPCustomEntity = Src_IP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+kind: Scheduled

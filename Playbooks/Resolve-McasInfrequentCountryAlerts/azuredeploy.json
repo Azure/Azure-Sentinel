@@ -1,0 +1,722 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.1",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "InfrequentCountryTriage",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the logic app."
+            }
+        },
+        "servicePrincipal": {
+            "type": "SecureObject"
+        },
+        "mcasAPI": {
+            "type": "SecureObject"
+        },
+        "azuresentinel_Connection_Name": {
+            "defaultValue": "azuresentinel",
+            "type": "String",
+            "metadata": {
+                "description": "Azure Sentinel connection"
+            }
+        }
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('azuresentinel_Connection_Name')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'azuresentinel')]"
+                },
+                "displayName": "[parameters('azuresentinel_Connection_Name')]"
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[parameters('azuresentinel_Connection_Name')]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "servicePrincipal": {
+                            "type": "secureobject",
+                            "defaultValue": "[parameters('servicePrincipal')]"
+                        },
+                        "mcasAPI": {
+                            "defaultValue": "[parameters('mcasAPI')]",
+                            "type": "secureobject"
+                        },
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    },
+                    "actions": {
+                        "Initialize_entities": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entities",
+                                        "type": "array",
+                                        "value": "@triggerBody()?['Entities']"
+                                    }
+                                ]
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
+                        },
+                        "Entities_parsing": {
+                            "actions": {                                
+                                "Get_username": {
+                                    "inputs": {
+                                        "from": "@variables('entities')",
+                                        "where": "@equals(item()['Type'], 'account')"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Query"
+                                },
+                                "Compose_UPN": {
+                                    "inputs": "@concat(body('Get_username')[0]['Name'], '@', body('Get_username')[0]['UPNSuffix'])",
+                                    "runAfter": {
+                                        "Get_username": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
+                                },                                
+                                "Get_alertLink": {
+                                    "inputs": {
+                                        "from": "@triggerBody()?['ExtendedLinks']",
+                                        "where": "@contains(item()['Label'], 'alert')"
+                                    },
+                                    "runAfter": {
+                                        "Compose_UPN": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query"
+                                },
+                                "Extract_alertId": {
+                                    "inputs": "@last(split(body('Get_alertLink')[0]['Href'], '/'))",
+                                    "runAfter": {
+                                        "Get_alertLink": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "User": {
+                            "actions": {
+                                "Get_user_details": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{outputs('Compose_UPN')}"
+                                    }
+                                },
+                                "Switch": {
+                                    "runAfter": {
+                                        "Get_user_details": [
+                                            "Failed",
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case_200_OK": {
+                                            "case": 200,
+                                            "actions": {
+                                                "Get_user_AAD_risk_status": {
+                                                    "runAfter": {
+                                                        "Parse_user_manager": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "authentication": {
+                                                            "audience": "https://graph.microsoft.com/",
+                                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                                            "type": "ActiveDirectoryOAuth"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://graph.microsoft.com/beta/riskyUsers/@{body('Parse_user_details')?['id']}/"
+                                                    }
+                                                },                                                
+                                                "Get_user_manager": {
+                                                    "runAfter": {
+                                                        "Parse_user_details": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "authentication": {
+                                                            "audience": "https://graph.microsoft.com/",
+                                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                                            "type": "ActiveDirectoryOAuth"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_user_details')?['userPrincipalName']}/manager"
+                                                    }
+                                                },
+                                                "Parse_user_details": {
+                                                    "runAfter": {},
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_user_details')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {},
+                                                                "accountEnabled": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "ageGroup": {},
+                                                                "businessPhones": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "city": {},
+                                                                "companyName": {},
+                                                                "consentProvidedForMinor": {},
+                                                                "country": {},
+                                                                "createdDateTime": {},
+                                                                "creationType": {},
+                                                                "deletedDateTime": {},
+                                                                "department": {},
+                                                                "deviceKeys": {
+                                                                    "type": "array"
+                                                                },
+                                                                "displayName": {},
+                                                                "employeeId": {},
+                                                                "externalUserState": {},
+                                                                "externalUserStateChangeDateTime": {},
+                                                                "faxNumber": {},
+                                                                "givenName": {},
+                                                                "id": {},
+                                                                "identities": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "issuer": {},
+                                                                            "issuerAssignedId": {},
+                                                                            "signInType": {}
+                                                                        },
+                                                                        "required": [],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "imAddresses": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "isResourceAccount": {},
+                                                                "jobTitle": {},
+                                                                "legalAgeGroupClassification": {},
+                                                                "mail": {},
+                                                                "mailNickname": {},
+                                                                "mobilePhone": {},
+                                                                "officeLocation": {},
+                                                                "onPremisesDistinguishedName": {},
+                                                                "onPremisesDomainName": {},
+                                                                "onPremisesImmutableId": {},
+                                                                "onPremisesLastSyncDateTime": {},
+                                                                "onPremisesSamAccountName": {},
+                                                                "onPremisesSecurityIdentifier": {},
+                                                                "onPremisesSyncEnabled": {},
+                                                                "onPremisesUserPrincipalName": {},
+                                                                "otherMails": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "passwordPolicies": {},
+                                                                "passwordProfile": {},
+                                                                "postalCode": {},
+                                                                "preferredDataLocation": {},
+                                                                "preferredLanguage": {},
+                                                                "proxyAddresses": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "refreshTokensValidFromDateTime": {},
+                                                                "showInAddressList": {},
+                                                                "signInSessionsValidFromDateTime": {},
+                                                                "state": {},
+                                                                "streetAddress": {},
+                                                                "surname": {},
+                                                                "usageLocation": {},
+                                                                "userPrincipalName": {},
+                                                                "userType": {}
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_user_manager": {
+                                                    "runAfter": {
+                                                        "Get_user_manager": [
+                                                            "Succeeded",
+                                                            "Failed"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_user_details')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {},
+                                                                "accountEnabled": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "ageGroup": {},
+                                                                "businessPhones": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "city": {},
+                                                                "companyName": {},
+                                                                "consentProvidedForMinor": {},
+                                                                "country": {},
+                                                                "createdDateTime": {},
+                                                                "creationType": {},
+                                                                "deletedDateTime": {},
+                                                                "department": {},
+                                                                "deviceKeys": {
+                                                                    "type": "array"
+                                                                },
+                                                                "displayName": {},
+                                                                "employeeId": {},
+                                                                "externalUserState": {},
+                                                                "externalUserStateChangeDateTime": {},
+                                                                "faxNumber": {},
+                                                                "givenName": {},
+                                                                "id": {},
+                                                                "identities": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "issuer": {},
+                                                                            "issuerAssignedId": {},
+                                                                            "signInType": {}
+                                                                        },
+                                                                        "required": [],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "imAddresses": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "isResourceAccount": {},
+                                                                "jobTitle": {},
+                                                                "legalAgeGroupClassification": {},
+                                                                "mail": {},
+                                                                "mailNickname": {},
+                                                                "mobilePhone": {},
+                                                                "officeLocation": {},
+                                                                "onPremisesDistinguishedName": {},
+                                                                "onPremisesDomainName": {},
+                                                                "onPremisesImmutableId": {},
+                                                                "onPremisesLastSyncDateTime": {},
+                                                                "onPremisesSamAccountName": {},
+                                                                "onPremisesSecurityIdentifier": {},
+                                                                "onPremisesSyncEnabled": {},
+                                                                "onPremisesUserPrincipalName": {},
+                                                                "otherMails": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "passwordPolicies": {},
+                                                                "passwordProfile": {},
+                                                                "postalCode": {},
+                                                                "preferredDataLocation": {},
+                                                                "preferredLanguage": {},
+                                                                "proxyAddresses": {
+                                                                    "items": {},
+                                                                    "type": "array"
+                                                                },
+                                                                "refreshTokensValidFromDateTime": {},
+                                                                "showInAddressList": {},
+                                                                "signInSessionsValidFromDateTime": {},
+                                                                "state": {},
+                                                                "streetAddress": {},
+                                                                "surname": {},
+                                                                "usageLocation": {},
+                                                                "userPrincipalName": {},
+                                                                "userType": {}
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Parse_user_risk_status": {
+                                                    "runAfter": {
+                                                        "Get_user_AAD_risk_status": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('Get_user_AAD_risk_status')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "@@odata.context": {},
+                                                                "id": {},
+                                                                "isDeleted": {},
+                                                                "isGuest": {},
+                                                                "isProcessing": {},
+                                                                "riskDetail": {},
+                                                                "riskLastUpdatedDateTime": {},
+                                                                "riskLevel": {},
+                                                                "riskState": {},
+                                                                "userDisplayName": {},
+                                                                "userPrincipalName": {}
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {
+                                            "Response_user_unknown": {
+                                                "runAfter": {},
+                                                "type": "Response",
+                                                "kind": "Http",
+                                                "inputs": {
+                                                    "body": "@body('Get_user_details')",
+                                                    "statusCode": "@outputs('Get_user_details')['statusCode']"
+                                                }
+                                            },
+                                            "Terminate": {
+                                                "runAfter": {
+                                                    "Response_user_unknown": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runStatus": "Succeeded"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": "@outputs('Get_user_details')['statusCode']",
+                                    "type": "Switch"
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_parsing": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Get_user_OOF": {
+                            "runAfter": {
+                                "User": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com/",
+                                    "clientId": "[parameters('servicePrincipal').clientId]",
+                                    "secret": "[parameters('servicePrincipal').clientSecret]",
+                                    "tenant": "[parameters('servicePrincipal').tenantId]",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "body": {
+                                    "EmailAddresses": [
+                                        "@{body('Parse_user_details')?['mail']}"
+                                    ],
+                                    "MailTipsOptions": "automaticReplies"
+                                },
+                                "method": "POST",
+                                "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_user_details')?['userPrincipalName']}/getMailTips"
+                            }
+                        },
+                        "Group_membership": {
+                            "actions": {
+                                "Groups": {
+                                    "runAfter": {},
+                                    "type": "Compose",
+                                    "description": "Define here the sensitive groups AAD object IDs to exclude of auto-resolution when OOF is on",
+                                    "inputs": {
+                                        "groupIds": [
+                                            "05795c57-70c0-4363-b55a-6ca803ec0000",
+                                            "ac9b3596-f4bd-407e-acd3-a773bad60000"
+                                        ]
+                                    }
+                                },
+                                "Check_group_membership": {
+                                    "runAfter": {
+                                        "Groups": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com/",
+                                            "clientId": "[parameters('servicePrincipal').clientId]",
+                                            "secret": "[parameters('servicePrincipal').clientSecret]",
+                                            "tenant": "[parameters('servicePrincipal').tenantId]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "body": "@outputs('Groups')",
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://graph.microsoft.com/beta/users/@{body('Parse_user_details')?['userPrincipalName']}/checkMemberGroups"
+                                    }
+                                },
+                                "Parse_Groups": {
+                                    "runAfter": {
+                                        "Check_group_membership": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Check_group_membership')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {
+                                                    "type": "string"
+                                                },
+                                                "value": {
+                                                    "items": {},
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Get_user_OOF": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Compose_message": {
+                            "actions": {
+                                "Message": {
+                                    "inputs": {                                        
+                                        "userPrincipalName": "@outputs('Compose_UPN')",
+                                        "userRiskLevel": "@{body('Parse_user_risk_status')?['riskLevel']}",
+                                        "oofEnabled": "@not(empty(body('Get_user_OOF')?['value']?[0]?['AutomaticReplies']?['Message']))",
+                                        "OOFmessage": "@{body('Get_user_OOF')?['value']?[0]?['AutomaticReplies']?['Message']}"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Compose"
+                                }
+                            },
+                            "runAfter": {
+                                "Group_membership": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Condition": {
+                            "actions": {
+                                "Resolve_Cloud_App_Security_alert": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": {
+                                            "filters": {
+                                                "id": {
+                                                    "eq": [
+                                                        "@{outputs('Extract_alertId')}"
+                                                    ]
+                                                }
+                                            },
+                                            "comment": "Resolved using Microsoft Flow - user OOF is 'ON', and is not part of the 'Exec' group"
+                                        },
+                                        "headers": {
+                                            "Authorization": "[concat('token ',parameters('mcasAPI').apiToken)]"
+                                        },
+                                        "method": "POST",
+                                        "uri": "[concat(parameters('mcasAPI').tenantUrl, '/cas/api/v1/alerts/resolve/')]"
+                                    }
+                                    
+                                },
+                                "Change_incident_status": {
+                                    "inputs": {
+                                        "body": {
+                                            "CloseReason": "FalsePositive",
+                                            "CloseReasonText": "@{outputs('Message')}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Case/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/Status/@{encodeURIComponent('Closed')}"
+                                    },
+                                    "runAfter": {
+                                        "Resolve_Cloud_App_Security_alert": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                },
+                                "Add_comment_to_incident_closed": {
+                                    "inputs": {
+                                        "body": {
+                                            "Value": "Alert resolved using automation\n\n@{outputs('Message')}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                    },
+                                    "runAfter": {
+                                        "Change_incident_status": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection"
+                                }
+                                
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_comment_to_incident_open": {
+                                    "inputs": {
+                                        "body": {
+                                            "Value": "Automated investigation details:\n\n@{outputs('Message')}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                    },
+                                    "runAfter": {
+                                    },
+                                    "type": "ApiConnection"
+                                }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@empty(body('Get_user_OOF')?['value']?[0]?['AutomaticReplies']?['Message'])",
+                                            "@false"
+                                        ]
+                                    },
+                                    {
+                                        "equals": [
+                                            "@empty(body('Check_group_membership')?['value'])",
+                                            "@true"
+                                        ]
+                                    },
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@body('Parse_user_risk_status')?['riskLevel']",
+                                                "High"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Compose_message": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If",
+                            "description": "If user OOF is turned on and the user is not part of the sensitive groups"
+                        }                        
+                        
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', parameters('azuresentinel_Connection_Name'))]",
+                                "connectionName": "[parameters('azuresentinel_Connection_Name')]" ,
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/', 'azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+    ],
+    "outputs": {
+        
+        "logicAppUrl": {
+            "type": "string",
+            "value": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows/', parameters('PlaybookName')), '/triggers/When_a_response_to_an_Azure_Sentinel_alert_is_triggered'), '2016-06-01').value]"
+        }
+    }
+}

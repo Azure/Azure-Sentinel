@@ -1,0 +1,239 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "title": "EnrichIP-GeoFromIp-Nested",
+        "description": "This playbook will take the IP address entities from the Incident and query a Geo-IP API to geo-locate the IP Address.  It will write the City and Country to a tag on the Incident and more details to the comments.",
+        "prerequisites": "None",
+        "lastUpdateTime": "2022-08-29T10:43:00Z",
+        "entities": ["ip"],
+        "tags": ["Enrichment"],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "EnrichIP-GeoFromIp-Nested",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "IPAPIConnectionName": "[concat('IP-API-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-10-01",
+            "name": "linkedTemplate",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Get-GeoFromIpAndTagIncident/customConnector/azuredeploy.json",
+                    "contentVersion": "1.0.0.0"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('IPAPIConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'linkedTemplate')]"
+            ],
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId ,'/resourceGroups/', resourcegroup().name ,'/providers/Microsoft.Web/customApis/IP-API')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "Get-GeoFromIpAndTagIncident",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/deployments', 'linkedTemplate')]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('IPAPIConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+                "$connections": {
+                    "defaultValue": {},
+                    "type": "Object"
+                }
+            },
+            "triggers": {
+                "manual": {
+                    "type": "Request",
+                    "kind": "Http",
+                    "inputs": {
+                        "method": "POST",
+                        "schema": {
+                            "properties": {
+                                "IPs": {
+                                    "items": {
+                                        "properties": {
+                                            "Address": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "Address"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "actions": {
+                "For_each": {
+                    "foreach": "@triggerBody()?['IPs']",
+                    "actions": {
+                        "Append_to_string_variable": {
+                            "runAfter": {
+                                "Query_IP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "AppendToStringVariable",
+                            "inputs": {
+                                "name": "Consolidated comment",
+                                "value": "IP Address: @{items('For_each')?['Address']}\nCity: @{body('Query_IP')?['city']}\nCountry: @{body('Query_IP')?['country']}\nCountry Code: @{body('Query_IP')?['countryCode']}\nISP: @{body('Query_IP')?['isp']}\nORG: @{body('Query_IP')?['org']}\nLatitude: @{body('Query_IP')?['lat']}\nLongitude: @{body('Query_IP')?['lon']}"
+                            }
+                        },
+                        "Query_IP": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['IP-API']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/@{encodeURIComponent(items('For_each')?['Address'])}"
+                            }
+                        }
+                    },
+                    "runAfter": {
+                        "Initialize_variable_Consolidated_comment": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Foreach",
+                    "runtimeConfiguration": {
+                        "concurrency": {
+                            "repetitions": 1
+                        }
+                    }
+                },
+                "Initialize_variable_Consolidated_comment": {
+                    "runAfter": {
+                        "Initialize_variable_IPs": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "Consolidated comment",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "Initialize_variable_IPs": {
+                    "runAfter": {},
+                    "type": "InitializeVariable",
+                    "inputs": {
+                        "variables": [
+                            {
+                                "name": "IPs",
+                                "type": "array"
+                            }
+                        ]
+                    }
+                },
+                "Response": {
+                    "runAfter": {
+                        "For_each": [
+                            "Succeeded"
+                        ]
+                    },
+                    "type": "Response",
+                    "kind": "Http",
+                    "inputs": {
+                        "body": "@variables('Consolidated comment')",
+                        "statusCode": 200
+                    }
+                }
+            },
+            "outputs": {}
+        },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "IP-API": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('IPAPIConnectionName'))]",
+                                "connectionName": "[variables('IPAPIConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId ,'/resourceGroups/', resourcegroup().name ,'/providers/Microsoft.Web/customApis/IP-API')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

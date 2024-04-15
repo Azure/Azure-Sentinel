@@ -1,0 +1,65 @@
+Id: 07da3cc8-c8ad-4710-a44e-334cdcb7882b
+DisplayName: Processes running on host
+Description: Any process creation event that contains parent process running on a given host during the time of or recently after compromise (set time range to +-10m when running the query)
+InputEntityType: Host
+InputFields:
+  - HostName
+OutputEntityTypes:
+  - Process
+QueryPeriodBefore: 10m
+QueryPeriodAfter: 10m
+DataSources:
+  - SecurityEvent
+  - imProcessCreate
+Tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+    let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+    let Legacy = (v_Host_HostName:string){
+    (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+    | join (
+    SecurityEvent 
+    | where EventID == 4688 
+    | where isnotempty(ParentProcessName)
+    // excluding well known processes, feel free to add more specific to the environment
+    | where NewProcessName !has '\\Windows\\System32\\conhost.exe' and ParentProcessName !has ':\\Windows\\System32\\conhost.exe'
+      and NewProcessName !has '\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\csc.exe' and ParentProcessName !has '\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\csc.exe'
+      and NewProcessName !has '\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\cvtres.exe' and ParentProcessName !has '\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\cvtres.exe'
+      and NewProcessName!has '\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe' and ParentProcessName !has '\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe'
+      and ParentProcessName !has '\\Windows\\CCM\\CcmExec.exe'
+    // excluding well known parent process, child process combinations, feel free to add more specific to the environment
+    | where(ParentProcessName !has '\\Windows\\System32\\svchost.exe' and (NewProcessName !has ':\\Windows\\System32\\wbem\\WmiPrvSE.exe' or NewProcessName !has ':\\Windows\\SysWOW64\\wbem\\WmiPrvSE.exe'))
+    | where(ParentProcessName !has '\\Windows\\System32\\services.exe' and NewProcessName !has ':\\Windows\\servicing\\TrustedInstaller.exe')
+    | where Computer has v_Host_HostName or WorkstationName has v_Host_HostName
+    | extend info = pack('EventID', EventID, 'TargetAccount', TargetAccount)
+    | summarize min(TimeGenerated), max(TimeGenerated), Process_Aux_info = makeset(info) by Account, Computer, ParentProcessName, NewProcessName, CommandLine, ProcessId
+    | project min_TimeGenerated, max_TimeGenerated, Account, Computer, ParentProcessName, NewProcessName, CommandLine, ProcessId, Process_Aux_info
+    | project-rename Process_Host_UnstructuredName=Computer, Process_Account_UnstructuredName=Account, Process_CommandLine=CommandLine, Process_ProcessId=ProcessId, Process_ImageFile_FullPath=NewProcessName, Process_ParentProcess_ImageFile_FullPath=ParentProcessName, Process_Aux_StartTime = min_TimeGenerated, Process_Aux_EndTime= max_TimeGenerated
+    | top 10 by Process_Aux_StartTime asc
+    | extend exists=int(1)
+    ) on exists
+    | project-away exists, exists1 
+    };
+    let Normalized = (v_Host_HostName:string){
+    (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+    | join kind=inner (
+        imProcessCreate()
+      | where Dvc has v_Host_HostName
+      // excluding well known parent process, child process combinations, feel free to add more specific to the environment
+      | where Process !has '\\Windows\\System32\\conhost.exe' and ParentProcessName !has '\\Windows\\System32\\conhost.exe'
+      and Process !has '\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\csc.exe' and ParentProcessName !has '\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\csc.exe'
+      and Process !has '\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\cvtres.exe' and ParentProcessName !has '\\Windows\\Microsoft.NET\\Framework64\\v2.0.50727\\cvtres.exe'
+      and Process!has '\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe' and ParentProcessName !has '\\Program Files\\Microsoft Monitoring Agent\\Agent\\MonitoringHost.exe' and ParentProcessName !has '\\Windows\\CCM\\CcmExec.exe'
+      | where(ParentProcessName !has '\\Windows\\System32\\svchost.exe' and (Process !has '\\Windows\\System32\\wbem\\WmiPrvSE.exe' or Process !has '\\Windows\\SysWOW64\\wbem\\WmiPrvSE.exe'))
+      | where(ParentProcessName !has '\\Windows\\System32\\services.exe' and Process !has '\\Windows\\servicing\\TrustedInstaller.exe')
+      | extend info = pack('Dvc', Dvc, 'TargetUsername', TargetUsername)
+      | summarize min(TimeGenerated), max(TimeGenerated), Process_Aux_info = make_set(info, maxSize=1000) by User, Dvc, ParentProcessName, Process, CommandLine, TargetProcessId
+      | project min_TimeGenerated, max_TimeGenerated, User, Dvc, ParentProcessName, Process, CommandLine, TargetProcessId, Process_Aux_info
+      | top 10 by min_TimeGenerated asc
+    | extend exists=int(1)
+    ) on exists | project-away exists, exists1 };
+    // change <HostName> value below
+    union isfuzzy=true Legacy('<HostName>'), Normalized('<HostName>')

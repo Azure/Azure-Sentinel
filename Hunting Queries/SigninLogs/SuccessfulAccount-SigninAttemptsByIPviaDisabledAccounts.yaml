@@ -1,0 +1,59 @@
+id: 53b6d42e-ff74-46a8-abee-ec72181f66ba
+name: Sign-ins from IPs that attempt sign-ins to disabled accounts
+description: |
+  'Identifies IPs with failed attempts to sign in to one or more disabled accounts signed in successfully to another account.
+  This analytic will additionally identify the successful signed in accounts as the mapped account entities for investigation.
+  References: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+  50057 - User account is disabled. The account has been disabled by an administrator.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T1098
+query: |
+  let threshold = 100;
+  SigninLogs 
+  | where ResultType == "50057" 
+  | where ResultDescription == "User account is disabled. The account has been disabled by an administrator." 
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), disabledAccountLoginAttempts = count(), 
+  disabledAccountsTargeted = dcount(UserPrincipalName), applicationsTargeted = dcount(AppDisplayName), disabledAccountSet = makeset(UserPrincipalName), 
+  applicationSet = makeset(AppDisplayName) by IPAddress
+  | order by disabledAccountLoginAttempts desc
+  | join kind= leftouter (
+      // Consider these IPs suspicious - and alert any related  successful sign-ins
+      SigninLogs
+      | where ResultType == 0
+      | summarize successSigninStart = min(TimeGenerated), successSigninEnd = max(TimeGenerated), successfulAccountSigninCount = dcount(UserPrincipalName), successfulAccountSigninSet = makeset(UserPrincipalName, 15) by IPAddress
+      // Assume IPs associated with sign-ins from 100+ distinct user accounts are safe
+      | where successfulAccountSigninCount < threshold
+  ) on IPAddress  
+  // IPs from which attempts to authenticate as disabled user accounts originated, and had a non-zero success rate for some other account
+  | where successfulAccountSigninCount != 0
+  // Successful Account Signins occur within the same lookback period as the failed 
+  | extend SuccessBeforeFailure = iff(successSigninStart >= StartTime and successSigninEnd <= EndTime, true, false)  
+  | project StartTime, EndTime, IPAddress, disabledAccountLoginAttempts, disabledAccountsTargeted, disabledAccountSet, applicationSet, 
+  successfulAccountSigninCount, successfulAccountSigninSet
+  | order by disabledAccountLoginAttempts
+  // Break up the string of Succesfully signed into accounts into individual events
+  | mvexpand successfulAccountSigninSet
+  | extend timestamp = StartTime, IPCustomEntity = IPAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

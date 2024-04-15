@@ -1,0 +1,39 @@
+id: 48fa6c2c-6e30-49e1-bc94-744212f99bfe
+name: OracleDBAudit - Users connected to databases during non-operational hours.
+description: |
+  'Query searches for users who have connected to databases during non-operational hours.'
+requiredDataConnectors:
+  - connectorId: OracleDatabaseAudit
+    dataTypes:
+      - Syslog
+tactics:
+  - InitialAccess
+  - DefenseEvasion
+  - Collection
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1005
+  - T1119
+  - T1078
+query: |
+  let lbtime = 24h;
+  OracleDatabaseAuditEvent
+  | where TimeGenerated > ago(lbtime)
+  | where DbAction =~ 'CONNECT'
+  | where isnotempty(DstUserName)
+  | extend day_of_week = dayofweek(TimeGenerated)
+  | extend hour_of_day = hourofday(TimeGenerated)
+  | where tostring(day_of_week) in~ ('0.00:00:00', '6.00:00:00') or hour_of_day between (8 .. 18)
+  | project TimeGenerated, DstUserName, SrcIpAddr
+  | extend AccountCustomEntity = DstUserName
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

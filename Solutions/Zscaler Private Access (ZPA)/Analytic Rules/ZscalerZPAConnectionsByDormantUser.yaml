@@ -1,0 +1,38 @@
+id: 66bc77ee-3e45-11ec-9bbc-0242ac130002
+name: Zscaler - Connections by dormant user
+description: |
+  'Detects ZPA connections by dormant user.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: ZscalerPrivateAccess
+    dataTypes:
+      - ZPAEvent
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078
+query: |
+  let dt_lastlogintime = 14d;
+  let activeUsers =
+  ZPAEvent 
+  | where TimeGenerated > ago(dt_lastlogintime)
+  | where DvcAction == 'open'
+  | summarize lastLoginTime = max(TimeGenerated) by DstUserName
+  | summarize makelist(DstUserName);
+  ZPAEvent
+  | where DstUserName !in~ (activeUsers)
+  | summarize EventCount = count() by DstUserName
+  | project-away EventCount
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

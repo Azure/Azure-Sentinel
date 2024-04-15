@@ -1,0 +1,63 @@
+id: 3db9f99e-a459-41e0-8e02-8b332f5fcb2c
+name: SonicWall - Capture ATP Malicious File Detection
+description: |
+  'This rule identifies malicious file verdicts from the SonicWall Capture ATP service. This analytic rule leverages the SonicWall Firewall ASIM Network Session parser (ASimNetworkSessionSonicWallFirewall).
+    Ref: https://www.sonicwall.com/products/capture-advanced-threat-protection/
+    Ref: https://www.sonicwall.com/support/knowledge-base/how-to-view-threat-reports-capture-atp/170505384715913/'
+severity: Medium
+status: Experimental
+requiredDataConnectors:
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: SonicWallFirewall
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+relevantTechniques:
+  - T1204
+query: |
+  CommonSecurityLog
+  | where DeviceEventClassID == 1631
+  | extend CaptureATPVerdict = extract(@'Gateway Anti-Virus Status: (.*)\. ', 1, Message)
+  | where CaptureATPVerdict == "BAD"
+  | parse-kv AdditionalExtensions as (['susr']:string, ['fileid']:string) with (pair_delimiter=";", kv_delimiter="=")
+  | extend
+      NetworkProtocol = toupper(iff(Protocol contains "-" and Protocol !contains "/", toupper(trim_start(@".*-", Protocol)), toupper(trim_end(@"/.*", Protocol)))),
+      NetworkApplicationProtocol = tostring(toupper(trim_start(@".*/", Protocol)))
+  | project
+      TimeGenerated,
+      DeviceModel = DeviceProduct,
+      SerialNumber = Computer,
+      SrcIpAddr = SourceIP,
+      SrcUsername = coalesce(susr, SourceUserName),
+      NetworkProtocol,
+      NetworkApplicationProtocol,
+      RequestURL,
+      File = url_decode(tostring(split(RequestURL, '/')[-1])),
+      Hash = fileid,
+      Verdict = CaptureATPVerdict
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: File
+  - entityType: Url
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUsername
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+version: 1.0.0
+kind: Scheduled

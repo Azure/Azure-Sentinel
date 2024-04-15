@@ -1,0 +1,79 @@
+id: 6e715730-82c0-496c-983b-7a20c4590bd9
+name: Windows host username encoded in base64 web request
+description: |
+  'This detection will identify network requests in HTTP proxy data that contains Base64 encoded usernames from machines in the DeviceEvents table.
+  This technique was seen usee by POLONIUM in their RunningRAT tool.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1041
+  - T1071.001
+tags:
+  - POLONIUM
+query: |
+  let accountLookback = 3d;
+  let requestLookback = 3d;
+  let extraction_regex = @"(?:\?|&)[a-zA-Z0-9\%]*=([a-zA-Z0-9\/\+\=]*)";
+  // Collect account names and base64 encode them
+  DeviceEvents
+  | where TimeGenerated > ago(accountLookback)
+  | summarize make_set(DeviceId), make_set(DeviceName) by InitiatingProcessAccountName
+  | where isnotempty(InitiatingProcessAccountName)
+  | extend base64_user = base64_encode_tostring(InitiatingProcessAccountName)
+  | join (
+      // Collect requests and extract base64 parameters
+      CommonSecurityLog
+      | where TimeGenerated > ago(requestLookback)
+      | where isnotempty(RequestURL)
+      // Summarize early on the RequestURL
+      | summarize FirstRequest=min(TimeGenerated), LastRequest=max(TimeGenerated), NumberOfRequests=count() by RequestURL
+      | extend base64_candidate = extract_all(extraction_regex, RequestURL)
+      | mv-expand base64_candidate  to typeof(string)
+  ) on $left.base64_user == $right.base64_candidate
+  | project FirstRequest, LastRequest, NumberOfRequests, RequestURL, DeviceIds=set_DeviceId, DeviceNames=set_DeviceName, UserName=InitiatingProcessAccountName
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceNames
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserName
+version: 1.0.1
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Thomas McElroy
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

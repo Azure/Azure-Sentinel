@@ -1,0 +1,38 @@
+id: 548a2eda-d3eb-46cc-8d4b-1601551629e4
+name: CiscoISE - Device PostureStatus changed to non-compliant
+description: |
+  'Detects when device changes PostureStatus from "Compliant".'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoISE
+    dataTypes:
+      - Syslog
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+query: |
+  let lbtime_48h = 48h;
+  let lbtime_24h = 24h;
+  let lbtime_now = now();
+  let compliantIPs = CiscoISEEvent
+  | where TimeGenerated between (ago(lbtime_48h) .. ago(lbtime_24h))
+  | where PostureStatus == 'Compliant'
+  | summarize makelist(DstIpAddr)
+  ;
+  CiscoISEEvent
+  | where TimeGenerated between (ago(lbtime_24h) .. lbtime_now)
+  | where PostureStatus != 'Compliant'
+  | where DstIpAddr in (compliantIPs)
+  | project DstIpAddr
+  | extend IPCustomEntity = DstIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

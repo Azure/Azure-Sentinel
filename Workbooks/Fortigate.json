@@ -1,0 +1,843 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": ""
+      },
+      "name": "text - 1"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## FortiGate overview"
+      },
+      "name": "text - 1"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "crossComponentResources": [],
+        "parameters": [
+          {
+            "id": "dc0f1964-cd27-4aa8-bef7-10054a908d4f",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 604800000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "3741462d-c208-4438-b01e-cc6776be6939",
+            "version": "KqlParameterItem/1.0",
+            "name": "LogSeverity",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| summarize Count = count() by LogSeverity\r\n| order by Count desc, LogSeverity asc\r\n| project Value = LogSeverity, Label = strcat(LogSeverity, ' - ', Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "90246516-998b-43f1-849e-63cf60e5bf14",
+            "version": "KqlParameterItem/1.0",
+            "name": "Action",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory = extract('([a-zA-Z/-]*).*$',1,B)\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| summarize Count = count() by SubType\r\n| order by Count desc, SubType asc\r\n| project Value = SubType, Label = strcat(SubType, ' - ', Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory= extract('([a-zA-Z/-]*).*$',1,B)\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| where \"{Action:lable}\" == \"All\" or SubType in ({Action});\r\ndata\r\n| summarize Count = count() by Category\r\n| join kind = fullouter (datatable(Category:string)['Medium', 'high', 'low']) on Category\r\n| project Category = iff(Category == '', Category1, Category), Count = iff(Category == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Category)\r\n on Category\r\n| project-away Category1, TimeGenerated\r\n| extend Categorys = Category\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend Category = 'All', Categorys = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportFieldName": "Category",
+        "exportParameterName": "CategoryFilter",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Event category",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Category",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "palette": "gray",
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 4",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| where Category == '{CategoryFilter}' or '{CategoryFilter}'== \"All\"\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory= extract('([a-zA-Z/-]*).*$',1,B)\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| where \"{Action:lable}\" == \"All\" or SubType in ({Action});\r\ndata\r\n| summarize Count = count() by SubCategory\r\n| join kind = fullouter (datatable(SubCategory:string)['Medium', 'high', 'low']) on SubCategory\r\n| project SubCategory = iff(SubCategory == '', SubCategory1, SubCategory), Count = iff(SubCategory == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by SubCategory)\r\n on SubCategory\r\n| project-away SubCategory1, TimeGenerated\r\n| extend SubCategorys = SubCategory\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend SubCategory = 'All', SubCategorys = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportFieldName": "SubCategory",
+        "exportParameterName": "SubCategoryFilter",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Event type",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "SubCategory",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "palette": "magenta",
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 5",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| where Category == '{CategoryFilter}' or '{CategoryFilter}'== \"All\"\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory = extract('([a-zA-Z/-]*).*$',1,B)\r\n| where SubCategory == '{SubCategoryFilter}' or '{SubCategoryFilter}' == \"All\"\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| where \"{Action:lable}\" == \"All\" or SubType in ({Action})\r\n| summarize count() by SubType, bin(TimeGenerated, 1d)",
+        "size": 0,
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Event actions, by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "name": "query - 10"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| where Category == '{CategoryFilter}' or '{CategoryFilter}'== \"All\"\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory = extract('([a-zA-Z/-]*).*$',1,B)\r\n| where SubCategory == '{SubCategoryFilter}' or '{SubCategoryFilter}' == \"All\"\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| where \"{Action:lable}\" == \"All\" or SubType in ({Action});\r\ndata\r\n| summarize Count = count() by SubType\r\n| join kind = fullouter (datatable(SubType:string)['Medium', 'high', 'low']) on SubType\r\n| project SubType = iff(SubType == '', SubType1, SubType), Count = iff(SubType == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by SubType)\r\n on SubType\r\n| project-away SubType1, TimeGenerated\r\n| extend SubTypes = SubType\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend SubType = 'All', SubTypes = '*' \r\n)\r\n| order by Count desc\r\n",
+        "size": 4,
+        "exportFieldName": "SubType",
+        "exportParameterName": "SubTypeFilter",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Event action",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "SubType",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory= extract('([a-zA-Z/-]*).*$',1,B)\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| where Category == '{CategoryFilter}' or '{CategoryFilter}' == \"All\"\r\n| where SubCategory == '{SubCategoryFilter}' or '{SubCategoryFilter}' == \"All\"\r\n| where \"{Action:lable}\" == \"All\" or SubType in ({Action})\r\n| where SubType == '{SubTypeFilter}' or '{SubTypeFilter}' == \"All\"\r\n| where DestinationUserName != \"\";\r\nlet appData = data\r\n| summarize TotalCount = count() by DestinationUserName\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by DestinationUserName\r\n    | project-away TimeGenerated) on DestinationUserName\r\n| order by TotalCount desc, DestinationUserName asc\r\n| project DestinationUserName, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , DestinationUserName\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by DestinationUserName, Activity\r\n    | project-away TimeGenerated) on DestinationUserName, Activity\r\n| order by TotalCount desc, DestinationUserName asc\r\n| project DestinationUserName, Activity, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on DestinationUserName\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = DestinationUserName, Type = 'DestinationUserName', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc\r\n",
+        "size": 1,
+        "exportFieldName": "DestinationUserName",
+        "exportParameterName": "DestinationUserNameFilter",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "User activity",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activity Count",
+              "formatter": 4,
+              "formatOptions": {
+                "min": 0,
+                "palette": "purple",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DestinationUserName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Amount",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        },
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "DestinationUserName",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Amount",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "name": "query - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory= extract('([a-zA-Z/-]*).*$',1,B)\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| where Category == '{CategoryFilter}' or '{CategoryFilter}' == \"All\"\r\n| where SubCategory == '{SubCategoryFilter}' or '{SubCategoryFilter}' == \"All\"\r\n| where \"{Action:lable}\" == \"All\" or SubType in ({Action})\r\n| where SubType == '{SubTypeFilter}' or '{SubTypeFilter}' == \"All\"\r\n| where ApplicationProtocol != \"\"\r\n| summarize SentDataMB = sum(SentBytes)/1048576 , DataRecievedMB =sum(ReceivedBytes)/1048576, Amount = count() by ApplicationProtocol, DestinationPort\r\n| order by Amount, SentDataMB, DataRecievedMB\r\n\r\n",
+        "size": 0,
+        "exportFieldName": "ApplicationProtocol",
+        "exportParameterName": "ApplicationProtocolFilter",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Application protocol activities",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ApplicationProtocol",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SentDataMB",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DataRecievedMB",
+              "formatter": 4,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Amount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "purple",
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory= extract('([a-zA-Z/-]*).*$',1,B)\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| where Category == '{CategoryFilter}' or '{CategoryFilter}' == \"All\"\r\n| where SubCategory == '{SubCategoryFilter}' or '{SubCategoryFilter}' == \"All\"\r\n| where \"{Action:lable}\" == \"All\" or SubType in ({Action})\r\n| where SubType == '{SubTypeFilter}' or '{SubTypeFilter}' == \"All\"\r\n| where ApplicationProtocol == '{ApplicationProtocolFilter}' or '{ApplicationProtocolFilter}' == \"All\"\r\n| summarize SentDataMB = sum(SentBytes)/1048576 , DataRecievedMB =sum(ReceivedBytes)/1048576 by bin(TimeGenerated, 1d)\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Data flow (MB)",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "timechart"
+      },
+      "customWidth": "50",
+      "name": "query - 9"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where \"{LogSeverity:lable}\" == \"All\" or LogSeverity in ({LogSeverity})\r\n| extend Category= extract('(.*):(.*)$',1,Activity)\r\n| extend B= extract('(.*):(.*$)',2,Activity)\r\n| extend SubCategory= extract('([a-zA-Z/-]*).*$',1,B)\r\n| extend SubType= extract('([a-zA-Z/-]*) (.*)$',2,B)\r\n| where Category == '{CategoryFilter}' or '{CategoryFilter}' == \"All\"\r\n| where SubCategory == '{SubCategoryFilter}' or '{SubCategoryFilter}' == \"All\"\r\n| where \"{Action:lable}\" == \"All\" or SubType in ({Action})\r\n| where SubType == '{SubTypeFilter}' or '{SubTypeFilter}' == \"All\"\r\n| where ApplicationProtocol == '{ApplicationProtocolFilter}' or '{ApplicationProtocolFilter}' == \"All\"\r\n| extend EventResult= extract(';FortinetFortiGatelogdesc=(.*?);',1, AdditionalExtensions) \r\n| summarize SentDataMB = sum(SentBytes)/1048576 , DataRecievedMB =sum(ReceivedBytes)/1048576, Amount = count() by Category, Type = SubCategory, Action = SubType, DeviceEventClassID, LogSeverity, EventResult , DestinationUserName, SourceIP, DestinationIP, DestinationPort, ApplicationProtocol, Message\r\n| order by Amount\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Category",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Action",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DeviceEventClassID",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "LogSeverity",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "EventResult",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DestinationUserName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SourceIP",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DestinationIP",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DestinationPort",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ApplicationProtocol",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Message",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "SentDataMB",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "DataRecievedMB",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Amount",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "pink",
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "name": "query - 6"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---\r\n## Forward data"
+      },
+      "name": "text - 11"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "crossComponentResources": [],
+        "parameters": [
+          {
+            "id": "18e95949-7b4c-4611-94eb-19d4384987f3",
+            "version": "KqlParameterItem/1.0",
+            "name": "DestinationIP",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n| where Activity contains \"forward\" \r\n| where DestinationIP != \"\"\r\n| summarize Count = count() by DestinationIP\r\n| order by Count desc, DestinationIP asc\r\n| project Value = DestinationIP, Label = strcat(DestinationIP, ' - ', Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          },
+          {
+            "id": "0acac6e9-fbb4-4ac3-8872-df386163d33b",
+            "version": "KqlParameterItem/1.0",
+            "name": "DestinationPort",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "CommonSecurityLog\r\n| where DeviceVendor =~ 'Fortinet'\r\n| where DeviceProduct contains 'Fortigate'\r\n//| where Activity contains \"forward\"\r\n| where isempty(DestinationPort) != true\r\n| summarize Count = count() by DestinationPort\r\n| order by Count desc, DestinationPort asc\r\n| project Value = DestinationPort, Label = strcat(DestinationPort, \"- \", Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "timeContext": {
+              "durationMs": 0
+            },
+            "timeContextFromParameter": "TimeRange",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 17"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor == \"Fortinet\" \r\n| where DeviceProduct contains \"Fortigate\"\r\n| where \"{DestinationIP:lable}\" == \"All\" or DestinationIP in ({DestinationIP}) \r\n| where \"{DestinationPort:lable}\" == \"All\" or DestinationPort in ({DestinationPort}) \r\n| summarize SentDataMB = sumif(SentBytes,Activity contains \"forward\" )/1048576 , DataRecievedMB =sumif(ReceivedBytes, Activity contains \"forward\")/1048576 by TimeGenerated \r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Forward data flow volume. by time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "linechart"
+      },
+      "customWidth": "40",
+      "name": "query - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor == \"Fortinet\" \r\n| where DeviceProduct contains \"Fortigate\"\r\n| where Activity contains \"forward\" \r\n| where DeviceInboundInterface == \"port1\"\r\n| where \"{DestinationIP:lable}\" == \"All\" or DestinationIP in ({DestinationIP}) \r\n| where \"{DestinationPort:lable}\" == \"All\" or DestinationPort in ({DestinationPort}) \r\n| where DestinationPort > 0\r\n| extend DestinationPorts= tostring(DestinationPort) \r\n| summarize TopDestinationPortsCount= count() by DestinationPorts, bin(TimeGenerated, 1d)\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Used ports over time",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "barchart"
+      },
+      "customWidth": "50",
+      "name": "query - 18"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor == \"Fortinet\" \r\n| where DeviceProduct contains \"Fortigate\"\r\n| where Activity contains \"forward\" \r\n| where DeviceInboundInterface == \"port1\"\r\n| where \"{DestinationIP:lable}\" == \"All\" or DestinationIP in ({DestinationIP}) \r\n| where \"{DestinationPort:lable}\" == \"All\" or DestinationPort in ({DestinationPort}) \r\n| where DestinationPort > 0\r\n| extend DestinationPorts= tostring(DestinationPort) \r\n| summarize TopDestinationPortsCount= count() by DestinationPorts\r\n| top 5 by TopDestinationPortsCount  desc \r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 inbound dstination ports",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "25",
+      "name": "query - 13"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor == \"Fortinet\" \r\n| where DeviceProduct contains \"Fortigate\"\r\n| where Activity contains \"forward\" \r\n| where DeviceInboundInterface == \"port2\"\r\n| where \"{DestinationIP:lable}\" == \"All\" or DestinationIP in ({DestinationIP}) \r\n| where \"{DestinationPort:lable}\" == \"All\" or DestinationPort in ({DestinationPort}) \r\n| where DestinationPort > 0\r\n| extend DestinationPorts= tostring(DestinationPort) \r\n| summarize TopDestinationPortsCount= count() by DestinationPorts\r\n| top 5 by TopDestinationPortsCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 outbound destination ports",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "25",
+      "name": "query - 14"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor == \"Fortinet\"\r\n| where DeviceProduct contains \"Fortigate\"\r\n| where Activity contains \"forward\"\r\n| where DeviceInboundInterface == \"port1\"\r\n| where DestinationTranslatedAddress contains \".\"\r\n| where \"{DestinationIP:lable}\" == \"All\" or DestinationIP in ({DestinationIP}) \r\n| where \"{DestinationPort:lable}\" == \"All\" or DestinationPort in ({DestinationPort}) \r\n| summarize InBoundCount= count() by DestinationTranslatedAddress\r\n| project-rename DestinationIP= DestinationTranslatedAddress\r\n| top 5 by InBoundCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 inbound destination IP addresses",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "25",
+      "name": "query - 16"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "CommonSecurityLog\r\n| where DeviceVendor == \"Fortinet\" \r\n| where DeviceProduct contains \"Fortigate\"\r\n| where Activity contains \"forward\" \r\n| where DeviceInboundInterface == \"port2\"\r\n| where \"{DestinationIP:lable}\" == \"All\" or DestinationIP in ({DestinationIP}) \r\n| where \"{DestinationPort:lable}\" == \"All\" or DestinationPort in ({DestinationPort}) \r\n| summarize OutBoundCount= count() by DestinationIP\r\n| top 5 by OutBoundCount desc\r\n",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Top 5 outbound destination IP addresses",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "piechart"
+      },
+      "customWidth": "25",
+      "name": "query - 16"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "---"
+      },
+      "name": "text - 19"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-Fortigate",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -1,0 +1,327 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+       "metadata":  {
+        "title":  "Notify When Incident Is Closed",
+        "description":  "This playbook is utilizing new update trigger to notify person/group on Microsoft Teams/Outlook when incident is closed.",
+        "prerequisites":  ["1. Email address to where notification will be sent to.", "2. (Optional) Microsoft Teams Team ID and Channel ID, or choose them in Logic Apps designer after the deployment. [Guidance to get Ids](Instructions to get IDs - https://www.linkedin.com/pulse/3-ways-locate-microsoft-team-id-christopher-barber-/)"],
+        "postDeployment":  ["1. Authorize Microsoft Teams and Microsoft Office 365 Outlook connectors.", "2. Add playbook as an action to the automation rule: Trigger = When incident is updated;  Condition = Status Changed To Closed."],
+        "lastUpdateTime":  "2022-08-05T00:00:00.000Z",
+        "entities":  [],
+        "tags":  [ "Notification", "Incident Update"],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Benjamin Kovacevic"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Notify When Incident Is Closed",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Notify-IncidentClosed",
+            "type":  "string"
+        },
+        "Notification email":  {
+            "type":  "string",
+            "defaultValue":  "Notification email",
+            "metadata":  {
+                "description":  "Enter value for Notification email"
+            }
+        },
+        "Teams Channel ID":  {
+            "type":  "string",
+            "defaultValue":  "Teams Channel ID",
+            "metadata":  {
+                "description":  "Enter value for Teams Channel ID"
+            }
+        },
+        "Teams Team ID":  {
+            "type":  "string",
+            "defaultValue":  "Teams Team ID",
+            "metadata":  {
+                "description":  "Enter value for Teams Team ID"
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "Office365ConnectionName":  "[concat('Office365-', parameters('PlaybookName'))]",
+        "TeamsConnectionName":  "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "Notification email":  {
+                            "defaultValue":  "[parameters('Notification email')]",
+                            "type":  "string"
+                        },
+                        "Teams Channel ID":  {
+                            "defaultValue":  "[parameters('Teams Channel ID')]",
+                            "type":  "string"
+                        },
+                        "Teams Team ID":  {
+                            "defaultValue":  "[parameters('Teams Team ID')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Compose_-_Incident_URL":  {
+                            "runAfter":  {
+                            },
+                            "type":  "Compose",
+                            "inputs":  "\u003ca href=\"@{triggerBody()?['object']?['properties']?['incidentUrl']}\"\u003eClick here to view incident\u003c/a\u003e"
+                        },
+                        "Compose_-_Teams_adaptive_card_response":  {
+                            "runAfter":  {
+                                "Send_an_email_(V2)":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Compose",
+                            "inputs":  {
+                                "$schema":  "http://adaptivecards.io/schemas/adaptive-card.json",
+                                "body":  [
+                                    {
+                                        "color":  "Good",
+                                        "size":  "Large",
+                                        "text":  "Microsoft Sentinel Incident Closed!",
+                                        "type":  "TextBlock",
+                                        "weight":  "Bolder",
+                                        "wrap":  true
+                                    },
+                                    {
+                                        "text":  "Incident details:",
+                                        "type":  "TextBlock",
+                                        "wrap":  true
+                                    },
+                                    {
+                                        "facts":  [
+                                            {
+                                                "title":  "Title",
+                                                "value":  "@{triggerBody()?['object']?['properties']?['title']}"
+                                            },
+                                            {
+                                                "title":  "Incident ID",
+                                                "value":  "@{triggerBody()?['object']?['properties']?['incidentNumber']}"
+                                            },
+                                            {
+                                                "title":  "Description",
+                                                "value":  "@{triggerBody()?['object']?['properties']?['description']}"
+                                            },
+                                            {
+                                                "title":  "Tactics",
+                                                "value":  "@{join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '\u003cbr /\u003e')}"
+                                            },
+                                            {
+                                                "title":  "Alert providers",
+                                                "value":  "@{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], '\u003cbr /\u003e')}"
+                                            },
+                                            {
+                                                "title":  "Status",
+                                                "value":  "@{triggerBody()?['object']?['properties']?['status']}"
+                                            },
+                                            {
+                                                "title":  "Classification",
+                                                "value":  "@{triggerBody()?['object']?['properties']?['classification']}"
+                                            },
+                                            {
+                                                "title":  "Classification comment",
+                                                "value":  "@{triggerBody()?['object']?['properties']?['classificationComment']}"
+                                            },
+                                            {
+                                                "title":  "Classification reason",
+                                                "value":  "@{triggerBody()?['object']?['properties']?['classificationReason']}"
+                                            },
+                                            {
+                                                "title":  "Incident updated by",
+                                                "value":  "@{triggerBody()?['incidentUpdates']?['updatedBy']?['name']}"
+                                            },
+                                            {
+                                                "title":  "Incident URL",
+                                                "value":  "[Click here to view incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})"
+                                            }
+                                        ],
+                                        "type":  "FactSet"
+                                    }
+                                ],
+                                "type":  "AdaptiveCard",
+                                "version":  "1.4"
+                            }
+                        },
+                        "Post_adaptive_card_in_a_chat_or_channel":  {
+                            "runAfter":  {
+                                "Compose_-_Teams_adaptive_card_response":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "messageBody":  "@{outputs('Compose_-_Teams_adaptive_card_response')}",
+                                    "recipient":  {
+                                        "channelId":  "@parameters('Teams Channel ID')",
+                                        "groupId":  "@parameters('Teams Team ID')"
+                                    }
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                            }
+                        },
+                        "Send_an_email_(V2)":  {
+                            "runAfter":  {
+                                "Compose_-_Incident_URL":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "Body":  "\u003cp\u003e\u003cspan style=\"font-size: 18px\"\u003e\u003cstrong\u003eIncident details:\u003c/strong\u003e\u003c/span\u003e\u003cbr\u003e\n\u003cbr\u003e\n\u003cstrong\u003eTitle\u003c/strong\u003e: @{triggerBody()?['object']?['properties']?['title']};\u003cbr\u003e\n\u003cstrong\u003eIncident ID\u003c/strong\u003e: @{triggerBody()?['object']?['properties']?['incidentNumber']};\u003cbr\u003e\n\u003cstrong\u003eDescription\u003c/strong\u003e: @{triggerBody()?['object']?['properties']?['description']};\u003cbr\u003e\n\u003cstrong\u003eTactics\u003c/strong\u003e: @{join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '\u003cbr /\u003e')};\u003cbr\u003e\n\u003cstrong\u003eAlert providers\u003c/strong\u003e: @{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], '\u003cbr /\u003e')};\u003cbr\u003e\n\u003cstrong\u003eStatus\u003c/strong\u003e: @{triggerBody()?['object']?['properties']?['status']};\u003cbr\u003e\n\u003cstrong\u003eClassification\u003c/strong\u003e: @{triggerBody()?['object']?['properties']?['classification']};\u003cbr\u003e\n\u003cstrong\u003eClassification comment\u003c/strong\u003e: @{triggerBody()?['object']?['properties']?['classificationComment']};\u003cbr\u003e\n\u003cstrong\u003eClassification reason\u003c/strong\u003e: @{triggerBody()?['object']?['properties']?['classificationReason']}\u003cbr\u003e\n\u003cstrong\u003eIncident updated by\u003c/strong\u003e: @{triggerBody()?['incidentUpdates']?['updatedBy']?['name']};\u003cbr\u003e\n\u003cstrong\u003eIncident URL\u003c/strong\u003e: @{outputs('Compose_-_Incident_URL')}\u003c/p\u003e",
+                                    "Subject":  "Microsoft Sentinel Incident Closed!",
+                                    "To":  "@parameters('Notification email')"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/v2/Mail"
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "microsoftsentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName":  "[variables('Office365ConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                            },
+                            "teams":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName":  "[variables('TeamsConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Notify-IncidentClosed",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('Office365ConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('Office365ConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('TeamsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('TeamsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

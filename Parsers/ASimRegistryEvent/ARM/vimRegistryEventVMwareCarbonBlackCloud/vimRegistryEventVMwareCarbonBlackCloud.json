@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimRegistryEventVMwareCarbonBlackCloud",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Registry Event ASIM Parser for VMware Carbon Black Cloud",
+            "category": "ASIM",
+            "FunctionAlias": "vimRegistryEventVMwareCarbonBlackCloud",
+            "query": "let EventTypeLookup = datatable (temp_action: string, EventType: string)\n  [\n    \"ACTION_WRITE_VALUE\", \"RegistryValueSet\",\n    \"ACTION_CREATE_KEY\", \"RegistryKeyCreated\",\n    \"ACTION_DELETE_KEY\", \"RegistryKeyDeleted\",\n    \"ACTION_DELETE_VALUE\", \"RegistryValueDeleted\",\n    \"ACTION_RENAME_KEY\", \"RegistryKeyRenamed\"\n];\nlet RegistryKeyPrefixLookup = datatable(\n    RegistryKeyPrefix: string,\n    RegistryKeyNormalizedPrefix: string\n)[\n    \"HKLM\", \"HKEY_LOCAL_MACHINE\",\n    \"HKU\", \"HKEY_USERS\",\n    \"HKCU\", \"HKEY_CURRENT_USER\",\n    \"HKCR\", \"HKEY_CLASSES_ROOT\",\n    \"HKCC\", \"HKEY_CURRENT_CONFIG\"\n];\nlet actionvalues = dynamic([\"ACTION_WRITE_VALUE\", \"ACTION_CREATE_KEY\", \"ACTION_DELETE_KEY\", \"ACTION_DELETE_VALUE\", \"ACTION_RENAME_KEY\"]);\nlet parser=(\n    starttime: datetime=datetime(null), \n    endtime: datetime=datetime(null), \n    eventtype_in: dynamic=dynamic([]), \n    actorusername_has_any: dynamic=dynamic([]), \n    registrykey_has_any: dynamic=dynamic([]), \n    registryvalue_has_any: dynamic=dynamic([]), \n    registryvaluedata_has_any: dynamic=dynamic([]), \n    dvchostname_has_any: dynamic=dynamic([]), \n    disabled: bool=false\n    ) {\n    CarbonBlackEvents_CL\n    | where not(disabled)\n    | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime))\n        and eventType_s == \"endpoint.event.regmod\"\n        and isnotempty(regmod_name_s)\n    | where array_length(registryvalue_has_any) == 0\n        and array_length(registryvaluedata_has_any) == 0\n        and (array_length(actorusername_has_any) == 0 or process_username_s has_any (actorusername_has_any))\n        and (array_length(dvchostname_has_any) == 0 or device_name_s has_any (dvchostname_has_any))\n    | extend\n        temp_action = case(\n                  action_s has \"|\" and action_s has \"delete\",\n                  \"ACTION_DELETE_KEY\",\n                  action_s has \"|\" and action_s !has \"delete\",\n                  \"ACTION_CREATE_KEY\",\n                  action_s\n              ),\n        RegistryKeyPrefix = tostring(split(regmod_name_s, @'\\')[0])\n    | where temp_action in (actionvalues)\n    | lookup EventTypeLookup on temp_action\n    | lookup RegistryKeyPrefixLookup on RegistryKeyPrefix\n    | extend RegistryKey = replace_string(regmod_name_s, RegistryKeyPrefix, RegistryKeyNormalizedPrefix)\n    | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))\n        and (array_length(registrykey_has_any) == 0 or RegistryKey has_any (registrykey_has_any))\n    | extend\n        ActingProcessId = tostring(toint(process_pid_d)),\n        EventStartTime = todatetime(split(createTime_s, '+')[0]),\n        ParentProcessId = tostring(toint(parent_pid_d)),\n        AdditionalFields = bag_pack(\n                      \"process_guid\", process_guid_s,\n                      \"parent_guid\", parent_guid_s \n                  )\n    | project-rename\n        ActorUsername = process_username_s,\n        DvcIpAddr = device_external_ip_s,\n        DvcScope = device_group_s,\n        EventUid = _ItemId,\n        ActingProcessName = process_path_s,\n        DvcId = device_id_s,\n        DvcOs = device_os_s,\n        EventMessage = event_description_s,\n        EventOriginalType = action_s,\n        EventOriginalUid = event_id_g,\n        EventOwner = event_origin_s,\n        ParentProcessName = processDetails_parentName_s,\n        ActorScopeId = org_key_s\n    | invoke _ASIM_ResolveDvcFQDN('device_name_s')\n    | extend\n        EventCount = toint(1),\n        EventProduct = \"Carbon Black Cloud\",\n        EventVendor = \"VMware\",\n        EventResult = \"Success\",\n        DvcAction = \"Allowed\",\n        EventSchema = \"RegistryEvent\",\n        EventSchemaVersion = \"0.1.2\"\n    | extend\n        Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),\n        DvcIdType = iff(isnotempty(DvcId), \"Other\", \"\"),\n        EventEndTime = EventStartTime,\n        Process = ActingProcessName,\n        User = ActorUsername,\n        ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),\n        ActorUserType = _ASIM_GetUserType(ActorUsername, \"\")\n    | project-away\n        *_d,\n        *_s,\n        *_g,\n        *_b,\n        temp_action,\n        _ResourceId,\n        Computer,\n        MG,\n        ManagementGroupName,\n        RawData,\n        SourceSystem,\n        TenantId,\n        RegistryKeyPrefix,\n        RegistryKeyNormalizedPrefix\n};\nparser(\n    starttime=starttime, \n    endtime=endtime, \n    eventtype_in=eventtype_in, \n    actorusername_has_any=actorusername_has_any, \n    registrykey_has_any=registrykey_has_any, \n    registryvalue_has_any=registryvalue_has_any, \n    registryvaluedata_has_any=registryvaluedata_has_any, \n    dvchostname_has_any=dvchostname_has_any, \n    disabled = disabled\n)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),eventtype_in:dynamic=dynamic([]),actorusername_has_any:dynamic=dynamic([]),registrykey_has_any:dynamic=dynamic([]),registryvalue_has_any:dynamic=dynamic([]),registryvaluedata_has_any:dynamic=dynamic([]),dvchostname_has_any:dynamic=dynamic([]),disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

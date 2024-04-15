@@ -1,0 +1,44 @@
+id: e6e99dcb-4dff-48d2-8012-206ca166b36b
+name: SlackAudit - User login after deactivated.
+description: |
+  'Detects when user email linked to account changes.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SlackAuditAPI
+    dataTypes:
+      - SlackAudit_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let lbperiod_max_d = 14d;
+  let lbperiod_min_d = 1d;
+  let lb_time_max_h = 24h;
+  SlackAudit
+  | where TimeGenerated between (ago(lbperiod_max_d) .. (lbperiod_min_d))
+  | where Action =~ 'user_deactivated'
+  | summarize deactivation_time = max(TimeGenerated) by EntityUserEmail, EntityUserId
+  | project deactivation_time, EntityUserEmail, EntityUserId
+  | join (SlackAudit
+        | where TimeGenerated > ago(lb_time_max_h)
+        | where Action =~ 'user_login'
+        | summarize new_login_time = max(TimeGenerated) by SrcUserEmail, SrcUserIdentity
+        | project new_login_time, SrcUserEmail, EntityUserId = SrcUserIdentity) on EntityUserId
+  | where EntityUserEmail == SrcUserEmail
+  | where deactivation_time < new_login_time
+  | extend AccountCustomEntity = SrcUserEmail
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

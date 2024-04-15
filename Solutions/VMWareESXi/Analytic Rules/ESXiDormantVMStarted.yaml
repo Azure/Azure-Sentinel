@@ -1,0 +1,57 @@
+id: 4cdcd5d8-89df-4076-a917-bc50abb9f2ab
+name: VMware ESXi - Dormant VM started
+description: |
+  'Detects when dormant VM was started.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: VMwareESXi
+    dataTypes:
+      - VMwareESXi
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let vm_p_off =
+  VMwareESXi
+  | where TimeGenerated > ago(14d)
+  | where SyslogMessage has ('VmPoweredOffEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | summarize LastPowerOffTime=max(TimeGenerated) by DstHostname
+  | where datetime_diff('day',datetime(now),LastPowerOffTime) >= 20; 
+  let vm_p_on =
+  VMwareESXi
+  | where TimeGenerated > ago(14d)
+  | where SyslogMessage has ('VmPoweredOnEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | summarize LastPowerOnTime=max(TimeGenerated) by DstHostname
+  | where datetime_diff('day',datetime(now),LastPowerOnTime) >= 20;
+  let off_vms =
+  vm_p_on
+  | join (vm_p_off) on DstHostname
+  | where LastPowerOffTime > LastPowerOnTime
+  | summarize p_off_vm = make_set(DstHostname,200)
+  | extend k=1;
+  VMwareESXi
+  | where TimeGenerated between (ago(24h) .. datetime(now))
+  | where SyslogMessage has ('VmPoweredOnEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | extend k=1
+  | join (off_vms) on k
+  | where p_off_vm !has DstHostname
+  | summarize rec_p_on = make_set(DstHostname,200)
+  | extend hostname = iff(array_length(rec_p_on) > 0, rec_p_on[0], "")
+  | extend NTDomain = tostring(split(hostname, '\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0])
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: NTDomain
+version: 1.0.1
+kind: Scheduled

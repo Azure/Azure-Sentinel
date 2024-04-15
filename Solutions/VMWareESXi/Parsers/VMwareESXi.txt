@@ -1,0 +1,30 @@
+// Title:           VMWare ESXi
+// Author:          Microsoft
+// Version:         1.0
+// Last Updated:    09/29/2022
+// Comment:         Inital Release
+//
+// DESCRIPTION:
+// This parser takes raw VMWare ESXi logs from a Syslog stream and parses the logs into a normalized schema.
+//
+// REFERENCES:
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+//
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+// info vpxa[D089B70] [Originator@6876 sub=vpxLro opID=HB-host-89929@3678594-5d55f348-40] [VpxLRO] -- BEGIN session[52908bc7-673e-dc2f-8726-70d13fe8ef72]521881cd-707e-cf9b-01c4-f0fd16d7444d -- vpxa -- vpxapi.VpxaService.retrieveChanges -- 52908bc7-673e-dc2f-8726-70d13fe8ef72
+// warning hostd[191C2B70] [Originator@6876 sub=VigorStatsProvider(409264032)] AddVirtualMachine: VM '67' already registered
+// cpu25:1040586)WARNING: vmw_psp_rr: psp_rrSelectPathToActivate:1101: Could not select path for device "Unregistered Device".
+//
+Syslog
+| where Computer has_any ('ESXiserver1', 'ESXiserver2') // ESXiserver1 and ESXiserver2 are examples, replace this list with your ESXi devices
+| extend Parser = extract_all(@"^(\w+)?\s?(\w+)\[(\w+)\]\s([\s\S]+)", dynamic([1,2,3,4]), SyslogMessage)[0]
+| extend Substring =  iif(isnotempty(Parser), tostring(Parser[3]),"")
+| extend Sub = iif(Substring has ("sub="), extract(@"sub=([\w\d\(\)\-\.]+)\]?",1, Substring), dynamic("")),
+	 OpId = iif(Substring has ("opID="), extract(@"opID=([\w\d\(\)\-@]+)\s?\]?",1, Substring), dynamic("")),
+         UserName = iif(Substring has("suser="), extract(@"\suser=([\w\d\(\)\-]+)\]",1, Substring), dynamic (""))
+| extend Message = iif(isnotempty(Substring), extract(@"\[([\S\s]+)\]\s([\S\s]+)",2, Substring), "")
+| extend Message = iif(isempty(Message),SyslogMessage,Message)
+| extend Message = trim(@"^-- ", Message)
+| project-away Substring, Parser

@@ -1,0 +1,27 @@
+id: 374a40ba-73fc-4d70-95ac-524b5765ffa2
+name: Summary of users created using uncommon/undocumented commandline switches (Normalized Process Events)
+description: |
+  'Summarizes uses of uncommon & undocumented commandline switches to create persistence
+  User accounts may be created to achieve persistence on a machine.
+  Read more here: https://attack.mitre.org/wiki/Technique/T1136
+  Query for users being created using "net user" command
+  "net user" commands are noisy, so needs to be joined with another signal -
+  e.g. in this example we look for some undocumented variations (e.g. /ad instead of /add)'
+requiredDataConnectors: []
+tactics:
+  - CredentialAccess
+  - LateralMovement
+relevantTechniques:
+  - T1110
+query: |
+  imProcessCreate
+  | where Process has_any ("net.exe", "net1.exe") // preformance pre-filtering
+  | extend FileName = tostring(split(Process, '\\')[-1]) 
+  | extend ActingProcessFileName= tostring(split(ActingProcessName, '\\')[-1]) 
+  | where FileName in~ ("net.exe", "net1.exe")
+  | parse kind=regex flags=iU CommandLine with * "user " CreatedUser " " * "/ad"
+  | where not(FileName =~ "net1.exe" and ActingProcessFileName =~ "net.exe" and replace("net", "net1", ActingProcessCommandLine) =~ CommandLine)
+  | extend CreatedOnLocalMachine=(CommandLine !has "/do")
+  | where CommandLine has "/add" or (CreatedOnLocalMachine == 0 and CommandLine !has "/domain")
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), MachineCount=dcount(Dvc) by CreatedUser, CreatedOnLocalMachine, ActingProcessFileName, FileName, CommandLine, ActingProcessCommandLine, EventVendor, EventProduct
+  | extend timestamp = StartTimeUtc, AccountCustomEntity = CreatedUser

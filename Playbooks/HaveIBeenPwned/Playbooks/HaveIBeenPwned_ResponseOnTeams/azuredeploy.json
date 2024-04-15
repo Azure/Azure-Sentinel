@@ -1,0 +1,1128 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Response on Teams - HaveIBeenPwned",
+    "description": "This playbook checks if user accounts are breached, sends email to breached user account and closes incident based on action taken by SOC.",
+    "mainSteps": [ "1. Fetch the breach information from HaveIBeenPwned", "2. Sends adaptive card to SOC with breach information from HaveIBeenPwned" ],
+    "prerequisites": [
+      "1. HaveIBeenPwned Custom Connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+      "2. Generate an API key. Refer this link [ how to generate the API Key](https://haveibeenpwned.com/API/Key)",
+      "3. Users must have access to Microsoft Teams and they should be a part of a Teams channel."
+    ],
+    "prerequisitesDeployTemplateFile": "../../HaveIBeenPwnedCustomConnector/azuredeploy.json",
+    "lastUpdateTime": "2021-07-23T00:00:00.000Z",
+    "entities": [ "Account" ],
+    "tags": [ "Response on Teams" ],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "Accenture"
+    }
+  },
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "HaveIBeenPwned_ResponseOnTeams",
+      "metadata": {
+        "description": "Enter the playbook name without spaces"
+      }
+    },
+    "HaveIBeenPwnedConnectorName": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "HaveIBeenPwnedConnector",
+      "metadata": {
+        "description": "Enter the name for your HaveIBeenPwned Connector without spaces"
+      }
+    }
+  },
+  "variables": {
+    "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]",
+    "azuresentinel_Connection_Name": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "HaveIBeenPwnedConnector_Connection_Name": "[concat('HaveIBeenPwnedConnector-',  parameters('PlaybookName'))]",
+    "office365_Connection_Name": "[concat('office365-',  parameters('PlaybookName'))]"
+  },
+  "resources": [
+    {
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Condition_to_check_if_we_are_getting_account_information_from_sentinel": {
+              "actions": {
+                "Compose_Account_names": {
+                  "runAfter": {
+                    "For_each_account": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@replace(replace(replace(replace(string(variables('Account')),'[',''),']',''),'\"',''),',',', ')",
+                  "description": "This Composes Account names to be displayed in the adaptive card"
+                },
+                "Condition_based_on_the_SOC_choice_from_adaptive_card": {
+                  "actions": {
+                    "For_each_breached_account": {
+                      "foreach": "@variables('Account')",
+                      "actions": {
+                        "Append_to_array_variable_All_Info": {
+                          "runAfter": {
+                            "Set_variable_consolidate_Info": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "AllInfo",
+                            "value": "@variables('ConsolidateInfo')"
+                          },
+                          "description": "This Appends all info"
+                        },
+                        "Compose_current_item": {
+                          "runAfter": {},
+                          "type": "Compose",
+                          "inputs": "@item()",
+                          "description": "This composes current account name"
+                        },
+                        "Filter_array_all_breaches": {
+                          "runAfter": {
+                            "Filter_array_all_breaches_in_html_format": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Query",
+                          "inputs": {
+                            "from": "@variables('ConsolidatedAccountBreachees')",
+                            "where": "@equals(item()?['AccountName'], outputs('Compose_current_item'))"
+                          },
+                          "description": "This composes breach info in coma separated values"
+                        },
+                        "Filter_array_all_breaches_in_html_format": {
+                          "runAfter": {
+                            "Compose_current_item": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "Query",
+                          "inputs": {
+                            "from": "@variables('AllBreaches')",
+                            "where": "@equals(item()?['AccountName'], outputs('Compose_current_item'))"
+                          },
+                          "description": "This composes breach info in html format"
+                        },
+                        "Send_an_email_of_breach_information_to_user": {
+                          "runAfter": {
+                            "Filter_array_all_breaches": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "Body": "<p>Hi ,<br>\n<br>\nYour account has been identified in data breach(es).<br>\n@{Outputs('Filter_array_all_breaches_in_html_format')?['body']?[0]?['Breaches']}<br>\n<br>\nHere's what you can do<br>\n<br>\n1.Change your password for the above mentioned site(s).<br>\n2.Navigate to <a href=\"https://haveibeenpwned.com/\">HIBP website</a> &nbsp;to verify the breach information.<br>\n<br>\n<span style=\"color: rgb(124,112,107)\">Note: Do not respond to this email since it is auto generated.</span><br>\n</p>",
+                              "Subject": "Your account has been breached!",
+                              "To": "@{Outputs('Filter_array_all_breaches_in_html_format')?['body']?[0]?['AccountName']}"
+                            },
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['office365']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/v2/Mail"
+                          },
+                          "description": "This sends the user breach information and also recommends to change password"
+                        },
+                        "Set_variable_SOC_decision": {
+                          "runAfter": {
+                            "Set_variable_action_taken": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "SocDescision",
+                            "value": "Send Email and Close Incident."
+                          },
+                          "description": "This sets SOC decision variable"
+                        },
+                        "Set_variable_action_taken": {
+                          "runAfter": {
+                            "Send_an_email_of_breach_information_to_user": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "ActionTaken",
+                            "value": "Email sent to user."
+                          },
+                          "description": "This sets the action taken variable incase if user selects to send email to user and  change incident configuration"
+                        },
+                        "Set_variable_consolidate_Info": {
+                          "runAfter": {
+                            "Set_variable_SOC_decision": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "SetVariable",
+                          "inputs": {
+                            "name": "ConsolidateInfo",
+                            "value": {
+                              "AccountName": "@{Outputs('Filter_array_all_breaches')?['body']?[0]?['AccountName']}",
+                              "ActionTaken": "@{variables('ActionTaken')}",
+                              "Breaches": "@{Outputs('Filter_array_all_breaches')?['body']?[0]?['Breaches']}",
+                              "Socdescision": "@{variables('SocDescision')}"
+                            }
+                          },
+                          "description": "This sets consolidate info"
+                        }
+                      },
+                      "runAfter": {},
+                      "type": "Foreach",
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 1
+                        }
+                      }
+                    },
+                    "Update_incident": {
+                      "runAfter": {
+                        "For_each_breached_account": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "classification": {
+                            "ClassificationAndReason": "@{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['incidentStatus']}",
+                            "ClassificationReasonText": "HaveIBeenPwned_ResponseOnTeams playbook ran and closed this incident"
+                          },
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "severity": "@{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['incidentSeverity']}",
+                          "status": "Closed"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "put",
+                        "path": "/Incidents"
+                      },
+                      "description": "This updates the Incident based on the adaptive card choices"
+                    }
+                  },
+                  "runAfter": {
+                    "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "For_each_breached_account_and_Ignored_by_SOC": {
+                        "foreach": "@variables('Account')",
+                        "actions": {
+                          "Append_to_array_variable_All_Info_if_ignored": {
+                            "runAfter": {
+                              "Set_variable_consolidate_Info_if_ignored": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                              "name": "AllInfo",
+                              "value": "@variables('ConsolidateInfo')"
+                            },
+                            "description": "This Appends all info if ignored"
+                          },
+                          "Compose_current_account_item": {
+                            "runAfter": {},
+                            "type": "Compose",
+                            "inputs": "@item()",
+                            "description": "This composes current account name"
+                          },
+                          "Filter_array_all_the_breaches": {
+                            "runAfter": {
+                              "Compose_current_account_item": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                              "from": "@variables('ConsolidatedAccountBreachees')",
+                              "where": "@equals(item()?['AccountName'], outputs('Compose_current_account_item'))"
+                            },
+                            "description": "This composes breach info in coma separated values"
+                          },
+                          "Set_variable_SOC_decision_if_ignored": {
+                            "runAfter": {
+                              "Set_variable_action_taken_if_ignored": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "SocDescision",
+                              "value": "No action taken by SOC."
+                            },
+                            "description": "This sets SOC decision variable"
+                          },
+                          "Set_variable_action_taken_if_ignored": {
+                            "runAfter": {
+                              "Filter_array_all_the_breaches": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "ActionTaken",
+                              "value": "No action taken by SOC."
+                            },
+                            "description": "This sets the action taken variable if Ignored"
+                          },
+                          "Set_variable_consolidate_Info_if_ignored": {
+                            "runAfter": {
+                              "Set_variable_SOC_decision_if_ignored": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "ConsolidateInfo",
+                              "value": {
+                                "AccountName": "@{Outputs('Filter_array_all_the_breaches')?['body']?[0]?['AccountName']}",
+                                "ActionTaken": "@{variables('ActionTaken')}",
+                                "Breaches": "@{Outputs('Filter_array_all_the_breaches')?['body']?[0]?['Breaches']}",
+                                "Socdescision": "@{variables('SocDescision')}"
+                              }
+                            },
+                            "description": "This sets consolidate info"
+                          }
+                        },
+                        "runAfter": {},
+                        "type": "Foreach",
+                        "runtimeConfiguration": {
+                          "concurrency": {
+                            "repetitions": 1
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['submitActionId']",
+                          "Send Email and Update Incident Configuration"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If",
+                  "description": "This checks on the condition based on the choice selected from adaptive card"
+                },
+                "Condition_to_check_if_needs_to_be_terminated": {
+                  "actions": {
+                    "Add_comment_to_incident_(V3)": {
+                      "runAfter": {
+                        "Compose_image_to_add_in_the_Incident": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p>@{outputs('Compose_image_to_add_in_the_Incident')} <strong>Have I Been Pwned_ResponseOnTeams </strong>playbook run results:<br>\n@{body('Create_HTML_table_to_update_in_the_incident')}</p>"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment"
+                      },
+                      "description": "This adds comments to the Incident"
+                    },
+                    "Compose_image_to_add_in_the_Incident": {
+                      "runAfter": {},
+                      "type": "Compose",
+                      "inputs": "<img src=\"https://th.bing.com/th/id/OIP.bhGpY9L2aqT2B00nX_gOoAAAAA?w=152&h=180&c=7&o=5&dpr=1.5&pid=1.7\" alt=\"Lamp\" width=\"32\" height=\"32\">",
+                      "description": "This composes the HaveIBeenPwned logo to attach in the incident"
+                    }
+                  },
+                  "runAfter": {
+                    "Create_HTML_table_to_update_in_the_incident": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "Terminate": {
+                        "runAfter": {},
+                        "type": "Terminate",
+                        "inputs": {
+                          "runError": {
+                            "message": "Logic App failed"
+                          },
+                          "runStatus": "Failed"
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@variables('Terminate')",
+                          "Success"
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "If",
+                  "description": "This checks the value of terminate variable"
+                },
+                "Create_HTML_table_to_update_in_the_incident": {
+                  "runAfter": {
+                    "Condition_based_on_the_SOC_choice_from_adaptive_card": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Table",
+                  "inputs": {
+                    "columns": [
+                      {
+                        "header": "Account Name",
+                        "value": "@item()?['AccountName']"
+                      },
+                      {
+                        "header": "Breach Incident",
+                        "value": "@item()?['Breaches']"
+                      },
+                      {
+                        "header": "SOC Decision",
+                        "value": "@item()?['Socdescision']"
+                      },
+                      {
+                        "header": "Action Taken",
+                        "value": "@item()?['ActionTaken']"
+                      }
+                    ],
+                    "format": "HTML",
+                    "from": "@variables('AllInfo')"
+                  },
+                  "description": "This creates HTML table to update in the incident comment"
+                },
+                "For_each_account": {
+                  "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                  "actions": {
+                    "Get_all_breaches_for_an_account": {
+                      "runAfter": {},
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['HaveIBeenPwnedConnector']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "/api/v3/breachedaccount/@{encodeURIComponent(items('For_each_account')?['Name'])}"
+                      }
+                    },
+                    "Switch_to_check_the_status_of_API_response": {
+                      "runAfter": {
+                        "Get_all_breaches_for_an_account": [
+                          "Succeeded",
+                          "Failed"
+                        ]
+                      },
+                      "cases": {
+                        "Case-No_data_found": {
+                          "case": 404,
+                          "actions": {
+                            "Append_to_array_variable_All_Info_if_no_breach_data_found": {
+                              "runAfter": {
+                                "Set_variable_Consolidated_Info_if_no_breach_data_found": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "AllInfo",
+                                "value": "@variables('ConsolidateInfo')"
+                              },
+                              "description": "This appends array variable All Info if no breach data found"
+                            },
+                            "Set_variable_Consolidated_Info_if_no_breach_data_found": {
+                              "runAfter": {
+                                "Set_variable_action_taken_if_no_breaches_found": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "ConsolidateInfo",
+                                "value": {
+                                  "AccountName": "@{items('For_each_account')?['Name']}",
+                                  "ActionTaken": "@{variables('ActionTaken')}",
+                                  "Breaches": "No breaches found.",
+                                  "SOCDescision": "Not Applicable."
+                                }
+                              },
+                              "description": "This sets consolidated info if no breach data found"
+                            },
+                            "Set_variable_action_taken_if_no_breaches_found": {
+                              "runAfter": {},
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "ActionTaken",
+                                "value": "Not Applicable."
+                              },
+                              "description": "This sets the action taken variable if no breaches found"
+                            },
+                            "Set_variable_terminate_in_case_if_accounts_are_not_breached": {
+                              "runAfter": {
+                                "Append_to_array_variable_All_Info_if_no_breach_data_found": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Terminate",
+                                "value": "Success"
+                              },
+                              "description": "This sets the terminate variable to success if accounts are not breached"
+                            }
+                          }
+                        },
+                        "Case-Success": {
+                          "case": 200,
+                          "actions": {
+                            "Append_to_array_variable_All_breaches": {
+                              "runAfter": {
+                                "Set_variable_Breach_information_for_each_account_": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "AllBreaches",
+                                "value": "@variables('BreachInformation')"
+                              },
+                              "description": "This appends breach information for all accounts in coma separated values"
+                            },
+                            "Append_to_array_variable_account": {
+                              "runAfter": {
+                                "Compose_Account_name": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "Account",
+                                "value": "@items('For_each_account')?['Name']"
+                              },
+                              "description": "Append all account names"
+                            },
+                            "Append_to_array_variable_consolidated_account_breaches": {
+                              "runAfter": {
+                                "Set_variable_Account_Breach": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "AppendToArrayVariable",
+                              "inputs": {
+                                "name": "ConsolidatedAccountBreachees",
+                                "value": "@variables('AccountBreach')"
+                              },
+                              "description": "This appends consolidated account breach information for all breached accounts"
+                            },
+                            "Compose_Account_name": {
+                              "runAfter": {
+                                "Append_to_array_variable_consolidated_account_breaches": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Compose",
+                              "inputs": "@item()?['Name']",
+                              "description": "This composes the current account name"
+                            },
+                            "Compose_breach_names": {
+                              "runAfter": {
+                                "For_each_breach_found": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Compose",
+                              "inputs": "@{substring(variables('Name'),0,sub(length(variables('Name')),2))}.",
+                              "description": "This eliminates coma at the end of breach"
+                            },
+                            "Create_HTML_table_of_all_the_data_breaches": {
+                              "runAfter": {},
+                              "type": "Table",
+                              "inputs": {
+                                "columns": [
+                                  {
+                                    "header": "Breach Data",
+                                    "value": "@item()?['Name']"
+                                  }
+                                ],
+                                "format": "HTML",
+                                "from": "@body('Get_all_breaches_for_an_account')"
+                              },
+                              "description": "This creates the HTML table format for the breach information"
+                            },
+                            "For_each_breach_found": {
+                              "foreach": "@body('Get_all_breaches_for_an_account')",
+                              "actions": {
+                                "Append_to_string_variable_name": {
+                                  "runAfter": {},
+                                  "type": "AppendToStringVariable",
+                                  "inputs": {
+                                    "name": "Name",
+                                    "value": "@{items('For_each_breach_found')?['Name']}, "
+                                  },
+                                  "description": "This appends breach names"
+                                }
+                              },
+                              "runAfter": {
+                                "Set_variable_name_to_empty": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "Foreach",
+                              "description": "This loops on each data breach",
+                              "runtimeConfiguration": {
+                                "concurrency": {
+                                  "repetitions": 1
+                                }
+                              }
+                            },
+                            "Set_variable_Account_Breach": {
+                              "runAfter": {
+                                "Compose_breach_names": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "AccountBreach",
+                                "value": {
+                                  "AccountName": "@{items('For_each_account')?['Name']}",
+                                  "Breaches": "@outputs('Compose_breach_names')"
+                                }
+                              },
+                              "description": "This sets individual breaches for an account"
+                            },
+                            "Set_variable_Breach_information_for_each_account_": {
+                              "runAfter": {
+                                "Append_to_array_variable_account": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "BreachInformation",
+                                "value": {
+                                  "AccountName": "@{items('For_each_account')?['Name']}",
+                                  "Breaches": "@{body('Create_HTML_table_of_all_the_data_breaches')}"
+                                }
+                              },
+                              "description": "set breach Information for each account in coma separated values"
+                            },
+                            "Set_variable_name_to_empty": {
+                              "runAfter": {
+                                "Create_HTML_table_of_all_the_data_breaches": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Name",
+                                "value": "@{string('')}"
+                              },
+                              "description": "Set variable to empty"
+                            },
+                            "Set_variable_terminate_in_case_if_accounts_are_breached": {
+                              "runAfter": {
+                                "Append_to_array_variable_All_breaches": [
+                                  "Succeeded"
+                                ]
+                              },
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Terminate",
+                                "value": "Success"
+                              },
+                              "description": "This sets the terminate variable to success if accounts are breached"
+                            }
+                          }
+                        }
+                      },
+                      "default": {
+                        "actions": {
+                          "Set_variable_terminate_in_case_of_API_error": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "Terminate",
+                              "value": "APIFailed"
+                            },
+                            "description": "This sets the terminate variable in case of API error"
+                          }
+                        }
+                      },
+                      "expression": "@outputs('Get_all_breaches_for_an_account')['statusCode']",
+                      "type": "Switch",
+                      "description": "This checks on the API response and act accordingly"
+                    }
+                  },
+                  "runAfter": {},
+                  "type": "Foreach",
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 1
+                    }
+                  }
+                },
+                "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response": {
+                  "runAfter": {
+                    "Select_breached_account_names": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnectionWebhook",
+                  "inputs": {
+                    "body": {
+                      "body": {
+                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\":[\n{\n  \"columns\": [\n    {\n      \"items\": [\n  {\n    \"size\": \"large\",\n    \"text\": \"Breached Account(s) - Azure Sentinel\",\n    \"type\": \"TextBlock\",\n    \"weight\": \"bolder\",\n    \"wrap\": true\n  },\n  {\n    \"text\": \"Incident Severity: @{triggerBody()?['object']?['properties']?['severity']}\",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\",\n    \"wrap\": true\n  },\n  {\n    \"text\": \" Incident Title: @{triggerBody()?['object']?['properties']?['title']}\",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\",\n    \"wrap\": true\n  },\n  {\n    \"text\": \" Incident #: @{triggerBody()?['object']?['properties']?['incidentNumber']} \",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\",\n    \"wrap\": true\n  },\n  {\n    \"text\": \"Incident Description: \",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\",\n    \"wrap\": true\n  },\n  {\n    \"text\": \"@{triggerBody()?['object']?['properties']?['description']}\",\n    \"type\": \"TextBlock\",\n   \"wrap\": true\n  },\n  {\n    \"text\": \"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})\",\n    \"type\": \"TextBlock\",\n    \"wrap\": true\n  },\n  {\n    \"size\": \"Small\",\n    \"type\": \"Image\",\n    \"url\": \"https://www.bing.com/th?id=OIP.bhGpY9L2aqT2B00nX_gOoAEiEi&w=93&h=100&c=8&rs=1&qlt=90&dpr=1.5&pid=3.1&rm=2\"\n  },\n  {\n    \"text\": \"Breached Account(s):\",\n    \"type\": \"TextBlock\",\n    \"weight\": \"Bolder\"\n  }\n],\n      \"type\": \"Column\"\n    }\n  ],\n  \"type\": \"ColumnSet\"\n},\n  {\n    \"text\": \"@{outputs('Compose_Account_names')}\",\n    \"type\": \"TextBlock\",\n    \"wrap\": true\n  },\n\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident Configuration:\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Azure Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Azure Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                  \n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        }\n],\n\t\"actions\": [\n{\n  \"title\": \"Send Email and Update Incident Configuration\",\n  \"type\": \"Action.Submit\"\n},\n{\n  \"title\": \"Ignore\",\n  \"type\": \"Action.Submit\"\n}\n],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                        "recipient": {
+                          "channelId": "19:7abc1180c1d84a3fba83770e34231132@thread.tacv2"
+                        },
+                        "shouldUpdateCard": true
+                      },
+                      "notificationUrl": "@{listCallbackUrl()}"
+                    },
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['teams']['connectionId']"
+                      }
+                    },
+                    "path": "/flowbot/actions/flowcontinuation/recipienttypes/channel/$subscriptions",
+                    "queries": {
+                      "groupId": "18de1100-ab2e-4505-be42-8263b915b221"
+                    }
+                  },
+                  "description": "This posts the adaptive card to SOC channel"
+                },
+                "Select_breached_account_names": {
+                  "runAfter": {
+                    "Compose_Account_names": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Select",
+                  "inputs": {
+                    "from": "@variables('Account')",
+                    "select": {
+                      "text": "@item()",
+                      "type": "TextBlock"
+                    }
+                  },
+                  "description": "select breached account names to be displayed in the adptive card"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_Terminate": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Terminate_if_there_are_no_inputs_from_sentinel": {
+                    "runAfter": {},
+                    "type": "Terminate",
+                    "inputs": {
+                      "runError": {
+                        "message": "No Inputs from sentinel"
+                      },
+                      "runStatus": "Failed"
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Entities_-_Get_Accounts')?['Accounts']?[0]?['Name'])",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "type": "If",
+              "description": "This checks if sentinel is providing accounts as the entities"
+            },
+            "Entities_-_Get_Accounts": {
+              "runAfter": {},
+              "type": "ApiConnection",
+              "inputs": {
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/entities/account"
+              },
+              "description": "Get List of risky user accounts from Azure Sentinel"
+
+            },
+            "Initialize_variable_Account": {
+              "runAfter": {
+                "Initialize_variable_Name": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Account",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "This holds the value of account names"
+            },
+            "Initialize_variable_Account_breach": {
+              "runAfter": {
+                "Initialize_variable_All_breaches": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AccountBreach",
+                    "type": "object"
+                  }
+                ]
+              },
+              "description": "This holds breaches for a particular account in coma separated values"
+            },
+            "Initialize_variable_Action_Taken": {
+              "runAfter": {
+                "Initialize_variable_Breaches": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ActionTaken",
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": "This holds the action taken on SOC to comment in the Incident"
+            },
+            "Initialize_variable_AllInfo": {
+              "runAfter": {
+                "Initialize_variable_Consolidated_info": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AllInfo",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "This holds consolidated info of account names, breaches, soc decision and action taken for all accounts"
+            },
+            "Initialize_variable_All_breaches": {
+              "runAfter": {
+                "Initialize_variable_Breach_information": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "AllBreaches",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "This holds breach information for all accounts in html format to display in email sent to user"
+            },
+            "Initialize_variable_Breach_information": {
+              "runAfter": {
+                "Initialize_variable_Account": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "BreachInformation",
+                    "type": "object"
+                  }
+                ]
+              },
+              "description": "This holds breach information for a particular account in html format to display in email sent to user"
+            },
+            "Initialize_variable_Breaches": {
+              "runAfter": {
+                "Entities_-_Get_Accounts": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Breaches",
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": "This holds the Breaches for an individual account"
+            },
+            "Initialize_variable_ConsolidatedAccountBreaches": {
+              "runAfter": {
+                "Initialize_variable_Account_breach": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ConsolidatedAccountBreachees",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "This holds breach info of all accounts in coma separated values"
+            },
+            "Initialize_variable_Consolidated_info": {
+              "runAfter": {
+                "Initialize_variable_ConsolidatedAccountBreaches": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "ConsolidateInfo",
+                    "type": "object"
+                  }
+                ]
+              },
+              "description": "This holds consolidated info of account names, breaches , soc decision and action taken for a particular account"
+            },
+            "Initialize_variable_Name": {
+              "runAfter": {
+                "Initialize_variable_Soc_decision": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Name",
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": "This holds the value of breach names"
+            },
+            "Initialize_variable_Soc_decision": {
+              "runAfter": {
+                "Initialize_variable_Action_Taken": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "SocDescision",
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": "This hold the value of SOC decision"
+            },
+            "Initialize_variable_Terminate": {
+              "runAfter": {
+                "Initialize_variable_AllInfo": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Terminate",
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": "This holds the variable terminate to terminate the logic app"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel_Connection_Name'))]",
+                "connectionName": "[variables('azuresentinel_Connection_Name')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "HaveIBeenPwnedConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('HaveIBeenPwnedConnector_Connection_Name'))]",
+                "connectionName": "[variables('HaveIBeenPwnedConnector_Connection_Name')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/',parameters('HaveIBeenPwnedConnectorName'))]"
+              },
+              "office365": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]",
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('office365_Connection_Name'))]",
+                "connectionName": "[variables('office365_Connection_Name')]"
+              },
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "connectionName": "[variables('TeamsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+              }
+            }
+          }
+        }
+
+      },
+      "name": "[parameters('PlaybookName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "apiVersion": "2016-06-01",
+      "dependsOn": [
+
+        "[resourceId('Microsoft.Web/connections', variables('azuresentinel_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', variables('HaveIBeenPwnedConnector_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', variables('office365_Connection_Name'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+      ]
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('office365_Connection_Name')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+
+        }
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('HaveIBeenPwnedConnector_Connection_Name')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/',parameters('HaveIBeenPwnedConnectorName'))]"
+        }
+
+
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('TeamsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "api": {
+
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+        }
+
+      }
+    },
+    {
+      "type": "MICROSOFT.WEB/CONNECTIONS",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('azuresentinel_Connection_Name')]",
+      "location": "[resourceGroup().location]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('azuresentinel_Connection_Name')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+
+
+      }
+    }
+  ],
+  "outputs": {}
+}

@@ -1,0 +1,120 @@
+//
+// This parser with pars string messages in the "msg_s" colomn provided by Azure Firewall diagnostics logs.
+// Due to the native of these logs it's impossible to parse all data with a single "parse" statement
+// Because there are six different parsers needed all data is deviced into their respective parser type by
+// using parse-where sometime in conjuction with an addition "where" statement to prevent duplicates
+//
+let AzureFirewallApplicationRuleLogs = AzureDiagnostics
+    | where OperationName == "AzureFirewallApplicationRuleLog";
+let parseLogsWithUrls = AzureFirewallApplicationRuleLogs
+    | where msg_s has_all ("Url:", "Rule Collection Group:")
+    | parse-where
+        msg_s with                  networkProtocol:string 
+        " request from "            srcIpAddr:string
+        ":"                         srcPortNumber:int
+        " to "                      dstIpAddr:string
+        ":"                         dstPortNumber:int
+        ". Url: "                   url:string
+        ". Action: "                dvcAction:string
+        ". Policy: "                policy:string
+        ". Rule Collection Group: " ruleCollectionGroup:string
+        ". Rule Collection: "       ruleCollection:string
+        ". Rule: "                  ruleName:string
+    | project-away msg_s;
+let parseLogsWithoutUrls = AzureFirewallApplicationRuleLogs
+    | where msg_s !has "Url:" and
+            msg_s  has "Rule Collection Group:"
+    | parse-where
+        msg_s with                  networkProtocol:string
+        " request from "            srcIpAddr:string
+        ":"                         srcPortNumber:int
+        " to "                      dstIpAddr:string
+        ":"                         dstPortNumber:int
+        ". Action: "                dvcAction:string
+        ". Policy: "                policy:string
+        ". Rule Collection Group: " ruleCollectionGroup:string
+        ". Rule Collection: "       ruleCollection:string
+        ". Rule: "                  rule:string
+    // Since web category is not always specified it can't be part of the parse statement above
+    // otherwise lines without a web category will not be parsed at all.
+    // Therefore the web categories is distilled from the "rule" colomn if applicable:
+    | extend ruleName = tostring(split(rule, " Webcategories. Web Category: ")[0])
+    | extend webCategory = tostring(split(rule, " Webcategories. Web Category: ")[1])
+    | project-away msg_s;
+let parseLogsNoRuleWithUrls = AzureFirewallApplicationRuleLogs
+    | where msg_s has_all ("Url:", "No rule matched.")
+    | parse-where
+        msg_s with                  networkProtocol:string
+        " request from "            srcIpAddr:string
+        ":"                         srcPortNumber:int
+        " to "                      dstIpAddr:string
+        ":"                         dstPortNumber:int
+        ". Url: "                   url:string
+        ". Action: "                dvcAction:string
+        ". No rule matched. "       policy:string
+    | where dvcAction == "Deny"
+    | extend ruleName = "No rule matched"
+    | project-away msg_s;
+let parseLogsNoRuleWithoutUrls = AzureFirewallApplicationRuleLogs
+    | where msg_s !has "Url:" and
+            msg_s  has "No rule matched."
+    | parse-where
+        msg_s with                  networkProtocol:string
+        " request from "            srcIpAddr:string
+        ":"                         srcPortNumber:int
+        " to "                      dstIpAddr:string
+        ":"                         dstPortNumber:int
+        ". Action: "                dvcAction:string
+        ". No rule matched. "       policy:string
+    | where dvcAction == "Deny"
+    // Since we needed to parse based on ". No rule matched. " that part of the string is now lost
+    // This will be put back as ruleName:
+    | extend ruleName = "No rule matched"
+    | project-away msg_s;
+let parseLogsResolveFail = AzureFirewallApplicationRuleLogs
+    | where msg_s has "Failed to resolve"
+    | parse-where
+        msg_s with                  networkProtocol:string
+        " request from "            srcIpAddr:string
+        ":"                         srcPortNumber:int
+        " to "                      dstIpAddr:string
+        ":"                         dstPortNumber:int
+        ". Action: "                dvcAction:string
+        ". Failed to resolve "      reason:string
+    // Since we needed to parse based on ". Failed to resolve " that part of the string is now lost
+    // This will be put back as reason with a concatenate:
+    | extend reason = strcat("Failed to resolve ", reason)
+    | project-away msg_s;
+let parseLogsNoSni = AzureFirewallApplicationRuleLogs
+    | where msg_s has "Reason:"
+    | parse-where
+        msg_s with                  networkProtocol:string
+        " request from "            srcIpAddr:string
+        ":"                         srcPortNumber:int
+        ". Action: "                dvcAction:string
+        ". Reason: "                reason:string
+    | where dvcAction == "Deny"
+    | project-away msg_s;
+// Each of these six let statements will divide the whole dataset union will put everything back together
+// Fuzzy = true should not be used here since we need all parts of the data and cannot accept to miss any of it
+union
+    parseLogsWithUrls,
+    parseLogsWithoutUrls,
+    parseLogsNoRuleWithUrls,
+    parseLogsNoRuleWithoutUrls,
+    parseLogsResolveFail,
+    parseLogsNoSni
+| project TimeGenerated,
+          networkProtocol,
+          srcIpAddr,
+          srcPortNumber,
+          dstIpAddr,
+          dstPortNumber,
+          url,
+          tolower(dvcAction),
+          reason,
+          policy,
+          ruleCollectionGroup,
+          ruleCollection,
+          ruleName,
+          webCategory

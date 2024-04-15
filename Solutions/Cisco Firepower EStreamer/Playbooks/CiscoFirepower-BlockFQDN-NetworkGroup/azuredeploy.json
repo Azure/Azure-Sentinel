@@ -1,0 +1,1197 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block URL - Cisco Firepower", 
+        "description": "This playbook allows blocking of FQDNs in Cisco Firepower, using a **Network Group object**. This allows making changes to a Network Group selected members, instead of making Access List Entries. The Network Group object itself should be part of an Access List Entry.",
+        "mainSteps": ["1. For the URLs of the incident, extract the FQDN", 
+            "2. Check if FQDNs are already selected for the Network Group object", 
+            "3. For the FQDNs not already selected for the Network Group object, check if there is an existing FQDN object in Cisco Firepower, if it does not exist create it", 
+            "4. Add the FQDN object to the Network Group object, so it gets blocked", 
+            "5. Comment is added to Microsoft Sentinel incident"
+        ],
+        "prerequisites": ["1. Cisco Firepower custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc pages.", 
+            "2. In Cisco Firepower there needs to be a Network Group object. [Creating Network Objects](https://www.cisco.com/c/en/us/td/docs/security/firepower/630/configuration/guide/fpmc-config-guide-v63/reusable_objects.html#ariaid-title15)"
+        ],
+        "prerequisitesDeployTemplateFile": "../CustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2022-07-20T00:00:00.000Z", 
+        "entities": ["Url"], 
+        "tags": ["Remediation"],
+        "postDeployment":  ["**a. Authorize connections**", 
+            "Once deployment is complete, you will need to authorize each connection.", 
+            "1. Click the Microsoft Sentinel connection resource", 
+            "2. Click edit API connection", 
+            "3. Click Authorize", 
+            "4. Sign in", 
+            "5. Click Save", 
+            "6. Repeat steps for other connections such as Cisco Firepower (For authorizing the Cisco Firepower API connection, the username and password needs to be provided).", 
+            "**b. Configurations in Sentinel**", 
+            "1. In Microsoft sentinel analytical rules should be configured to trigger an incident with URL Entity.", 
+            "2. Configure the automation rules to trigger this playbook."
+        ],
+        "support": {
+            "tier": "Microsoft" 
+        },
+        "author": {
+            "name": "Lior Tamir"
+        },
+        "releaseNotes": [
+        {
+            "version": "1.0.0",
+            "title": "Block URL - Cisco Firepower",
+            "notes": [
+            "Initial version"
+            ]
+        }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "BlockURL-CiscoFirepower-NetworkGroup",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Logic Apps resource to be created"
+            }
+        },
+        "Cisco Firepower Connector name": {
+            "defaultValue": "CiscoFirepowerConnector",
+            "type": "String",
+            "metadata": {
+                "description": "Cisco Firepower Connector name"
+            }
+        },
+        "Network Group object name": {
+            "type": "String",
+            "metadata": {
+                "description": "Network Group object name"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "CiscoFirepowerConnectionName": "[concat('ciscofirepowerconnector-', parameters('PlaybookName'))]",
+        "defaultValue": "",
+        "_defaultValue": "[variables('defaultValue')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CiscoFirepowerConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Cisco Firepower Connector name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CiscoFirepowerConnectionName'))]"
+            ],
+            "tags": {
+                "hidden-SentinelTemplateName": "BlockURL-CiscoFirepower",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Network Group object name": {
+                            "defaultValue": "[variables('_defaultValue')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "Entities_has_any_URLs": {
+                            "actions": {
+                                "For_each_over_URLs": {
+                                    "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                                    "actions": {
+                                        "Append_Extracted_domain_to_FQDNs_array_variable": {
+                                            "runAfter": {
+                                                "If_Extract_domain_middle_has_a_path": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "FQDNs",
+                                                "value": "@variables('Extracted domain')"
+                                            }
+                                        },
+                                        "If_Extract_domain_initial_starts_with_www": {
+                                            "actions": {
+                                                "Set_Extract_domain_middle_variable_without_www": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Extract domain middle",
+                                                        "value": "@{replace(variables('Extract domain initial'), 'www.', '')}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "If_Url_starts_with_https": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_Extract_domain_middle_variable_to_Extract_domain_initial": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "Extract domain middle",
+                                                            "value": "@variables('Extract domain initial')"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "startsWith": [
+                                                            "@variables('Extract domain initial')",
+                                                            "www."
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "If_Extract_domain_middle_has_a_path": {
+                                            "actions": {
+                                                "Set_Extracted_domain_variable_without_path": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Extracted domain",
+                                                        "value": "@{substring(variables('Extract domain middle'), 0, int(indexOf(variables('Extract domain middle'), '/')))}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "If_Extract_domain_initial_starts_with_www": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_Extracted_domain_variable_to_Extract_domain_middle": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "Extracted domain",
+                                                            "value": "@variables('Extract domain middle')"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "contains": [
+                                                            "@variables('Extract domain middle')",
+                                                            "/"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "If_Url_starts_with_https": {
+                                            "actions": {
+                                                "Set_Extract_domain_initial_variable_without_https": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Extract domain initial",
+                                                        "value": "@{replace(items('For_each_over_URLs')?['Url'], 'https://', '')}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_Extracted_domain_variable_to_empty": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "If_Url_starts_with_http": {
+                                                        "actions": {
+                                                            "Set_Extract_domain_initial_variable_without_http": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "Extract domain initial",
+                                                                    "value": "@{replace(items('For_each_over_URLs')?['Url'], 'http://', '')}"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "else": {
+                                                            "actions": {
+                                                                "Set_Extract_domain_initial_variable_to_Url": {
+                                                                    "runAfter": {},
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "Extract domain initial",
+                                                                        "value": "@{items('For_each_over_URLs')?['Url']}"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "startsWith": [
+                                                                        "@items('For_each_over_URLs')?['Url']",
+                                                                        "http://"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "startsWith": [
+                                                            "@items('For_each_over_URLs')?['Url']",
+                                                            "https://"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Set_Extract_domain_initial_variable_to_empty": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Extract domain initial",
+                                                "value": "''"
+                                            }
+                                        },
+                                        "Set_Extract_domain_middle_variable_to_empty": {
+                                            "runAfter": {
+                                                "Set_Extract_domain_initial_variable_to_empty": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Extract domain middle",
+                                                "value": "''"
+                                            }
+                                        },
+                                        "Set_Extracted_domain_variable_to_empty": {
+                                            "runAfter": {
+                                                "Set_Extract_domain_middle_variable_to_empty": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Extracted domain",
+                                                "value": "''"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach",
+                                    "description": "In this for each we go over all the URLs and clean them up. Remove 'https://' or 'http://' form the start, also remove the path. Then we'll be left with a FQDN we store in the FQDNs array.",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Extracted_domain_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_comment_to_incident_(V3):_No_URLs_found": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p><span style=\"font-size: 16px\"><strong>Cisco Firepower playbook run summary</strong></span><br>\nThe incident did not have any entities with URLs.</p>"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment"
+                                        }
+                                    },
+                                    "Terminate:_No_URLs_found": {
+                                        "runAfter": {
+                                            "Add_comment_to_incident_(V3):_No_URLs_found": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Cancelled"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_URLs')?['URLs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "If the Entities does not have any URLs for this incident, we terminate the Logic App. If we do have URLs we clean them up to FQDNs."
+                        },
+                        "Filter_Network_group_object_items_array": {
+                            "runAfter": {
+                                "If_Network_group_object_items_array_is_null": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@body('Retrieves_list_of_all_network_group_objects')?['items']",
+                                "where": "@equals(item()?['name'], variables('Network Group object name'))"
+                            },
+                            "description": "The filter with nameOrValue will also return items that start with the name, for example the 'Network Group Object name' is 'TEST' and there is a network group object named 'TEST_2' that will also be returned."
+                        },
+                        "Found_the_network_group_object_by_name": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Modifies_the_network_group_object_associated_with_the_specified_ID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><span style=\"font-size: 16px\"><strong>Cisco Firepower playbook run summary</strong></span><br>\n<span style=\"font-size: 14px\">The following FQDNs were found in the Incident:<br>\n</span><span style=\"font-size: 14px\">@{variables('fqdnActionComment')}</span><span style=\"font-size: 14px\"></span></p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "For_each_over_FQDNs": {
+                                    "foreach": "@variables('FQDNs')",
+                                    "actions": {
+                                        "Filter_Network_Group_object_Objects_with_FQDN": {
+                                            "runAfter": {
+                                                "Set_FQDN_Name_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@variables('Network Group object Objects')",
+                                                "where": "@and(equals(item()?['type'], 'FQDN'), equals(item()?['name'], variables('fqdnName')))"
+                                            }
+                                        },
+                                        "If_Network_Group_object_Objects_contains_FQDN": {
+                                            "actions": {
+                                                "Append_to_fqdnActionComment_string_variable_already_blocked_message": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "fqdnActionComment",
+                                                        "value": "@{items('For_each_over_FQDNs')} - is already blocked in Cisco Firepower"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_Network_Group_object_Objects_with_FQDN": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Append_to_string_variable": {
+                                                        "runAfter": {
+                                                            "If_any_FQDN_items_found": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToStringVariable",
+                                                        "inputs": {
+                                                            "name": "fqdnActionComment",
+                                                            "value": "@{items('For_each_over_FQDNs')} - blocked in Cisco Firepower\n"
+                                                        }
+                                                    },
+                                                    "If_any_FQDN_items_found": {
+                                                        "actions": {
+                                                            "Filter_FQDN_items_array": {
+                                                                "runAfter": {},
+                                                                "type": "Query",
+                                                                "inputs": {
+                                                                    "from": "@body('Retrieves_list_of_all_FQDN_objects')?['items']",
+                                                                    "where": "@equals(item()?['name'], variables('fqdnName'))"
+                                                                }
+                                                            },
+                                                            "Found_existing_FQDN_object": {
+                                                                "actions": {
+                                                                    "Append_existing_FQDN_to_Network_Group_Object_Objects_array_variable": {
+                                                                        "runAfter": {},
+                                                                        "type": "AppendToArrayVariable",
+                                                                        "inputs": {
+                                                                            "name": "Network Group Object Objects",
+                                                                            "value": {
+                                                                                "id": "@{body('Filter_FQDN_items_array')[0]?['id']}",
+                                                                                "name": "@{body('Filter_FQDN_items_array')[0]?['name']}",
+                                                                                "type": "FQDN"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "Filter_FQDN_items_array": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "Append_new_FQDN_to_Network_Group_Object_Objects_array_variable": {
+                                                                            "runAfter": {
+                                                                                "Create_the_FQDN_object": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "AppendToArrayVariable",
+                                                                            "inputs": {
+                                                                                "name": "Network Group Object Objects",
+                                                                                "value": {
+                                                                                    "id": "@{body('Create_the_FQDN_object')?['id']}",
+                                                                                    "name": "@{body('Create_the_FQDN_object')?['name']}",
+                                                                                    "type": "FQDN"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "Create_the_FQDN_object": {
+                                                                            "runAfter": {},
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "body": {
+                                                                                    "dnsResolution": "IPV4_AND_IPV6",
+                                                                                    "name": "@variables('fqdnName')",
+                                                                                    "type": "FQDN",
+                                                                                    "value": "@{items('For_each_over_FQDNs')}"
+                                                                                },
+                                                                                "headers": {
+                                                                                    "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "post",
+                                                                                "path": "/api/fmc_config/v1/domain/@{encodeURIComponent(outputs('Generate_token')['headers']['DOMAIN_UUID'])}/object/fqdns"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "greater": [
+                                                                                "@length(body('Filter_FQDN_items_array'))",
+                                                                                0
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "Retrieves_list_of_all_FQDN_objects": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Append_new_FQDN_to_Network_Group_Object_Objects_array_variable_2": {
+                                                                    "runAfter": {
+                                                                        "Create_the_FQDN_object_2": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "Network Group Object Objects",
+                                                                        "value": {
+                                                                            "id": "@{body('Create_the_FQDN_object_2')?['id']}",
+                                                                            "name": "@{body('Create_the_FQDN_object_2')?['name']}",
+                                                                            "type": "FQDN"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "Create_the_FQDN_object_2": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "dnsResolution": "IPV4_AND_IPV6",
+                                                                            "name": "@variables('fqdnName')",
+                                                                            "type": "FQDN",
+                                                                            "value": "@{items('For_each_over_FQDNs')}"
+                                                                        },
+                                                                        "headers": {
+                                                                            "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/api/fmc_config/v1/domain/@{encodeURIComponent(outputs('Generate_token')['headers']['DOMAIN_UUID'])}/object/fqdns"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "greaterOrEquals": [
+                                                                        "@body('Retrieves_list_of_all_FQDN_objects')?['paging']?['limit']",
+                                                                        1
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "Retrieves_list_of_all_FQDN_objects": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "headers": {
+                                                                "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "get",
+                                                            "path": "/api/fmc_config/v1/domain/@{encodeURIComponent(outputs('Generate_token')['headers']['DOMAIN_UUID'])}/object/fqdns",
+                                                            "queries": {
+                                                                "filter": "nameOrValue:@{variables('fqdnName')}"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('Filter_Network_Group_Object_Objects_with_FQDN'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Set_FQDN_Name_variable": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "fqdnName",
+                                                "value": "@{concat(variables('fqdnNamePrefix'), items('For_each_over_FQDNs'))}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_Network_Group_object_Objects_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "Modifies_the_network_group_object_associated_with_the_specified_ID": {
+                                    "runAfter": {
+                                        "For_each_over_FQDNs": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "description": "@body('Retrieves_the_network_group_object_associated_with_the_specified_ID')?['description']",
+                                            "id": "@body('Retrieves_the_network_group_object_associated_with_the_specified_ID')?['id']",
+                                            "literals": "@body('Retrieves_the_network_group_object_associated_with_the_specified_ID')?['literals']",
+                                            "name": "@body('Retrieves_the_network_group_object_associated_with_the_specified_ID')?['name']",
+                                            "objects": "@variables('Network Group Object Objects')",
+                                            "overridable": "@body('Retrieves_the_network_group_object_associated_with_the_specified_ID')?['overridable']",
+                                            "type": "NetworkGroup"
+                                        },
+                                        "headers": {
+                                            "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/api/fmc_config/v1/domain/@{encodeURIComponent(outputs('Generate_token')['headers']['DOMAIN_UUID'])}/object/networkgroups/@{encodeURIComponent(body('Retrieves_the_network_group_object_associated_with_the_specified_ID')?['id'])}"
+                                    }
+                                },
+                                "Retrieves_the_network_group_object_associated_with_the_specified_ID": {
+                                    "runAfter": {
+                                        "Set_Network_Group_Object_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "headers": {
+                                            "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/fmc_config/v1/domain/@{encodeURIComponent(outputs('Generate_token')['headers']['DOMAIN_UUID'])}/object/networkgroups/@{encodeURIComponent(variables('Network Group object')?['id'])}"
+                                    }
+                                },
+                                "Set_Network_Group_Object_variable": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Network Group Object",
+                                        "value": "@body('Filter_Network_group_object_items_array')[0]"
+                                    }
+                                },
+                                "Set_Network_Group_object_Objects_variable": {
+                                    "runAfter": {
+                                        "Retrieves_the_network_group_object_associated_with_the_specified_ID": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Network Group Object Objects",
+                                        "value": "@body('Retrieves_the_network_group_object_associated_with_the_specified_ID')?['objects']"
+                                    }
+                                },
+                                "Update_incident": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "classification": {
+                                                "ClassificationAndReason": "True Positive - Suspicious Activity",
+                                                "ClassificationReasonText": "URLs/FQDNs in incident automaticly blocked"
+                                            },
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "status": "Closed"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_Network_group_object_items_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Add_comment_to_incident_(V3):_Network_Group_object_not_found": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "message": "<p><span style=\"font-size: 16px\"><strong>Cisco Firepower playbook run summary<br>\n</strong></span><span style=\"font-size: 12px\">We could not find the Network Group object with name: '</span><span style=\"font-size: 12px\">@{variables('Network Group object name')}</span><span style=\"font-size: 12px\">'</span></p>"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/Incidents/Comment"
+                                        }
+                                    },
+                                    "Revoke_access:_Network_Group_object_not_found": {
+                                        "runAfter": {
+                                            "Add_comment_to_incident_(V3):_Network_Group_object_not_found": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "headers": {
+                                                "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/api/fmc_platform/v1/auth/revokeaccess"
+                                        }
+                                    },
+                                    "Terminate:_Network_Group_object_not_found": {
+                                        "runAfter": {
+                                            "Revoke_access:_Network_Group_object_not_found": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "message": "Network Group object not found"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Filter_Network_group_object_items_array'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Generate_token": {
+                            "runAfter": {
+                                "Initialize_Network_Group_object_Objects_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/fmc_platform/v1/auth/generatetoken"
+                            }
+                        },
+                        "If_Network_group_object_items_array_is_null": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3):_Network_Group_object_not_found_2": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><span style=\"font-size: 16px\"><strong>Cisco Firepower playbook run summary</strong></span><br>\nWe could not find the Network Group object with name: '@{variables('Network Group object name')}'</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Revoke_access:_Network_Group_object_not_found_2": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3):_Network_Group_object_not_found_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "headers": {
+                                            "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/fmc_platform/v1/auth/revokeaccess"
+                                    }
+                                },
+                                "Terminate:_Network_Group_object_not_found_2": {
+                                    "runAfter": {
+                                        "Revoke_access:_Network_Group_object_not_found_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "message": "Network Group object not found"
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Retrieves_list_of_all_network_group_objects": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Retrieves_list_of_all_network_group_objects')?['items']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_Extract_domain_initial_variable": {
+                            "runAfter": {
+                                "Initialize_FQDNs_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Extract domain initial",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Extract_domain_middle_variable": {
+                            "runAfter": {
+                                "Initialize_Extract_domain_initial_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Extract domain middle",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Extracted_domain_variable": {
+                            "runAfter": {
+                                "Initialize_Extract_domain_middle_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Extracted domain",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_FQDN_name_prefix_variable": {
+                            "runAfter": {
+                                "Initialize_Network_Group_object_name_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fqdnNamePrefix",
+                                        "type": "string",
+                                        "value": "LogicApp_"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_FQDN_name_variable": {
+                            "runAfter": {
+                                "Initialize_FQDN_name_prefix_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fqdnName",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_FQDNs_variable": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "FQDNs",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Network_Group_object_Objects_variable": {
+                            "runAfter": {
+                                "Initialize_Network_Group_object_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Network Group object Objects",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Network_Group_object_name_variable": {
+                            "runAfter": {
+                                "Entities_has_any_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Network Group object name",
+                                        "type": "string",
+                                        "value": "@parameters('Network Group object name')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Network_Group_object_variable": {
+                            "runAfter": {
+                                "Initialize_fqdnActionComment_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Network Group object",
+                                        "type": "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_fqdnActionComment_variable": {
+                            "runAfter": {
+                                "Initialize_FQDN_name_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fqdnActionComment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Retrieves_list_of_all_network_group_objects": {
+                            "runAfter": {
+                                "Generate_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "headers": {
+                                    "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/api/fmc_config/v1/domain/@{encodeURIComponent(outputs('Generate_token')['headers']['DOMAIN_UUID'])}/object/networkgroups",
+                                "queries": {
+                                    "filter": "nameOrValue:@{variables('Network Group object name')}"
+                                }
+                            }
+                        },
+                        "Revoke_access": {
+                            "runAfter": {
+                                "Found_the_network_group_object_by_name": [
+                                    "Succeeded",
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "headers": {
+                                    "X-auth-access-token": "@outputs('Generate_token')['headers']['X-auth-access-token']"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['Cisco-Firepower-connector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/fmc_platform/v1/auth/revokeaccess"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "Cisco-Firepower-connector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CiscoFirepowerConnectionName'))]",
+                                "connectionName": "[variables('CiscoFirepowerConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Cisco Firepower Connector name'))]"
+                            }
+                        }
+                    },
+                    "Network Group object name": {
+                        "value": "[parameters('Network Group object name')]"
+                    }
+                }
+            }
+        }
+    ]
+}

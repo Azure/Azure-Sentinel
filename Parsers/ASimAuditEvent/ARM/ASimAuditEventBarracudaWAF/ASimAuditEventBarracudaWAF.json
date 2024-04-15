@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimAuditEventBarracudaWAF",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Audit Event ASIM parser for Barracuda WAF",
+            "category": "ASIM",
+            "FunctionAlias": "ASimAuditEventBarracudaWAF",
+            "query": "let barracudaSchema = datatable(\n    LogType_s: string,\n    UnitName_s: string,\n    EventName_s: string,\n    DeviceReceiptTime_s: string,\n    ChangeType_s: string,\n    CommandName_s: string,\n    Severity_s: string,\n    LoginIP_s: string,\n    NewValue_s: string,\n    HostIP_s: string,\n    host_s: string,\n    OldValue_s: string,\n    EventMessage_s: string,\n    AdminName_s: string,\n    ObjectType_s: string,\n    ObjectName_s: string,\n    TimeTaken_d: real,\n    _ResourceId: string,\n    RawData: string,\n    SourceIP: string,\n    Message: string,\n    Computer: string,\n    MG: string,\n    ManagementGroupName: string,\n    TenantId: string,\n    SourceSystem: string\n)[];\nlet EventTypeLookup = datatable (\n    ChangeType_s: string,\n    EventType_lookup: string\n)\n    [\n    \"SET\", \"Set\",\n    \"ADD\", \"Create\",\n    \"DEL\", \"Delete\",\n    \"NONE\", \"Other\",\n    \"\", \"Other\"\n];\nlet SeverityLookup = datatable (severity: int, EventSeverity: string)\n    [\n    0, \"High\", \n    1, \"High\", \n    2, \"High\", \n    3, \"Medium\",\n    4, \"Low\",\n    5, \"Low\", \n    6, \"Informational\",\n    7, \"Informational\" \n];\nlet ObjectTypeLookup = datatable (ObjectType_s: string, ObjectType: string)[\n    \"global\", \"Other\",\n    \"Services\", \"Service\",\n    \"web_firewall_policy\", \"Policy Rule\",\n    \"service\", \"Service\",\n    \"json_url_profile\", \"Other\",\n    \"server\", \"Service\",\n    \"header_acl\", \"Directory Service Object\",\n    \"virtual_ip_config_address\", \"Configuration Atom\",\n    \"aps_req_rewrite_policy\", \"Policy Rule\",\n    \"aps_url_acl\", \"Directory Service Object\",\n    \"websocket_security_policy\", \"Policy Rule\",\n    \"aps_ftp_acl\", \"Directory Service Object\",\n    \"user_system_ip\", \"Configuration Atom\",\n    \"syslog_server\", \"Service\",\n    \"attack_action\", \"Configuration Atom\",\n    \"global_adr\", \"Configuration Atom\",\n    \"aps_content_protection\", \"Other\"\n];\nlet parser = (disabled: bool=false) {\n    let BarracudaCustom = \n        (union isfuzzy=true\n            barracudaSchema,\n            barracuda_CL\n        | where not(disabled) \n            and LogType_s == \"AUDIT\" \n            and EventName_s !in (\"LOGIN\", \"LOGOUT\", \"UNSUCCESSFUL_LOGIN\")\n        | parse trim(@'[^\\w(\")]+', EventMessage_s) with * \"Reason=\" Reason: string\n        | extend Reason = trim('\"', Reason)\n        | extend\n            EventResultDetails = Reason,\n            severity = toint(Severity_s)\n        | lookup SeverityLookup on severity\n        | lookup EventTypeLookup on ChangeType_s\n        | lookup ObjectTypeLookup on ObjectType_s\n        | extend\n            EventType = EventType_lookup,\n            EventResult = \"Success\", \n            EventSchema = \"AuditEvent\",\n            EventSchemaVersion = \"0.1.0\",\n            EventVendor = \"Barracuda\",\n            EventProduct = \"WAF\",\n            EventCount = toint(1)\n        | extend\n            Dvc = UnitName_s, \n            EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s) - tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))),\n            Operation = CommandName_s,\n            DvcIpAddr = HostIP_s,\n            NewValue = NewValue_s,\n            SrcIpAddr = LoginIP_s,\n            EventMessage = EventMessage_s,\n            OldValue = OldValue_s,\n            DvcHostname = host_s,\n            ActorUsername = AdminName_s,\n            Object = ObjectName_s        \n        | extend\n            Src = SrcIpAddr,\n            EventEndTime = EventStartTime,\n            ActorUsernameType = iff(isnotempty(ActorUsername), \"Simple\", \"\"),\n            ActorUserType = iff(isnotempty(ActorUsername), \"Admin\", \"\"),\n            User = ActorUsername,\n            Value = NewValue          \n        | extend\n            IpAddr = SrcIpAddr,\n            ValueType = iff(isnotempty(Value), \"Other\", \"\")\n        | project-away\n            *_d,\n            *_s,\n            EventType_lookup,\n            _ResourceId,\n            Reason,\n            severity,\n            RawData,\n            SourceIP,\n            Message,\n            Computer,\n            MG,\n            ManagementGroupName,\n            TenantId,\n            SourceSystem\n        );\n    let BarracudaCEF = \n        CommonSecurityLog\n        | where not(disabled)\n            and DeviceVendor startswith \"Barracuda\"\n            and (DeviceProduct == \"WAF\" or DeviceProduct == \"WAAS\")\n        | where DeviceEventCategory == \"AUDIT\" \n            and (toupper(ProcessName) !in (\"LOGIN\", \"LOGOUT\", \"UNSUCCESSFUL_LOGIN\"))\n        | parse trim(@'[^\\w(\")]+', Message) with * \"Reason=\" Reason: string \n        | extend Reason = trim('\"', Reason)\n        | extend \n            EventResultDetails = Reason,\n            severity = toint(LogSeverity)\n        | lookup SeverityLookup on severity\n        | lookup EventTypeLookup on $left.EventOutcome == $right.ChangeType_s\n        | lookup ObjectTypeLookup on $left.FileType == $right.ObjectType_s\n        | extend\n            EventResult = \"Success\", \n            EventSchema = \"AuditEvent\",\n            EventSchemaVersion = \"0.1.0\",\n            EventVendor = \"Barracuda\",\n            EventProduct = \"WAF\",\n            EventCount = toint(1)\n        | extend\n            EventType = EventType_lookup,\n            Dvc = DeviceName, \n            EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime) - tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),\n            Operation = ProcessName,\n            DvcIpAddr = DeviceAddress,\n            NewValue = DeviceCustomString1,\n            SrcIpAddr = SourceIP,\n            EventMessage = Message,\n            OldValue = DeviceCustomString2,\n            DvcHostname = DeviceName,\n            ActorUsername = DestinationUserName,\n            Object = FileName,\n            ThreatConfidence = toint(ThreatConfidence)     \n        | extend\n            Src = SrcIpAddr,\n            EventEndTime = EventStartTime,\n            ActorUsernameType = iff(isnotempty(ActorUsername), \"Simple\", \"\"),\n            ActorUserType = iff(isnotempty(ActorUsername), \"Admin\", \"\"),\n            User = ActorUsername,\n            Value = NewValue \n        | extend\n            IpAddr = SrcIpAddr,\n            ValueType = iff(isnotempty(Value), \"Other\", \"\")\n        | project-away\n            EventType_lookup,\n            ThreatConfidence,\n            CommunicationDirection,\n            AdditionalExtensions,\n            Device*,\n            Source*,\n            Reason,\n            Destination*,\n            Activity,\n            LogSeverity,\n            ApplicationProtocol,\n            ProcessID,\n            ExtID,\n            Protocol,\n            ReceiptTime,\n            SimplifiedDeviceAction,\n            OriginalLogSeverity,\n            ProcessName,\n            EndTime,\n            ExternalID,\n            File*,\n            ReceivedBytes,\n            Message,\n            Old*,\n            EventOutcome,\n            Request*,\n            StartTime,\n            Field*,\n            Flex*,\n            Remote*,\n            Malicious*,\n            severity,\n            ThreatSeverity,\n            IndicatorThreatType,\n            ThreatDescription,\n            _ResourceId,\n            SentBytes,\n            ReportReferenceLink,\n            Computer,\n            TenantId;\n    union isfuzzy = true \n        BarracudaCustom,\n        BarracudaCEF\n};\nparser(disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

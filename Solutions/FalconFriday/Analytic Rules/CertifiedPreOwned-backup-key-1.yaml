@@ -1,0 +1,52 @@
+id: aa5eaac7-1264-4833-b620-8f062be75541
+name: Certified Pre-Owned - backup of CA private key - rule 1
+description: |
+  This query identifies someone that performs a read operation of they CA key from the file.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1036
+query: |
+  SecurityEvent
+  // Fill in the machine name of your CA.
+  | where EventID == 5058 and Computer contains "<YOUR CA MACHINE NAME>"
+  | where EventData contains "%%2499" // Machine key.
+  | extend EventData=parse_xml(EventData)
+  | mv-apply d=EventData.EventData.Data on
+  (
+      where d["@Name"]=="KeyName"
+      | project KeyName=tostring(d["#text"])
+  )
+  | mv-apply d=EventData.EventData.Data on
+  (
+      where d["@Name"]=="SubjectUserName"
+      | project SubjectUserName=tostring(d["#text"])
+  )
+  | mv-apply d=EventData.EventData.Data on
+  (
+      where d["@Name"]=="Operation"
+      | project Operation=tostring(d["#text"])
+  )
+  | extend Operation=iff(Operation == "%%2458", "Read persisted key from file", Operation)
+  // This one is a guess and very poorly documented :(
+  | extend Operation=iff(Operation == "%%2459", "Write persisted key to file", Operation)
+  // Fill in the keyname of the CA key.
+  | where KeyName == "<INSERT ISSUING CA KEY HERE>" // Or any other key you want to monitor.
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+version: 1.0.0
+kind: Scheduled

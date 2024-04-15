@@ -1,0 +1,40 @@
+id: 01df3abe-3dc7-40e2-8aa7-f00b402df6f0
+name: Cisco Duo - Authentication device new location
+description: |
+  'Detects new location of authentication device.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  CiscoDuo
+  | where EventType =~ 'authentication'
+  | where EventResult =~ 'success'
+  | where isnotempty(AuthDeviceCountry)
+  | summarize src_c = makeset(AuthDeviceCountry) by SrcIpAddr
+  | join (CiscoDuo
+          | where EventType =~ 'authentication'
+          | where EventResult =~ 'success') on SrcIpAddr
+  | where src_c !has AuthDeviceCountry
+  | extend IPCustomEntity = SrcIpAddr, AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,20 @@
+id: b4f52ff7-daaa-455c-91d9-00ab4976242a
+Function:
+  Title: Parser for VMwareESXi
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: VMwareESXi
+FunctionAlias: VMwareESXi
+FunctionQuery: |
+    Syslog
+    | where Computer has_any ('ESXiserver1', 'ESXiserver2') // ESXiserver1 and ESXiserver2 are examples, replace this list with your ESXi devices
+    | extend Parser = extract_all(@"^(\w+)?\s?(\w+)\[(\w+)\]\s([\s\S]+)", dynamic([1,2,3,4]), SyslogMessage)[0]
+    | extend Substring =  iif(isnotempty(Parser), tostring(Parser[3]),"")
+    | extend Sub = iif(Substring has ("sub="), extract(@"sub=([\w\d\(\)\-\.]+)\]?",1, Substring), dynamic("")),
+    	 OpId = iif(Substring has ("opID="), extract(@"opID=([\w\d\(\)\-@]+)\s?\]?",1, Substring), dynamic("")),
+             UserName = iif(Substring has("suser="), extract(@"\suser=([\w\d\(\)\-]+)\]",1, Substring), dynamic (""))
+    | extend Message = iif(isnotempty(Substring), extract(@"\[([\S\s]+)\]\s([\S\s]+)",2, Substring), "")
+    | extend Message = iif(isempty(Message),SyslogMessage,Message)
+    | extend Message = trim(@"^-- ", Message)
+    | project-away Substring, Parser

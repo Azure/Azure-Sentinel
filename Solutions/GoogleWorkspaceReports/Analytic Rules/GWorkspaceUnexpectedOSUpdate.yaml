@@ -1,0 +1,40 @@
+id: c02b0c8e-5da6-11ec-bf63-0242ac130002
+name: GWorkspace - Unexpected OS update
+description: |
+  'Detects unexpected OS update.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: GoogleWorkspaceReportsAPI
+    dataTypes:
+      - GWorkspaceActivityReports
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+query: |
+  GWorkspaceActivityReports
+  | where EventMessage has "os_updated"
+  | where isnotempty(NeqValue) and isnotempty(OldValue)
+  | extend NewVersion1 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 1, NeqValue)
+  | extend NewVersion2 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 2, NeqValue)
+  | extend NewVersion3 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 3, NeqValue)
+  | extend OldVersion1 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 1, OldValue)
+  | extend OldVersion2 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 2, OldValue)
+  | extend OldVersion3 = extract(@'([0-9]+)\.([0-9]+)\.?([0-9])?', 3, OldValue)
+  | extend NewVersion3Comparision = iff(isempty(NewVersion3), 0, tolong(NewVersion3))
+  | extend OldVersion3Comparision = iff(isempty(OldVersion3), 0, tolong(OldVersion3))
+  | extend Comparision1 = iff(tolong(NewVersion3Comparision) > tolong(OldVersion3Comparision), 'Expected version', 'Unexpected version')
+  | extend Comparision2 = iff(tolong(NewVersion2) > tolong(OldVersion2), 'Expected version', Comparision1)
+  | extend VersionCheck = iff(tolong(NewVersion1) > tolong(OldVersion1), 'Expected version', Comparision2)
+  | project-away NewVersion1, NewVersion2, NewVersion3, NewVersion3Comparision, OldVersion1, OldVersion2, OldVersion3, OldVersion3Comparision, Comparision1, Comparision2
+  | extend AccountCustomEntity = ActorEmail
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.1
+kind: Scheduled

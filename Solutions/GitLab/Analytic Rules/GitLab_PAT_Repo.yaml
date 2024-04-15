@@ -1,0 +1,36 @@
+id: 4d6d8b0e-6d9a-4857-a141-f5d89393cddb
+name: GitLab - Personal Access Tokens creation over time
+description: |
+  'This queries GitLab Audit Logs for access tokens. Attacker can exfiltrate data from you GitLab repository after gaining access to it by generating or hijacking access tokens. 
+  This hunting queries allows you to track the personal access tokens creation for each of your repositories. 
+  The visualization allow you to quickly identify anomalies/excessive creation, to further investigate repo access & permissions.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes: 
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+relevantTechniques:
+  - T1213
+query: |
+  // l_min_tokens_created - minimum tokens created per repository per user per day to consider
+  let l_min_tokens_created = 0;
+  let interval = 1d;
+  GitLabAudit
+  | where TargetType == "PersonalAccessToken"
+  | project Severity, TimeGenerated = bin(todatetime(EventTime),1d), AuthorName, IPAddress, Repository = EntityName, Action, TargetType
+  | summarize total = count() by Repository, TimeGenerated, AuthorName
+  | where total >= l_min_tokens_created
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AuthorName
+version: 1.0.0
+kind: Scheduled

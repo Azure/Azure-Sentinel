@@ -1,0 +1,55 @@
+id: 98fdd28d-9c13-431b-aca9-e6cfbb90a5a9
+name: Dev-0056 Command Line Activity November 2021 (ASIM Version)
+description: |
+  ' This hunting query looks for process command line activity related to activity observed by Dev-0056.The command lines this query hunts for are used as part of the threat actor's post exploitation activity.
+    This query uses the Microsoft Sentinel Information Model - https://docs.microsoft.com/azure/sentinel/normalization'
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+    imProcess
+    | where ( CommandLine has_any("/q /c color f7&", "Net.We$()bClient", "$b,15,$b.Length-15")) or (CommandLine has "FromBase64String" and CommandLine has_all("-nop", "iex", "(iex"))
+    | summarize count(), FirstSeen=min(TimeGenerated), LastSeen = max(TimeGenerated) by DvcId, Dvc, CommandLine, User
+    // Base risk score on number of command lines seen for each host
+    | extend RiskScore = count_
+    // Increase risk score if host has recent security alerts
+    | join kind=leftouter (SecurityAlert
+    | where ProviderName =~ "MDATP"
+    | extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)
+    | mv-expand todynamic(Entities)
+    | extend DvcId = tostring(parse_json(Entities).MdatpDeviceId)
+    | where isnotempty(DvcId)
+    // Increase risk score further if alerts relate to malware assocaited with threat actor
+    | extend AlertRiskScore = iif(ThreatName has_any ("Backdoor:MSIL/ShellClient.A", "Backdoor:MSIL/ShellClient.A!dll", "Trojan:MSIL/Mimikatz.BA!MTB"), 1.0, 0.5)) on DvcId
+    // Create aggregate risk score
+    | extend AlertRiskScore = iif(isempty(AlertRiskScore), 0.0 , AlertRiskScore)
+    | extend RiskScore = RiskScore + AlertRiskScore
+    | project-reorder  FirstSeen, LastSeen, RiskScore, Dvc, DvcId, CommandLine, User
+    | extend timestamp = FirstSeen
+    | extend NTDomain = tostring(split(User,'\\',0)[0]), Name = tostring(split(User,'\\',1)[0])
+    | extend HostName = tostring(split(Dvc, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Dvc, '.'), 1, -1), '.')), FileName = File
+    | extend Account_0_Name = Name
+    | extend Account_0_NTDomain = NTDomain
+    | extend Host_0_HostName = HostName
+    | extend Host_0_DnsDomain = DnsDomain
+    | extend File_0_Name = FileName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+version: 1.0.0

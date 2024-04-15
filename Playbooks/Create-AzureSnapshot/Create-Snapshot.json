@@ -1,0 +1,825 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "PlaybookName",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "SentinelResourceName": {
+            "defaultValue": "SentinelResourcesName",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureMonitorConnectionName": "[concat('azuremonitor-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                            }
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Parse_query_results')?['value']",
+                            "actions": {
+                                "Condition": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V2)_2": {
+                                            "runAfter": {
+                                                "Parse_SnapshotData": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Value": "Created snapshot \"@{body('Parse_VMData')?['name']}\" of VM. Saved at: @{body('Parse_SnapshotData')?['id']}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                            }
+                                        },
+                                        "Create_Snapshot": {
+                                            "runAfter": {
+                                                "Parse_VMData": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "body": {
+                                                    "location": "@{body('Parse_VMData')?['location']}",
+                                                    "properties": {
+                                                        "creationData": {
+                                                            "createOption": "Copy",
+                                                            "sourceResourceId": "@{body('Parse_VMData')?['properties']?['storageProfile']?['osDisk']?['managedDisk']?['id']}"
+                                                        }
+                                                    }
+                                                },
+                                                "method": "PUT",
+                                                "uri": "https://management.azure.com/subscriptions/@{split(body('Parse_VMData')?['id'],'/')[2]}/resourceGroups/@{split(body('Parse_VMData')?['id'],'/')[4]}/providers/Microsoft.Compute/snapshots/@{body('Parse_VMData')?['properties']?['osProfile']?['computerName']}@{body('Alert_-_Get_incident')?['properties']?['CaseNumber']}?api-version=2019-07-01"
+                                            }
+                                        },
+                                        "Get-AzureVM": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com@{items('For_each')['ResourceId']}?api-version=2019-07-01"
+                                            }
+                                        },
+                                        "Parse_SnapshotData": {
+                                            "runAfter": {
+                                                "Create_Snapshot": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Create_Snapshot')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "location": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "properties": {
+                                                            "properties": {
+                                                                "creationData": {
+                                                                    "properties": {
+                                                                        "createOption": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "sourceResourceId": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "sourceUniqueId": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "diskSizeBytes": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "diskSizeGB": {
+                                                                    "type": "integer"
+                                                                },
+                                                                "diskState": {
+                                                                    "type": "string"
+                                                                },
+                                                                "encryption": {
+                                                                    "properties": {
+                                                                        "type": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "hyperVGeneration": {
+                                                                    "type": "string"
+                                                                },
+                                                                "incremental": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "osType": {
+                                                                    "type": "string"
+                                                                },
+                                                                "provisioningState": {
+                                                                    "type": "string"
+                                                                },
+                                                                "timeCreated": {
+                                                                    "type": "string"
+                                                                },
+                                                                "uniqueId": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "sku": {
+                                                            "properties": {
+                                                                "name": {
+                                                                    "type": "string"
+                                                                },
+                                                                "tier": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Parse_VMData": {
+                                            "runAfter": {
+                                                "Get-AzureVM": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('Get-AzureVM')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "location": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "properties": {
+                                                            "properties": {
+                                                                "diagnosticsProfile": {
+                                                                    "properties": {
+                                                                        "bootDiagnostics": {
+                                                                            "properties": {
+                                                                                "enabled": {
+                                                                                    "type": "boolean"
+                                                                                },
+                                                                                "storageUri": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "hardwareProfile": {
+                                                                    "properties": {
+                                                                        "vmSize": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "networkProfile": {
+                                                                    "properties": {
+                                                                        "networkInterfaces": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "id": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "id"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "osProfile": {
+                                                                    "properties": {
+                                                                        "adminUsername": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "allowExtensionOperations": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "computerName": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "requireGuestProvisionSignal": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "secrets": {
+                                                                            "type": "array"
+                                                                        },
+                                                                        "windowsConfiguration": {
+                                                                            "properties": {
+                                                                                "enableAutomaticUpdates": {
+                                                                                    "type": "boolean"
+                                                                                },
+                                                                                "provisionVMAgent": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "provisioningState": {
+                                                                    "type": "string"
+                                                                },
+                                                                "storageProfile": {
+                                                                    "properties": {
+                                                                        "dataDisks": {
+                                                                            "type": "array"
+                                                                        },
+                                                                        "imageReference": {
+                                                                            "properties": {
+                                                                                "exactVersion": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "offer": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "publisher": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "sku": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "version": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "osDisk": {
+                                                                            "properties": {
+                                                                                "caching": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "createOption": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "managedDisk": {
+                                                                                    "properties": {
+                                                                                        "id": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "name": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "osType": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "vmId": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@first(body('Parse_JSON')?['Entities'])?['Name']",
+                                                    "@last(split(items('For_each')['ResourceId'],'/'))"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_query_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Full_Alert_Details": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": " @{body('Parse_JSON')?['ExtendedProperties']?['Query']}",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "@triggerBody()?['WorkspaceResourceGroup']",
+                                    "resourcename": "[parameters('SentinelResourceName')]",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@triggerBody()?['WorkspaceSubscriptionId']",
+                                    "timerange": "Last hour"
+                                }
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()",
+                                "schema": {
+                                    "properties": {
+                                        "$id": {
+                                            "type": "string"
+                                        },
+                                        "AgentId": {},
+                                        "AlertDisplayName": {
+                                            "type": "string"
+                                        },
+                                        "AlertType": {
+                                            "type": "string"
+                                        },
+                                        "AzureResourceId": {},
+                                        "ConfidenceLevel": {
+                                            "type": "string"
+                                        },
+                                        "CorrelationKey": {},
+                                        "Description": {
+                                            "type": "string"
+                                        },
+                                        "EndTimeUtc": {
+                                            "type": "string"
+                                        },
+                                        "Entities": {
+                                            "items": {
+                                                "properties": {
+                                                    "$id": {
+                                                        "type": "string"
+                                                    },
+                                                    "IsDomainJoined": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "Name": {
+                                                        "type": "string"
+                                                    },
+                                                    "Type": {
+                                                        "type": "string"
+                                                    },
+                                                    "UPNSuffix": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "$id",
+                                                    "Name",
+                                                    "Type"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "ExtendedProperties": {
+                                            "properties": {
+                                                "Query": {
+                                                    "type": "string"
+                                                },
+                                                "Query End Time UTC": {
+                                                    "type": "string"
+                                                },
+                                                "Query Period": {
+                                                    "type": "string"
+                                                },
+                                                "Query Results Aggregation Kind": {
+                                                    "type": "string"
+                                                },
+                                                "Query Start Time UTC": {
+                                                    "type": "string"
+                                                },
+                                                "Search Query Results Overall Count": {
+                                                    "type": "string"
+                                                },
+                                                "Total Account Entities": {
+                                                    "type": "string"
+                                                },
+                                                "Trigger Operator": {
+                                                    "type": "string"
+                                                },
+                                                "Trigger Threshold": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "Intent": {
+                                            "type": "string"
+                                        },
+                                        "InvestigationIds": {
+                                            "type": "array"
+                                        },
+                                        "IsIncident": {
+                                            "type": "boolean"
+                                        },
+                                        "Metadata": {
+                                            "properties": {
+                                                "SourceTags.SourceEnv": {
+                                                    "type": "string"
+                                                },
+                                                "TriggeringRuleNames": {
+                                                    "type": "string"
+                                                },
+                                                "WorkspaceRegion": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "ProcessingEndTime": {
+                                            "type": "string"
+                                        },
+                                        "ProductComponentName": {
+                                            "type": "string"
+                                        },
+                                        "ProductName": {
+                                            "type": "string"
+                                        },
+                                        "ProviderAlertId": {
+                                            "type": "string"
+                                        },
+                                        "ProviderName": {
+                                            "type": "string"
+                                        },
+                                        "ResourceIdentifiers": {
+                                            "items": {
+                                                "properties": {
+                                                    "$id": {
+                                                        "type": "string"
+                                                    },
+                                                    "Type": {
+                                                        "type": "string"
+                                                    },
+                                                    "WorkspaceId": {
+                                                        "type": "string"
+                                                    },
+                                                    "WorkspaceResourceGroup": {
+                                                        "type": "string"
+                                                    },
+                                                    "WorkspaceSubscriptionId": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "$id",
+                                                    "WorkspaceId",
+                                                    "WorkspaceSubscriptionId",
+                                                    "WorkspaceResourceGroup",
+                                                    "Type"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "Severity": {
+                                            "type": "string"
+                                        },
+                                        "StartTimeUtc": {
+                                            "type": "string"
+                                        },
+                                        "Status": {
+                                            "type": "string"
+                                        },
+                                        "SystemAlertId": {
+                                            "type": "string"
+                                        },
+                                        "TimeGenerated": {
+                                            "type": "string"
+                                        },
+                                        "VendorName": {
+                                            "type": "string"
+                                        },
+                                        "Version": {
+                                            "type": "string"
+                                        },
+                                        "WorkspaceId": {
+                                            "type": "string"
+                                        },
+                                        "WorkspaceResourceGroup": {
+                                            "type": "string"
+                                        },
+                                        "WorkspaceSubscriptionId": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_query_results": {
+                            "runAfter": {
+                                "Get_Full_Alert_Details": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Get_Full_Alert_Details')",
+                                "schema": {
+                                    "properties": {
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "AccountCustomEntity": {
+                                                        "type": "string"
+                                                    },
+                                                    "ActivityStatus": {
+                                                        "type": "string"
+                                                    },
+                                                    "ActivityStatusValue": {
+                                                        "type": "string"
+                                                    },
+                                                    "ActivitySubstatus": {
+                                                        "type": "string"
+                                                    },
+                                                    "ActivitySubstatusValue": {
+                                                        "type": "string"
+                                                    },
+                                                    "Authorization": {
+                                                        "type": "string"
+                                                    },
+                                                    "Authorization_d": {},
+                                                    "Caller": {
+                                                        "type": "string"
+                                                    },
+                                                    "CallerIpAddress": {
+                                                        "type": "string"
+                                                    },
+                                                    "Category": {
+                                                        "type": "string"
+                                                    },
+                                                    "CategoryValue": {
+                                                        "type": "string"
+                                                    },
+                                                    "Claims": {
+                                                        "type": "string"
+                                                    },
+                                                    "Claims_d": {},
+                                                    "CorrelationId": {
+                                                        "type": "string"
+                                                    },
+                                                    "EventDataId": {
+                                                        "type": "string"
+                                                    },
+                                                    "EventSubmissionTimestamp": {
+                                                        "type": "string"
+                                                    },
+                                                    "HTTPRequest": {
+                                                        "type": "string"
+                                                    },
+                                                    "Hierarchy": {
+                                                        "type": "string"
+                                                    },
+                                                    "Level": {
+                                                        "type": "string"
+                                                    },
+                                                    "OperationId": {
+                                                        "type": "string"
+                                                    },
+                                                    "OperationName": {
+                                                        "type": "string"
+                                                    },
+                                                    "OperationNameValue": {
+                                                        "type": "string"
+                                                    },
+                                                    "Properties": {
+                                                        "type": "string"
+                                                    },
+                                                    "Properties_d": {},
+                                                    "Resource": {
+                                                        "type": "string"
+                                                    },
+                                                    "ResourceGroup": {
+                                                        "type": "string"
+                                                    },
+                                                    "ResourceId": {
+                                                        "type": "string"
+                                                    },
+                                                    "ResourceProvider": {
+                                                        "type": "string"
+                                                    },
+                                                    "ResourceProviderValue": {
+                                                        "type": "string"
+                                                    },
+                                                    "SourceSystem": {
+                                                        "type": "string"
+                                                    },
+                                                    "SubscriptionId": {
+                                                        "type": "string"
+                                                    },
+                                                    "TenantId": {
+                                                        "type": "string"
+                                                    },
+                                                    "TimeGenerated": {
+                                                        "type": "string"
+                                                    },
+                                                    "Type": {
+                                                        "type": "string"
+                                                    },
+                                                    "_ResourceId": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "ResourceId"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

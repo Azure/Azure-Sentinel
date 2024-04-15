@@ -1,0 +1,288 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP - Zscaler", 
+        "description": "This playbook allows blocks IPs in Zscaler by adding them to categories",
+        "prerequisites": [
+            "1. This playbook leverages a nested playbook: Zscaler authentication (https://portal.azure.com/#create/Microsoft.Template/uri/https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FZscaler%2FAuthentication%2Fazuredeploy.json). Deploy this playbook before deploying this template in the same resource group.",
+            "2. Create a block category in Zscaler, which this playbook will add IPs to."
+        ],
+        "lastUpdateTime": "2021-07-28T00:00:00.000Z", 
+        "entities": ["Ip"], 
+        "tags": ["Remediation"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Wortell"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Zscaler-Add-IP-To-Category",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "Zscaler Authentation Playbook": {
+            "defaultValue": "Zscaler-Authentication-Playbook",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Zscaler Authentication Playbook"
+            }
+        },
+        "Zscaler Admin Url": {
+            "defaultValue": "https://admin.<zscaler_instance_domain>.net",
+            "type": "string",
+            "metadata": {
+                "description": "Update to a valid Zscaler admin url."
+            }
+        },
+        "Block Category": {
+            "defaultValue": "OTHER_MISCELLANEOUS",
+            "type": "String",
+            "metadata": {
+                "description": "Zscaler block category"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "ZscalerAuthenticationFlow": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Zscaler Authentation Playbook'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "tags": {
+                "hidden-SentinelTemplateName": "BlockIP-Zscaler",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Set_Zscaler_Block_Category": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Category",
+                                        "type": "string",
+                                        "value": "[parameters('Block Category')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Set_Zscaler_Block_Category": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_2": {
+                                    "runAfter": {
+                                        "Compose": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "[concat('<p>@{outputs(''Compose'')}<br>IP @{items(''For_each'')?[''Address'']} has been added to category @{variables(''Category'')}</p>')]"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Compose": {
+                                    "runAfter": {
+                                        "HTTP_Activate_Changes": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Compose",
+                                    "inputs": "<img src=\"https://www.zscaler.com//themes/custom/zscaler/logo.svg\" alt=\"Zscaler\">"
+                                },
+                                "HTTP_Add_IP": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": {
+                                            "configuredName": "@{variables('Category')}",
+                                            "urls": [
+                                                "@{items('For_each')?['Address']}"
+                                            ]
+                                        },
+                                        "cookie": "@body('Parse_Authentication_Response')?['cookie']",
+                                        "headers": {
+                                            "Cache-Control": "no-cache",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "PUT",
+                                        "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/urlCategories/@{variables(''Category'')}?action=ADD_TO_LIST')]"
+                                    }
+                                },
+                                "HTTP_Activate_Changes": {
+                                    "runAfter": {
+                                        "HTTP_Add_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "cookie": "@body('Parse_Authentication_Response')?['cookie']",
+                                        "method": "POST",
+                                        "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/status/activate')]"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Authentication_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP_Delete_Api_Session": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "cookie": "@body('Parse_Authentication_Response')?['cookie']",
+                                "method": "DELETE",
+                                "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/authenticatedSession')]"
+                            }
+                        },
+                        "Parse_Authentication_Response": {
+                            "runAfter": {
+                                "zscaler": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('zscaler')",
+                                "schema": {
+                                    "properties": {
+                                        "cookie": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "zscaler": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Workflow",
+                            "inputs": {
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[variables('ZscalerAuthenticationFlow')]"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

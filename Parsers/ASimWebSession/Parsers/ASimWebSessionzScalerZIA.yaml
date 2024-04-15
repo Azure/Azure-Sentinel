@@ -1,0 +1,123 @@
+Parser:
+  Title: Web Session ASIM parser for Zscaler ZIA
+  Version: '0.4'
+  LastUpdated: Dec 11, 2022
+Product:
+  Name: Zscaler ZIA
+Normalization:
+  Schema: WebSession
+  Version: '0.2.3'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Zscaler Connector
+  Link: https://docs.microsoft.com/azure/sentinel/data-connectors-reference#zscaler
+- Title: Zscaler Sentinel deployment guide
+  Link: https://help.zscaler.com/zia/zscaler-microsoft-azure-sentinel-deployment-guide
+Description: |
+  This ASIM parser supports normalizing Zscaler ZIA proxy logs produced by the Microsoft Sentinel Zscaler connector to the ASIM Web Session normalized schema.
+ParserName: ASimWebSessionZscalerZIA
+EquivalentBuiltInParser: _ASim_WebSession_ZscalerZIA
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false){
+  let DvcActionLookup = datatable (DeviceAction:string, DvcAction: string) 
+  [
+    'Allowed', 'Allow',
+    'Blocked', 'Deny'
+  ]; 
+  CommonSecurityLog | where not(disabled)
+  | where DeviceVendor == "Zscaler"
+  | where DeviceProduct == "NSSWeblog"
+  // Event fields
+  | extend 
+    EventCount=int(1), 
+    EventStartTime=TimeGenerated,  
+    EventVendor = "Zscaler", 
+    EventProduct = "ZIA Proxy", 
+    EventSchema = "WebSession", 
+    EventSchemaVersion="0.2.3", 
+    EventType = 'HTTPsession',
+    EventEndTime=TimeGenerated
+  | project-rename
+    EventProductVersion = DeviceVersion,
+    NetworkApplicationProtocol = ApplicationProtocol,
+    HttpContentType = FileType,
+    HttpUserAgent = RequestClientApplication,
+    HttpRequestMethod = RequestMethod,
+    DstAppName = DestinationServiceName,
+    DstIpAddr = DestinationIP,
+    DstFQDN = DestinationHostName,
+    SrcIpAddr = SourceIP,
+    SrcUsername = SourceUserName,
+    SrcNatIpAddr= SourceTranslatedAddress,
+    SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema
+    UrlCategory = DeviceCustomString2,
+    ThreatName = DeviceCustomString5,
+    FileMD5 = DeviceCustomString6,
+    EventOriginalSeverity = LogSeverity,
+    EventMessage = Message
+  // -- Parse
+  | parse AdditionalExtensions with 
+      * "rulelabel=" RuleName:string ";"
+      "ruletype=" ruletype:string ";"
+      "urlclass=" urlclass:string ";"
+      "devicemodel=" * 
+  // -- Calculated fields
+  | lookup DvcActionLookup on DeviceAction
+  | extend
+    // -- Adjustment to support both old and new CSL fields.
+    EventOriginalResultDetails = coalesce(
+      column_ifexists("Reason", ""),
+      extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
+    ),
+    EventResultDetails = coalesce(
+      column_ifexists("EventOutcome", ""),
+      extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))
+    ),
+    ThreatRiskLevel = coalesce(
+      toint(column_ifexists("FieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("DeviceCustomNumber1",int(null)))
+    ),
+    DvcHostname = tostring(Computer),
+    SrcBytes = tolong(SentBytes),
+    DstBytes = tolong(ReceivedBytes),
+    Url = iff (RequestURL == "", "", strcat (tolower(NetworkApplicationProtocol), "://", url_decode(RequestURL))),
+    UrlCategory = strcat (urlclass, "/", UrlCategory),
+    ThreatCategory = iff(DeviceCustomString4 == "None", "", strcat (DeviceCustomString3, "/", DeviceCustomString4)),
+    RuleName = iff (RuleName == "None", "", strcat (ruletype, "/", RuleName)),
+    FileMD5 = iff (FileMD5 == "None", "", FileMD5),
+    HttpReferrer = iff (RequestContext == "None", "", url_decode(RequestContext)),
+    DstAppName = iff (DstAppName == "General Browsing", "", DstAppName),
+    DstFQDNparts = split (DstFQDN, "."),
+    DstHostnameNotAddr = DstIpAddr != DstFQDN
+  | extend
+    DstHostname = iff (DstHostnameNotAddr, tostring(DstFQDNparts[0]), DstFQDN),
+    DstDomain = iff (DstHostnameNotAddr, strcat_array(array_slice(DstFQDNparts,1,-1),"."), ""),
+    DstFQDN = iff (DstHostnameNotAddr, DstFQDN, "") 
+  // -- Enrichment
+  | extend
+    EventResult = iff (EventResultDetails == "NA" or toint(EventResultDetails) >= 400, "Failure", "Success"),
+    EventSeverity = case (ThreatRiskLevel > 90, "High", ThreatRiskLevel > 60, "Medium", ThreatRiskLevel > 10, "Low",  "Informational"),
+    DstAppType = "SaaS application",
+    DstDomainType = iff (DstHostnameNotAddr, "FQDN", ""),
+    SrcUsernameType = "UPN"
+  // -- Aliases
+  | extend
+    Dvc = DvcHostname,
+    Hostname = DstHostname,
+    UserAgent = HttpUserAgent,
+    User = SrcUsername,
+    HttpStatusCode = EventResultDetails,
+    IpAddr = SrcNatIpAddr,
+    Hash = FileMD5,
+    FileHashType = iff(FileMD5 == "", "", "MD5")
+  | project-away DstFQDNparts
+  | project-away AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, Activity, EventOutcome, FieldDevice*, ExtID, Reason, ReportReferenceLink, urlclass, ruletype, DstHostnameNotAddr
+  };
+  parser (disabled)

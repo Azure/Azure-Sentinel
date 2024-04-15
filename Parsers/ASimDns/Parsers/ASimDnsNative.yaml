@@ -1,0 +1,58 @@
+Parser:
+  Title: DNS activity ASIM parser for Microsoft Sentinel native DNS table
+  Version: '0.6.1'
+  LastUpdated: March 01 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Microsoft Sentinel DNS table (ASimDnsActivityLogs) to the ASIM DNS activity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
+ParserName: ASimDnsNative
+EquivalentBuiltInParser: _ASim_Dns_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false) 
+  {
+    ASimDnsActivityLogs  | where not(disabled)
+      | project-rename
+          EventUid = _ItemId
+      | extend
+          EventEndTime = TimeGenerated,
+          EventStartTime = TimeGenerated,
+          Dvc = coalesce (Dvc, DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId, strcat (EventVendor,'/', EventProduct)),
+          Dst = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),
+          Src = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+          EventSchema = "Dns"
+      // -- Type fixes
+      | extend
+          ThreatConfidence = toint(ThreatConfidence),
+          ThreatFirstReportedTime = todatetime(ThreatFirstReportedTime),
+          ThreatIsActive = tobool(ThreatIsActive),
+          ThreatLastReportedTime = todatetime(ThreatLastReportedTime),
+          ThreatOriginalRiskLevel = tostring(ThreatOriginalRiskLevel),
+          ThreatRiskLevel = toint(ThreatRiskLevel)    
+      //  -- Aliases
+      | extend
+          DnsResponseCodeName=EventResultDetails,
+          Domain=DnsQuery,
+          IpAddr=SrcIpAddr,
+          Duration = DnsNetworkDuration,
+          Process = SrcProcessName,
+          SessionId = DnsSessionId,
+          User = SrcUsername,
+          Hostname = SrcHostname,
+          DvcScopeId = coalesce(DvcScopeId,_SubscriptionId)
+      | project-away
+          TenantId, SourceSystem, _ResourceId, _SubscriptionId
+  };
+  parser  (disabled=disabled)

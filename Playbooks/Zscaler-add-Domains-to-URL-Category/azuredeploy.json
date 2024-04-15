@@ -1,0 +1,954 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Add-Domains-to-Zscaler-URL-Category", 
+        "description": "This playbook will extract domains from Microsoft Sentinel incidents and add them to a Zscaler Custom URL Category of your choice.",
+        "prerequisites": "1. A configured Zscaler admin account is needed, along with a username, password, and API token for this account. 2. A Zscaler URL Category is also needed. 3. A Microsoft Azure integration account and Azure key vault containing the Zscaler account password and API token must also be set up. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/Zscaler-add-Domains-to-URL-Category",
+        "lastUpdateTime": "2023-03-09T17:06:04Z",
+        "entities": ["URL"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Zscaler", "URL Categories"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Add-Domains-to-Zscaler-URL-Category",
+            "type": "string"
+        },
+        "IntegrationAccountName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of your Microsoft Integration Account"
+            }
+        },
+        "ZscalerURL": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the URL of your Zscaler org"
+            }
+        },
+        "ZscalerUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter your Zscaler API username"
+            }
+        },
+        "ZscalerCustomURLCategoryName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of your Zscaler Custom URL Category"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the name of the key vault that stores your Zscaler API key and Zscaler password"
+            }
+        },
+        "KeySecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of the key vault Secret that contains the value of your Zscaler API key"
+            }
+        },
+        "PasswordSecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of the key vault Secret that contains the value of your Zscaler password"
+            }
+        }
+
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "integrationAccount": {
+                    "id": "[resourceId('Microsoft.Logic/integrationAccounts', parameters('IntegrationAccountName'))]"
+                },
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_Secret_API_Key": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeySecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Get_Secret_-_Password": {
+                            "runAfter": {
+                                "Get_Secret_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('PasswordSecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {
+                                "Get_Secret_-_Password": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "Initialize_variable-_Domain_Names": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Domain Names",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable-_Extracted_Domain_Remove_Path": {
+                            "runAfter": {
+                                "Initialize_variable-_Extracted_Domain_Remove_Subdomain": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Extracted Domain - Remove Path",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable-_Extracted_Domain_Remove_Protocol": {
+                            "runAfter": {
+                                "Initialize_variable-_Domain_Names": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Extract Domain - Remove Protocol",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable-_Extracted_Domain_Remove_Subdomain": {
+                            "runAfter": {
+                                "Initialize_variable-_Extracted_Domain_Remove_Protocol": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Extracted Domain - Remove Subdomain",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable-_Extracted_Domain_Zscaler_Formatting_": {
+                            "runAfter": {
+                                "Initialize_variable-_Extracted_Domain_Remove_Path": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Extracted Domain - Zscaler Formatting",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "Domains added to Zscaler URL Categories must be prepended with a dot. This will hold the final result of the extracted domain, with a prepended dot, if needed."
+                        },
+                        "For_each-_URLs": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "Append_to_array_variable-_Domain_Names": {
+                                    "runAfter": {
+                                        "Condition-_URL_parsing_zscaler_formatting": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "Domain Names",
+                                        "value": "@variables('Extracted Domain - Zscaler Formatting')"
+                                    }
+                                },
+                                "Condition-_URL_parsing_remove_https_protocol": {
+                                    "actions": {
+                                        "Set_variable-_Remove_https": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Extract Domain - Remove Protocol",
+                                                "value": "@{replace(items('For_each-_URLs')?['url'],'https://', '')}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable-_clear_extracted_domain_zscaler_formatting": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Condition_-_URL_parsing_remove_http_protocol": {
+                                                "actions": {
+                                                    "Set_variable-_Remove_http": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "Extract Domain - Remove Protocol",
+                                                            "value": "@{replace(items('For_each-_URLs')?['url'],'http://', '')}"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "else": {
+                                                    "actions": {
+                                                        "Set_variable-_No_protocol": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "Extract Domain - Remove Protocol",
+                                                                "value": "@{items('For_each-_URLs')?['url']}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "startsWith": [
+                                                                "@items('For_each-_URLs')?['url']",
+                                                                "http://"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "startsWith": [
+                                                    "@items('For_each-_URLs')?['url']",
+                                                    "https://"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition-_URL_parsing_remove_path": {
+                                    "actions": {
+                                        "Set_variable_-_Remove_URL_path": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Extracted Domain - Remove Path",
+                                                "value": "@{substring(variables('Extracted Domain - Remove Subdomain'), 0, int(indexOf(variables('Extracted Domain - Remove Subdomain'), '/')))}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition-_URL_parsing_remove_www._subdomain": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_-_No_URL_path": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Extracted Domain - Remove Path",
+                                                    "value": "@variables('Extracted Domain - Remove Subdomain')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@variables('Extracted Domain - Remove Subdomain')",
+                                                    "/"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition-_URL_parsing_remove_www._subdomain": {
+                                    "actions": {
+                                        "Set_variable-_remove_www._subdomain": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Extracted Domain - Remove Subdomain",
+                                                "value": "@{replace(variables('Extract Domain - Remove Protocol'), 'www.', '')}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition-_URL_parsing_remove_https_protocol": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable-_No_www._subdomain": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Extracted Domain - Remove Subdomain",
+                                                    "value": "@variables('Extract Domain - Remove Protocol')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "startsWith": [
+                                                    "@variables('Extract Domain - Remove Protocol')",
+                                                    "www."
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Condition-_URL_parsing_zscaler_formatting": {
+                                    "actions": {
+                                        "Set_variable_-_No_additional_formatting_needed": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "Extracted Domain - Zscaler Formatting",
+                                                "value": "@variables('Extracted Domain - Remove Path')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition-_URL_parsing_remove_path": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_-_Prepend_dot": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Extracted Domain - Zscaler Formatting",
+                                                    "value": "@{concat('.', variables('Extracted Domain - Remove Path'))}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "startsWith": [
+                                                    "@variables('Extracted Domain - Remove Path')",
+                                                    "."
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Set_variable-_clear_extracted_domain_remove_path": {
+                                    "runAfter": {
+                                        "Set_variable-_clear_extracted_domain_remove_subdomain": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Extracted Domain - Remove Path",
+                                        "value": "''"
+                                    }
+                                },
+                                "Set_variable-_clear_extracted_domain_remove_protocol": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Extract Domain - Remove Protocol",
+                                        "value": "''"
+                                    }
+                                },
+                                "Set_variable-_clear_extracted_domain_remove_subdomain": {
+                                    "runAfter": {
+                                        "Set_variable-_clear_extracted_domain_remove_protocol": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Extracted Domain - Remove Subdomain",
+                                        "value": "''"
+                                    }
+                                },
+                                "Set_variable-_clear_extracted_domain_zscaler_formatting": {
+                                    "runAfter": {
+                                        "Set_variable-_clear_extracted_domain_remove_path": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Extracted Domain - Zscaler Formatting",
+                                        "value": "''"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable-_Extracted_Domain_Zscaler_Formatting_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Execute_JavaScript_Code_Date": {
+                            "inputs": {
+                                "code": "var d = new Date();\r\nvar tstamp = d.getTime().toString();\r\nreturn tstamp;"
+                            },
+                            "runAfter": {
+                                "For_each-_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "JavaScriptCode"
+                        },
+                        "Execute_JavaScript_Code_Obfuscate": {
+                            "inputs": {
+                                "code": "var tstamp = workflowContext.actions.Execute_JavaScript_Code_Date.outputs.body;\r\nvar key = workflowContext.actions.Get_Secret_API_Key.outputs.body.value;\r\nvar high = tstamp.substring(tstamp.length - 6);\r\nvar low = (parseInt(high) >> 1).toString();\r\nvar apiKey = \"\";\r\nwhile (low.length < 6) {\r\n    low = \"0\" + low;\r\n}\r\nfor (var i = 0; i < high.length; i++) {\r\n    apiKey += key.charAt(parseInt(high.charAt(i)));\r\n}\r\nfor (var j = 0; j < low.length; j++) {\r\n    apiKey += key.charAt(parseInt(low.charAt(j)) + 2);\r\n}\r\nreturn apiKey;\r\n"
+                            },
+                            "runAfter": {
+                                "Execute_JavaScript_Code_Date": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "JavaScriptCode"
+                        },
+                        "HTTP-_Authenticate": {
+                            "inputs": {
+                                "body": {
+                                    "apiKey": "@{body('Execute_JavaScript_Code_Obfuscate')}",
+                                    "password": "@{body('Get_Secret_-_Password')?['value']}",
+                                    "timestamp": "@{body('Execute_JavaScript_Code_Date')}",
+                                    "username": "[parameters('ZscalerUsername')]"
+                                },
+                                "headers": {
+                                    "Cache-Control": "no-cache",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "[concat(parameters('ZscalerURL'), '/api/v1/authenticatedSession')]"
+                            },
+                            "runAfter": {
+                                "Execute_JavaScript_Code_Obfuscate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "Parse_JSON-_Authentication_Headers": {
+                            "inputs": {
+                                "content": "@outputs('HTTP-_Authenticate')['headers']",
+                                "schema": {
+                                    "properties": {
+                                        "Connection": {
+                                            "type": "string"
+                                        },
+                                        "Content-Length": {
+                                            "type": "string"
+                                        },
+                                        "Content-Type": {
+                                            "type": "string"
+                                        },
+                                        "Date": {
+                                            "type": "string"
+                                        },
+                                        "Keep-Alive": {
+                                            "type": "string"
+                                        },
+                                        "Server": {
+                                            "type": "string"
+                                        },
+                                        "Set-Cookie": {
+                                            "type": "string"
+                                        },
+                                        "Strict-Transport-Security": {
+                                            "type": "string"
+                                        },
+                                        "X-Content-Type-Options": {
+                                            "type": "string"
+                                        },
+                                        "X-Frame-Options": {
+                                            "type": "string"
+                                        },
+                                        "X-XSS-Protection": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP-_Authenticate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "HTTP-_Get_URLCategories": {
+                            "inputs": {
+                                "cookie": "@body('Parse_JSON-_Authentication_Headers')?['Set-Cookie']",
+                                "headers": {
+                                    "Cache-Control": "no-cache",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "GET",
+                                "uri": "[concat(parameters('ZscalerURL'), '/api/v1/urlCategories?customOnly=true')]"
+                            },
+                            "runAfter": {
+                                "Parse_JSON-_Authentication_Headers": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        },
+                        "Parse_JSON-_URL_Category": {
+                            "inputs": {
+                                "content": "@body('HTTP-_Get_URLCategories')",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "configuredName": {
+                                                "type": "string"
+                                            },
+                                            "customCategory": {
+                                                "type": "boolean"
+                                            },
+                                            "customUrlsCount": {
+                                                "type": "integer"
+                                            },
+                                            "dbCategorizedUrls": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "description": {
+                                                "type": "string"
+                                            },
+                                            "editable": {
+                                                "type": "boolean"
+                                            },
+                                            "id": {
+                                                "type": "string"
+                                            },
+                                            "keywordsRetainingParentCategory": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "type": {
+                                                "type": "string"
+                                            },
+                                            "urls": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "urlsRetainingParentCategoryCount": {
+                                                "type": "integer"
+                                            },
+                                            "val": {
+                                                "type": "integer"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP-_Get_URLCategories": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "Initialize_variable-_URL_Category_Id": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "URL Category Id",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Parse_JSON-_URL_Category": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },     
+                        "Initialize_variable-_Description": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Description",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable-_URL_Category_Id": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_variable-_Keywords": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Keywords",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable-_Description": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "For_each-_URL_Category": {
+                            "actions": {
+                                "Condition-_Check_for_URL_Category_Match": {
+                                    "actions": {
+                                        "Condition-_Keyword_null_check": {
+                                            "actions": {
+                                                "For_each-_Keyword": {
+                                                    "actions": {
+                                                        "Append_to_array_variable-_Keywords": {
+                                                            "inputs": {
+                                                                "name": "Keywords",
+                                                                "value": "@items('For_each-_Keyword')"
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "AppendToArrayVariable"
+                                                        }
+                                                    },
+                                                    "foreach": "@items('For_each-_URL_Category')?['keywordsRetainingParentCategory']",
+                                                    "runAfter": {},
+                                                    "type": "Foreach"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each-_URL_Category')?['keywordsRetainingParentCategory']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Set_variable-_Description": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Set_variable-_Description": {
+                                            "inputs": {
+                                                "name": "Description",
+                                                "value": "@items('For_each-_URL_Category')?['description']"
+                                            },
+                                            "runAfter": {
+                                                "Set_variable-_URL_Category_Id": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable"
+                                        },
+                                        "Set_variable-_URL_Category_Id": {
+                                            "inputs": {
+                                                "name": "URL Category Id",
+                                                "value": "@items('For_each-_URL_Category')['id']"
+                                            },
+                                            "runAfter": {},
+                                            "type": "SetVariable"
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each-_URL_Category')['configuredName']",
+                                                    "[parameters('ZscalerCustomURLCategoryName')]"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {},
+                                    "type": "If"
+                                }
+                            },
+                            "foreach": "@body('Parse_JSON-_URL_Category')",
+                            "runAfter": {
+                                "Initialize_variable-_Keywords": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Condition-_Check_that_URL_Category_name_was_found": {
+                            "actions": {
+                                "HTTP-_Activate_Changes": {
+                                    "inputs": {
+                                        "cookie": "@body('Parse_JSON-_Authentication_Headers')?['Set-Cookie']",
+                                        "method": "POST",
+                                        "uri": "[concat(parameters('ZscalerURL'), '/api/v1/status/activate')]"
+                                    },
+                                    "runAfter": {
+                                        "HTTP-_Update_URL_Category": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http"
+                                },
+                                "HTTP-_Update_URL_Category": {
+                                    "inputs": {
+                                        "body": {
+                                            "configuredName": "[parameters('ZscalerCustomURLCategoryName')]",
+                                            "description": "@{variables('Description')}",
+                                            "id": "@{variables('URL Category Id')}",
+                                            "keywordsRetainingParentCategory": "@variables('Keywords')",
+                                            "urls": "@variables('Domain Names')"
+                                        },
+                                        "cookie": "@body('Parse_JSON-_Authentication_Headers')?['Set-Cookie']",
+                                        "method": "PUT",
+                                        "uri": "[concat(parameters('ZscalerURL'), '/api/v1/urlCategories/@{variables(''URL Category Id'')}?action=ADD_TO_LIST')]"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@variables('URL Category Id')",
+                                                "@null"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@variables('Domain Names')",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "For_each-_URL_Category": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "HTTP-_End_Session": {
+                            "inputs": {
+                                "cookie": "@body('Parse_JSON-_Authentication_Headers')?['Set-Cookie']",
+                                "headers": {
+                                    "Cache-Control": "no-cache",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "DELETE",
+                                "uri": "[concat(parameters('ZscalerURL'), '/api/v1/authenticatedSession')]"
+                            },
+                            "runAfter": {
+                                "Condition-_Check_that_URL_Category_name_was_found": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http"
+                        }        
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+    ]
+}

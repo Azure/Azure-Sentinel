@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceName": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimNetworkSessionMicrosoft365Defender",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "M365 Defender Network Sessions",
+            "category": "Security",
+            "FunctionAlias": "vimNetworkSessionMicrosoft365Defender",
+            "query": "let M365Defender=(){\nlet Direction=datatable(ActionType:string,NetworkDirection:string)[\n'ConnectionSuccess','Outbound'\n,'ConnectionFailed', 'Outbound'\n,'ConnectionRequest','Outbound'\n,'InboundConnectionAccepted', 'Inbound'\n,'ConnectionFound', 'Unkown'\n,'ListeningConnectionCreated', 'Listening'];\nDeviceNetworkEvents \n| extend EventType = \"Traffic\"\n,EventCount = 1\n,EventEndTime = TimeGenerated\n,EventMessage = ActionType\n,DvcIpAddr = LocalIP\n,DvcHostname = DeviceName\n,EventProduct = \"M365 Defender for Endpoint\"\n,EventVendor = \"Microsoft\"\n    // Types: \n    // - ConnectionFailed\n    //   An attempt to establish a network connection from the device failed.\n    // - ConnectionRequest\n    //   The device initiated a network connection.\n    // - InboundConnectionAccepted\n    //   The device accepted a network connection initiated by another device.\n    // - ConnectionFound\n    //   An active network connection was found on the device.\n    // - ConnectionSuccess\n    //   The TCP three-way handshake was completed.\n    // - ListeningConnectionCreated\n    //   A process has started listening for connections on a certain port.\n,EventResult = iff(ActionType=='ConnectionFailed','Failure','Success')\n,EventResultDetails = ActionType\n,EventSchemaVersion = '1.0.0'\n,EventStartTime = TimeGenerated\n,DstIpAddr = RemoteIP\n,DstPortNumber = RemotePort\n,SrcIpAddr = LocalIP\n,SrcPortNumber = LocalPort\n,SrcUserSid = InitiatingProcessAccountSid\n,SrcUserAadId = InitiatingProcessAccountObjectId\n,SrcUsername = InitiatingProcessAccountName\n,SrcUserUpn = InitiatingProcessAccountUpn\n,SrcUserDomain = InitiatingProcessAccountDomain\n,NetworkProtocol = Protocol\n,UrlOriginal = RemoteUrl\n| lookup kind=leftouter Direction on ActionType};\nM365Defender\n",
+            "version": 1
+          }
+        }
+      ]
+    }
+  ]
+}

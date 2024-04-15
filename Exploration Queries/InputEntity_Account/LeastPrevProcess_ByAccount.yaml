@@ -1,0 +1,47 @@
+Id: f89061dd-e6d6-4553-9c88-301a7360fc14
+DisplayName: Least prevalent processes for this account
+Description: Bottom 10 process by account (set time range to +-1h when running the query)
+InputEntityType: Account
+InputFields:
+  - Name
+OutputEntityTypes:
+  - Process
+QueryPeriodBefore: 1h
+QueryPeriodAfter: 1h
+DataSources:
+  - SecurityEvent
+  - imProcessCreate
+Tactics:
+  - Execution
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+ let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+ let Legacy = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+  | join kind=inner(
+    SecurityEvent
+    | where EventID == 4688
+    | where Account has v_Account_Name
+    | extend info = pack('HostName', Computer, 'HostIP', "")
+    | summarize Process_Aux_StartTime=min(TimeGenerated), Process_Aux_EndTime=max(TimeGenerated), count(), Process_Aux_info = make_set(info, maxsize=100) by Computer, NewProcessName
+    | top 10 by count_ asc nulls last 
+    | project Process_Aux_StartTime, Process_Aux_EndTime, Process_Host_UnstructuredName=Computer, Process=NewProcessName, Process_Aux_info  
+    | extend exists=int(1)) on exists
+    | project-away exists, exists1 
+  };
+   let Normalized = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+  | join kind=inner (
+  imProcessCreate(targetusername=v_Account_Name)
+    | extend info = pack('HostName', Dvc, 'HostIP', DvcIpAddr)
+    | extend TargetProcessFilename = column_ifexists("TargetProcessFilename", "")
+    | extend Process = case(isnotempty(Process), Process, isnotempty(TargetProcessFilename), TargetProcessFilename, isnotempty(ActingProcessName), ActingProcessName, split(ActingProcessCommandLine, " ")[0])
+    | summarize Process_Aux_StartTime=min(TimeGenerated), Process_Aux_EndTime=max(TimeGenerated), count(), Process_Aux_info = make_set(info, maxsize=100) by Dvc, Process
+    | top 10 by count_ asc nulls last 
+    | project Process_Aux_StartTime, Process_Aux_EndTime, Process_Host_UnstructuredName=Dvc, Process, Process_Aux_info
+    | extend exists=int(1)) on exists | project-away exists, exists1 };
+  // change <Name> value below
+  union isfuzzy=true Legacy('<Name>'), Normalized('<Name>')

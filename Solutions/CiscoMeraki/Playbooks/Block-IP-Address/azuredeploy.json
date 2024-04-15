@@ -1,0 +1,1017 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP Address - Cisco Meraki",
+        "description": "This playbook checks if malicious IP address is blocked or unblocked by Cisco Meraki MX network.",
+        "mainSteps": [ "1. Fetches a list of potentially malicious IP addresses", "2.  If malicious IP address is not blocked by Cisco meraki network then blocks it." ],
+        "prerequisites": [
+            "1. Deploy the Cisco Meraki Custom Connector before the deployment of this playbook under the same subscription and same resource group. Capture the name of the connector during deployment.",
+            "2. Cisco Meraki API Key should be known to establish a connection with Cisco Meraki Custom Connector.",
+            "3. Organization name should be known.",
+            "4. Network name should be known."
+        ],
+        "prerequisitesDeployTemplateFile": "../../MerakiConnector/azuredeploy.json",
+        "postDeployment": [
+            "**a. Authorize API connection**",
+            "Once deployment is complete, go under deployment details and authorize Cisco Meraki connection.",
+            "1.  Click the Cisco Meraki connection",
+            "2.  Click **Edit API connection**",
+            "3.  Enter API Key",
+            "4.  Click Save",
+            "**b. Configurations in Sentinel**",
+            "- In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP addresses.",
+            "- Configure the automation rules to trigger the playbook."
+        ],
+        "lastUpdateTime": "2022-08-05T00:00:00.000Z",
+        "entities": [ "IP" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Block IP Address - Cisco Meraki",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "string",
+            "defaultValue": "Block-IP-Address-Meraki",
+            "metadata": {
+                "description": "Enter name for Block IP Address playbook without spaces"
+            },
+            "minLength": 3
+        },
+        "CiscoMerakiConnectorName": {
+            "type": "string",
+            "defaultValue": "MerakiConnector",
+            "metadata": {
+                "description": "Enter name of Cisco Meraki custom connector without spaces"
+            },
+            "minLength": 3
+        },
+        "OrganizationName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter organization name"
+            },
+            "minLength": 3
+        },
+        "NetworkName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter network name"
+            },
+            "minLength": 3
+        }
+    },
+    "variables": {
+        "Meraki_Connection": "[concat('Meraki-', parameters('PlaybookName'))]",
+        "AzureSentinel_Connection": "[concat('Azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('Meraki_Connection'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "NetworkName": {
+                            "defaultValue": "[parameters('NetworkName')]",
+                            "type": "String"
+                        },
+                        "OrganizationName": {
+                            "defaultValue": "[parameters('OrganizationName')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_if_body_present_in_Azure_Sentinel_incident": {
+                            "actions": {
+                                "Check_if_Organization_exists": {
+                                    "actions": {
+                                        "Check_if_Network_exists": {
+                                            "actions": {
+                                                "Add_comment_to_incident": {
+                                                    "runAfter": {
+                                                        "Create_incident_HTML_table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>@{outputs('Cisco_Meraki_Logo')} <strong>Cisco Meraki Block IP Address Playbook</strong><br>\n<br>\nBelow incident IP address(s) are found in Microsoft Sentinel have the following status in network - <strong>@{parameters('NetworkName')}</strong> for organization - <strong>@{parameters('OrganizationName')}</strong><br>\n@{body('Create_incident_HTML_table')}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Compose_Network_Id": {
+                                                    "runAfter": {},
+                                                    "type": "Compose",
+                                                    "inputs": "@body('Filter_Network')?[0]?['id']",
+                                                    "description": "To store network id from filter network result"
+                                                },
+                                                "Create_incident_HTML_table": {
+                                                    "runAfter": {
+                                                        "Update_Network_Appliance_L3_Firewall_Rules": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "columns": [
+                                                            {
+                                                                "header": "Incident IP Address",
+                                                                "value": "@item()?['IP']"
+                                                            },
+                                                            {
+                                                                "header": "Source",
+                                                                "value": "@item()?['SourceCidr']"
+                                                            },
+                                                            {
+                                                                "header": "Source Port",
+                                                                "value": "@item()?['SourcePort']"
+                                                            },
+                                                            {
+                                                                "header": "Destination",
+                                                                "value": "@item()?['DestinationCidr']"
+                                                            },
+                                                            {
+                                                                "header": "Destination Port",
+                                                                "value": "@item()?['DestinationPort']"
+                                                            },
+                                                            {
+                                                                "header": "Policy",
+                                                                "value": "@toUpper(item()?['Policy'])"
+                                                            },
+                                                            {
+                                                                "header": "Protocol",
+                                                                "value": "@toUpper(item()?['Protocol'])"
+                                                            },
+                                                            {
+                                                                "header": "Previous Status",
+                                                                "value": "@item()?['PreviousStatus']"
+                                                            },
+                                                            {
+                                                                "header": "Current Status",
+                                                                "value": "@item()?['CurrentStatus']"
+                                                            },
+                                                            {
+                                                                "header": "Action",
+                                                                "value": "@item()?['Action']"
+                                                            }
+                                                        ],
+                                                        "format": "HTML",
+                                                        "from": "@variables('ConsolidatedAction')"
+                                                    },
+                                                    "description": "To create incident HTML table from consolidated action array"
+                                                },
+                                                "Filter_L3_firewall_default_rule": {
+                                                    "runAfter": {
+                                                        "Get_Network_Appliance_Firewall_L3_Firewall_Rules": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Query",
+                                                    "inputs": {
+                                                        "from": "@body('Get_Network_Appliance_Firewall_L3_Firewall_Rules')?['rules']",
+                                                        "where": "@not(equals(item()?['comment'], string('Default rule')))"
+                                                    },
+                                                    "description": "To filter out L3 firewall default rule"
+                                                },
+                                                "For_each_IP_Address": {
+                                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                                                    "actions": {
+                                                        "Check_if_IP_Address_exists_in_L3_Firewall_Rules": {
+                                                            "actions": {
+                                                                "Check_if_IP_address_is_blocked_by_L3_firewall_rule": {
+                                                                    "actions": {
+                                                                        "Append_to_consolidated_action_variable_for_blocked_IP_address_in_L3_firewall": {
+                                                                            "runAfter": {
+                                                                                "Set_action_variable_for_blocked_IP_address_in_L3_firewall": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "AppendToArrayVariable",
+                                                                            "inputs": {
+                                                                                "name": "ConsolidatedAction",
+                                                                                "value": "@variables('Action')"
+                                                                            },
+                                                                            "description": "To append action JSON object"
+                                                                        },
+                                                                        "Set_action_variable_for_blocked_IP_address_in_L3_firewall": {
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "Action",
+                                                                                "value": {
+                                                                                    "Action": "Blocked using L3 firewall rule",
+                                                                                    "CurrentStatus": "Blocked",
+                                                                                    "DestinationCidr": "@{outputs('Compose_L3_firewall_rule')?['destCidr']}",
+                                                                                    "DestinationPort": "@{outputs('Compose_L3_firewall_rule')?['destPort']}",
+                                                                                    "IP": "@{items('For_each_IP_Address')?['Address']}",
+                                                                                    "Policy": "@{outputs('Compose_L3_firewall_rule')?['policy']}",
+                                                                                    "PreviousStatus": "Blocked",
+                                                                                    "Protocol": "@{outputs('Compose_L3_firewall_rule')?['protocol']}",
+                                                                                    "SourceCidr": "@{outputs('Compose_L3_firewall_rule')?['srcCidr']}",
+                                                                                    "SourcePort": "@{outputs('Compose_L3_firewall_rule')?['srcPort']}"
+                                                                                }
+                                                                            },
+                                                                            "description": "To create action JSON object"
+                                                                        },
+                                                                        "Set_classification_reason_variable_for_blocked_IP_address_in_L3_firewall": {
+                                                                            "runAfter": {
+                                                                                "Append_to_consolidated_action_variable_for_blocked_IP_address_in_L3_firewall": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "ClassificationReason",
+                                                                                "value": "TruePositive - SuspiciousActivity"
+                                                                            },
+                                                                            "description": " To store incident closing reason"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Compose_L3_firewall_rule": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Condition_if_IP_address_exists_in_L7_firewall_rules": {
+                                                                                "actions": {
+                                                                                    "Append_to_consolidated_action_variable_for_IP_address_blocked_in_L7_firewall": {
+                                                                                        "runAfter": {
+                                                                                            "Set_action_variable_for_IP_address_blocked_in_L7_firewall": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "AppendToArrayVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "ConsolidatedAction",
+                                                                                            "value": "@variables('Action')"
+                                                                                        },
+                                                                                        "description": "To append action JSON object"
+                                                                                    },
+                                                                                    "Compose_L7_firewall_rule": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "Compose",
+                                                                                        "inputs": "@body('Filter_L7_firewall_rule')?[0]",
+                                                                                        "description": "To create firewall rule item"
+                                                                                    },
+                                                                                    "Set_action_variable_for_IP_address_blocked_in_L7_firewall": {
+                                                                                        "runAfter": {
+                                                                                            "Compose_L7_firewall_rule": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "Action",
+                                                                                            "value": {
+                                                                                                "Action": "Blocked using L7 firewall rule",
+                                                                                                "CurrentStatus": "Blocked",
+                                                                                                "DestinationCidr": "@{outputs('Compose_L7_firewall_rule')?['value']}",
+                                                                                                "DestinationPort": "NA",
+                                                                                                "IP": "@{items('For_each_IP_Address')?['Address']}",
+                                                                                                "Policy": "@{outputs('Compose_L7_firewall_rule')?['policy']}",
+                                                                                                "PreviousStatus": "Blocked",
+                                                                                                "Protocol": "NA",
+                                                                                                "SourceCidr": "NA",
+                                                                                                "SourcePort": "NA"
+                                                                                            }
+                                                                                        },
+                                                                                        "description": "To create action JSON object"
+                                                                                    },
+                                                                                    "Set_classification_reason_variable_for_IP_address_blocked_in_L7_firewall": {
+                                                                                        "runAfter": {
+                                                                                            "Append_to_consolidated_action_variable_for_IP_address_blocked_in_L7_firewall": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "ClassificationReason",
+                                                                                            "value": "TruePositive - SuspiciousActivity"
+                                                                                        },
+                                                                                        "description": " To store incident closing reason"
+                                                                                    }
+                                                                                },
+                                                                                "runAfter": {},
+                                                                                "else": {
+                                                                                    "actions": {
+                                                                                        "Append_to_consolidated_action_variable_for_IP_address_allowed_in_firewall": {
+                                                                                            "runAfter": {
+                                                                                                "Set_action_variable_for_IP_address_allowed_in_firewall": [
+                                                                                                    "Succeeded"
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": "AppendToArrayVariable",
+                                                                                            "inputs": {
+                                                                                                "name": "ConsolidatedAction",
+                                                                                                "value": "@variables('Action')"
+                                                                                            },
+                                                                                            "description": "To append action JSON object"
+                                                                                        },
+                                                                                        "Set_action_variable_for_IP_address_allowed_in_firewall": {
+                                                                                            "runAfter": {},
+                                                                                            "type": "SetVariable",
+                                                                                            "inputs": {
+                                                                                                "name": "Action",
+                                                                                                "value": {
+                                                                                                    "Action": "Allowed using L3 & L7 firewall rules",
+                                                                                                    "CurrentStatus": "Allowed",
+                                                                                                    "DestinationCidr": "@{outputs('Compose_L3_firewall_rule')?['destCidr']}",
+                                                                                                    "DestinationPort": "@{outputs('Compose_L3_firewall_rule')?['destPort']}",
+                                                                                                    "IP": "@{items('For_each_IP_Address')?['Address']}",
+                                                                                                    "Policy": "@{outputs('Compose_L3_firewall_rule')?['policy']}",
+                                                                                                    "PreviousStatus": "Allowed",
+                                                                                                    "Protocol": "@{outputs('Compose_L3_firewall_rule')?['protocol']}",
+                                                                                                    "SourceCidr": "@{outputs('Compose_L3_firewall_rule')?['srcCidr']}",
+                                                                                                    "SourcePort": "@{outputs('Compose_L3_firewall_rule')?['srcPort']}"
+                                                                                                }
+                                                                                            },
+                                                                                            "description": "To create action json object"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "expression": {
+                                                                                    "and": [
+                                                                                        {
+                                                                                            "greater": [
+                                                                                                "@length(body('Filter_L7_firewall_rule'))",
+                                                                                                0
+                                                                                            ]
+                                                                                        }
+                                                                                    ]
+                                                                                },
+                                                                                "type": "If",
+                                                                                "description": "Condition to check if filter L7 firewall rule"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@outputs('Compose_L3_firewall_rule')?['Policy']",
+                                                                                    "deny"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If",
+                                                                    "description": " Condition to check if IP address is blocked by L3 firewall"
+                                                                },
+                                                                "Compose_L3_firewall_rule": {
+                                                                    "runAfter": {},
+                                                                    "type": "Compose",
+                                                                    "inputs": "@body('Filter_L3_firewall_rule')?[0]",
+                                                                    "description": "To store L3 firewall rule"
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Filter_L7_firewall_rule": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Check_if_IP_address_exists_in_L7_firewall_rule": {
+                                                                        "actions": {
+                                                                            "Append_to_consolidated_action_variable_for_blocked_IP_address_in_L7_firewall": {
+                                                                                "runAfter": {
+                                                                                    "Set_action_variable_for_blocked_IP_address_in_L7_firewall": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "ConsolidatedAction",
+                                                                                    "value": "@variables('Action')"
+                                                                                },
+                                                                                "description": "To append action JSON object"
+                                                                            },
+                                                                            "Compose_L7_firewall_rule_item": {
+                                                                                "runAfter": {},
+                                                                                "type": "Compose",
+                                                                                "inputs": "@body('Filter_L7_firewall_rule')?[0]",
+                                                                                "description": "To create firewall rule item"
+                                                                            },
+                                                                            "Set_action_variable_for_blocked_IP_address_in_L7_firewall": {
+                                                                                "runAfter": {
+                                                                                    "Compose_L7_firewall_rule_item": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "SetVariable",
+                                                                                "inputs": {
+                                                                                    "name": "Action",
+                                                                                    "value": {
+                                                                                        "Action": "Blocked using L7 firewall rule",
+                                                                                        "CurrentStatus": "Blocked",
+                                                                                        "DestinationCidr": "@{outputs('Compose_L7_firewall_rule_item')?['value']}",
+                                                                                        "DestinationPort": "NA",
+                                                                                        "IP": "@{items('For_each_IP_Address')?['Address']}",
+                                                                                        "Policy": "@{outputs('Compose_L7_firewall_rule_item')?['policy']}",
+                                                                                        "PreviousStatus": "Blocked",
+                                                                                        "Protocol": "NA",
+                                                                                        "SourceCidr": "NA",
+                                                                                        "SourcePort": "NA"
+                                                                                    }
+                                                                                },
+                                                                                "description": "To create action JSON object"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {},
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Append_to_L3_firewall_rules_variable": {
+                                                                                    "runAfter": {},
+                                                                                    "type": "AppendToArrayVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "L3FirewallRules",
+                                                                                        "value": {
+                                                                                            "comment": "Blocked by playbook",
+                                                                                            "destCidr": "@items('For_each_IP_Address')?['Address']",
+                                                                                            "destPort": "any",
+                                                                                            "policy": "deny",
+                                                                                            "protocol": "any",
+                                                                                            "srcCidr": "any",
+                                                                                            "srcPort": "any",
+                                                                                            "syslogEnabled": false
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "Append_to_consolidated_action_variable_for_new_IP_address": {
+                                                                                    "runAfter": {
+                                                                                        "Set_action_variable_for_new_IP_address": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "AppendToArrayVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "ConsolidatedAction",
+                                                                                        "value": "@variables('Action')"
+                                                                                    },
+                                                                                    "description": " To append action JSON object"
+                                                                                },
+                                                                                "Set_action_variable_for_new_IP_address": {
+                                                                                    "runAfter": {
+                                                                                        "Append_to_L3_firewall_rules_variable": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "Action",
+                                                                                        "value": {
+                                                                                            "Action": "Blocked using L3 firewall rule by playbook",
+                                                                                            "CurrentStatus": "Blocked",
+                                                                                            "DestinationCidr": "@{items('For_each_IP_Address')?['Address']}",
+                                                                                            "DestinationPort": "Any",
+                                                                                            "IP": "@{items('For_each_IP_Address')?['Address']}",
+                                                                                            "Policy": "deny",
+                                                                                            "PreviousStatus": "Not Found",
+                                                                                            "Protocol": "any",
+                                                                                            "SourceCidr": "Any",
+                                                                                            "SourcePort": "Any"
+                                                                                        }
+                                                                                    },
+                                                                                    "description": "To create action JSON object for IP address"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "greater": [
+                                                                                        "@length(body('Filter_L7_firewall_rule'))",
+                                                                                        0
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If",
+                                                                        "description": "Condition to check if IP address exists in L7 firewall rule"
+                                                                    },
+                                                                    "Set_classification_reason_variable": {
+                                                                        "runAfter": {
+                                                                            "Check_if_IP_address_exists_in_L7_firewall_rule": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "ClassificationReason",
+                                                                            "value": "TruePositive - SuspiciousActivity"
+                                                                        },
+                                                                        "description": "To store incident closing reason"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "greater": [
+                                                                            "@length(body('Filter_L3_firewall_rule'))",
+                                                                            0
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If",
+                                                            "description": "Condition to check if filter IP address returns network object"
+                                                        },
+                                                        "Filter_L3_firewall_rule": {
+                                                            "runAfter": {},
+                                                            "type": "Query",
+                                                            "inputs": {
+                                                                "from": "@body('Get_Network_Appliance_Firewall_L3_Firewall_Rules')?['rules']",
+                                                                "where": "@contains(item()?['destCidr'], items('For_each_IP_Address')?['Address'])"
+                                                            },
+                                                            "description": "To filter rule detail from get network appliance L3 firewall rule action based on IP address"
+                                                        },
+                                                        "Filter_L7_firewall_rule": {
+                                                            "runAfter": {
+                                                                "Filter_L3_firewall_rule": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Query",
+                                                            "inputs": {
+                                                                "from": "@body('Get_Network_Appliance_Firewall_L7_Firewall_Rules')?['rules']",
+                                                                "where": "@contains(item()?['value'], items('For_each_IP_Address')?['Address'])"
+                                                            },
+                                                            "description": "To filter rule detail from get network appliance L7 firewall rule action based on IP address"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Get_Network_Appliance_Firewall_L7_Firewall_Rules": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach",
+                                                    "description": "For each loop for IP addresses from Microsoft Sentinel",
+                                                    "runtimeConfiguration": {
+                                                        "concurrency": {
+                                                            "repetitions": 1
+                                                        }
+                                                    }
+                                                },
+                                                "Get_Network_Appliance_Firewall_L3_Firewall_Rules": {
+                                                    "runAfter": {
+                                                        "Compose_Network_Id": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/networks/@{encodeURIComponent(outputs('Compose_Network_Id'))}/appliance/firewall/l3FirewallRules"
+                                                    }
+                                                },
+                                                "Get_Network_Appliance_Firewall_L7_Firewall_Rules": {
+                                                    "runAfter": {
+                                                        "Set_L3_firewall_rules_variable": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/networks/@{encodeURIComponent(outputs('Compose_Network_Id'))}/appliance/firewall/l7FirewallRules"
+                                                    }
+                                                },
+                                                "Set_L3_firewall_rules_variable": {
+                                                    "runAfter": {
+                                                        "Filter_L3_firewall_default_rule": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "L3FirewallRules",
+                                                        "value": "@body('Filter_L3_firewall_default_rule')"
+                                                    },
+                                                    "description": " To create L3 firewall rules array"
+                                                },
+                                                "Update_Network_Appliance_L3_Firewall_Rules": {
+                                                    "runAfter": {
+                                                        "For_each_IP_Address": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "rules": "@variables('L3FirewallRules')"
+                                                        },
+                                                        "headers": {
+                                                            "Content-Type": "application/json"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/networks/@{encodeURIComponent(outputs('Compose_Network_Id'))}/appliance/firewall/l3FirewallRules"
+                                                    }
+                                                },
+                                                "Update_incident": {
+                                                    "runAfter": {
+                                                        "Add_comment_to_incident": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "classification": {
+                                                                "ClassificationAndReason": "@variables('ClassificationReason')"
+                                                            },
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "status": "Closed"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/Incidents"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_Network": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Terminate_if_network_not_found": {
+                                                        "runAfter": {},
+                                                        "type": "Terminate",
+                                                        "inputs": {
+                                                            "runError": {
+                                                                "code": "404",
+                                                                "message": "Network Not Found"
+                                                            },
+                                                            "runStatus": "Failed"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('Filter_Network'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If",
+                                            "description": "Condition to check if filter network returns network object"
+                                        },
+                                        "Filter_Network": {
+                                            "runAfter": {
+                                                "Get_Networks": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('Get_Networks')",
+                                                "where": "@equals(item()?['name'], parameters('NetworkName'))"
+                                            },
+                                            "description": "To filter network detail from get networks action based on network name"
+                                        },
+                                        "Get_Networks": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/organizations/@{encodeURIComponent(body('Filter_Organization')?[0]?['id'])}/networks",
+                                                "queries": {
+                                                    "perPage": 1000
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Filter_Organization": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Terminate_if_organization_not_found": {
+                                                "runAfter": {},
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runError": {
+                                                        "code": "404",
+                                                        "message": "Organization Not Found"
+                                                    },
+                                                    "runStatus": "Failed"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Filter_Organization'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Condition to check if filter organization returns organization object"
+                                },
+                                "Filter_Organization": {
+                                    "runAfter": {
+                                        "Get_Organizations": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('Get_Organizations')",
+                                        "where": "@equals(item()?['name'], parameters('OrganizationName'))"
+                                    },
+                                    "description": "To filter organization detail from get organizations action based on organization name"
+                                },
+                                "Get_Organizations": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/organizations"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Cisco_Meraki_Logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_if_IP_address_not_found": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "code": "404",
+                                                "message": "IP Address Not Found in Microsoft Sentinel Incident"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@outputs('Entities_-_Get_IPs')",
+                                            "body"
+                                        ]
+                                    },
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Condition to check if body present in the sentinel incident"
+                        },
+                        "Cisco_Meraki_Logo": {
+                            "runAfter": {
+                                "Initialize_classification_reason_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://www.kellerschroeder.com/wp-content/uploads/2017/05/Cisco-Meraki.jpg\" alt=\"CiscoMerakiLogo\" width=\"32\" height=\"32\">",
+                            "description": "To add logo for incident "
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Initialize_L3_firewall_rules_variable": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "L3FirewallRules",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To store L3 firewall rule object"
+                        },
+                        "Initialize_action_object_variable": {
+                            "runAfter": {
+                                "Initialize_L3_firewall_rules_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Action",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "To create JSON action object"
+                        },
+                        "Initialize_classification_reason_variable": {
+                            "runAfter": {
+                                "Initialize_consolidated_action_array_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ClassificationReason",
+                                        "type": "string",
+                                        "value": "BenignPositive - SuspiciousButExpected"
+                                    }
+                                ]
+                            },
+                            "description": "To store incident closing reason"
+                        },
+                        "Initialize_consolidated_action_array_variable": {
+                            "runAfter": {
+                                "Initialize_action_object_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ConsolidatedAction",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To create consolidated array variable for HTML incident table"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "MerakiConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Meraki_Connection'))]",
+                                "connectionName": "[variables('Meraki_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('CiscoMerakiConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]",
+                                "connectionName": "[variables('AzureSentinel_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Meraki_Connection')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('CiscoMerakiConnectorName'))]"
+                },
+                "parameterValues": {
+                    "api_key": ""
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinel_Connection')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinel_Connection')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

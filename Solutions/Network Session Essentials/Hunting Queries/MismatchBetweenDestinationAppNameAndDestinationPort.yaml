@@ -1,0 +1,84 @@
+id: a61e9fc1-dd9e-4588-a497-2a34a1d811bf
+name: Mismatch between Destination App name and Destination Port (ASIM Network Session schema)
+description: |
+  'Every standard app has a port associated with it. This query will identify if destination port associated with destination app is not standard which can be a case of network spoofing attack.'
+
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSVPCFlow
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight_CL
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoMeraki
+    dataTypes:
+      - Syslog
+      - CiscoMerakiNativePoller
+
+tactics:
+  - Discovery
+
+query: |
+  _Im_NetworkSession(starttime=ago(1d),endtime=now())
+  | where DstAppName in ("dns","web-browsing","http","ssl","smtp") and DstPortNumber in (53, 80, 8080, 8000, 443, 8443, 25)
+  | extend DstAppName = tolower(DstAppName)
+  | where 
+          (DstAppName == "dns" and not(DstPortNumber == 53)) or
+          (DstAppName in ("web-browsing","http") and not(DstPortNumber in (80, 8080, 8000))) or
+          (DstAppName == "ssl" and not(DstPortNumber in (443, 8443))) or
+          (DstAppName == "smtp" and not(DstPortNumber == 25))
+  | summarize Instances = count(), EventStartTime = min(EventStartTime), EventEndTime = max(EventEndTime) by SrcIpAddr, DstIpAddr, DstAppName, DstPortNumber
+  | extend IP_0_Address = SrcIpAddr
+  | extend IP_1_Address = DstIpAddr
+
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DstIpAddr

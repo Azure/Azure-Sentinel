@@ -1,0 +1,36 @@
+id: 10838671-0c35-4d5b-95f8-06d5b4d5bf61
+name: Map external devices
+description: |
+  Action "PnpDeviceConnected" reports the connection of any plug and play device.
+  Read more online on event 6416: https://docs.microsoft.com/windows/security/threat-protection/auditing/event-6416.
+  Query #1: look for rare one-time devices connected to a specific machine.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+query: |
+  let DeviceNameParam = "<replace this with full computer name>";
+  // Query for device connection events
+  let devices =
+      DeviceEvents
+      | where ActionType == "PnpDeviceConnected"
+      | extend parsed=parse_json(AdditionalFields)
+      | project 
+          DeviceDescription=tostring(parsed.DeviceDescription),
+          ClassName=tostring(parsed.ClassName),
+          DeviceId=tostring(parsed.VendorIds),
+          VendorIds=tostring(parsed.VendorIds),
+          DeviceName, Timestamp ;
+  // Filter devices seen on the suspected machine
+  devices | where DeviceName == DeviceNameParam
+  // Get some stats on the device connections to that machine
+  | summarize TimesConnected=count(), FirstTime=min(Timestamp), LastTime=max(Timestamp) by DeviceId, DeviceDescription, ClassName, VendorIds, DeviceName
+  // Optional filter - looking for devices used in only within 24h
+  | where LastTime - FirstTime < 1d
+  // Filter out (antijoin) devices that are common in the organization.
+  // We use here multiple identifiers, including a pseudo-unique device ID.
+  // So, a specific disk-on-key device which model is common in the org will still be shown in the results,
+  // while built-in software devices (often have constant device ID) as well as common network devices (e.g. printer queues) will be excluded.
+  | join kind=leftanti 
+    (devices | summarize Machines=dcount(DeviceName) by DeviceId, DeviceDescription, VendorIds | where Machines > 5)
+    on DeviceId, DeviceDescription, VendorIds

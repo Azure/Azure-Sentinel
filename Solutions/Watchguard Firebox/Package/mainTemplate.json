@@ -1,0 +1,587 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "WatchGuard",
+    "comments": "Solution template for Watchguard Firebox"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "watchguard-technologies.watchguard_firebox_mss",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "WatchguardFirebox",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "WatchguardFirebox",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "WatchGuardFirebox-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "WatchGuardFirebox",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Watchguard Firebox data connector with template",
+        "displayName": "Watchguard Firebox template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Watchguard Firebox data connector with template version 2.0.3",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "WatchGuard Firebox",
+                  "publisher": "WatchGuard Technologies",
+                  "descriptionMarkdown": "WatchGuard Firebox (https://www.watchguard.com/wgrd-products/firewall-appliances and https://www.watchguard.com/wgrd-products/cloud-and-virtual-firewalls) is security products/firewall-appliances. Watchguard Firebox will send syslog to Watchguard Firebox collector agent.The agent then sends the message to the workspace.",
+                  "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "WatchGuardFirebox",
+                      "baseQuery": "WatchGuardFirebox"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Fireboxes in last 24 hours",
+                      "query": "WatchGuardFirebox\n | where TimeGenerated >= ago(24h)\n| summarize count() by HostName\n| top 10 by count_ desc"
+                    },
+                    {
+                      "description": "Firebox Named WatchGuard-XTM top 10 messages in last 24 hours",
+                      "query": "WatchGuardFirebox\n | where HostName contains 'WatchGuard-XTM'\n| where TimeGenerated >= ago(24h)\n| summarize count() by MessageId\n| top 10 by count_ desc"
+                    },
+                    {
+                      "description": "Firebox Named WatchGuard-XTM top 10 applications in last 24 hours",
+                      "query": "WatchGuardFirebox\n | where HostName contains 'WatchGuard-XTM'\n| where TimeGenerated >= ago(24h)\n| summarize count() by Application\n| top 10 by count_ desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Syslog (WatchGuardFirebox)",
+                      "lastDataReceivedQuery": "WatchGuardFirebox\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "WatchGuardFirebox\n  |where TimeGenerated > ago(3d)\n    |take 1\n   | project IsConnected = true"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "write permission is required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias WatchGuardFirebox and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Watchguard%20Firebox/Parsers/WatchGuardFirebox.txt) on the second line of the query, enter the hostname(s) of your WatchGuard Firebox device(s) and any other unique identifiers for the logstream. The function usually takes 10-15 minutes to activate after solution installation/update."
+                    },
+                    {
+                      "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux"
+                    },
+                    {
+                      "description": "Configure the facilities you want to collect and their severities.\n\n1.  Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n2.  Select **Apply below configuration to my machines** and select the facilities and severities.\n3.  Click **Save**.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenSyslogSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "2. Configure the logs to be collected"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "47835227-715b-4000-892e-e1fff81023c0",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "WatchGuard"
+                    },
+                    "support": {
+                      "name": "WatchGuard",
+                      "link": "https://www.watchguard.com/wgrd-support/overview",
+                      "tier": "developer"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Watchguard Firebox",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "WatchGuard"
+                },
+                "support": {
+                  "name": "WatchGuard",
+                  "tier": "Partner",
+                  "link": "https://www.watchguard.com/wgrd-support/contact-support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Watchguard Firebox",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "WatchGuard"
+        },
+        "support": {
+          "name": "WatchGuard",
+          "tier": "Partner",
+          "link": "https://www.watchguard.com/wgrd-support/contact-support"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "WatchGuard Firebox",
+          "publisher": "WatchGuard Technologies",
+          "descriptionMarkdown": "WatchGuard Firebox (https://www.watchguard.com/wgrd-products/firewall-appliances and https://www.watchguard.com/wgrd-products/cloud-and-virtual-firewalls) is security products/firewall-appliances. Watchguard Firebox will send syslog to Watchguard Firebox collector agent.The agent then sends the message to the workspace.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "WatchGuardFirebox",
+              "baseQuery": "WatchGuardFirebox"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (WatchGuardFirebox)",
+              "lastDataReceivedQuery": "WatchGuardFirebox\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "WatchGuardFirebox\n  |where TimeGenerated > ago(3d)\n    |take 1\n   | project IsConnected = true"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Fireboxes in last 24 hours",
+              "query": "WatchGuardFirebox\n | where TimeGenerated >= ago(24h)\n| summarize count() by HostName\n| top 10 by count_ desc"
+            },
+            {
+              "description": "Firebox Named WatchGuard-XTM top 10 messages in last 24 hours",
+              "query": "WatchGuardFirebox\n | where HostName contains 'WatchGuard-XTM'\n| where TimeGenerated >= ago(24h)\n| summarize count() by MessageId\n| top 10 by count_ desc"
+            },
+            {
+              "description": "Firebox Named WatchGuard-XTM top 10 applications in last 24 hours",
+              "query": "WatchGuardFirebox\n | where HostName contains 'WatchGuard-XTM'\n| where TimeGenerated >= ago(24h)\n| summarize count() by Application\n| top 10 by count_ desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "write permission is required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias WatchGuardFirebox and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Watchguard%20Firebox/Parsers/WatchGuardFirebox.txt) on the second line of the query, enter the hostname(s) of your WatchGuard Firebox device(s) and any other unique identifiers for the logstream. The function usually takes 10-15 minutes to activate after solution installation/update."
+            },
+            {
+              "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux"
+            },
+            {
+              "description": "Configure the facilities you want to collect and their severities.\n\n1.  Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n2.  Select **Apply below configuration to my machines** and select the facilities and severities.\n3.  Click **Save**.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenSyslogSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "2. Configure the logs to be collected"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "WatchGuardFirebox Data Parser with template",
+        "displayName": "WatchGuardFirebox Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "WatchGuardFirebox Data Parser with template version 2.0.3",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "WatchGuardFirebox",
+                "category": "Samples",
+                "functionAlias": "WatchGuardFirebox",
+                "query": "\nlet fromat_result = (source_arry: dynamic) {\r\n    let source_ips = array_concat(source_arry[0], source_arry[1]);\r\n    iif(source_ips[2] == \"\", strcat(source_ips[0], source_ips[1]), strcat(source_ips[0], dynamic(\",\"), source_ips[2]))\r\n};\r\nSyslog\r\n| extend\r\n    PolicyName = replace(\"-00\", \"\", extract(@\"\\s\\(([-\\w\\s]*?(-00|\\sPolicy|DVCP-BOVPN-Allow-in))\\)$\", 1, SyslogMessage, typeof(string)))\r\n    , PolicyAction = extract(\"msg_id=\\\".*?\\\"\\\\s(\\\\w+?)\\\\s.*(Policy|-00|DVCP-BOVPN-Allow-in)\\\\)$\", 1, SyslogMessage)\r\n    , ProxyName = extract(\"Proxy.*?: ([\\\\w\\\\s]+)\", 1, SyslogMessage)\r\n    , Application = extract(\"app_name=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , MessageId = extract(\"msg_id=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , EventMessage = extract(\"msg=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , EventVendor = \"Watchguard\"\r\n    , EventProduct = \"Firebox\"\r\n    , EventType=\"Traffic\"\r\n    , EventSchemaVersion=\"1.0.0\"\r\n    , EventProductVersion = extract(\"Watchguard loggerd (.*?) \", 1, SyslogMessage)\r\n    , SrcUserName =  extract(\"Authentication of .*?\\\\[(.*?)@.*?\\\\].*?\\\\s\", 1, SyslogMessage)\r\n    , DvcInboundInterface = extract(\"msg_id=\\\"3100-002C\\\" \\\\[(.*)\\\\]\", 1, SyslogMessage)\r\n    , InterfaceStatus = extract(\"Interface link status changed to ([\\\\w\\\\s]+)\", 1, SyslogMessage)\r\n    , BOVPNInterface = extract(\"msg_id=\\\"0207-0001\\\".*\\'(.*)\\'\", 1, SyslogMessage)\r\n    , BOVPNStatus = extract(\"BOVPN IPSec tunnel is (.*). local\", 1, SyslogMessage)\r\n    , DstGeoCountry = extract(\"geo_dst=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , SrcGeoCountry = extract(\"geo_src=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , SrcBytes = todouble(extract(\"sent_bytes=\\\"(.*?)\\\"\", 1, SyslogMessage))\r\n    , DstBytes = todouble(extract(\"rcvd_bytes=\\\"(.*?)\\\"\", 1, SyslogMessage))\r\n    , FireboxManageUser = extract(\"Management user (.*?)@\", 1, SyslogMessage)\r\n    , SrcIpAddr = fromat_result(extract_all(@\"(:\\s(?P<srcIp1>(\\d{1,3}\\.){3}\\d{1,3}):\\d{1,5}\\s->\\s)|(\\s(?P<srcIp2>(\\d{1,3}\\.){3}\\d{1,3})\\s(\\d{1,3}\\.){3}\\d{1,3}\\s)\", dynamic(['srcIp1', 'srcIp2']), SyslogMessage))\r\n    , DstIpAddr = fromat_result(extract_all(@\"(:\\d{1,5}\\s->\\s(?P<destIp1>(\\d{1,3}\\.){3}\\d{1,3}):\\d{1,5}\\s)|(\\s(\\d{1,3}\\.){3}\\d{1,3}\\s(?P<destIp2>(\\d{1,3}\\.){3}\\d{1,3})\\s)\", dynamic(['destIp1', 'destIp2']), SyslogMessage))\r\n    , SrcPortNumber = fromat_result(extract_all(@\"(:\\s(\\d{1,3}\\.){3}\\d{1,3}:(?P<srcPort1>\\d{1,5})\\s->\\s)|(\\s(\\d{1,3}\\.){3}\\d{1,3}\\s(\\d{1,3}\\.){3}\\d{1,3}\\s(?P<srcPort2>\\d{1,5})\\s)\", dynamic(['srcPort1', 'srcPort2']), SyslogMessage))\r\n    , DstPortNumber = fromat_result(extract_all(@\"(:\\d{1,5}\\s->\\s(\\d{1,3}\\.){3}\\d{1,3}:(?P<destPort1>\\d{1,5})\\s)|(\\s(\\d{1,3}\\.){3}\\d{1,3}\\s(\\d{1,3}\\.){3}\\d{1,3}\\s\\d{1,5}\\s(?P<destPort2>\\d{1,5})\\s)\", dynamic(['destPort1', 'destPort2']), SyslogMessage))\r\n| extend\r\n    DvcAction = case(PolicyAction has \"Allow\", \"Allow\", PolicyAction has \"Deny\", \"Deny\", PolicyAction has \"Drop\", \"Drop\", \"\")\r\n    , EventResult = case(PolicyAction has \"Allow\", \"Success\", \"Failure\")\r\n    , EventTimeIngested = ingestion_time()\r\n    , EventCount = toint(1)\r\n",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "WatchGuardFirebox"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "Watchguard Firebox",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "WatchGuard"
+                },
+                "support": {
+                  "name": "WatchGuard",
+                  "tier": "Partner",
+                  "link": "https://www.watchguard.com/wgrd-support/contact-support"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "WatchGuardFirebox",
+        "category": "Samples",
+        "functionAlias": "WatchGuardFirebox",
+        "query": "\nlet fromat_result = (source_arry: dynamic) {\r\n    let source_ips = array_concat(source_arry[0], source_arry[1]);\r\n    iif(source_ips[2] == \"\", strcat(source_ips[0], source_ips[1]), strcat(source_ips[0], dynamic(\",\"), source_ips[2]))\r\n};\r\nSyslog\r\n| extend\r\n    PolicyName = replace(\"-00\", \"\", extract(@\"\\s\\(([-\\w\\s]*?(-00|\\sPolicy|DVCP-BOVPN-Allow-in))\\)$\", 1, SyslogMessage, typeof(string)))\r\n    , PolicyAction = extract(\"msg_id=\\\".*?\\\"\\\\s(\\\\w+?)\\\\s.*(Policy|-00|DVCP-BOVPN-Allow-in)\\\\)$\", 1, SyslogMessage)\r\n    , ProxyName = extract(\"Proxy.*?: ([\\\\w\\\\s]+)\", 1, SyslogMessage)\r\n    , Application = extract(\"app_name=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , MessageId = extract(\"msg_id=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , EventMessage = extract(\"msg=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , EventVendor = \"Watchguard\"\r\n    , EventProduct = \"Firebox\"\r\n    , EventType=\"Traffic\"\r\n    , EventSchemaVersion=\"1.0.0\"\r\n    , EventProductVersion = extract(\"Watchguard loggerd (.*?) \", 1, SyslogMessage)\r\n    , SrcUserName =  extract(\"Authentication of .*?\\\\[(.*?)@.*?\\\\].*?\\\\s\", 1, SyslogMessage)\r\n    , DvcInboundInterface = extract(\"msg_id=\\\"3100-002C\\\" \\\\[(.*)\\\\]\", 1, SyslogMessage)\r\n    , InterfaceStatus = extract(\"Interface link status changed to ([\\\\w\\\\s]+)\", 1, SyslogMessage)\r\n    , BOVPNInterface = extract(\"msg_id=\\\"0207-0001\\\".*\\'(.*)\\'\", 1, SyslogMessage)\r\n    , BOVPNStatus = extract(\"BOVPN IPSec tunnel is (.*). local\", 1, SyslogMessage)\r\n    , DstGeoCountry = extract(\"geo_dst=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , SrcGeoCountry = extract(\"geo_src=\\\"(.*?)\\\"\", 1, SyslogMessage)\r\n    , SrcBytes = todouble(extract(\"sent_bytes=\\\"(.*?)\\\"\", 1, SyslogMessage))\r\n    , DstBytes = todouble(extract(\"rcvd_bytes=\\\"(.*?)\\\"\", 1, SyslogMessage))\r\n    , FireboxManageUser = extract(\"Management user (.*?)@\", 1, SyslogMessage)\r\n    , SrcIpAddr = fromat_result(extract_all(@\"(:\\s(?P<srcIp1>(\\d{1,3}\\.){3}\\d{1,3}):\\d{1,5}\\s->\\s)|(\\s(?P<srcIp2>(\\d{1,3}\\.){3}\\d{1,3})\\s(\\d{1,3}\\.){3}\\d{1,3}\\s)\", dynamic(['srcIp1', 'srcIp2']), SyslogMessage))\r\n    , DstIpAddr = fromat_result(extract_all(@\"(:\\d{1,5}\\s->\\s(?P<destIp1>(\\d{1,3}\\.){3}\\d{1,3}):\\d{1,5}\\s)|(\\s(\\d{1,3}\\.){3}\\d{1,3}\\s(?P<destIp2>(\\d{1,3}\\.){3}\\d{1,3})\\s)\", dynamic(['destIp1', 'destIp2']), SyslogMessage))\r\n    , SrcPortNumber = fromat_result(extract_all(@\"(:\\s(\\d{1,3}\\.){3}\\d{1,3}:(?P<srcPort1>\\d{1,5})\\s->\\s)|(\\s(\\d{1,3}\\.){3}\\d{1,3}\\s(\\d{1,3}\\.){3}\\d{1,3}\\s(?P<srcPort2>\\d{1,5})\\s)\", dynamic(['srcPort1', 'srcPort2']), SyslogMessage))\r\n    , DstPortNumber = fromat_result(extract_all(@\"(:\\d{1,5}\\s->\\s(\\d{1,3}\\.){3}\\d{1,3}:(?P<destPort1>\\d{1,5})\\s)|(\\s(\\d{1,3}\\.){3}\\d{1,3}\\s(\\d{1,3}\\.){3}\\d{1,3}\\s\\d{1,5}\\s(?P<destPort2>\\d{1,5})\\s)\", dynamic(['destPort1', 'destPort2']), SyslogMessage))\r\n| extend\r\n    DvcAction = case(PolicyAction has \"Allow\", \"Allow\", PolicyAction has \"Deny\", \"Deny\", PolicyAction has \"Drop\", \"Drop\", \"\")\r\n    , EventResult = case(PolicyAction has \"Allow\", \"Success\", \"Failure\")\r\n    , EventTimeIngested = ingestion_time()\r\n    , EventCount = toint(1)\r\n",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Watchguard Firebox",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "WatchGuard"
+        },
+        "support": {
+          "name": "WatchGuard",
+          "tier": "Partner",
+          "link": "https://www.watchguard.com/wgrd-support/contact-support"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.3",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Watchguard Firebox",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "WatchGuard"
+        },
+        "support": {
+          "name": "WatchGuard",
+          "tier": "Partner",
+          "link": "https://www.watchguard.com/wgrd-support/contact-support"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-05-06",
+        "providers": [
+          "WatchGuard"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

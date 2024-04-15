@@ -1,0 +1,61 @@
+﻿id: fa2658fe-3714-4c55-bb12-2b7275c628e8
+name: Threat Essentials - Mass Cloud resource deletions Time Series Anomaly
+description: |
+  'This query generates baseline pattern of cloud resource deletions by an user and generated anomaly 
+  when any unusual spike is detected.
+  These anomalies from unusual or privileged users could be an indication of cloud infrastructure 
+  take-down by an adversary '
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+tags:
+  - DEV-0537
+query: |
+  let starttime = 14d;
+  let endtime = 1d;
+  let timeframe = 1h;
+  let TotalEventsThreshold = 25; 
+  let TimeSeriesData = 
+  AzureActivity 
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where OperationNameValue endswith "delete" 
+  | project TimeGenerated, Caller 
+  | make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller; 
+  let TimeSeriesAlerts = materialize(TimeSeriesData 
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit') 
+  | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) 
+  | where anomalies > 0 
+  | project Caller, TimeGenerated, Total, baseline, anomalies, score 
+  | where Total > TotalEventsThreshold and baseline > 0 ); 
+  TimeSeriesAlerts 
+  | where TimeGenerated > (ago(endtime)) 
+  | project TimeGenerated, Caller 
+  | join kind = inner (AzureActivity 
+  | where TimeGenerated > (ago(endtime)) 
+  | where OperationNameValue endswith "delete" 
+  | summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller 
+  | extend Name = iif(Caller has '@',tostring(split(Caller,'@',0)[0]),"")
+  | extend UPNSuffix = iif(Caller has '@',tostring(split(Caller,'@',1)[0]),"")
+  | extend AadUserId = iif(Caller !has '@',Caller,"")
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+      - identifier: AadUserId
+        columnName: AadUserId
+version: 1.0.1
+kind: Scheduled

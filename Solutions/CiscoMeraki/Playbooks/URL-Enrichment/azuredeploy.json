@@ -1,0 +1,598 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "URL Enrichment - Cisco Meraki",
+        "description": "This playbook checks if malicious URL is blocked or unblocked by Cisco Meraki network.",
+        "mainSteps": [ "1. Fetches a list of potentially malicious URLs", "2. Enrich the incident with URL status information." ],
+        "prerequisites": [
+            "1. Deploy the Cisco Meraki Custom Connector before the deployment of this playbook under the same subscription and same resource group. Capture the name of the connector during deployment.",
+            "2. Cisco Meraki API Key should be known to establish a connection with Cisco Meraki Custom Connector.",
+            "3. Organization name should be known."
+        ],
+        "prerequisitesDeployTemplateFile": "../../MerakiConnector/azuredeploy.json",
+        "postDeployment": [
+            "**a. Authorize API connection**",
+            "Once deployment is complete, go under deployment details and authorize Cisco Meraki connection.",
+            "1.  Click the Cisco Meraki connection",
+            "2.  Click **Edit API connection**",
+            "3.  Enter API Key",
+            "4.  Click Save",
+            "**b. Configurations in Sentinel**",
+            "- In Microsoft Sentinel analytical rules should be configured to trigger an incident with URLs.",
+            "- Configure the automation rules to trigger the playbook."
+        ],
+        "lastUpdateTime": "2021-07-28T00:00:00.000Z",
+        "entities": [ "URL" ],
+        "tags": [ "Enrichment" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "URL Enrichment - Cisco Meraki",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "string",
+            "defaultValue": "URL-Enrichment-Meraki",
+            "metadata": {
+                "description": "Enter name for URL Enrichment playbook without spaces"
+            },
+            "minLength": 3
+        },
+        "CiscoMerakiConnectorName": {
+            "type": "string",
+            "defaultValue": "MerakiConnector",
+            "metadata": {
+                "description": "Enter name of Cisco Meraki custom connector without spaces"
+            },
+            "minLength": 3
+        },
+        "OrganizationName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter organization name"
+            },
+            "minLength": 3
+        }
+    },
+    "variables": {
+        "Meraki_Connection": "[concat('Meraki-', parameters('PlaybookName'))]",
+        "AzureSentinel_Connection": "[concat('Azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('Meraki_Connection'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "OrganizationName": {
+                            "defaultValue": "[parameters('OrganizationName')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_if_body_present_in_Azure_Sentinel_incident": {
+                            "actions": {
+                                "Check_if_Organization_exists": {
+                                    "actions": {
+                                        "Add_comment_to_incident": {
+                                            "runAfter": {
+                                                "Create_Incident_HTML_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p>@{outputs('Cisco_Meraki_Logo')} <strong>Cisco Meraki URL Enrichment Playbook<br>\n<br>\n</strong>Below incident URL(s) are found in Microsoft Sentinel have the following status in networks for organization - <strong></strong><strong>@{parameters('OrganizationName')}</strong><strong></strong><br>\n@{body('Create_Incident_HTML_table')}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Create_Incident_HTML_table": {
+                                            "runAfter": {
+                                                "For_each_Network": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "columns": [
+                                                    {
+                                                        "header": "Incident URL",
+                                                        "value": "@item()?['URL']"
+                                                    },
+                                                    {
+                                                        "header": "Network Name",
+                                                        "value": "@item()?['NetworkName']"
+                                                    },
+                                                    {
+                                                        "header": "Status",
+                                                        "value": "@item()?['Status']"
+                                                    },
+                                                    {
+                                                        "header": "Comment",
+                                                        "value": "@item()?['Comment']"
+                                                    }
+                                                ],
+                                                "format": "HTML",
+                                                "from": "@variables('ConsolidatedAction')"
+                                            },
+                                            "description": "To create incident HTML table from consolidated action array"
+                                        },
+                                        "For_each_Network": {
+                                            "foreach": "@body('Get_Networks')",
+                                            "actions": {
+                                                "For_each_URL": {
+                                                    "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                                                    "actions": {
+                                                        "Check_if_URL_is_allowed": {
+                                                            "actions": {
+                                                                "Append_to_consolidated_action_variable_for_allowed_URL": {
+                                                                    "runAfter": {
+                                                                        "Set_action_variable_for_allowed_URL": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "ConsolidatedAction",
+                                                                        "value": "@variables('Action')"
+                                                                    },
+                                                                    "description": "To append action JSON object"
+                                                                },
+                                                                "Set_action_variable_for_allowed_URL": {
+                                                                    "runAfter": {},
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "Action",
+                                                                        "value": {
+                                                                            "Comment": "Allowed using content filtering",
+                                                                            "NetworkName": "@{items('For_each_Network')?['name']}",
+                                                                            "Status": "Allowed",
+                                                                            "URL": "@{items('For_each_URL')?['Url']}"
+                                                                        }
+                                                                    },
+                                                                    "description": "To create action JSON object for allowed URL"
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Filter_Blocked_URL_Pattern": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Check_if_URL_is_blocked": {
+                                                                        "actions": {
+                                                                            "Append_to_consolidated_action_variable_for_blocked_URL": {
+                                                                                "runAfter": {
+                                                                                    "Set_action_variable_for_blocked_URL": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "ConsolidatedAction",
+                                                                                    "value": "@variables('Action')"
+                                                                                },
+                                                                                "description": "To append action JSON object"
+                                                                            },
+                                                                            "Set_action_variable_for_blocked_URL": {
+                                                                                "runAfter": {},
+                                                                                "type": "SetVariable",
+                                                                                "inputs": {
+                                                                                    "name": "Action",
+                                                                                    "value": {
+                                                                                        "Comment": "Blocked using content filtering",
+                                                                                        "NetworkName": "@{items('For_each_Network')?['name']}",
+                                                                                        "Status": "Blocked",
+                                                                                        "URL": "@{items('For_each_URL')?['Url']}"
+                                                                                    }
+                                                                                },
+                                                                                "description": "To create action JSON object for blocked URL"
+                                                                            }
+                                                                        },
+                                                                        "runAfter": {},
+                                                                        "else": {
+                                                                            "actions": {
+                                                                                "Append_to_consolidated_action_variable": {
+                                                                                    "runAfter": {
+                                                                                        "Set_action_variable": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "AppendToArrayVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "ConsolidatedAction",
+                                                                                        "value": "@variables('Action')"
+                                                                                    },
+                                                                                    "description": "To append action JSON object"
+                                                                                },
+                                                                                "Set_action_variable": {
+                                                                                    "runAfter": {},
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "Action",
+                                                                                        "value": {
+                                                                                            "Comment": "Not Found using content filtering",
+                                                                                            "NetworkName": "@{items('For_each_Network')?['name']}",
+                                                                                            "Status": "Not Found",
+                                                                                            "URL": "@{items('For_each_URL')?['Url']}"
+                                                                                        }
+                                                                                    },
+                                                                                    "description": "To create action JSON object"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression": {
+                                                                            "and": [
+                                                                                {
+                                                                                    "greater": [
+                                                                                        "@length(body('Filter_Blocked_URL_Pattern'))",
+                                                                                        0
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type": "If",
+                                                                        "description": "Condition to check if URL belongs to blocked URL patterns"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "greater": [
+                                                                            "@length(body('Filter_Allowed_URL_Pattern'))",
+                                                                            0
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If",
+                                                            "description": "Condition to check if URL belongs to allowed URL patterns"
+                                                        },
+                                                        "Filter_Allowed_URL_Pattern": {
+                                                            "runAfter": {},
+                                                            "type": "Query",
+                                                            "inputs": {
+                                                                "from": "@body('Get_Network_Appliance_Content_Filtering')?['allowedUrlPatterns']",
+                                                                "where": "@contains(item(), items('For_each_URL')?['Url'])"
+                                                            },
+                                                            "description": "To filter allowed URL pattern from get network appliance content filtering action based on URL"
+                                                        },
+                                                        "Filter_Blocked_URL_Pattern": {
+                                                            "runAfter": {
+                                                                "Filter_Allowed_URL_Pattern": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Query",
+                                                            "inputs": {
+                                                                "from": "@body('Get_Network_Appliance_Content_Filtering')?['blockedUrlPatterns']",
+                                                                "where": "@contains(item(), items('For_each_URL')?['Url'])"
+                                                            },
+                                                            "description": "To filter blocked URL pattern from get network appliance content filtering action based on URL"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Get_Network_Appliance_Content_Filtering": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach",
+                                                    "description": "For each loop for URLs from Microsoft Sentinel",
+                                                    "runtimeConfiguration": {
+                                                        "concurrency": {
+                                                            "repetitions": 1
+                                                        }
+                                                    }
+                                                },
+                                                "Get_Network_Appliance_Content_Filtering": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/networks/@{encodeURIComponent(items('For_each_Network')?['id'])}/appliance/contentFiltering"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Get_Networks": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach",
+                                            "description": " For each loop for network",
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            }
+                                        },
+                                        "Get_Networks": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/organizations/@{encodeURIComponent(body('Filter_Organization')?[0]?['id'])}/networks",
+                                                "queries": {
+                                                    "perPage": 1000
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Filter_Organization": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Terminate_if_organization_not_found": {
+                                                "runAfter": {},
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runError": {
+                                                        "code": "404",
+                                                        "message": "Organization Not Found"
+                                                    },
+                                                    "runStatus": "Failed"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Filter_Organization'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Condition to check if filtered organization is same as organization"
+                                },
+                                "Filter_Organization": {
+                                    "runAfter": {
+                                        "Get_Organizations": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('Get_Organizations')",
+                                        "where": "@equals(item()?['name'], parameters('OrganizationName'))"
+                                    },
+                                    "description": "To filter organization detail from get organizations action based on organization name"
+                                },
+                                "Get_Organizations": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/organizations"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Cisco_Meraki_Logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_if_URL_not_found": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "code": "404",
+                                                "message": "URL Not Found in Microsoft Sentinel Incident"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@outputs('Entities_-_Get_URLs')",
+                                            "body"
+                                        ]
+                                    },
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_URLs')?['URLs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Condition to check if body present in the sentinel incident"
+                        },
+                        "Cisco_Meraki_Logo": {
+                            "runAfter": {
+                                "Initialize_consolidated_action_array_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://www.kellerschroeder.com/wp-content/uploads/2017/05/Cisco-Meraki.jpg\" alt=\"CiscoMerakiLogo\" width=\"32\" height=\"32\">",
+                            "description": "To store meraki logo"
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "Initialize_action_object_variable": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Action",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "To create JSON action object"
+                        },
+                        "Initialize_consolidated_action_array_variable": {
+                            "runAfter": {
+                                "Initialize_action_object_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ConsolidatedAction",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To create consolidated action array variable for incident comment"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "MerakiConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Meraki_Connection'))]",
+                                "connectionName": "[variables('Meraki_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('CiscoMerakiConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]",
+                                "connectionName": "[variables('AzureSentinel_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Meraki_Connection')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('CiscoMerakiConnectorName'))]"
+                },
+                "parameterValues": {
+                    "api_key": ""
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinel_Connection')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinel_Connection')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

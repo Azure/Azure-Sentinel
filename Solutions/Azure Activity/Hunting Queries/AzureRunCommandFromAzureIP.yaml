@@ -1,0 +1,49 @@
+id: efe843ca-3ce7-4896-9f8b-f2c374ae6527
+name: Azure VM Run Command executed from Azure IP address
+description: |
+  'Identifies any Azure VM Run Command operation executed from an Azure IP address.
+  Run Command allows an attacker or legitimate user to execute arbitrary PowerShell
+  on a target VM. This technique has been seen in use by NOBELIUM.'
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AzureActivity
+tactics:
+  - LateralMovement
+  - CredentialAccess
+relevantTechniques:
+  - T1570
+  - T1078.004
+query: |
+  let azure_ranges = externaldata(changeNumber: string, cloud: string, values: dynamic)
+  ["https://raw.githubusercontent.com/microsoft/mstic/master/PublicFeeds/MSFTIPRanges/ServiceTags_Public.json"] with(format='multijson')
+  | mv-expand values
+  | extend Name = values.name, AddressPrefixes = values.properties.addressPrefixes
+  | where Name startswith "WindowsVirtualDesktop"
+  | mv-expand AddressPrefixes
+  | summarize by tostring(AddressPrefixes);
+  AzureActivity
+  | where TimeGenerated > ago(30d)
+  // Isolate run command actions
+  | where OperationNameValue == "Microsoft.Compute/virtualMachines/runCommand/action"
+  // Confirm that the operation impacted a virtual machine
+  | where Authorization has "virtualMachines"
+  // Each runcommand operation consists of three events when successful, Started, Accepted (or Rejected), Successful (or Failed).
+  | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), max(CallerIpAddress), make_list(ActivityStatusValue) by CorrelationId, Authorization, Caller
+  // Limit to Run Command executions that Succeeded
+  | where list_ActivityStatusValue has "Succeeded"
+  // Extract data from the Authorization field, allowing us to later extract the Caller (UPN) and CallerIpAddress
+  | extend Authorization_d = parse_json(Authorization)
+  | extend Scope = Authorization_d.scope
+  | extend Scope_s = split(Scope, "/")
+  | extend Subscription = tostring(Scope_s[2])
+  | extend VirtualMachineName = tostring(Scope_s[-1])
+  | project StartTime, EndTime, Subscription, VirtualMachineName, CorrelationId, Caller, CallerIpAddress=max_CallerIpAddress
+  | evaluate ipv4_lookup(azure_ranges, CallerIpAddress, AddressPrefixes)
+  | extend IP_0_Address = CallerIpAddress
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+version: 2.1.1

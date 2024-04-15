@@ -1,0 +1,46 @@
+id: bdea247f-7d17-498c-ac0e-c7e764cbdbbe
+name: VMware ESXi - Multiple new VMs started
+description: |
+  'Detects when multiple new VMs were started.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: VMwareESXi
+    dataTypes:
+      - VMwareESXi
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let threshold = 5;
+  let a_vm = 
+  VMwareESXi
+  | where SyslogMessage has ('VmPoweredOnEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | summarize vm_l = make_set(DstHostname,200)
+  | extend k=1;
+  VMwareESXi
+  | where SyslogMessage has ('VmPoweredOnEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | extend SrcUsername = extract(@'\[info\]\s+\[(.*?)\]', 1, SyslogMessage)
+  | extend k = 1
+  | join (a_vm) on k
+  | where vm_l !has DstHostname
+  | summarize n_vm = make_set(DstHostname,200) by SrcUsername, bin(TimeGenerated, 10m)
+  | where array_length(n_vm) >= threshold
+  | extend hostname = iff(array_length(n_vm) > 0, n_vm[0], "")
+  | extend NTDomain = tostring(split(hostname, '\\', 1)[0]), HostName = tostring(split(hostname, '.', 0)[0])
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: NTDomain
+version: 1.0.1
+kind: Scheduled

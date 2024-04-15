@@ -1,0 +1,744 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+    "handler": "Microsoft.Azure.CreateUIDef",
+    "version": "0.1.2-preview",
+    "parameters": {
+        "config": {
+            "isWizard": false,
+            "basics": {
+                "description": "**Important:** _This Microsoft Sentinel Solution is currently in public preview. This feature is provided without a service level agreement, and it's not recommended for production workloads. Certain features might not be supported or might have constrained capabilities. For more information, see [Supplemental Terms of Use for Microsoft Azure Previews](https://azure.microsoft.com/support/legal/preview-supplemental-terms/)._\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\nMicrosoft Sentinel Solutions provide a consolidated way to acquire Microsoft Sentinel content like data connectors, workbooks, analytics, and automations in your workspace with a single deployment step.\n\n**Workbooks:** 2, **Analytic Rules:** 3, **Watchlists:** 1, **Playbooks:** 3, **Function Apps:** 1\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+                "subscription": {
+                    "resourceProviders": [
+                        "Microsoft.OperationsManagement/solutions",
+                        "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+                        "Microsoft.Insights/workbooks",
+                        "Microsoft.Logic/workflows"
+                    ]
+                },
+                "location": {
+                    "metadata": {
+                        "hidden": "Hiding location, we get it from the log analytics workspace"
+                    },
+                    "visible": false
+                },
+                "resourceGroup": {
+                    "allowExisting": true
+                }
+            }
+        },
+        "basics": [
+            {
+                "name": "getLAWorkspace",
+                "type": "Microsoft.Solutions.ArmApiControl",
+                "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+                "condition": "[greater(length(resourceGroup().name),0)]",
+                "request": {
+                    "method": "GET",
+                    "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+                }
+            },
+            {
+                "name": "workspace",
+                "type": "Microsoft.Common.DropDown",
+                "label": "Workspace",
+                "placeholder": "Select a workspace",
+                "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+                "constraints": {
+                    "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(filter.id, toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+                    "required": true
+                },
+                "visible": true
+            }
+        ],
+        "steps": [
+            {
+                "name": "prereq",
+                "label": "Prerequisites",
+                "subLabel": {
+                    "preValidation": "Register an AAD app",
+                    "postValidation": "Done"
+                },
+                "bladeTitle": "Prerequisites",
+                "elements": [
+					{
+						"name": "Connectors",
+						"type": "Microsoft.Common.Section",
+						"label": "Data Connectors",
+						"elements": [
+							{
+								"name": "ConnectorsInstriction",
+								"type": "Microsoft.Common.TextBlock",
+								"visible": true,
+								"options": {
+									"text": "> Make sure that you’ve connected the 'Azure Activity' and 'Azure Key Vault' data connectors in your Microsoft Sentinel workspace."
+								}
+							}
+						],
+						"visible": true
+					},
+                    {
+                        "name": "AADregister",
+                        "type": "Microsoft.Common.Section",
+                        "label": "AAD App Registration",
+                        "elements": [
+                            {
+                                "name": "AADregister-subheader",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Register an AAD app for the function app that will create honeytokens in your key vaults at scale."
+                                }
+                            },
+                            {
+                                "name": "AADregister-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Enter a meaningful name for your function app:"
+                                }
+                            },
+                            {
+                                "name": "funcappname",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Function app name",
+                                "toolTip": "Enter a name that is unique, between 2-22 characters long, and includes alphanumeric characters only.",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "^[a-z0-9A-Z]{2,21}$",
+                                    "validationMessage": "Must be between 2 and 22 characters in length, alphanumeric and not end with a hyphen."
+                                }
+                            },
+                            {
+                                "name": "AADregister-text2",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "2. Run the following command from a cloud shell:"
+                                }
+                            },
+                            {
+                                "name": "AADregister-command",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "[concat('curl -sL https://aka.ms/sentinelhoneytokensappcreate | bash -s ', if(equals(steps('prereq').AADregister.funcappname,''),'<your-app-name>',steps('prereq').AADregister.funcappname))]"
+                                }
+                            },
+                            {
+                                "name": "CloudShell-link",
+                                "type": "Microsoft.Common.InfoBox",
+								"visible": true,
+                                "options": {
+                                    "icon": "None",
+                                    "text": "Click here to open a cloud shell",
+                                    "uri": "https://shell.azure.com"
+                                }
+                            },
+							{
+                                "name": "AADregister-outputs",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "3. Provide the output from the cloud shell below:"
+                                },
+								"visible": true
+                            },
+                            {
+                                "name": "aadClientId",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "AAD Client ID",
+                                "defaultValue": "",
+                                "toolTip": "Please enter the AAD Client ID",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "(^([0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12})$)",
+                                    "validationMessage": "Please enter the AAD Client ID"
+                                },
+								"visible": true
+                            },
+                            {
+                                "name": "aadClientSecret",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "AAD Client Secret",
+                                "defaultValue": "",
+                                "toolTip": "Please enter the AAD Client Secret",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[\\w\\W]+",
+                                    "validationMessage": "Please enter the AAD Client Secret"
+                                },
+								"visible": true
+							},
+                            {
+                                "name": "adminConsentLink",
+                                "type": "Microsoft.Common.TextBlock",
+                               "visible": true,
+                                "options": {
+                                    "text": "4. Grant admin consent to your function app.",
+                                    "link": {
+                                        "label": "Click here to continue in your function app settings.",
+										"uri": "[concat('https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/CallAnAPI/appId/',steps('prereq').AADregister.aadClientId,'/isMSAApp/')]"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "workbooks",
+                "label": "Workbooks",
+                "subLabel": {
+                    "preValidation": "Configure the workbooks",
+                    "postValidation": "Done"
+                },
+                "bladeTitle": "Workbooks",
+                "elements": [
+                    {
+                        "name": "workbooks-text",
+                        "type": "Microsoft.Common.TextBlock",
+                        "options": {
+                            "text": "This Microsoft Sentinel Solution installs workbooks. Workbooks provide a flexible canvas for data monitoring, analysis, and the creation of rich visual reports within the Azure portal. They allow you to tap into one or many data sources from Microsoft Sentinel and combine them into unified interactive experiences.",
+                            "link": {
+                                "label": "Learn more",
+                                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+                            }
+                        }
+                    },
+                    {
+                        "name": "workbook1",
+                        "type": "Microsoft.Common.Section",
+                        "label": "HoneyTokensIncidents",
+                        "elements": [
+                            {
+                                "name": "workbook1-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "A workbook that displays details about all honeytoken activity in your key vaults."
+                                }
+                            },
+                            {
+                                "name": "workbook1-name",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Workbook name",
+                                "defaultValue": "HoneyTokensIncidents",
+                                "toolTip": "Display name for the workbook.",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[a-z0-9A-Z]{1,256}$",
+                                    "validationMessage": "Please enter a workbook name"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "workbook2",
+                        "type": "Microsoft.Common.Section",
+                        "label": "SOCHTManagement",
+                        "elements": [
+                            {
+                                "name": "workbook2-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Provides an interactive, guided process for deploying honeytokens to your key vaults. Share this workbook with all key vault owners in your tenant."
+                                }
+                            },
+                            {
+                                "name": "workbook2-name",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Workbook name",
+                                "defaultValue": "SOCHTManagement",
+                                "toolTip": "Display name for the workbook.",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[a-z0-9A-Z]{1,256}$",
+                                    "validationMessage": "Please enter a workbook name"
+                                }
+                            },
+                            {
+                                "name": "CommonLAWorkspace-name",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "LogAnalytics workspace name",
+                                "defaultValue": "HTDummyLA",
+                                "toolTip": "This LogAnalytics workspace is required to support the functionality of the honeytokens deployment workbook. No data is needed to be stored in it. Reader permissions need to be granted to any user with which the workbook is shared.",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[a-z0-9A-Z]{1,256}$",
+                                    "validationMessage": "Please enter a name for the LogAnalytics workspace"
+                                }
+                            },
+                            {
+                                "name": "workbook2-SOCEmail",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "SOC email address",
+                                "toolTip": "SOC email address for reporting honeytoken deletion.",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": ".+@.+$",
+                                    "validationMessage": "Please enter a valid email address"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "analytics",
+                "label": "Analytics",
+                "subLabel": {
+                    "preValidation": "Configure the analytics",
+                    "postValidation": "Done"
+                },
+                "bladeTitle": "Analytics",
+                "elements": [
+                    {
+                        "name": "analytics-text",
+                        "type": "Microsoft.Common.TextBlock",
+                        "options": {
+                            "text": "This Microsoft Sentinel Solution installs analytic rules for HoneyTokens that you can enable for custom alert generation in Microsoft Sentinel. These analytic rules will be deployed in disabled mode in the analytics rules gallery of your Microsoft Sentinel workspace. Configure and enable these rules in the analytic rules gallery after this Solution deploys.",
+                            "link": {
+                                "label": "Learn more",
+                                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+                            }
+                        }
+                    },
+                    {
+                        "name": "analytic1",
+                        "type": "Microsoft.Common.Section",
+                        "label": "HoneyTokens: KeyVault HoneyToken key accessed",
+                        "elements": [
+                            {
+                                "name": "analytic1-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Detects when a honeytoken key has been accessed."
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "analytic2",
+                        "type": "Microsoft.Common.Section",
+                        "label": "HoneyTokens: KeyVault HoneyToken secret accessed",
+                        "elements": [
+                            {
+                                "name": "analytic1-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Detects when a honeytoken secret has been accessed."
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "analytic3",
+                        "type": "Microsoft.Common.Section",
+                        "label": "HoneyTokens: KeyVault HoneyToken diagnostic settings deleted or changed",
+                        "elements": [
+                            {
+                                "name": "analytic1-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Detects when a monitored key vault diagnostics settings are deleted or changed."
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "watchlists",
+                "label": "Watchlists",
+                "subLabel": {
+                    "preValidation": "Configure the watchlists",
+                    "postValidation": "Done"
+                },
+                "bladeTitle": "Watchlists",
+                "elements": [
+                    {
+                        "name": "watchlists-text",
+                        "type": "Microsoft.Common.TextBlock",
+                        "options": {
+                            "text": "Microsoft Sentinel watchlists enable the collection of data from external data sources for correlation with the events in your Microsoft Sentinel environment. Once created, you can use watchlists in your search, detection rules, threat hunting, and response playbooks. Watchlists are stored in your Microsoft Sentinel workspace as name-value pairs and are cached for optimal query performance and low latency. Once deployment is successful, the installed watchlists will be available in the Watchlists blade under 'My Watchlists'.",
+                            "link": {
+                                "label": "Learn more",
+                                "uri": "https://aka.ms/sentinelwatchlists"
+                            }
+                        }
+                    },
+                    {
+                        "name": "watchlist1",
+                        "type": "Microsoft.Common.Section",
+                        "label": "HoneyTokens",
+                        "elements": [
+                            {
+                                "name": "watchlist1-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Display a list of honeytokens created in your tenant's key vaults."
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "playbooks",
+                "label": "Playbooks",
+                "subLabel": {
+                    "preValidation": "Configure the playbooks",
+                    "postValidation": "Done"
+                },
+                "bladeTitle": "Playbooks",
+                "elements": [
+                    {
+                        "name": "playbooks-text",
+                        "type": "Microsoft.Common.TextBlock",
+                        "options": {
+                            "text": "This solution installs playbook resources.  A security playbook is a collection of procedures that can be run from Microsoft Sentinel in response to an alert. A security playbook can help automate and orchestrate your response, and can be run manually or set to run automatically when specific alerts are triggered. Security playbooks in Microsoft Sentinel are based on Azure Logic Apps, which means that you get all the power, customizability, and built-in templates of Logic Apps. Each playbook is created for the specific subscription you choose, but when you look at the Playbooks page, you will see all the playbooks across any selected subscriptions.",
+                            "link": {
+                                "label": "Learn more",
+                                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-respond-threats-playbook?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+                            }
+                        }
+                    },
+                    {
+                        "name": "playbook1",
+                        "type": "Microsoft.Common.Section",
+                        "label": "HoneyTokenWLCheckKV",
+                        "elements": [
+                            {
+                                "name": "playbook1-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Internally called from the managemnent workbook to display which key-vaults are monitored by the SOC."
+                                }
+                            },
+                            {
+                                "name": "playbook1-PlaybookName",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Playbook name",
+                                "defaultValue": "HoneyTokenWLCheckKV",
+                                "toolTip": "Please enter the Playbook Name",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[a-z0-9A-Z]{1,256}$",
+                                    "validationMessage": "Please enter the Playbook Name"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "playbook2",
+                        "type": "Microsoft.Common.Section",
+                        "label": "HoneyTokensAdd2WLKV",
+                        "elements": [
+                            {
+                                "name": "playbook2-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Internally called from the managemnent workbook during the manual honeytokens deployment to add a honeytoken to the SOC's watchlist."
+                                }
+                            },
+                            {
+                                "name": "playbook2-PlaybookName",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Playbook name",
+                                "defaultValue": "HoneyTokensAdd2WLKV",
+                                "toolTip": "Please enter the playbook name",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[a-z0-9A-Z]{1,256}$",
+                                    "validationMessage": "Please enter the playbook name"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "playbook3",
+                        "type": "Microsoft.Common.Section",
+                        "label": "HoneyTokensEnableKVPolicy",
+                        "elements": [
+                            {
+                                "name": "playbook3-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Internally called from the managemnent workbook to generate an ARM template for adding or removing a user from a key-vault's policy."
+                                }
+                            },
+                            {
+                                "name": "playbook3-PlaybookName",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Playbook name",
+                                "defaultValue": "HoneyTokensEnableKVPolicy",
+                                "toolTip": "Please enter the playbook name",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[a-z0-9A-Z]{1,256}$",
+                                    "validationMessage": "Please enter the playbook name"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name": "azurefunctions",
+                "label": "Azure Functions",
+                "subLabel": {
+                    "preValidation": "Configure the Azure Functions",
+                    "postValidation": "Done"
+                },
+                "bladeTitle": "Azure Functions",
+                "elements": [
+                    {
+                        "name": "playbooks-text",
+                        "type": "Microsoft.Common.TextBlock",
+                        "options": {
+                            "text": "This solution installs Azure Functions.",
+                            "link": {
+                                "label": "Learn more",
+                                "uri": "https://docs.microsoft.com/azure/azure-functions/"
+                            }
+                        }
+                    },
+                    {
+                        "name": "playbook4funcapp",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Function app settings",
+                        "elements": [
+                            {
+                                "name": "funcapp-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Define a function app to deploy honeytokens in your key vaults at scale"
+                                }
+                            },
+                            {
+                                "name": "playbook4-ServicePlan",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "Service plan",
+                                "placeholder": "Select a service plan for your function app",
+                                "toolTip": "Select a service plan for Azure function app that will deploy honeytokens at scale. This function app requires permissions to your key vault on behalf of the user running the function app. The Premium plan has a higher cost, and allows you to configure extra security features, such as assigning the function a specific IP/domain.",
+                                "constraints": {
+                                    "allowedValues": [
+                                        {
+                                            "label": "Premium",
+                                            "value": "Premium"
+                                        },
+                                        {
+                                            "label": "Consumption",
+                                            "value": "Consumption"
+                                        }
+                                    ],
+                                    "required": true
+                                },
+                                "visible": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "playbook4KV",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Key vault configuration",
+                        "elements": [
+                            {
+                                "name": "kv-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Define values for the key vault where you'll store your AAD app's ID and secret."
+                                }
+                            },
+                            {
+                                "name": "playbook4-NewOrExistingKV",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "Should a new KeyVault be created",
+                                "placeholder": "New key vault or use existing?",
+                                "toolTip": "Select whether to create a new key vault to store the app secret, or to deploy to an existing key vault",
+								"defaultValue": "existing",
+                                "constraints": {
+                                    "allowedValues": [
+                                        {
+                                            "label": "existing",
+                                            "value": "existing"
+                                        },
+                                        {
+                                            "label": "new",
+                                            "value": "new"
+                                        }
+                                    ],
+                                    "required": true
+								},
+								"visible": true
+							},
+							{
+								"name": "existingKV",
+								"type": "Microsoft.Solutions.ResourceSelector",
+								"label": "Existing key vault",
+								"resourceType": "Microsoft.KeyVault/vaults",
+								"toolTip": "Select a key vault from the list",
+								"options": {
+									"filter": {
+										"subscription": "onBasics"
+									}
+								},
+								"visible": "[if(equals(steps('azurefunctions').playbook4KV.playbook4-NewOrExistingKV,'existing'),true,false)]"
+							},
+							{
+								"name": "playbook4-KeyVaultName",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "New key vault name",
+                                "defaultValue": "",
+                                "toolTip": "Enter a name for your new key vault",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[a-z0-9A-Z]{1,256}$",
+                                    "validationMessage": "Enter a name for your new key vault"
+                                },
+                                "visible": "[if(equals(steps('azurefunctions').playbook4KV.playbook4-NewOrExistingKV,'existing'),false,true)]"
+                            },
+                            {
+                                "name": "resourceGroupsList",
+                                "type": "Microsoft.Solutions.ArmApiControl",
+                                "request": {
+                                    "method": "GET",
+                                    "path": "[concat(subscription().id, '/resourcegroups?api-version=2021-04-01')]"
+                                }
+                            },
+                            {
+                                "name": "playbook4-ResourceGroupOfKeyVaultStoringAppSecret",
+                                "type": "Microsoft.Common.DropDown",
+                                "label": "New key vault resource group",
+                                "toolTip": "Select a resource group for your new key vault",
+                                "constraints": {
+                                    "allowedValues": "[map(steps('azurefunctions').playbook4KV.resourceGroupsList.value, (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', concat(item.name, '/', item.location), '\"}')))]",
+                                    "required": true
+                                },								
+                                "visible": "[if(equals(steps('azurefunctions').playbook4KV.playbook4-NewOrExistingKV,'existing'),false,true)]"
+                            },
+                            {
+                                "name": "playbook4-SecretName",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Key vault secret name",
+                                "defaultValue": "",
+                                "toolTip": "Enter a name for the key vault secret where you want to store your app secret",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "[\\w\\W]{1,256}$",
+                                    "validationMessage": "Enter a name for the key vault secret where you want to store your app secret"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "name": "playbook4HTConf",
+                        "type": "Microsoft.Common.Section",
+                        "label": "Honeytoken configuration",
+                        "elements": [
+                            {
+                                "name": "htconf-text",
+                                "type": "Microsoft.Common.TextBlock",
+                                "options": {
+                                    "text": "Define settings used for the keys and secrets used in your honeytokens."
+                                }
+                            },
+                            {
+                                "name": "playbook4-keysKeywords",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Honeytoken key keywords",
+                                "defaultValue": "",
+                                "toolTip": "A comma-separated lists of alphanumeric values you want to use with your honeytoken names. For example, key,prod,dev",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "^[a-zA-Z0-9,]+$",
+                                    "validationMessage": "Please enter a comma-separated list of prefixes to be used for keys (no spaces)"
+                                }
+                            },
+                            {
+                                "name": "playbook4-secretsKeywords",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Honeytoken secret keywords",
+                                "defaultValue": "",
+                                "toolTip": "A comma-separated list of alphanumeric values you want to use with your honeytoken secrets. For example, secret,prod,dev",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "^[a-zA-Z0-9,]+$",
+                                    "validationMessage": "Please enter a comma-separated list of prefixes to be used for secrets (no spaces)"
+                                }
+                            },
+                            {
+                                "name": "playbook4-AdditionalHTProb",
+                                "type": "Microsoft.Common.TextBox",
+                                "label": "Additional honeytoken probability",
+                                "defaultValue": "",
+                                "toolTip": "The probability of more than one honeytoken being added to the Key Vault.  Enter a value between 0 and 1, such as 0.6.",
+                                "constraints": {
+                                    "required": true,
+                                    "regex": "0\\.\\d+$",
+                                    "validationMessage": "Please enter a number between 0 and 1"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+			{
+				"name": "Post-deployment Steps",
+				"label": "Post-deployment steps",
+				"subLabel": {
+					"preValidation": "Deploy policy definitions",
+					"postValidation": "Done"
+				},
+				"bladeTitle": "Policy Definitions",
+				"elements": [
+					{
+						"name": "policyDefs",
+						"type": "Microsoft.Common.Section",
+						"label": "Important: Distribute the SOCManagement workbook to key vault owners",
+						"elements": [
+							{
+								"name": "Policy-text",
+								"type": "Microsoft.Common.TextBlock",
+								"options": {
+									"text": "We recommend that all key vault owners in your tenant use the SOCManagement workbook to deploy honeytokens into the key vaults they own. To ensure access and provide awareness, share the SOCManagement workbook with all key vault owners."
+								}
+							},
+                            {
+								"name": "Policy-text2",
+								"type": "Microsoft.Common.TextBlock",
+								"options": {
+									"text": "There are many ways to share the SOCManagement workbook. One option is to use a custom recommendation in Microsoft Defender for Cloud. To do this, use the links shown on the 'Output' page after the Deception solution installation is complete to deploy the 'Deception' policy and trigger the custom recommendation.",
+									"link": {
+										"label": "Learn more",
+										"uri": "https://aka.ms/honeytokens-doc"
+									}
+								}
+							}
+
+						],
+						"visible": true
+					}
+				]
+			}
+		],        
+		"outputs": {
+            "workspace-location": "[resourceGroup().location]",
+            "location": "[location()]",
+            "workspace": "[basics('workspace')]",
+            "PlaybookName_HoneyTokenWLCheckKV": "[steps('playbooks').playbook1.playbook1-PlaybookName]",
+            "PlaybookName_HoneyTokensAdd2WLKV": "[steps('playbooks').playbook2.playbook2-PlaybookName]",
+            "PlaybookName_HoneyTokensEnableKVPolicy": "[steps('playbooks').playbook3.playbook3-PlaybookName]",
+            "AzureFuncServicePlan": "[steps('azurefunctions').playbook4funcapp.playbook4-ServicePlan]",
+            "functionAppName": "[steps('prereq').AADregister.funcappname]",
+            "aadClientId": "[steps('prereq').AADregister.aadClientId]",
+            "aadClientSecret": "[steps('prereq').AADregister.aadClientSecret]",
+            "KeyVaultNameStoringAppSecretNewOrExisting": "[steps('azurefunctions').playbook4KV.playbook4-NewOrExistingKV]",
+            "KeyVaultNameStoringAppSecret": "[if(equals(steps('azurefunctions').playbook4KV.playbook4-NewOrExistingKV,'existing'),steps('azurefunctions').playbook4KV.existingKV.name,steps('azurefunctions').playbook4KV.playbook4-KeyVaultName)]",
+            "ResourceGroupNameOfKeyVaultStoringAppSecret": "[if(equals(steps('azurefunctions').playbook4KV.playbook4-NewOrExistingKV,'existing'),first(skip(split(steps('azurefunctions').playbook4KV.existingKV.id,'/'),4)),first(split(steps('azurefunctions').playbook4KV.playbook4-ResourceGroupOfKeyVaultStoringAppSecret,'/')))]",
+            "LocationNameOfKeyVaultStoringAppSecret": "[if(equals(steps('azurefunctions').playbook4KV.playbook4-NewOrExistingKV,'existing'),steps('azurefunctions').playbook4KV.existingKV.location,last(split(steps('azurefunctions').playbook4KV.playbook4-ResourceGroupOfKeyVaultStoringAppSecret,'/')))]",
+            "SecretName": "[steps('azurefunctions').playbook4KV.playbook4-SecretName]",
+            "kyKywords": "[steps('azurefunctions').playbook4HTConf.playbook4-keysKeywords]",
+            "scrtKywords": "[steps('azurefunctions').playbook4HTConf.playbook4-secretsKeywords]",
+            "AdditionalHTProb": "[steps('azurefunctions').playbook4HTConf.playbook4-AdditionalHTProb]",
+            "incidentsWorkbookDisplayName": "[steps('workbooks').workbook1.workbook1-name]",
+            "managementWorkbookDisplayName": "[steps('workbooks').workbook2.workbook2-name]",
+			"CommonLAWorkspaceName": "[steps('workbooks').workbook2.CommonLAWorkspace-name]",
+            "SOCEmailAddress": "[steps('workbooks').workbook2.workbook2-SOCEmail]"
+        }
+    }
+}

@@ -1,0 +1,38 @@
+id: 4a433846-4b05-4a27-99d7-92093feded79
+name: GCP IAM - Publicly exposed storage bucket
+description: |
+  'Detects possible misconfiguration for bucket policy making it publicly available.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: GCPIAMDataConnector
+    dataTypes:
+      - GCP_IAM
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1069
+query: |
+  GCP_IAM
+  | where PayloadMethodname =~ 'google.iam.v1.IAMPolicy.SetIamPolicy'
+  | where ResourceType has 'bucket'
+  | extend members = parse_json(todynamic(PayloadRequestPolicyBindings))[0]['members']
+  | extend action = parse_json(todynamic(PayloadRequestPolicyBindings))[0]['action']
+  | where members in~ ('allUsers', 'allAuthenticatedUsers')
+  | where action =~ 'ADD'
+  | extend timestamp = TimeGenerated, AccountCustomEntity = PayloadAuthenticationinfoPrincipalemail, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

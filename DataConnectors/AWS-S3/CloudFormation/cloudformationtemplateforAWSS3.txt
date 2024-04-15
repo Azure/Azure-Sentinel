@@ -1,0 +1,146 @@
+# This template creates SQS Queue and IAM Role for Sentinel
+# S3 bucket where logs are fetched by Sentinel should be updated to send notifications to SQS as following
+# This configuration is done in Control Tower managed stackset AWSControlTowerLoggingResources
+#   {
+#     'QueueConfigurations': [
+#     {
+#       'Id':'${eventNotificationName}',
+#       'QueueArn': '${sqsArn}',
+#       'Events': ['s3:ObjectCreated:*'],
+#       'Filter': {
+#       'Key': {
+#         'FilterRules': [
+#         {
+#           'Name': 'prefix',
+#           'Value': '${eventNotificationPrefix}'
+#         }
+#         ]
+#       }
+#       }
+#     }
+#   ]
+# } 
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Azure Sentinel integration. Stack creates an Assume Role with minimal permissions to grant 
+  Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, 
+  enable VPC Flow logs to VPCs of your choice, S3 bucket, SQS Queue, and S3 notifications, 
+  in addition to some mandatory IAM policies.
+Parameters:
+  SentinelSQSQueueName:
+    Default: "AzureSentinelNotifications"
+    Type: String
+    Description: >-
+      Prefix name for the Sentinel SQS Queue
+  LogBucketName:
+    Type: String
+    Description: >-
+      Log bucket name which will send SQS notifications for Azure Sentinel and from where Sentinel will fetch logs from.
+  SentinelAWSAccount:
+    Type: String
+    Description: >-
+      AWS Account ID from Azure Sentinel Workspace
+  SentinelWorkspaceID:
+    Type: String
+    Description: >-
+      Azure Sentinel Workspace ID
+Outputs:
+  SentinelSQSQueueURL:
+    Description: >-
+      AWS SQS Queue URL that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.
+    Value: !Ref SentinelSQSQueue
+  SentinelSQSQueueArn:
+    Description: >-
+      Log destination ARN to be used when setting up other accounts to exports
+      logs
+    Value: !GetAtt 
+      - SentinelSQSQueue
+      - Arn
+  SentinelSQSQueueName:
+    Description: >-
+      Log destination ARN to be used when setting up other accounts to exports
+      logs
+    Value: !GetAtt 
+      - SentinelSQSQueue
+      - QueueName
+  SentinelIAMRoleArn:
+    Description: >-
+      IAM Role ARN that is inserted into Amazon Web Service S3 Connector in the Sentinel Data Connectors portal.
+    Value: !GetAtt 
+      - SentinelIAMRole
+      - Arn  
+Resources:
+  # SQS Queue notifies Sentinel for new S3 objects
+  SentinelSQSQueue:
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: !Sub '${SentinelSQSQueueName}-${LogBucketName}'
+      Tags: 
+        - Key: Bucket
+          Value: !Ref LogBucketName
+  # SQS Queue Policy that allows S3 to send notifications and Azure Sentinel to fetch them
+  SentinelSQSQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties: 
+      PolicyDocument: 
+        Statement: 
+          - Sid: 'allow s3 to send notification messages to SQS queue'
+            Action: 
+              - "SQS:SendMessage"
+            Effect: "Allow"
+            Resource: 
+              - !GetAtt 
+                - SentinelSQSQueue
+                - Arn
+            Principal:  
+              Service: 
+                - "s3.amazonaws.com" 
+            Condition:
+              ArnLike:
+                'aws:SourceArn': !Sub 'arn:aws:s3:*:*:${LogBucketName}'
+          - Sid: 'allow specific role to read/delete/change visibility of SQS messages and get queue url'
+            Action: 
+              - "SQS:ChangeMessageVisibility"
+              - "SQS:DeleteMessage"
+              - "SQS:ReceiveMessage"
+              - "SQS:GetQueueUrl"
+            Effect: "Allow"
+            Resource: 
+              - !GetAtt 
+                - SentinelSQSQueue
+                - Arn
+            Principal:  
+              AWS: 
+                - !GetAtt 
+                  - SentinelIAMRole
+                  - Arn 
+      Queues: 
+        - !Ref SentinelSQSQueue
+
+  SentinelIAMRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${SentinelAWSAccount}:root"
+            Condition:
+              StringEquals:
+                'sts:ExternalId': !Ref SentinelWorkspaceID
+      Policies:
+        - PolicyName: !Sub Sentinel-${LogBucketName}-${AWS::AccountId}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Sid: SentinelS3Access
+              Action:
+                - 's3:Get*'
+                - 's3:List*'
+              Effect: Allow
+              Resource:
+                - !Sub arn:aws:s3:::${LogBucketName}/*

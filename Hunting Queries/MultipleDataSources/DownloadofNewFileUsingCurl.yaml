@@ -1,0 +1,57 @@
+id: 96066361-e101-4c8a-ad37-b0f58d75cd2b
+name: Download of New File Using Curl
+description: |
+  'Threat actors may use tools such as Curl to download additional files, communicate with C2 infrastructure, or exfiltrate data. This query looks for new files being downloaded using Curl. Curl also has legitimate uses files and hosts should be reviewed to identify potentially malicious activity.
+    Ref: https://www.microsoft.com/security/blog/2022/07/27/untangling-knotweed-european-private-sector-offensive-actor-using-0-day-exploits/'
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvents
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1071
+query: |
+  let known_files = DeviceNetworkEvents
+    | where TimeGenerated between (ago(7d)..ago(1d))
+    | where InitiatingProcessFileName has "curl"
+    | extend url = extract("http[s]?:\\/\\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+", 0,InitiatingProcessCommandLine)
+    | extend ip = extract("(\\b25[0-5]|\\b2[0-4][0-9]|\\b[01]?[0-9][0-9]?)(\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}[^ ]*", 0, InitiatingProcessCommandLine)
+    | extend remote_file = iif(isnotempty(url), url, ip)
+    | union (SecurityEvent
+    | where TimeGenerated between (ago(7d)..ago(1d))
+    | where EventID == 4688
+    | where CommandLine has "curl"
+    | extend url = extract("http[s]?:\\/\\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+", 0,CommandLine)
+    | extend ip = extract("(\\b25[0-5]|\\b2[0-4][0-9]|\\b[01]?[0-9][0-9]?)(\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}[^ ]*", 0, CommandLine)
+    | extend remote_file = iif(isnotempty(url), url, ip))
+    | summarize by remote_file;
+    DeviceNetworkEvents
+    | where TimeGenerated > ago(1d)
+    | where InitiatingProcessFileName has "curl"
+    | extend url = extract("http[s]?:\\/\\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+", 0,InitiatingProcessCommandLine)
+    | extend ip = extract("(\\b25[0-5]|\\b2[0-4][0-9]|\\b[01]?[0-9][0-9]?)(\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}[^ ]*", 0, InitiatingProcessCommandLine)
+    | extend remote_file = iif(isnotempty(url), url, ip)
+    | union (SecurityEvent
+    | where EventID == 4688
+    | where CommandLine has "curl"
+    | extend url = extract("http[s]?:\\/\\/(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+", 0,CommandLine)
+    | extend ip = extract("(\\b25[0-5]|\\b2[0-4][0-9]|\\b[01]?[0-9][0-9]?)(\\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}[^ ]*", 0, CommandLine)
+    | extend remote_file = iif(isnotempty(url), url, ip))
+    | where remote_file !in (known_files)
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ip
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: remote_file

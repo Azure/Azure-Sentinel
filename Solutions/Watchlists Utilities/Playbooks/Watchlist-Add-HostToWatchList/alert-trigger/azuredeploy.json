@@ -1,0 +1,439 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Add Host To Watchlist - Alert Trigger",
+        "description":  "This playbook will add a host entity from the alert to a new or existing watchlist.",
+        "prerequisites":  ["None"],
+        "postDeployment":  ["Assign Microsoft Sentinel Contributor role to the Playbook's Managed Identity"],
+        "lastUpdateTime":  "2022-04-25T00:00:00.000Z",
+        "entities":  [ "Host"],
+        "tags":  [],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Yaniv Shaha",
+            "updated": "Benjamin Kovacevic"
+        },
+        "releaseNotes": [
+        {
+            "version": "1.0.0",
+            "title": "Add Host To Watchlist - Alert Trigger",
+            "notes": [
+            "Initial version"
+            ]
+        }
+        ]
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Add-HostToWatchlist-AlertTrigger",
+            "type":  "string"
+        },
+        "Watchlist Alias":  {
+            "defaultValue":  "",
+            "type":  "string"
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_alert":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/subscribe"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Condition_-_is_host_from_MDFC":  {
+                            "actions":  {
+                                "Condition_-_is_watchlist_available_-_MDFC":  {
+                                    "actions":  {
+                                        "For_each_-_MDFC":  {
+                                            "foreach":  "@body('Entities_-_Get_Hosts')?['Hosts']",
+                                            "actions":  {
+                                                "Watchlists_-_Add_a_new_watchlist_item_-_MDFC":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "ApiConnection",
+                                                    "inputs":  {
+                                                        "body":  {
+                                                            "HostName":  "@{items('For_each_-_MDFC')?['AzureID']}"
+                                                        },
+                                                        "host":  {
+                                                            "connection":  {
+                                                                "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method":  "put",
+                                                        "path":  "/Watchlists/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/watchlists/@{encodeURIComponent(variables('Watchlist alias'))}/watchlistItem"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                            },
+                                            "type":  "Foreach"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Watchlists_-_Get_a_watchlist_by_alias_-_MDFC":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Create_CSV_table_with_MDFC_hosts":  {
+                                                "runAfter":  {
+                                                    "For_each_MDFC_host_-_add_to_host_array_variable":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "Table",
+                                                "inputs":  {
+                                                    "format":  "CSV",
+                                                    "from":  "@variables('Host')"
+                                                }
+                                            },
+                                            "For_each_MDFC_host_-_add_to_host_array_variable":  {
+                                                "foreach":  "@body('Entities_-_Get_Hosts')?['Hosts']",
+                                                "actions":  {
+                                                    "Append_to_array_variable_MDFC_host":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "AppendToArrayVariable",
+                                                        "inputs":  {
+                                                            "name":  "Host",
+                                                            "value":  {
+                                                                "HostName":  "@{items('For_each_MDFC_host_-_add_to_host_array_variable')?['AzureID']}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter":  {
+                                                },
+                                                "type":  "Foreach"
+                                            },
+                                            "Watchlists_-_Create_a_new_watchlist_with_data_-_MDFC":  {
+                                                "runAfter":  {
+                                                    "Create_CSV_table_with_MDFC_hosts":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "ApiConnection",
+                                                "inputs":  {
+                                                    "body":  {
+                                                        "description":  "hosts to watch",
+                                                        "displayName":  "@{variables('Watchlist alias')}",
+                                                        "itemsSearchKey":  "HostName",
+                                                        "rawContent":  "@{body('Create_CSV_table_with_MDFC_hosts')}",
+                                                        "sourceType":  "Local"
+                                                    },
+                                                    "host":  {
+                                                        "connection":  {
+                                                            "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method":  "put",
+                                                    "path":  "/Watchlists/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/watchlists/@{encodeURIComponent(variables('Watchlist alias'))}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@outputs('Watchlists_-_Get_a_watchlist_by_alias_-_MDFC')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "Watchlists_-_Get_a_watchlist_by_alias_-_MDFC":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "get",
+                                        "path":  "/Watchlists/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/watchlists/@{encodeURIComponent(variables('Watchlist alias'))}"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable_-_Watchlist_alias":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                    "Condition_-_is_watchlist_available":  {
+                                        "actions":  {
+                                            "For_each":  {
+                                                "foreach":  "@body('Entities_-_Get_Hosts')?['Hosts']",
+                                                "actions":  {
+                                                    "Watchlists_-_Add_a_new_watchlist_item":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "ApiConnection",
+                                                        "inputs":  {
+                                                            "body":  {
+                                                                "HostName":  "@{items('For_each')?['HostName']}"
+                                                            },
+                                                            "host":  {
+                                                                "connection":  {
+                                                                    "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method":  "put",
+                                                            "path":  "/Watchlists/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/watchlists/@{encodeURIComponent(variables('Watchlist alias'))}/watchlistItem"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter":  {
+                                                },
+                                                "type":  "Foreach"
+                                            }
+                                        },
+                                        "runAfter":  {
+                                            "Watchlists_-_Get_a_watchlist_by_alias":  [
+                                                "Succeeded",
+                                                "Failed"
+                                            ]
+                                        },
+                                        "else":  {
+                                            "actions":  {
+                                                "Create_CSV_table_with_hosts":  {
+                                                    "runAfter":  {
+                                                        "For_each_host_-_add_to_host_array_variable":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "Table",
+                                                    "inputs":  {
+                                                        "format":  "CSV",
+                                                        "from":  "@variables('Host')"
+                                                    }
+                                                },
+                                                "For_each_host_-_add_to_host_array_variable":  {
+                                                    "foreach":  "@body('Entities_-_Get_Hosts')?['Hosts']",
+                                                    "actions":  {
+                                                        "Append_to_array_variable_host":  {
+                                                            "runAfter":  {
+                                                            },
+                                                            "type":  "AppendToArrayVariable",
+                                                            "inputs":  {
+                                                                "name":  "Host",
+                                                                "value":  {
+                                                                    "HostName":  "@{items('For_each_host_-_add_to_host_array_variable')?['HostName']}"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Foreach"
+                                                },
+                                                "Watchlists_-_Create_a_new_watchlist_with_data":  {
+                                                    "runAfter":  {
+                                                        "Create_CSV_table_with_hosts":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "ApiConnection",
+                                                    "inputs":  {
+                                                        "body":  {
+                                                            "description":  "hosts to watch",
+                                                            "displayName":  "@{variables('Watchlist alias')}",
+                                                            "itemsSearchKey":  "HostName",
+                                                            "rawContent":  "@{body('Create_CSV_table_with_hosts')}",
+                                                            "sourceType":  "Local"
+                                                        },
+                                                        "host":  {
+                                                            "connection":  {
+                                                                "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method":  "put",
+                                                        "path":  "/Watchlists/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/watchlists/@{encodeURIComponent(variables('Watchlist alias'))}"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "expression":  {
+                                            "and":  [
+                                                {
+                                                    "equals":  [
+                                                        "@outputs('Watchlists_-_Get_a_watchlist_by_alias')['statusCode']",
+                                                        200
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "type":  "If"
+                                    },
+                                    "Watchlists_-_Get_a_watchlist_by_alias":  {
+                                        "runAfter":  {
+                                        },
+                                        "type":  "ApiConnection",
+                                        "inputs":  {
+                                            "host":  {
+                                                "connection":  {
+                                                    "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method":  "get",
+                                            "path":  "/Watchlists/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/watchlists/@{encodeURIComponent(variables('Watchlist alias'))}"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@triggerBody()?['ProductName']",
+                                            "Azure Security Center"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Entities_-_Get_Hosts":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@triggerBody()?['Entities']",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/entities/host"
+                            }
+                        },
+                        "Initialize_variable_-_Host":  {
+                            "runAfter":  {
+                                "Entities_-_Get_Hosts":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Host",
+                                        "type":  "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_Watchlist_alias":  {
+                            "runAfter":  {
+                                "Initialize_variable_-_Host":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "Watchlist alias",
+                                        "type":  "string",
+                                        "value":  "[parameters('Watchlist Alias')]"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "microsoftsentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "LogicAppsCategory":  "security",
+                "hidden-SentinelTemplateName":  "Add-HostToWatchlist-AlertTrigger",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,94 @@
+id: 06a9b845-6a95-4432-a78b-83919b28c375
+name: Time series anomaly detection for total volume of traffic
+description: |
+  'Identifies anamalous spikes in network traffic logs as compared to baseline or normal historical patterns.
+  The query leverages a KQL built-in anomaly detection algorithm to find large deviations from baseline patterns.
+  Sudden increases in network traffic volume may be an indication of data exfiltration attempts and should be investigated.
+  The higher the score, the further it is from the baseline value.
+  The output is aggregated to provide summary view of unique source IP to destination IP address and port traffic observed in the flagged anomaly hour.
+  The source IP addresses which were sending less than percentotalthreshold of the total traffic have been exluded whose value can be adjusted as needed .
+  You may have to run queries for individual source IP addresses from SourceIPlist to determine if anything looks suspicious'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Barracuda
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CEF
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: F5
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 3
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1030
+query: |
+  let starttime = 14d;
+  let endtime = 1d;
+  let timeframe = 1h;
+  let scorethreshold = 5;
+  let percentotalthreshold = 50;
+  let TimeSeriesData = CommonSecurityLog
+  | where isnotempty(DestinationIP) and isnotempty(SourceIP)
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | project TimeGenerated,SourceIP, DestinationIP, DeviceVendor
+  | make-series Total=count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by DeviceVendor;
+  // Filtering specific records associated with spikes as outliers
+  let TimeSeriesAlerts=materialize(TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, scorethreshold, -1, 'linefit')
+  | mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0 | extend score = round(score,2), AnomalyHour = TimeGenerated
+  | project DeviceVendor,AnomalyHour, TimeGenerated, Total, baseline, anomalies, score);
+  let AnomalyHours = materialize(TimeSeriesAlerts  | where TimeGenerated > ago(2d) | project TimeGenerated);
+  // Join anomalies with Base Data to popalate associated records for investigation - Results sorted by score in descending order
+  TimeSeriesAlerts
+  | where TimeGenerated > ago(2d)
+  | join (
+      CommonSecurityLog
+  | where isnotempty(DestinationIP) and isnotempty(SourceIP)
+  | where TimeGenerated > ago(2d)
+  | extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour
+  | where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours
+  | summarize HourlyCount = count(), TimeGeneratedMax = arg_max(TimeGenerated, *), DestinationIPlist = make_set(DestinationIP, 100), DestinationPortlist = make_set(DestinationPort, 100) by DeviceVendor, SourceIP, TimeGeneratedHour= bin(TimeGenerated, 1h)
+  | extend AnomalyHour = TimeGeneratedHour
+  ) on AnomalyHour, DeviceVendor
+  | extend PercentTotal = round((HourlyCount / Total) * 100, 3)
+  | where PercentTotal > percentotalthreshold
+  | project DeviceVendor , AnomalyHour, TimeGeneratedMax, SourceIP, DestinationIPlist, DestinationPortlist, HourlyCount, PercentTotal, Total, baseline, score, anomalies
+  | summarize HourlyCount=sum(HourlyCount), StartTimeUtc=min(TimeGeneratedMax), EndTimeUtc=max(TimeGeneratedMax), SourceIPlist = make_set(SourceIP, 100), SourceIPMax= arg_max(SourceIP, *), DestinationIPlist = make_set(DestinationIPlist, 100), DestinationPortlist = make_set(DestinationPortlist, 100) by DeviceVendor , AnomalyHour, Total, baseline, score, anomalies
+  | project DeviceVendor , AnomalyHour, EndTimeUtc, SourceIPMax ,SourceIPlist, DestinationIPlist, DestinationPortlist, HourlyCount, Total, baseline, score, anomalies
+  | extend timestamp= EndTimeUtc , IPCustomEntity = SourceIPMax
+
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Ashwin Patil
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others" ]

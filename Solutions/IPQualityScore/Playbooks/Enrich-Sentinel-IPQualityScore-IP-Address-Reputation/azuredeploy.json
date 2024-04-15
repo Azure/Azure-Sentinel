@@ -1,0 +1,535 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+    "title": "Enrich-Sentinel-IPQualityScore-IP-Address-Reputation",
+    "description": "This playbook uses the IPQS Fraud and Risk Scoring connector to automatically enrich IP Addresses found in the Sentinel incidents. This Playbook Template provides the Reputation such as **Critical, High Risk, Moderate Risk, Suspicious, Clean** based on Fraud Score. Learn more about the integration via the https://docs.microsoft.com/connectors/ipqsfraudandriskscor/ or visit https://www.ipqualityscore.com/contact-us to request a trial key.",
+    "prerequisites": ["None"],
+    "postDeployment": ["None"],
+    "lastUpdateTime": "2023-04-04T00:00:00.000Z",
+    "entities": [],
+    "tags": [],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "David Mackler, IPQualityScore"
+    },
+    "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Enrich-Sentinel-IPQualityScore-IP-Address-Reputation",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Enrich_Sentinel_IPQualityScore_IP_Address_Reputation",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+		"IPQSApiKey": "[concat('ipqsfraudandriskscor-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('IPQSApiKey')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[parameters('UserName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/ipqsfraudandriskscor')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+			"name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('IPQSApiKey'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "IPQS_Reputation_Variable": {
+                            "runAfter": {
+                                "Sucessful_Response_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ipqs_reputation",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "IP_FRAUD_SCORE_Variable": {
+                            "runAfter": {
+                                "IPQS_Reputation_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip_fraud_score",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "JSON_OUPUT": {
+                            "runAfter": {
+                                "IP_FRAUD_SCORE_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "json_output",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Looping_Through_IP_Object": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Checking_for_Successful_Response": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)_2": {
+                                            "runAfter": {
+                                                "Alert_-_Get_incident_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Alert_-_Get_incident_3')?['id']",
+                                                    "message": "<p><span style=\"font-size: 24px; color: rgb(71,85,119)\">IPQualityScore Reputation Data For </span><span style=\"font-size: 24px; color: rgb(71,85,119)\">@{items('Looping_Through_IP_Object')?['Address']}</span><span style=\"font-size: 24px; color: rgb(71,85,119)\">:</span><span style=\"color: rgb(71,85,119)\"><br>\n</span><span style=\"font-size: 18px; color: rgb(71,85,119)\">IPQS Reputation : </span><span style=\"font-size: 18px; color: rgb(71,85,119)\">@{variables('ipqs_reputation')}</span><span style=\"font-size: 18px; color: rgb(71,85,119)\"><br>\nIPQS API Response :<br>\n</span><span style=\"font-size: 18px; color: rgb(71,85,119)\">@{body('Create_HTML_table')}</span><span style=\"font-size: 18px; color: rgb(71,85,119)\"></span></p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Alert_-_Get_incident_3": {
+                                            "runAfter": {
+                                                "Create_HTML_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                            }
+                                        },
+                                        "Check_Fraud_Score_is_100": {
+                                            "actions": {
+                                                "SET_CRITICAL": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "ipqs_reputation",
+                                                        "value": "CRITICAL "
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Fetch_Fraud_Score": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Check_Fraud_Score_is_between_85_and_99": {
+                                                        "actions": {
+                                                            "SET_HIGH_RISK": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "ipqs_reputation",
+                                                                    "value": "HIGH RISK"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "else": {
+                                                            "actions": {
+                                                                "Check_Fraud_Score_is_between_75_and_84": {
+                                                                    "actions": {
+                                                                        "SET_MODERATE_RISK": {
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "ipqs_reputation",
+                                                                                "value": "MODERATE RISK"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {},
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Check_Fraud_Score_is_between_60_and_74": {
+                                                                                "actions": {
+                                                                                    "Set_SUSPICIOUS": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "ipqs_reputation",
+                                                                                            "value": "SUSPICIOUS"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "runAfter": {},
+                                                                                "else": {
+                                                                                    "actions": {
+                                                                                        "Check_Fraud_Score_is_less_than_or_equal_to_59": {
+                                                                                            "actions": {
+                                                                                                "Set_CLEAN": {
+                                                                                                    "runAfter": {},
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "ipqs_reputation",
+                                                                                                        "value": "CLEAN"
+                                                                                                    }
+                                                                                                }
+                                                                                            },
+                                                                                            "runAfter": {},
+                                                                                            "expression": {
+                                                                                                "and": [
+                                                                                                    {
+                                                                                                        "lessOrEquals": [
+                                                                                                            "@variables('ip_fraud_score')",
+                                                                                                            59
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": "If"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "expression": {
+                                                                                    "and": [
+                                                                                        {
+                                                                                            "greaterOrEquals": [
+                                                                                                "@variables('ip_fraud_score')",
+                                                                                                60
+                                                                                            ]
+                                                                                        },
+                                                                                        {
+                                                                                            "lessOrEquals": [
+                                                                                                "@variables('ip_fraud_score')",
+                                                                                                74
+                                                                                            ]
+                                                                                        }
+                                                                                    ]
+                                                                                },
+                                                                                "type": "If"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "greaterOrEquals": [
+                                                                                    "@variables('ip_fraud_score')",
+                                                                                    75
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "lessOrEquals": [
+                                                                                    "@variables('ip_fraud_score')",
+                                                                                    84
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "greaterOrEquals": [
+                                                                        "@variables('ip_fraud_score')",
+                                                                        85
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "lessOrEquals": [
+                                                                        "@variables('ip_fraud_score')",
+                                                                        99
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@variables('ip_fraud_score')",
+                                                            100
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Create_HTML_table": {
+                                            "runAfter": {
+                                                "Set_JSON_OUTPUT": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('json_output')"
+                                            }
+                                        },
+                                        "Fetch_Fraud_Score": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "ip_fraud_score",
+                                                "value": "@body('Retrieve_IP_address_reputation_data')?['fraud_score']"
+                                            }
+                                        },
+                                        "Set_JSON_OUTPUT": {
+                                            "runAfter": {
+                                                "Check_Fraud_Score_is_100": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "json_output",
+                                                "value": [
+                                                    {
+                                                        "ASN": "@body('Retrieve_IP_address_reputation_data')?['ASN']",
+                                                        "Abuse Velocity": "@body('Retrieve_IP_address_reputation_data')?['abuse_velocity']",
+                                                        "Active TOR": "@body('Retrieve_IP_address_reputation_data')?['active_tor']",
+                                                        "Active VPN": "@body('Retrieve_IP_address_reputation_data')?['active_vpn']",
+                                                        "Bot Status": "@body('Retrieve_IP_address_reputation_data')?['bot_status']",
+                                                        "City": "@body('Retrieve_IP_address_reputation_data')?['city']",
+                                                        "Connection Type": "@body('Retrieve_IP_address_reputation_data')?['connection_type']",
+                                                        "Country Code": "@body('Retrieve_IP_address_reputation_data')?['country_code']",
+                                                        "Fraud Score": "@body('Retrieve_IP_address_reputation_data')?['fraud_score']",
+                                                        "Host": "@body('Retrieve_IP_address_reputation_data')?['host']",
+                                                        "ISP": "@body('Retrieve_IP_address_reputation_data')?['ISP']",
+                                                        "Is Crawler": "@body('Retrieve_IP_address_reputation_data')?['is_crawler']",
+                                                        "Latitube": "@body('Retrieve_IP_address_reputation_data')?['latitude']",
+                                                        "Longitude": "@body('Retrieve_IP_address_reputation_data')?['longitude']",
+                                                        "Mobile": "@body('Retrieve_IP_address_reputation_data')?['mobile']",
+                                                        "Organization": "@body('Retrieve_IP_address_reputation_data')?['Organization']",
+                                                        "Proxy": "@body('Retrieve_IP_address_reputation_data')?['proxy']",
+                                                        "Recent Abuse": "@body('Retrieve_IP_address_reputation_data')?['recent_abuse']",
+                                                        "Region": "@body('Retrieve_IP_address_reputation_data')?['region']",
+                                                        "TOR": "@body('Retrieve_IP_address_reputation_data')?['tor']",
+                                                        "TimeZone": "@body('Retrieve_IP_address_reputation_data')?['timezone']",
+                                                        "VPN": "@body('Retrieve_IP_address_reputation_data')?['vpn']"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Setting_Successful_Response_Variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('is_success')",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Retrieve_IP_address_reputation_data": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "$content-type": "multipart/form-data",
+                                            "$multipart": [
+                                                {
+                                                    "body": "@items('Looping_Through_IP_Object')?['Address']",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"ip\""
+                                                    }
+                                                },
+                                                {
+                                                    "body": "0",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"strictness\""
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ipqsfraudandriskscor']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/ip"
+                                    }
+                                },
+                                "Setting_Successful_Response_Variable": {
+                                    "runAfter": {
+                                        "Retrieve_IP_address_reputation_data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "is_success",
+                                        "value": "@body('Retrieve_IP_address_reputation_data')?['success']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "JSON_OUPUT": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Sucessful_Response_Variable": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "is_success",
+                                        "type": "boolean"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "ipqsfraudandriskscor": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('IPQSApiKey'))]",
+                                "connectionName": "[variables('IPQSApiKey')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/ipqsfraudandriskscor')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

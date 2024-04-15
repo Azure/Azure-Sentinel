@@ -1,0 +1,197 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Vectra AI Streams
+  Version: '0.2'
+  LastUpdated: Dec 28 2021
+Product:
+  Name: Vectra AI Streams
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Vectra AI Streams logs to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionVectraAI
+EquivalentBuiltInParser: _Im_NetworkSession_VectraAI
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+    dstipaddr_has_any_prefix:dynamic=dynamic([]),
+    ipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstportnumber:int=int(null), 
+    hostname_has_any:dynamic=dynamic([]),
+    dvcaction:dynamic=dynamic([]), 
+    eventresult:string='*', 
+    disabled:bool=false,
+    pack:bool=false)
+  {
+    let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)[
+      false, true, 'Inbound',
+      true, false, 'Outbound',
+      true, true, 'Local',
+      false, false, 'External'];
+    let EventSubTypeLookup = datatable(conn_state_s:string, EventSubType:string)[
+      "S1", 'Start',
+      "SF", 'End'];
+    let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
+    VectraStream_CL
+    | where (isnull(starttime) or TimeGenerated>=starttime)
+      and   (isnull(endtime) or TimeGenerated<=endtime)
+    | where not(disabled)
+    | where metadata_type_s == 'metadata_isession'
+    | project-away MG, ManagementGroupName, RawData, SourceSystem, TenantId
+    | where array_length(dvcaction) == 0
+    | where eventresult == "*"
+    | where  (isnull(dstportnumber) or dstportnumber==id_resp_p_d)
+      and (array_length(hostname_has_any)==0 
+        or resp_domain_s has_any (hostname_has_any)
+        or resp_hostname_s has_any (hostname_has_any)
+        or orig_hostname_s has_any (hostname_has_any)
+      )
+    | extend temp_SrcMatch=has_any_ipv4_prefix(id_orig_h_s,src_or_any)
+           , temp_DstMatch=has_any_ipv4_prefix(id_resp_h_s,dst_or_any)
+    | extend ASimMatchingIpAddr=case(
+                                  array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+                                  temp_SrcMatch and temp_DstMatch, "Both",
+                                  temp_SrcMatch, "SrcIpAddr",
+                                  temp_DstMatch, "DstIpAddr",
+                                  "No match"
+                              )
+    | where ASimMatchingIpAddr != "No match" 
+    | project-away temp_*
+    | project-rename
+        DstIpAddr = id_resp_h_s,
+        DvcDescription = hostname_s,
+        DstDescription = resp_hostname_s,
+        SrcDescription = orig_hostname_s,
+        // -- huid does not seem to be unique per device and not mapped for now
+        // DstDvcId = resp_huid_s, 
+        // SrcDvcId = orig_huid_s,
+        DvcId = sensor_uid_s,
+        // -- community id is just a hash of addresses and ports, and not unique for the session
+        // NetworkSessionId = community_id_s,
+        SrcIpAddr = id_orig_h_s,
+        EventUid = _ItemId
+    // -- the domain field may have invalid values. Most of them are IP addresses filtered out, but a small fraction are not filtered.
+    | extend resp_domain_s = iff (ipv4_is_match(resp_domain_s, "0.0.0.0",0), "", resp_domain_s)
+    | extend SplitRespDomain = split(resp_domain_s,".")
+    | extend 
+        DstDomain = tostring(strcat_array(array_slice(SplitRespDomain, 1, -1), '.')),
+        DstFQDN = iif (array_length(SplitRespDomain) > 1, resp_domain_s, ''),
+        DstDomainType = iif (array_length(SplitRespDomain) > 1, 'FQDN', '')
+    | extend
+        DstHostname = case (
+            resp_domain_s != "", tostring(SplitRespDomain[0]),
+            DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "",
+            DstDescription)
+    | project-away SplitRespDomain
+    | extend
+        SrcHostname = iff (SrcDescription startswith "IP-" or not(SrcDescription matches regex HostnameRegex), "", SrcDescription),
+        DvcHostname = iff (DvcDescription startswith "IP-" or not(DvcDescription matches regex HostnameRegex), "", DvcDescription),
+        NetworkApplicationProtocol = toupper(service_s),
+        NetworkProtocol = toupper(protoName_s),
+        NetworkProtocolVersion = toupper(id_ip_ver_s),
+        Dst = DstIpAddr,
+        DstBytes = tolong(resp_ip_bytes_d),
+        DstPackets = tolong(resp_pkts_d),
+        DstPortNumber = toint(id_resp_p_d),
+        DstVlanId = tostring(toint(resp_vlan_id_d)),
+        EventCount = toint(1),
+        EventEndTime = unixtime_milliseconds_todatetime(ts_d),
+        EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),
+        EventProduct = 'Vectra Stream',
+        EventResult = 'Success',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion='0.2.2',
+        EventSeverity = 'Informational',
+        EventStartTime = unixtime_milliseconds_todatetime(session_start_time_d),
+        EventType = 'NetworkSession',
+        EventVendor = 'Vectra AI',
+        SrcBytes = tolong(orig_ip_bytes_d),
+        SrcPackets = tolong(orig_pkts_d),
+        SrcPortNumber = toint(id_orig_p_d),
+        SrcVlanId = tostring(toint(orig_vlan_id_d)),
+        // -- No ID mapped, since huid found not to be unique
+        // SrcDvcIdType = 'VectraId',
+        // DstDvcIdType = 'VectraId',
+        DvcIdType = 'VectraId',
+        NetworkDuration = toint(duration_d)
+    | extend 
+        Hostname = DstHostname,
+        IpAddr = SrcIpAddr,
+        // SessionId = NetworkSessionId,
+        Src = SrcIpAddr,
+        Dvc = DvcId,
+        Duration = NetworkDuration,
+        InnerVlanId = SrcVlanId,
+        NetworkBytes = SrcBytes + DstBytes,
+        NetworkPackets = SrcPackets + DstPackets,
+        OuterVlanId = DstVlanId
+    | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
+    | lookup EventSubTypeLookup on conn_state_s
+    // -- preserving non-normalized important fields
+    | extend AdditionalFields = iff (
+        pack, 
+        bag_pack (
+          "first_orig_resp_data_pkt", first_orig_resp_data_pkt_s,
+          "first_resp_orig_data_pkt", first_resp_orig_data_pkt_s,
+          "orig_sluid", orig_sluid_s, 
+          "resp_sluid", resp_sluid_s,
+          "orig_huid", orig_huid_s,
+          "resp_huid", resp_huid_s,
+          "community_id", community_id_s,
+          "resp_multihome", resp_multihomed_b,
+          "host_multihomed", host_multihomed_b,
+          "first_orig_resp_data_pkt_time", unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),
+          "first_orig_resp_pkt_time", unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),
+          "first_resp_orig_data_pkt_time", unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
+          "first_resp_orig_pkt_time", unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
+        ),
+        dynamic([])
+      )
+    | project-away
+        *_d, *_s, *_b, *_g, Computer
+  };
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled, pack=pack)
+

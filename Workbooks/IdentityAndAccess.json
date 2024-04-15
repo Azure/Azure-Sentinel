@@ -1,0 +1,617 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": ""
+      },
+      "name": "text - 1"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "query": "",
+        "crossComponentResources": [],
+        "parameters": [
+          {
+            "id": "80e332f7-8176-461f-b27a-0a52242fe6c9",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          },
+          {
+            "id": "5a93ede8-361d-4cc6-93f8-967dfc355143",
+            "version": "KqlParameterItem/1.0",
+            "name": "Activity",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "SecurityEvent\r\n| summarize Count = count() by Activity\r\n| order by Count desc, Activity asc\r\n| project Value = Activity, Label = strcat(Activity, ' - ', Count)",
+            "value": [
+              "value::all"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "selectAllValue": "All"
+            },
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces"
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 1"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity});\r\ndata\r\n| summarize Count = count() by Activity\r\n| join kind = fullouter (datatable(Activity:string)['Medium', 'high', 'low']) on Activity\r\n| project Activity = iff(Activity == '', Activity1, Activity), Count = iff(Activity == '', 0, Count)\r\n| join kind = inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by Activity)\r\n on Activity\r\n| project-away Activity1, TimeGenerated\r\n| extend Activitys = Activity\r\n| union (\r\n data \r\n | summarize Count = count() \r\n | extend jkey = 1\r\n | join kind=inner (data\r\n | make-series Trend = count() default = 0 on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain}\r\n | extend jkey = 1) on jkey\r\n | extend Activity = 'All', Activitys = '*' \r\n)\r\n| order by Count desc\r\n| take 10",
+        "size": 4,
+        "exportFieldName": "Activity",
+        "exportParameterName": "ActivityPiker",
+        "exportDefaultValue": "All",
+        "exportToExcelOptions": "visible",
+        "title": "Top 10 activities - click to filter by activity",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "tiles",
+        "tileSettings": {
+          "titleContent": {
+            "columnMatch": "Activity",
+            "formatter": 1,
+            "formatOptions": {
+              "showIcon": true
+            }
+          },
+          "leftContent": {
+            "columnMatch": "Count",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto",
+              "showIcon": true
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          },
+          "secondaryContent": {
+            "columnMatch": "Trend",
+            "formatter": 9,
+            "formatOptions": {
+              "palette": "lightBlue",
+              "showIcon": true
+            }
+          },
+          "showBorder": false
+        }
+      },
+      "name": "query - 2"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\" and AccountType == 'User'\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account));\r\nlet appData = data\r\n| summarize TotalCount = count() by Name\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name\r\n    | project-away TimeGenerated) on Name\r\n| order by TotalCount desc, Name asc\r\n| project Name, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Name\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Name, Activity\r\n    | project-away TimeGenerated) on Name, Activity\r\n| order by TotalCount desc, Name asc\r\n| project Name, Activity, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Name\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Name, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+        "size": 0,
+        "exportParameterName": "Userinfo",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "exportToExcelOptions": "visible",
+        "title": "User activities",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activity Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blueGreen",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "palette": "greenDark",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "IpAddress",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Account",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Names Count",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 3"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//let Users = dynamic({Userinfo});\r\nlet data = SecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\" and AccountType == 'Machine'\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where dynamic({Userinfo}).Type == '*' or (dynamic({Userinfo}).Type == 'Computer' and user == dynamic({Userinfo}).Name);\r\nlet appData = data\r\n| summarize TotalCount = count() by Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Computer\r\n    | project-away TimeGenerated) on Computer\r\n| order by TotalCount desc, Computer asc\r\n| project Computer, TotalCount, Trend\r\n| serialize Id = row_number();\r\ndata\r\n| summarize TotalCount = count() by Activity , Computer\r\n| join kind=inner (data\r\n    | make-series Trend = count() default = 0 on TimeGenerated in range({TimeRange:start}, {TimeRange:end}, {TimeRange:grain}) by Computer, Activity\r\n    | project-away TimeGenerated) on Computer, Activity\r\n| order by TotalCount desc, Computer asc\r\n| project Computer, Activity, TotalCount, Trend\r\n| serialize Id = row_number(1000000)\r\n| join kind=inner (appData) on Computer\r\n| project Id, Name = Activity, Type = 'Activity', ['Activity Count'] = TotalCount, Trend, ParentId = Id1\r\n| union (appData \r\n    | project Id, Name = Computer, Type = 'Computer', ['Activity Count'] = TotalCount, Trend )\r\n| order by ['Activity Count'] desc, Name asc",
+        "size": 0,
+        "exportFieldName": "",
+        "exportParameterName": "MachineInfo",
+        "exportDefaultValue": "{ \"Name\":\"\", \"Type\":\"*\"}",
+        "exportToExcelOptions": "visible",
+        "title": "Machine activities",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Id",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Type",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activity Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "blue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Trend",
+              "formatter": 9,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "ParentId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "idColumn": "Id",
+            "parentColumn": "ParentId",
+            "treeType": 0,
+            "expanderColumn": "Name"
+          },
+          "labelSettings": []
+        }
+      },
+      "customWidth": "50",
+      "name": "query - 4"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Users = dynamic({Userinfo});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and Name == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| extend Status = iif(Activity contains \"success\",\"✔️ Success\" , iif(Activity contains \"faile\", \"❌Faile\", \"none\"))\r\n| summarize Count = count() by Name, Computer,AccountType, Activity, IpAddress , Process, CallerProcessId, CallerProcessName, CommandLine, FilePath, IpPort,GroupMembership, Status, bin(TimeGenerated, 1d), Detalis=\"more details\"\r\n| project  Name, Computer,AccountType, Activity, IpAddress, CallerProcessId, CallerProcessName, CommandLine, FilePath, IpPort, Process, GroupMembership, Status, TimeGenerated, Count, Detalis\r\n| order by Count\r\n",
+        "size": 0,
+        "exportParameterName": "Info",
+        "exportDefaultValue": "\"*\"",
+        "exportToExcelOptions": "visible",
+        "title": "Full details",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Name",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Computer",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "AccountType",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activity",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "IpAddress",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "CallerProcessId",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "CallerProcessName",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "CommandLine",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "FilePath",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "IpPort",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Process",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "GroupMembership",
+              "formatter": 5,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Status",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "TimeGenerated",
+              "formatter": 6,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "greenBlue",
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Detalis",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "NumberOfProcess",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "detalis",
+              "formatter": 7,
+              "formatOptions": {
+                "linkTarget": "GenericDetails",
+                "linkIsContextBlade": true,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "count_",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "rowLimit": 1000,
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "name": "query - 5"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Users = dynamic({Userinfo});\r\nlet Info = dynamic({Info});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where Info == \"*\" or Process == Info.Process\r\n| where Process != \"\" and Process != \"-\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| extend Name = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and Name == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by Process, bin(TimeGenerated, 1h)",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Processes",
+        "color": "lightBlue",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "areachart"
+      },
+      "customWidth": "30",
+      "name": "query - 6"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Users = dynamic({Userinfo});\r\nlet Info = dynamic({Info});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where Process != \"\" and Process != \"-\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| where Info == \"*\" or Process == Info.Process\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and user == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by Process, Activity, user, Computer, bin(TimeGenerated, 1h)\r\n| order by TimeGenerated, Count",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Processes details",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "filter": true,
+          "labelSettings": []
+        }
+      },
+      "customWidth": "70",
+      "name": "query - 8"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let Users = dynamic({Userinfo});\r\nlet Info = dynamic({Info});\r\nlet Machines = dynamic({MachineInfo});\r\nSecurityEvent\r\n| where LogonTypeName != \"\"\r\n| where \"{Activity:lable}\" == \"All\" or Activity in ({Activity})\r\n| where Activity == '{ActivityPiker}' or '{ActivityPiker}' == \"All\"\r\n| where Info == \"*\" or Activity == Info.Activity\r\n| extend user = extract(@'^(.*\\\\)?([^@]*)(@.*)?$', 2, tolower(Account))\r\n| where (Users.Type == '*' or (Users.Type == 'Computer' and user == Users.Name)) and (Machines.Type == '*' or (Machines.Type == 'Computer' and Computer == Machines.Name))\r\n| summarize Count = count() by LogonTypeName = strcat( \"Logon type: \", LogonTypeName), Activity, user\r\n| order by Count",
+        "size": 0,
+        "exportToExcelOptions": "visible",
+        "title": "Logon activity types",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "LogonTypeName",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Activity",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "user",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "Count",
+              "formatter": 8,
+              "formatOptions": {
+                "min": 0,
+                "palette": "green",
+                "showIcon": true,
+                "aggregation": "Sum"
+              }
+            },
+            {
+              "columnMatch": "$gen_group",
+              "formatter": 0,
+              "formatOptions": {
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true,
+          "hierarchySettings": {
+            "treeType": 1,
+            "groupBy": [
+              "LogonTypeName",
+              "Activity"
+            ],
+            "expandTopLevel": false
+          },
+          "labelSettings": []
+        }
+      },
+      "customWidth": "70",
+      "name": "query - 7"
+    }
+  ],
+  "styleSettings": {},
+  "fromTemplateId": "sentinel-IdentityAndAccess",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

@@ -1,0 +1,36 @@
+// Title:           Vmware Vcenter
+// Author:          Microsoft
+// Version:         3.2
+// Last Updated:    07/06/2022
+// Comment:         version 1.0
+//  
+// DESCRIPTION:
+// This parser takes raw vcenter logs from a custom table (vcenter_CL) and parses the logs into a normalized schema.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+// "2018-04-30 14:14:08 samplehostname1 vcenter-server: User VSPHERE.LOCAL\\Administrator@10.0.0.1 l logged in as JAX-WS RI 2.2.9-b130926.1035 
+// svn-revisions#5f6196f2b90e30e065b24"
+// 2018-04-30 14:14:08 samplehostname vpxd 2442 - - events [592839] [1-1] [2018-04-30T14:14:08.1432662] [vim.event.UserLogoutSessionEvent] [info] //[VSPHERE.LOCAL\\Administrator] [] [592839] [User VSPHERE.LOCAL\\Administrator>@10.0.0.1 logged out(Login time: Monday, 30 APril, 2018 14:14:07, 
+// number of API invocations: 2, user agent: JAX-WS RI 2.2.9-b130926.1035 svn-revision#5f6196f2b90e30e065b24)]
+let vCenter_Login =() {
+vcenter_CL
+| where Message has ("UserLoginSessionEvent")
+| parse Message  with * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity "]" * "[User " DomainName:string "\\" Username:string "@" SourceIP " logged in as " UserAgent:string "]"
+};
+let vCenter_Logout =() {vcenter_CL
+| where Message has ("UserLogoutSessionEvent")
+| parse Message with * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity "]" * "[User" DomainName:string "\\" Username:string "@" SourceIP " logged out (login time:" LoginTime:string ", number of API invocations: " APIInvocationCount:int ", user agent:" UserAgent:string ")]"
+};
+let vCenter_Role=() {vcenter_CL
+| where Message has_any("RoleAddedEvent","RoleRemovedEvent")
+| parse Message with * " " * " " Hostname:string "vpxd" * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity:string "]" * "[New role " RoleName:string " " Operation:string  "]"
+};
+let vCenter_RoleModified=() {vcenter_CL
+| where Message has ("RoleUpdatedEvent")
+| parse Message with * " " * " " Hostname:string "vpxd" * "Event [" EventId:string "] [1-1] [" EventTime:datetime "] [" EventType:string "] [" EventSeverity:string "]" * "Previous name: " OldRoleName:string ", new name "NewRoleName:string " Added privileges: " AddedPriviledges:string " Removed privileges: " RemovedPriviledges:string "]"
+};
+union vCenter_Login,vCenter_Logout,vCenter_Role,vCenter_RoleModified

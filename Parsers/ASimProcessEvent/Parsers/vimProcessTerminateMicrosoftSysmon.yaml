@@ -1,0 +1,207 @@
+Parser:
+  Title: Process Terminate Event ASIM parser for Microsoft Windows Security Events
+  Version: '0.3.0'
+  LastUpdated: Apr 30, 2022
+Product:
+  Name: Microsoft Windows Events Sysmon
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing Microsoft Windows Sysmon process terminate events (event 5) collected using the Event or WEF (WindowsEvent table) connectors to the ASIM Process Event normalized schema. 
+ParserName: vimProcessTerminateMicrosoftSysmon
+EquivalentBuiltInParser: _Im_ProcessTerminate_MicrosoftSysmon
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: commandline_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_all
+    Type: dynamic
+    Default: dynamic([])
+  - Name: commandline_has_any_ip_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actingprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: parentprocess_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has
+    Type: string
+    Default: '*'
+  - Name: dvcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: | 
+   let parser = (
+      starttime:datetime=datetime(null),
+      endtime:datetime=datetime(null),
+      commandline_has_any:dynamic=dynamic([]),
+      commandline_has_all:dynamic=dynamic([]),
+      commandline_has_any_ip_prefix:dynamic=dynamic([]),
+      actingprocess_has_any:dynamic=dynamic([]),
+      targetprocess_has_any:dynamic=dynamic([]),
+      parentprocess_has_any:dynamic=dynamic([]),
+      actorusername_has:string='*',
+      dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+      dvchostname_has_any:dynamic=dynamic([]),
+      eventtype:string='*',
+      disabled:bool=false
+    ) {
+        // this is the parser for sysmon from Event table
+        let parser_Event = (
+            starttime:datetime=datetime(null),
+            endtime:datetime=datetime(null),
+            commandline_has_any:dynamic=dynamic([]),
+            commandline_has_all:dynamic=dynamic([]),
+            commandline_has_any_ip_prefix:dynamic=dynamic([]),
+            actingprocess_has_any:dynamic=dynamic([]),
+            targetprocess_has_any:dynamic=dynamic([]),
+            parentprocess_has_any:dynamic=dynamic([]),
+            actorusername_has:string='*',
+            dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+            dvchostname_has_any:dynamic=dynamic([]),
+            eventtype:string='*',
+            disabled:bool=false
+        ) {
+            Event
+            | where // pre-filtering
+                (isnull(starttime) or TimeGenerated >= starttime )
+                and (isnull(endtime) or TimeGenerated <= endtime )
+                and not(disabled)
+                and Source == "Microsoft-Windows-Sysmon" and EventID == 5
+                and (eventtype=='*' or eventtype=='ProcessTerminated')
+                and (array_length(commandline_has_all)==0) 
+                and (array_length(commandline_has_any)==0) 
+                and (array_length(commandline_has_any_ip_prefix)==0) 
+                and (array_length(actingprocess_has_any)==0) 
+                and (array_length(parentprocess_has_any)==0) 
+                and (array_length(targetprocess_has_any)==0 or EventData has_any (targetprocess_has_any)) 
+                and (actorusername_has=='*' or EventData has actorusername_has)  
+               and (array_length(dvcipaddr_has_any_prefix)==0)
+                and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))
+            | parse-kv EventData as (
+                ProcessId:string,
+                ProcessGuid:string,
+                Image:string,
+                User:string
+              ) 
+              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+            | project-rename
+                ActorUsername = User,
+                DvcHostname = Computer,
+                TargetProcessName = Image,
+                TargetProcessGuid = ProcessGuid,
+                TargetProcessId = ProcessId
+            | where // post-filtering
+                (actorusername_has=='*' or ActorUsername has actorusername_has) 
+                and (array_length(targetprocess_has_any)==0  or TargetProcessName has_any (targetprocess_has_any)) 
+            | extend 
+                EventProduct = "Sysmon"
+            | project-away EventData, ParameterXml, RenderedDescription, MG, ManagementGroupName, Message, AzureDeploymentID, SourceSystem, EventCategory, EventLevelName, EventLevel, EventLog, Role, TenantId, UserName, Source
+        };
+        let parser_WindowsEvent=(
+            starttime:datetime=datetime(null),
+            endtime:datetime=datetime(null),
+            commandline_has_any:dynamic=dynamic([]),
+            commandline_has_all:dynamic=dynamic([]),
+            commandline_has_any_ip_prefix:dynamic=dynamic([]),
+            actingprocess_has_any:dynamic=dynamic([]),
+            targetprocess_has_any:dynamic=dynamic([]),
+            parentprocess_has_any:dynamic=dynamic([]),
+            actorusername_has:string='*',
+            dvcipaddr_has_any_prefix:dynamic=dynamic([]),
+            dvchostname_has_any:dynamic=dynamic([]),
+            eventtype:string='*',
+            disabled:bool=false
+        ){
+            WindowsEvent
+            | where // pre-filtering
+                (isnull(starttime)   or TimeGenerated >= starttime )
+                and (isnull(endtime) or TimeGenerated <= endtime )
+                and not(disabled)
+                and Provider == "Microsoft-Windows-Sysmon" and EventID == 5
+                and (eventtype=='*' or eventtype=='ProcessTerminated')
+                and (array_length(commandline_has_all)==0 ) 
+                and (array_length(commandline_has_any)==0 ) 
+                and (array_length(commandline_has_any_ip_prefix)==0 ) 
+                and (array_length(actingprocess_has_any)==0 ) 
+                and (array_length(parentprocess_has_any)==0 ) 
+                and (array_length(targetprocess_has_any)==0 or EventData has_any (targetprocess_has_any)) 
+                and (actorusername_has=='*' or EventData has actorusername_has)  
+                and (array_length(dvcipaddr_has_any_prefix)==0)
+                and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))
+            | extend
+                EventProduct = "Security Events",
+                ActorUsername = tostring(EventData.User),
+                TargetProcessName = tostring(EventData.Image),
+                TargetProcessId = tostring(EventData.ProcessId),
+                TargetProcessGuid = extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string))
+            | where // post-filtering
+                (actorusername_has=='*' or ActorUsername has actorusername_has) 
+                and (array_length(targetprocess_has_any)==0  or TargetProcessName has_any (targetprocess_has_any)) 
+            | project-rename
+                DvcHostname = Computer,
+                EventOriginalUid = EventOriginId
+            | project-away Channel, Data, EventData, EventLevelName, EventLevel, ManagementGroupName, Provider, RawEventData, SourceSystem, Task, TenantId
+        };
+        union isfuzzy=true 
+            parser_Event (starttime=starttime, endtime=endtime, commandline_has_any=commandline_has_any, commandline_has_all=commandline_has_all, commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,actingprocess_has_any=actingprocess_has_any, targetprocess_has_any=targetprocess_has_any, parentprocess_has_any=parentprocess_has_any, actorusername_has=actorusername_has, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, dvchostname_has_any=dvchostname_has_any, eventtype=eventtype, disabled=disabled), 
+            parser_WindowsEvent(starttime=starttime, endtime=endtime, commandline_has_any=commandline_has_any, commandline_has_all=commandline_has_all, commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,actingprocess_has_any=actingprocess_has_any, targetprocess_has_any=targetprocess_has_any, parentprocess_has_any=parentprocess_has_any, actorusername_has=actorusername_has, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, dvchostname_has_any=dvchostname_has_any, eventtype=eventtype, disabled=disabled)
+        | extend  
+            EventType = "ProcessTerminated",
+            EventStartTime = todatetime(TimeGenerated),
+            EventEndTime = todatetime(TimeGenerated),
+            EventCount = int(1),
+            EventVendor = "Microsoft",
+            EventSchemaVersion = "0.1.0",
+            EventSchema = 'ProcessEvent',
+            EventOriginalType=tostring(EventID),
+            EventResult = 'Success',
+            DvcOs = "Windows",
+            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+            // -- Aliases 
+            User = ActorUsername,
+            Process = TargetProcessName,
+            Dvc = DvcHostname
+        | project-away EventID
+    };
+    parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      commandline_has_any=commandline_has_any,
+      commandline_has_all=commandline_has_all,
+      commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,
+      actingprocess_has_any=actingprocess_has_any,
+      targetprocess_has_any=targetprocess_has_any,
+      parentprocess_has_any=parentprocess_has_any,
+      actorusername_has=actorusername_has,
+      dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,
+      dvchostname_has_any=dvchostname_has_any,
+      eventtype=eventtype,
+      disabled=disabled
+    ) 

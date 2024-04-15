@@ -1,0 +1,38 @@
+id: 024b3726-add7-4e06-842d-932034ba21f7
+name: Windows System Shutdown/Reboot(Sysmon)
+description: |
+  'This detection uses Sysmon telemetry to detect System Shutdown/Reboot (MITRE Technique: T1529)'
+
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Impact
+relevantTechniques:
+  - T1529
+
+query: |
+  Event
+  | where Source == "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend RenderedDescription = tostring(split(RenderedDescription, ":")[0])
+  | extend EventData = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array EventData
+  | evaluate bag_unpack(EventData)
+  | extend Key=tostring(['@Name']), Value=['#text']
+  | evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)
+  | extend RuleName = column_ifexists("RuleName", ""), TechniqueId = column_ifexists("TechniqueId", ""),  TechniqueName = column_ifexists("TechniqueName", "")
+  | parse RuleName with * 'technique_id=' TechniqueId ',' * 'technique_name=' TechniqueName
+  | where Image has "shutdown.exe"
+  | extend HostCustomEntity = Computer, AccountCustomEntity = UserName
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

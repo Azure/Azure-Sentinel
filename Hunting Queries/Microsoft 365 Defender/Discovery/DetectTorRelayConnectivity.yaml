@@ -1,0 +1,24 @@
+id: 26be4a5f-7e6f-4c2e-967d-467bddcbb51a
+name: DetectTorRelayConnectivity
+description: |
+  This advanced hunting query detects processes communicating with known Tor relay IP addresses.
+  The public URL in the query is updated daily at 12PM and 12AM UTC.
+  CSV source is the Tor Project API, obtained with: https://github.com/Dylan-J/Tor-Project-Statistics
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+  - DeviceInfo
+tactics:
+- Discovery
+- Command and control
+query: |
+  let TorRelayData = (
+      externaldata (Nickname:string,Fingerprint:string,EntryAddress:string,IPAddress:string,Port:string,AddressType:string,Hostname:string,CountryCode:string,IsRunning:bool,LastChangedIPData:string)
+      [h@'https://torinfo.blob.core.windows.net/public/TorRelayIPs.csv'] with (ignoreFirstRecord=true,format="csv")
+      | where AddressType == "IPv4"
+  );
+  TorRelayData
+  | join kind=inner DeviceNetworkEvents on $left.IPAddress == $right.RemoteIP
+  | join kind=inner (DeviceInfo | distinct DeviceId, PublicIP) on DeviceId
+  | project Timestamp, DeviceId, LocalPublicIP = PublicIP, LocalIP, RemoteIP, TorIP = IPAddress, Hostname, CountryCode, ActionType, InitiatingProcessFileName, InitiatingProcessFolderPath
