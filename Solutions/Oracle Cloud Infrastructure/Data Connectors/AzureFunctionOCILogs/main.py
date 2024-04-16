@@ -59,14 +59,14 @@ def main(mytimer: func.TimerRequest):
          cursor = get_cursor_by_group(stream_client, StreamOcid, GroupName, GroupInstanceName)
        except oci.exceptions.ServiceError as ex:
             if ex.status == 400:
-             cursor=get_cursor_by_group(stream_client, StreamOcid, GroupName, GroupInstanceName)
+             cursor=get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
     else :
         try:
 
          cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
         except oci.exceptions.ServiceError as ex:
             if ex.status == 400:
-             cursor=get_cursor_by_partition(stream_client, StreamOcid, GroupName, GroupInstanceName) 
+             cursor=get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS) 
     process_events(stream_client, StreamOcid, cursor, limit, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
 
@@ -126,6 +126,7 @@ def get_cursor_by_partition(client, stream_id, partition):
     response = client.create_cursor(stream_id, cursor_details)
     cursor = response.data.value
     return cursor
+
 
 
 def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, limit, sentinel: AzureSentinelConnector, start_ts):
