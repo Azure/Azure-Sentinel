@@ -27,6 +27,19 @@ Prerequisites:
 - Install make `brew install make`
 - Install arm-ttk in powershell: https://github.com/Azure/arm-ttk
 
+Ensure that you add arm-ttk to your powershell profile e.g.
+
+```
+(in powershell)
+
+> New-Item -Type File -Path $PROFILE -Force
+> vim $PROFILE
+
+(in that file add:)
+
+Import-Module /full/path/to/import/module/for/arm-ttk
+```
+
 Building a solution:
 
 1. Clone the https://github.com/Tanium/Azure-Sentinel repo

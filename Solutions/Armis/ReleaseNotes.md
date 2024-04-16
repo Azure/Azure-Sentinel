@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
+|-------------|--------------------------------|---------------------------------------------|
+| 3.0.0       |     03-11-2023                 | Fixed vulnerability related issue by passing the scret key in the body of the request instead of the param in the data connector and playbook                    |

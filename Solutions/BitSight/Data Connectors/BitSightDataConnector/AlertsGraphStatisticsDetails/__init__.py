@@ -1,8 +1,11 @@
 """This __init__ file will be called once triggered is generated."""
 import time
-from ..SharedCode.logger import applogger
-from .bitsight import BitSight
+
 import azure.functions as func
+
+from ..SharedCode import consts
+from ..SharedCode.logger import applogger
+from .bitsight_statistics import BitSightStatistics
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -11,13 +14,26 @@ def main(mytimer: func.TimerRequest) -> None:
     Args:
         mytimer (func.TimerRequest): timer trigger
     """
-    applogger.info("BitSight: Alerts-Graph-statistics Details: Start processing")
     start = time.time()
-    BitSight_obj = BitSight()
-    BitSight_obj.get_bitsight_data_into_sentinel()
+    applogger.info(
+        "{} {} Start processing...".format(
+            consts.LOGS_STARTS_WITH, consts.ALERT_GRAPH_STATISTICS_FUNC_NAME
+        )
+    )
+    bitsightstatistics_obj = BitSightStatistics(start)
+    bitsightstatistics_obj.get_bitsight_data_into_sentinel()
     end = time.time()
-    applogger.info("BitSight: time taken for data ingestion is {} sec".format(int(end-start)))
-    applogger.info("BitSight: Alerts-Graph-statistics Details: execution completed.")
-
+    applogger.info(
+        "{} {} time taken for data ingestion is {} sec".format(
+            consts.LOGS_STARTS_WITH,
+            consts.ALERT_GRAPH_STATISTICS_FUNC_NAME,
+            int(end - start),
+        )
+    )
+    applogger.info(
+        "{} {} execution completed.".format(
+            consts.LOGS_STARTS_WITH, consts.ALERT_GRAPH_STATISTICS_FUNC_NAME
+        )
+    )
     if mytimer.past_due:
         applogger.info('BitSight Connector: The timer is past due!')

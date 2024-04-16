@@ -1,0 +1,1018 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Cisco Meraki Events via REST API"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    },
+    "resourceGroupName": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is setup"
+      }
+    },
+    "subscription": {
+      "type": "string",
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Cisco Meraki Events via REST API",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-ciscomerakinativepoller",
+    "_solutionId": "[variables('solutionId')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "dataConnectorCCPVersion": "1.0.0",
+    "_dataConnectorContentIdConnectorDefinition1": "CiscoMerakiMultiRule",
+    "dataConnectorTemplateNameConnectorDefinition1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition1')))]",
+    "_dataConnectorContentIdConnections1": "CiscoMerakiMultiRuleConnections",
+    "dataConnectorTemplateNameConnections1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections1')))]",
+    "dataCollectionEndpointId1": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "displayName": "Cisco Meraki (using REST API)",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+              "apiVersion": "2022-09-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+              "location": "[parameters('workspace-location')]",
+              "kind": "Customizable",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "CiscoMerakiMultiRule",
+                  "title": "Cisco Meraki (using REST API)",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes and API Requests) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
+                  "graphQueriesTableName": "ASimNetworkSessionLogs",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total IDS alerts received",
+                      "legend": "Get IDS Alerts",
+                      "baseQuery": "{{graphQueriesTableName}} | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\""
+                    },
+                    {
+                      "metricName": "Total File Scanned events received",
+                      "legend": "Get File Scanned",
+                      "baseQuery": "ASimWebSessionLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\" and EventOriginalType == \"File Scanned\""
+                    },
+                    {
+                      "metricName": "Total API request events received",
+                      "legend": "Get API Request",
+                      "baseQuery": "ASimWebSessionLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\" and EventOriginalType == \"API Request\""
+                    },
+                    {
+                      "metricName": "Total Configuration Changes received",
+                      "legend": "Get Configuration Changes",
+                      "baseQuery": "ASimAuditEventLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\""
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Get Sample of Cisco Meraki IDS Alerts",
+                      "query": "{{graphQueriesTableName}}\n | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"\n | take 10"
+                    },
+                    {
+                      "description": "Total Events by Event Type",
+                      "query": "union {{graphQueriesTableName}}, ASimWebSessionLogs, ASimAuditEventLogs\n | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"\n | summarize count() by EventOriginalType"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "{{graphQueriesTableName}}",
+                      "lastDataReceivedQuery": "{{graphQueriesTableName}}\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"         | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimWebSessionLogs",
+                      "lastDataReceivedQuery": "ASimWebSessionLogs\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    },
+                    {
+                      "name": "ASimAuditEventLogs",
+                      "lastDataReceivedQuery": "ASimAuditEventLogs\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriteria": [
+                    {
+                      "type": "HasDataConnectors"
+                    }
+                  ],
+                  "availability": {
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ],
+                    "customs": [
+                      {
+                        "name": "Cisco Meraki REST API Key",
+                        "description": "Enable API access in Cisco Meraki and generate API Key. Please refer to Cisco Meraki official [documentation](https://aka.ms/ciscomerakiapikey) for more information."
+                      },
+                      {
+                        "name": "Cisco Meraki Organization Id",
+                        "description": "Obtain your Cisco Meraki organization id to fetch security events. Follow the steps in the [documentation](https://aka.ms/ciscomerakifindorg) to obtain the Organization Id using the Meraki API Key obtained in previous step."
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "Currently, this connector allows to ingest events from the following [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) endpoint: \n 1. [Get Organization Appliance Security Events](https://developer.cisco.com/meraki/api-latest/#!get-organization-appliance-security-events) \n>This connector parses **IDS Alert** events into ASimNetworkSessionLogs Table and **File Scanned** events into ASimWebSessionLogs Table. \n 2. [Get Organization Api Requests](https://developer.cisco.com/meraki/api-latest/#!get-organization-api-requests) \n>This connector parses events into ASimWebSessionLogs Table. \n 3. [Get Organization Configuration Changes](https://developer.cisco.com/meraki/api-latest/#!get-organization-configuration-changes) \n>This connector parses events into ASimAuditEventLogs Table.",
+                      "instructions": [
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "Organization Id",
+                            "placeholder": "OrganizationId",
+                            "type": "text",
+                            "name": "organization"
+                          }
+                        },
+                        {
+                          "type": "Textbox",
+                          "parameters": {
+                            "label": "API Key",
+                            "placeholder": "ApiKey",
+                            "type": "password",
+                            "name": "apiKey"
+                          }
+                        },
+                        {
+                          "parameters": {
+                            "label": "toggle",
+                            "name": "toggle"
+                          },
+                          "type": "ConnectionToggleButton"
+                        }
+                      ],
+                      "title": "Connect Cisco Meraki events to Microsoft Sentinel"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorCCPVersion')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CiscoMerakiMultiRules",
+              "apiVersion": "2022-06-01",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId1')]",
+                "streamDeclarations": {
+                  "Custom-CiscoMeraki_API": {
+                    "columns": [
+                      {
+                        "name": "ts",
+                        "type": "datetime",
+                        "description": "The time at which the data was generated"
+                      },
+                      {
+                        "name": "adminId",
+                        "type": "string",
+                        "description": "Admin Id of the user"
+                      },
+                      {
+                        "name": "host",
+                        "type": "string",
+                        "description": "Host name of the URL"
+                      },
+                      {
+                        "name": "method",
+                        "type": "string",
+                        "description": "Method name of the URL"
+                      },
+                      {
+                        "name": "path",
+                        "type": "string",
+                        "description": "Path of the URL"
+                      },
+                      {
+                        "name": "queryString",
+                        "type": "string",
+                        "description": "Query parameters"
+                      },
+                      {
+                        "name": "userAgent",
+                        "type": "string",
+                        "description": "User Agent of URL"
+                      },
+                      {
+                        "name": "responseCode",
+                        "type": "int",
+                        "description": "Request code"
+                      },
+                      {
+                        "name": "sourceIp",
+                        "type": "string",
+                        "description": "Source IP used"
+                      },
+                      {
+                        "name": "version",
+                        "type": "int",
+                        "description": "Product version"
+                      },
+                      {
+                        "name": "operationId",
+                        "type": "string",
+                        "description": "Operation Id"
+                      }
+                    ]
+                  },
+                  "Custom-CiscoMeraki_Configuration": {
+                    "columns": [
+                      {
+                        "name": "ts",
+                        "type": "datetime",
+                        "description": "Time of configuration change"
+                      },
+                      {
+                        "name": "adminName",
+                        "type": "string",
+                        "description": "Name of the admin"
+                      },
+                      {
+                        "name": "adminEmail",
+                        "type": "string",
+                        "description": "Email of the admin"
+                      },
+                      {
+                        "name": "adminId",
+                        "type": "string",
+                        "description": "Id of the admin"
+                      },
+                      {
+                        "name": "networkName",
+                        "type": "string",
+                        "description": "Name of the network"
+                      },
+                      {
+                        "name": "networkId",
+                        "type": "string",
+                        "description": "Id of the network"
+                      },
+                      {
+                        "name": "ssidName",
+                        "type": "string",
+                        "description": "Name of the SSID"
+                      },
+                      {
+                        "name": "ssidNumber",
+                        "type": "string",
+                        "description": "Number of the SSID"
+                      },
+                      {
+                        "name": "page",
+                        "type": "string",
+                        "description": "Page from which configuration was changed"
+                      },
+                      {
+                        "name": "label",
+                        "type": "string",
+                        "description": "Label of the entity changed"
+                      },
+                      {
+                        "name": "oldValue",
+                        "type": "string",
+                        "description": "Old value of the configuration"
+                      },
+                      {
+                        "name": "newValue",
+                        "type": "string",
+                        "description": "New value of the configuration"
+                      }
+                    ]
+                  },
+                  "Custom-CiscoMeraki_IDS": {
+                    "columns": [
+                      {
+                        "name": "ts",
+                        "type": "datetime",
+                        "description": "The time at which the data was generated"
+                      },
+                      {
+                        "name": "eventType",
+                        "type": "string",
+                        "description": "Event Type of the security event."
+                      },
+                      {
+                        "name": "deviceMac",
+                        "type": "string",
+                        "description": "MAC address of Device"
+                      },
+                      {
+                        "name": "clientMac",
+                        "type": "string",
+                        "description": "MAC address of Client"
+                      },
+                      {
+                        "name": "srcIp",
+                        "type": "string",
+                        "description": "Source IP Address"
+                      },
+                      {
+                        "name": "destIp",
+                        "type": "string",
+                        "description": "Destination IP Address"
+                      },
+                      {
+                        "name": "protocol",
+                        "type": "string",
+                        "description": "Protocol used"
+                      },
+                      {
+                        "name": "priority",
+                        "type": "string",
+                        "description": "Priority of the Security Event"
+                      },
+                      {
+                        "name": "classification",
+                        "type": "string",
+                        "description": "Classification of the Security Event"
+                      },
+                      {
+                        "name": "blocked",
+                        "type": "boolean",
+                        "description": "If the action was blocked or not"
+                      },
+                      {
+                        "name": "message",
+                        "type": "string",
+                        "description": "Security Event message"
+                      },
+                      {
+                        "name": "signature",
+                        "type": "string",
+                        "description": "Signature used in the action"
+                      },
+                      {
+                        "name": "sigSource",
+                        "type": "string",
+                        "description": "Source of the signature"
+                      },
+                      {
+                        "name": "ruleId",
+                        "type": "string",
+                        "description": "RuleId in use"
+                      },
+                      {
+                        "name": "clientName",
+                        "type": "string",
+                        "description": "Client Machine name"
+                      },
+                      {
+                        "name": "clientIp",
+                        "type": "string",
+                        "description": "Client IP Address"
+                      },
+                      {
+                        "name": "uri",
+                        "type": "string",
+                        "description": "URI of the compromised entity"
+                      },
+                      {
+                        "name": "canonicalName",
+                        "type": "string",
+                        "description": "Canonical Name of the Client Machine"
+                      },
+                      {
+                        "name": "destinationPort",
+                        "type": "int",
+                        "description": "Destination Port"
+                      },
+                      {
+                        "name": "fileHash",
+                        "type": "string",
+                        "description": "File Hash of the Scanned File"
+                      },
+                      {
+                        "name": "fileType",
+                        "type": "string",
+                        "description": "File Type of the Scanned File"
+                      },
+                      {
+                        "name": "fileSizeBytes",
+                        "type": "int",
+                        "description": "File Size of the Scanned File"
+                      },
+                      {
+                        "name": "disposition",
+                        "type": "string",
+                        "description": "Disposition of the Scanned File"
+                      },
+                      {
+                        "name": "action",
+                        "type": "string",
+                        "description": "Action performed"
+                      }
+                    ]
+                  }
+                },
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CiscoMeraki_API"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source\r\n| extend \r\n            TimeGenerated = ts,\r\n            EventStartTime = ts,\r\n            EventEndTime = ts,\r\n            EventCount = toint(1),\r\n            EventResult = case(responseCode >= 200 and responseCode <= 299, \"Success\",\r\n                                \"Failure\"),\r\n            EventResultDetails = tostring(responseCode),\r\n            EventOriginalResultDetails = operationId,\r\n            EventProduct = \"Meraki\", \r\n            EventVendor = \"Cisco\",\r\n            Dvc = \"Meraki\",\r\n            EventType = \"HTTPsession\",\r\n            EventSchemaVersion = \"0.2.5\",  \r\n            EventOriginalType = \"API Request\",         \r\n            Url = strcat(host,path,'?',queryString),   \r\n            HttpVersion = \"2.0\",\r\n            HttpRequestMethod = method, \r\n            HttpStatusCode = tostring(responseCode),\r\n            HttpReferrer = host,\r\n            HttpUserAgent = userAgent,\r\n            SrcUserId = adminId,\r\n            SrcUserIdType = \"UID\",\r\n            SrcIpAddr = sourceIp,\r\n            EventProductVersion = case(isempty(version),tostring(1),\r\n                                        tostring(version)),\r\n            GeoLocation = geo_location(sourceIp)\r\n| extend UrlOriginal = Url,\r\n            UserAgent = HttpUserAgent,\r\n            EventSeverity = case(EventResult == \"Success\", \"Informational\",\r\n                              \"Low\"),\r\n            SrcGeoCountry = tostring(GeoLocation.Country),\r\n            SrcGeoLatitude = toreal(GeoLocation.Latitude),\r\n            SrcGeoLongitude = toreal(GeoLocation.Longitude)\r\n| project-away GeoLocation",
+                    "outputStream": "Microsoft-ASimWebSessionLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-CiscoMeraki_Configuration"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source\r\n    | project-rename TimeGenerated = ts,\r\n                 OldValue = oldValue,\r\n                 NewValue = newValue,\r\n                 ActorUsername = adminEmail,\r\n                 ActorUserId = adminId\r\n    | extend EventSchemaVersion = \"0.1\",\r\n          EventCount = toint(1),\r\n          EventResult = \"Success\",\r\n          EventProduct = \"Meraki\",\r\n          EventVendor = \"Cisco\",\r\n          EventSeverity = \"Informational\",\r\n          ActorUsernameType = \"UPN\",\r\n          ActorUserType = \"Admin\",\r\n          ActorUserIdType = \"Other\",\r\n          AdditionalFields = pack(\"adminName\",adminName),\r\n          Operation = strcat(page,'/',label),\r\n          Object = iff(isnotempty(ssidName), strcat(networkName,'/',ssidName), networkName),\r\n          ObjectId = iff(isnotempty(ssidNumber), strcat(networkId,'/',ssidNumber), networkId),\r\n          ObjectType = \"Other\",\r\n          EventType = case(isempty(OldValue),\"Create\",\r\n                           isempty(NewValue),\"Delete\",\r\n                           \"Set\"),\r\n          EventStartTime = TimeGenerated,\r\n          EventEndTime = TimeGenerated,\r\n          ValueType = \"Other\"\r\n    | project-away page, label, networkId, networkName, ssidNumber, ssidName, adminName\r\n",
+                    "outputStream": "Microsoft-ASimAuditEventLogs"
+                  },
+                  {
+                    "streams": [
+                      "Custom-CiscoMeraki_IDS"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source \r\n        | where eventType == \"IDS Alert\" \r\n        | extend srcIpSplit = split(srcIp,':'), dstIpSplit = split(destIp,':')\r\n        | project-rename TimeGenerated = ts, \r\n                EventOriginalType = eventType, \r\n                DvcMacAddr = deviceMac, \r\n                SrcMacAddr = clientMac, \r\n                EventOriginalSeverity = priority, \r\n                EventMessage = message,\r\n                NetworkRuleName = ruleId\r\n        | extend                 \r\n                EventCount = toint(1), \r\n                EventResult = iif(blocked,\"Failure\",\"Success\"),  \r\n                EventProduct = \"Meraki\", \r\n                EventVendor = \"Cisco\", \r\n                Dvc = DvcMacAddr,\r\n                EventType = \"Notable\",\r\n                SrcIpAddr = tostring(srcIpSplit[0]), \r\n                SrcPortNumber = iif(array_length(srcIpSplit) == 2, toint(srcIpSplit[1]), int(null)), \r\n                DstIpAddr = tostring(dstIpSplit[0]), \r\n                DstPortNumber = iff(array_length(dstIpSplit) == 2,toint(dstIpSplit[1]),int(null)), \r\n                NetworkProtocol = case(protocol == \"tcp/ip\", \"TCP\", \r\n                                       protocol == \"udp/ip\", \"UDP\",\r\n                                       \"\"), \r\n                EventSeverity = case(EventOriginalSeverity == \"0\", \"High\",\r\n                                EventOriginalSeverity == \"1\", \"Medium\",\r\n                                EventOriginalSeverity == \"2\", \"Low\",\r\n                                EventOriginalSeverity == \"3\", \"Informational\",\r\n                                \"Low\"), \r\n                DvcAction = case(\r\n                                blocked, \"Deny\",\r\n                                \"Allow\"\r\n                                ),\r\n                AdditionalFields = pack(\r\n                                        \"classification\",classification,\r\n                                        \"sigSource\",sigSource,\r\n                                        \"signature\",signature\r\n                                        ),\r\n                EventStartTime = TimeGenerated, \r\n                EventEndTime = TimeGenerated\r\n        | extend \r\n                GeoLocationSrc = geo_location(SrcIpAddr),\r\n                GeoLocationDst = geo_location(DstIpAddr)\r\n        | extend SrcGeoCountry = tostring(GeoLocationSrc.Country),\r\n                SrcGeoLatitude = toreal(GeoLocationSrc.Latitude),\r\n                SrcGeoLongitude = toreal(GeoLocationSrc.Longitude),\r\n                DstGeoCountry = tostring(GeoLocationDst.Country),\r\n                DstGeoLatitude = toreal(GeoLocationDst.Latitude),\r\n                DstGeoLongitude = toreal(GeoLocationDst.Longitude)\r\n| project-away GeoLocationSrc, GeoLocationDst, srcIpSplit, dstIpSplit, blocked, classification, destIp, protocol, sigSource, srcIp",
+                    "outputStream": "Microsoft-ASimNetworkSessionLogs"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition1'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "id": "CiscoMerakiMultiRule",
+          "title": "Cisco Meraki (using REST API)",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "The [Cisco Meraki](https://aka.ms/ciscomeraki) connector allows you to easily connect your Cisco Meraki organization events (Security events, Configuration Changes and API Requests) to Microsoft Sentinel. The data connector uses the [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) to fetch logs and supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) that parses the received data and ingests into ASIM and custom tables in your Log Analytics workspace. This data connector benefits from capabilities such as DCR based ingestion-time filtering, data normalization.\n\n **Supported ASIM schema:** \n 1. Network Session \n 2. Web Session  \n 3. Audit Event",
+          "graphQueriesTableName": "ASimNetworkSessionLogs",
+          "graphQueries": [
+            {
+              "metricName": "Total IDS alerts received",
+              "legend": "Get IDS Alerts",
+              "baseQuery": "{{graphQueriesTableName}} | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\""
+            },
+            {
+              "metricName": "Total File Scanned events received",
+              "legend": "Get File Scanned",
+              "baseQuery": "ASimWebSessionLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\" and EventOriginalType == \"File Scanned\""
+            },
+            {
+              "metricName": "Total API request events received",
+              "legend": "Get API Request",
+              "baseQuery": "ASimWebSessionLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\" and EventOriginalType == \"API Request\""
+            },
+            {
+              "metricName": "Total Configuration Changes received",
+              "legend": "Get Configuration Changes",
+              "baseQuery": "ASimAuditEventLogs | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\""
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of Cisco Meraki IDS Alerts",
+              "query": "{{graphQueriesTableName}}\n | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"\n | take 10"
+            },
+            {
+              "description": "Total Events by Event Type",
+              "query": "union {{graphQueriesTableName}}, ASimWebSessionLogs, ASimAuditEventLogs\n | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"\n | summarize count() by EventOriginalType"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"         | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimWebSessionLogs",
+              "lastDataReceivedQuery": "ASimWebSessionLogs\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            },
+            {
+              "name": "ASimAuditEventLogs",
+              "lastDataReceivedQuery": "ASimAuditEventLogs\n       | where TimeGenerated > ago(7d)    | where EventProduct == \"Meraki\" and EventVendor == \"Cisco\"                | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "Read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key)",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "Cisco Meraki REST API Key",
+                "description": "Enable API access in Cisco Meraki and generate API Key. Please refer to Cisco Meraki official [documentation](https://aka.ms/ciscomerakiapikey) for more information."
+              },
+              {
+                "name": "Cisco Meraki Organization Id",
+                "description": "Obtain your Cisco Meraki organization id to fetch security events. Follow the steps in the [documentation](https://aka.ms/ciscomerakifindorg) to obtain the Organization Id using the Meraki API Key obtained in previous step."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "Currently, this connector allows to ingest events from the following [Cisco Meraki REST API](https://developer.cisco.com/meraki/api-v1/#!get-organization-appliance-security-events) endpoint: \n 1. [Get Organization Appliance Security Events](https://developer.cisco.com/meraki/api-latest/#!get-organization-appliance-security-events) \n>This connector parses **IDS Alert** events into ASimNetworkSessionLogs Table and **File Scanned** events into ASimWebSessionLogs Table. \n 2. [Get Organization Api Requests](https://developer.cisco.com/meraki/api-latest/#!get-organization-api-requests) \n>This connector parses events into ASimWebSessionLogs Table. \n 3. [Get Organization Configuration Changes](https://developer.cisco.com/meraki/api-latest/#!get-organization-configuration-changes) \n>This connector parses events into ASimAuditEventLogs Table.",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Organization Id",
+                    "placeholder": "OrganizationId",
+                    "type": "text",
+                    "name": "organization"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Key",
+                    "placeholder": "ApiKey",
+                    "type": "password",
+                    "name": "apiKey"
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ],
+              "title": "Connect Cisco Meraki events to Microsoft Sentinel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition1')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition1'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorCCPVersion')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorCCPVersion')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections1'), variables('dataConnectorCCPVersion'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+        "displayName": "Cisco Meraki (using REST API)",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorCCPVersion')]",
+          "parameters": {
+            "apikey": {
+              "defaultValue": "-NA-",
+              "type": "securestring",
+              "minLength": 1
+            },
+            "organization": {
+              "defaultValue": "Enter organization value",
+              "type": "string",
+              "minLength": 1
+            },
+            "connectorDefinitionName": {
+              "defaultValue": "Cisco Meraki (using REST API)",
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections1": "[variables('_dataConnectorContentIdConnections1')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections1')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections1'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorCCPVersion')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CiscoMerakiAPIRequest')]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CiscoMerakiMultiRule",
+                "dataType": "ASimWebSessionLogs",
+                "dcrConfig": {
+                  "streamName": "Custom-CiscoMeraki_API",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "X-Cisco-Meraki-API-Key"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://api.meraki.com/api/v1/organizations/', parameters('organization'), '/apiRequests')]",
+                  "httpMethod": "GET",
+                  "queryParameters": {
+                    "perPage": 1000
+                  },
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "UnixTimestamp",
+                  "startTimeAttributeName": "t0",
+                  "endTimeAttributeName": "t1",
+                  "rateLimitQps": 2,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba-Microsoft"
+                  }
+                },
+                "paging": {
+                  "pagingType": "LinkHeader",
+                  "linkHeaderRelLinkName": "rel=next"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CiscoMerakiConfigRequest')]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CiscoMerakiMultiRule",
+                "dataType": "ASimAuditEventLogs",
+                "dcrConfig": {
+                  "streamName": "Custom-CiscoMeraki_Configuration",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "X-Cisco-Meraki-API-Key"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://api.meraki.com/api/v1/organizations/', parameters('organization'), '/configurationChanges')]",
+                  "httpMethod": "GET",
+                  "queryParameters": {
+                    "perPage": 1000
+                  },
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "UnixTimestamp",
+                  "startTimeAttributeName": "t0",
+                  "endTimeAttributeName": "t1",
+                  "rateLimitQps": 2,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba-Microsoft"
+                  }
+                },
+                "paging": {
+                  "pagingType": "LinkHeader",
+                  "linkHeaderRelLinkName": "rel=next"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CiscoMerakiIDSRequest')]",
+              "apiVersion": "2023-02-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "connectorDefinitionName": "CiscoMerakiMultiRule",
+                "dataType": "ASimNetworkSessionLogs",
+                "dcrConfig": {
+                  "streamName": "Custom-CiscoMeraki_IDS",
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                },
+                "auth": {
+                  "type": "APIKey",
+                  "ApiKey": "[[parameters('apikey')]",
+                  "ApiKeyName": "X-Cisco-Meraki-API-Key"
+                },
+                "request": {
+                  "apiEndpoint": "[[concat('https://api.meraki.com/api/v1/organizations/', parameters('organization'), '/appliance/security/events')]",
+                  "httpMethod": "GET",
+                  "queryParameters": {
+                    "perPage": 1000
+                  },
+                  "queryWindowInMin": 5,
+                  "queryTimeFormat": "UnixTimestamp",
+                  "startTimeAttributeName": "t0",
+                  "endTimeAttributeName": "t1",
+                  "rateLimitQps": 2,
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Scuba-Microsoft"
+                  }
+                },
+                "paging": {
+                  "pagingType": "LinkHeader",
+                  "linkHeaderRelLinkName": "rel=next"
+                },
+                "response": {
+                  "eventsJsonPaths": [
+                    "$"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(take(variables('_solutionId'), 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections1'),'-', variables('dataConnectorCCPVersion'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('dataConnectorCCPVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Cisco Meraki Events via REST API",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cisco%20Meraki%20Events%20via%20REST%20API/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Cisco Meraki Events via REST API solution for Microsoft Sentinel enables you to easily ingest the following events from <a href=\"https://meraki.cisco.com/products/security-sd-wan/\">Cisco Meraki MX security appliance</a> to Microsoft Sentinel using Cisco Meraki API:</p>\n<ol>\n<li><a href=\"https://developer.cisco.com/meraki/api-latest/#!get-organization-appliance-security-events\">Organization Appliance Security Events</a></li>\n<li><a href=\"https://developer.cisco.com/meraki/api-latest/#!get-organization-api-requests\">Organization Api Requests</a></li>\n<li><a href=\"https://developer.cisco.com/meraki/api-latest/#!get-organization-configuration-changes\">Organization Configuration Changes</a></li>\n</ol>\n<p>This enables you to view and analyze this data for security monitoring and using them to create custom alerts, and incorporate it to improve your investigation process, giving you more insight into your platform security.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol>\n<li><a href=\"https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview\">Azure Monitor Logs: DCR-based Custom Logs</a></li>\n<li><a href=\"https://docs.microsoft.com/azure/sentinel/create-codeless-connector?tabs=deploy-via-arm-template%2Cconnect-via-the-azure-portal\">Codeless Connector Platform (CCP)</a></li>\n</ol>\n<p><strong>Supported ASIM schema:</strong></p>\n<ol>\n<li>Network Session</li>\n<li>Web Session</li>\n<li>Audit Event</li>\n</ol>\n<p><strong>Data Connectors:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/CiscoMeraki/Connector/MerakiConnector/logo.jpg\"width=\"75px\"height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cisco Meraki Events via REST API",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentIdConnections1')]",
+              "version": "[variables('dataConnectorCCPVersion')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-07-12",
+        "providers": [
+          "Cisco"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

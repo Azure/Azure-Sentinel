@@ -5,7 +5,7 @@ This playbook creates a shared Connection for all Microsoft Defender Threat Inte
 
 ## Pre-deployment Instructions
 
-1. Azure AD App Registration credentials(ClientId/ClientSecret/TenantId) with MDTI API Permissions are needed when configuring this playbook. Please check here for instructions on creating an App Registration [Azure Client App](https://learn.microsoft.com/en-us/rest/api/azure/#register-your-client-application-with-azure-ad) page. 
+1. Microsoft Entra ID App Registration credentials(ClientId/ClientSecret/TenantId) with MDTI API Permissions are needed when configuring this playbook. Please check here for instructions on creating an App Registration [Azure Client App](https://learn.microsoft.com/en-us/rest/api/azure/#register-your-client-application-with-azure-ad) page. 
 2. MDTI API Permissions needed for the App registration is "ThreatIntelligence.Read.All" which needs to be granted consent by your Azure Tenant admin.
 3. Also, all playbooks part of the MDTI Solution require "Microsoft Sentinel Contributor" role to update Incidents. 
 

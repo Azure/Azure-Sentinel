@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuthenticationBarracudaWAF",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Authentication parser for Barracuda WAF",
+            "category": "ASIM",
+            "FunctionAlias": "vimAuthenticationBarracudaWAF",
+            "query": "let barracudaSchema = datatable(\n    LogType_s: string,\n    UnitName_s: string,\n    EventName_s: string,\n    DeviceReceiptTime_s: string,\n    HostIP_s: string,\n    host_s: string,\n    LoginIP_s: string,\n    Severity_s: string,\n    LoginPort_d: real,\n    AdminName_s: string,\n    EventMessage_s: string,\n    TimeTaken_d: real,\n    TenantId: string,\n    Message: string,\n    SourceSystem: string,\n    _ResourceId: string,\n    RawData: string,\n    Computer: string,\n    MG: string,\n    ManagementGroupName: string,\n    SourceIP: string,\n    TimeGenerated: datetime\n)[];\nlet SeverityLookup = datatable (severity: int, EventSeverity: string)\n    [\n    0, \"High\", \n    1, \"High\", \n    2, \"High\", \n    3, \"Medium\",\n    4, \"Low\",\n    5, \"Low\", \n    6, \"Informational\",\n    7, \"Informational\" \n];\nlet EventTypeLookup = datatable (\n    EventName_s: string,\n    EventType_lookup: string,\n    EventResult: string\n)\n    [\n    \"LOGIN\", \"Logon\", \"Success\",\n    \"UNSUCCESSFUL_LOGIN\", \"Logoff\", \"Failure\",\n    \"LOGOUT\", \"Logoff\", \"Success\"\n];\nlet EventResultDetailsLookup = datatable (\n    Reason: string,\n    EventResultDetails: string\n)\n    [\n    \"Invalid Username/Password\", \"Incorrect password\",\n    \"Account Lockout\", \"User locked\",\n    \"Expired or Disabled Accounts\", \"User disabled\",\n    \"IP Blocking\", \"Logon violates policy\",\n    \"Session Timeouts\", \"Session expired\",\n    \"CAPTCHA Verification\", \"Other\"\n];\nlet parser = (\n      starttime: datetime = datetime(null),\n      endtime: datetime = datetime(null),\n      targetusername_has: string = \"*\",\n      disabled: bool = false) { \n  let BarracudaCustom = \n      union isfuzzy=true\n          barracudaSchema,\n          barracuda_CL\n      | where not(disabled)\n          and (LogType_s == \"AUDIT\")\n          and (EventName_s in (\"LOGIN\", \"LOGOUT\", \"UNSUCCESSFUL_LOGIN\"))\n      | where (isnull(starttime) or TimeGenerated >= starttime)\n          and (isnull(endtime) or TimeGenerated <= endtime)\n          and (targetusername_has == '*' or (AdminName_s has targetusername_has))\n      | parse trim(@'[^\\w(\")]+', EventMessage_s) with * \"Reason=\" Reason:string\n      | extend Reason = trim(@'(\")', Reason)\n      | lookup EventResultDetailsLookup on Reason\n      | lookup EventTypeLookup on EventName_s\n      | extend \n          EventType = EventType_lookup,\n          severity = toint(Severity_s)\n      | lookup SeverityLookup on severity\n      | extend\n          Dvc = UnitName_s,\n          EventCount = toint(1),\n          EventProduct = \"WAF\",\n          EventSchema = \"Authentication\",\n          EventSchemaVersion = \"0.1.3\",\n          EventVendor = \"Barracuda\"\n      | extend\n          SrcPortNumber = toint(LoginPort_d),\n          DvcIpAddr = HostIP_s,\n          SrcIpAddr = LoginIP_s,\n          DvcHostname = host_s,\n          ActorUsername = AdminName_s,\n          EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)-tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)))\n      | extend\n          ActorUsernameType = iff(isnotempty(ActorUsername), \"Simple\", \"\"),\n          ActorUserType = iff(isnotempty(ActorUsername), \"Admin\", \"\"),\n          EventEndTime = EventStartTime\n      | extend\n          IpAddr = SrcIpAddr,\n          Src = SrcIpAddr\n      | project-away\n          *_s,\n          *_d,\n          severity,\n          EventType_lookup,\n          TenantId,\n          Message,\n          SourceSystem,\n          _ResourceId,\n          RawData,\n          Computer,\n          MG,\n          ManagementGroupName,\n          SourceIP,\n          Reason;\n  let BarracudaCEF = \n      CommonSecurityLog\n      | where not(disabled) and DeviceVendor startswith \"Barracuda\" and (DeviceProduct == \"WAF\" or DeviceProduct == \"WAAS\")\n      | where DeviceEventCategory == \"AUDIT\"\n          and (toupper(ProcessName) in (\"LOGIN\", \"LOGOUT\", \"UNSUCCESSFUL_LOGIN\"))\n      | where (isnull(starttime) or TimeGenerated >= starttime)\n          and (isnull(endtime) or TimeGenerated <= endtime)\n          and (targetusername_has == '*' or (DestinationUserName has targetusername_has))\n      | parse trim(@'[^\\w(\")]+', Message) with * \"Reason=\" Reason:string\n      | extend Reason = trim(@'(\")', Reason)\n      | lookup EventResultDetailsLookup on Reason\n      | extend ProcessName = toupper(ProcessName)\n      | lookup EventTypeLookup on $left.ProcessName == $right.EventName_s\n      | extend \n          EventType = EventType_lookup,\n          severity = toint(LogSeverity)\n      | lookup SeverityLookup on severity\n      | extend\n          Dvc = DeviceName,\n          EventCount = toint(1),\n          EventProduct = \"WAF\",\n          EventSchema = \"Authentication\",\n          EventSchemaVersion = \"0.1.3\",\n          EventVendor = \"Barracuda\"\n      | extend\n          SrcPortNumber = toint(SourcePort),\n          DvcIpAddr = DeviceAddress,\n          SrcIpAddr = SourceIP,\n          DvcHostname = DeviceName,\n          ActorUsername = DestinationUserName,\n          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime)))\n      | extend\n          ActorUsernameType = iff(isnotempty(ActorUsername), \"Simple\", \"\"),\n          ActorUserType = iff(isnotempty(ActorUsername), \"Admin\", \"\"), \n          EventEndTime = EventStartTime\n      | extend\n          IpAddr = SrcIpAddr,\n          Src = SrcIpAddr\n      | project-away\n          ThreatConfidence,\n          EventType_lookup,\n          CommunicationDirection,\n          AdditionalExtensions,\n          Device*,\n          Source*,\n          Destination*,\n          Activity,\n          LogSeverity,\n          ApplicationProtocol,\n          ProcessID,\n          ExtID,\n          Protocol,\n          Reason,\n          ReceiptTime,\n          SimplifiedDeviceAction,\n          OriginalLogSeverity,\n          ProcessName,\n          EndTime,\n          ExternalID,\n          File*,\n          ReceivedBytes,\n          Message,\n          Old*,\n          EventOutcome,\n          Request*,\n          StartTime,\n          Field*,\n          Flex*,\n          Remote*,\n          Malicious*,\n          severity,\n          ThreatSeverity,\n          IndicatorThreatType,\n          ThreatDescription,\n          _ResourceId,\n          SentBytes,\n          ReportReferenceLink,\n          Computer,\n          TenantId;\n  union isfuzzy = true \n  BarracudaCustom,\n  BarracudaCEF\n};\nparser(\n    starttime = starttime,\n    endtime = endtime,\n    targetusername_has = targetusername_has,\n    disabled=disabled\n)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False,starttime:datetime=datetime(null),endtime:datetime=datetime(null),targetusername_has:string='*'"
+          }
+        }
+      ]
+    }
+  ]
+}

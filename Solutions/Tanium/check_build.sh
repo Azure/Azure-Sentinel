@@ -77,7 +77,6 @@ compare_contents() {
 }
 
 show_diff_commands() {
-  echo "$previous"
   _msg "\nTo diff mainTemplate.json:"
   _msg "    check_build.sh diff mainTemplate.json"
   _msg "\nTo diff createUiDefinition.json:"
@@ -101,7 +100,7 @@ show_manual_check_steps() {
 
   2. Validate maintemplate.json:
 
-    Validate  mainTemplate.json  by deploying the template in portal. Follow these steps to deploy in portal:
+    Validate mainTemplate.json  by deploying the template in portal. Follow these steps to deploy in portal:
 
     • Open up https://aka.ms/AzureSentinelPrP which launches the Azure portal with the needed private preview flags.
     • Go to "Deploy a Custom Template" on the portal

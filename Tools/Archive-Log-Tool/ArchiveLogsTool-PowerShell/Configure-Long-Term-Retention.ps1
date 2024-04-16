@@ -16,7 +16,7 @@
          
     .NOTES
         AUTHOR: Sreedhar Ande
-        Last Edit : 5/15/2023 - Sreedhar Ande - Added Support for Azure Gov        
+        Last Edit : 11/9/2023 - Sreedhar Ande - Added Support for Azure Gov        
 
     .EXAMPLE
         .\Configure-Long-Term-Retention.ps1 -TenantId xxxx
@@ -348,7 +348,7 @@ function Collect-AnalyticsPlanRetentionDays {
     $label = New-Object System.Windows.Forms.Label
     $label.Location = New-Object System.Drawing.Point(10,20)
     $label.Size = New-Object System.Drawing.Size(350,60)
-    $label.Text = "Enter number of days to archive. The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days"
+    $label.Text = "Enter number of days to archive. The value beyond two years is restricted to full years. Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383 days"
     $form.Controls.Add($label)
 
     $textBox = New-Object System.Windows.Forms.TextBox
@@ -359,13 +359,13 @@ function Collect-AnalyticsPlanRetentionDays {
         
     $textBox.Add_TextChanged({
         $days = [int]$textBox.Text.Trim()
-        $AllowedDays = '(1095|1460|1826|2191|2556)'
+        $AllowedDays = '(1095|1460|1826|2191|2556|2922|3288|3653|4018|4383)'
         if ($days -in 4..730 -or $days -match $AllowedDays) {         
             $okButton.Enabled = $true
             $ErrorProvider.Clear()
         }
         else {
-            $ErrorProvider.SetError($textBox, "Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556 days")  
+            $ErrorProvider.SetError($textBox, "Allowed values are: [4-730], 1095, 1460, 1826, 2191, 2556, 2922, 3288, 3653, 4018, 4383 days")  
             $okButton.Enabled = $false            
         } 
     }) 
@@ -484,6 +484,13 @@ function Get-Confirmation {
 #endregion
 
 #region DriverProgram
+
+# Check Powershell version, needs to be 5 or higher
+if ($host.Version.Major -lt 5) {
+    Write-Log "Supported PowerShell version for this script is 5 or above" -LogFileName $LogFileName -Severity Error    
+    exit
+}
+
 $AzModulesQuestion = "Do you want to update required Az Modules to latest version?"
 $AzModulesQuestionChoices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
 $AzModulesQuestionChoices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
@@ -504,11 +511,6 @@ Get-RequiredModules("Az.OperationalInsights")
 $TimeStamp = Get-Date -Format yyyyMMdd_HHmmss 
 $LogFileName = '{0}_{1}.csv' -f "Sentinel_Long_Term_Retention", $TimeStamp
 
-# Check Powershell version, needs to be 5 or higher
-if ($host.Version.Major -lt 5) {
-    Write-Log "Supported PowerShell version for this script is 5 or above" -LogFileName $LogFileName -Severity Error    
-    exit
-}
 
 #disconnect exiting connections and clearing contexts.
 Write-Log "Clearing existing Azure connection" -LogFileName $LogFileName -Severity Information

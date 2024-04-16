@@ -172,7 +172,7 @@ foreach ($result in $results ) {
                     "type"       = "Microsoft.OperationalInsights/workspaces/providers/metadata"
                     "id"         = $null
                     "properties" = @{
-                        "contentId" = $verdict.name
+                        "contentId" = $result.properties.mainTemplate.resources[0].name
                         "parentId"  = $verdict.id
                         "kind"      = "AnalyticsRule"
                         "version"   = $templateVersion

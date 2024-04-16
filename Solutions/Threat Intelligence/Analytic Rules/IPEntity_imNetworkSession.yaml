@@ -1,8 +1,7 @@
 id: e2399891-383c-4caf-ae67-68a008b9f89e
 name: TI map IP entity to Network Session Events (ASIM Network Session schema)
 description: |
-  'This rule identifies a match Network Sessions for which the source or destination IP address is a known IoC. <br><br>
-  This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'
+  'This rule identifies a match Network Sessions for which the source or destination IP address is a known IoC. This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM NetworkSession schema'
 severity: Medium
 status: Available
 requiredDataConnectors:
@@ -58,6 +57,9 @@ requiredDataConnectors:
     dataTypes:
       - Syslog
       - CiscoMerakiNativePoller
+  - connectorId: ThreatIntelligenceTaxii
+    dataTypes:
+      - ThreatIntelligenceIndicator
 
 queryFrequency: 1h
 queryPeriod: 14d
@@ -70,11 +72,11 @@ query: |
   let ioc_lookBack = 14d;
   let IP_TI = materialize (
     ThreatIntelligenceIndicator
-    | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()
-    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-    | where Active == true
+    | where TimeGenerated >= ago(ioc_lookBack)
     | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,"NO_IP")
     | where TI_ipEntity != "NO_IP"
+    | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+    | where Active == true and ExpirationDateTime > now()
   );
   IP_TI
     // using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated
@@ -119,5 +121,5 @@ tags:
   - Schema: ASIMNetworkSession
     SchemaVersion: 0.2.4
 
-version: 1.2.4
+version: 1.2.5
 kind: Scheduled

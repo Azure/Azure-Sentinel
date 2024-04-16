@@ -12,6 +12,7 @@ DEFAULT_LOG_LEVEL = 20
 OAUTH2_ENDPOINT = "/oauth2/token"
 API_TIMEOUT = 180
 SENTINEL_ACCEPTABLE_CODES = list(range(200, 300))
+PAGE_SIZE = 100
 
 # Environment Variables of Microsoft Sentinel
 WORKSPACE_ID = os.environ.get("WorkspaceID")

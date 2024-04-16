@@ -1,99 +1,227 @@
 Parser:
   Title: File Event ASIM filtering parser for Microsoft Windows Events
-  Version: '0.1.2'
-  LastUpdated: October 27, 2022
+  Version: "0.1.3"
+  LastUpdated: Oct 31, 2023
 Product:
   Name: Microsoft Windows Events
 Normalization:
   Schema: FileEvent
-  Version: '0.1'
+  Version: "0.2.1"
 References:
-- Title: ASIM File Event Schema
-  Link: https://aka.ms/ASimFileEventDoc
-- Title: ASIM
-  Link: https://aka.ms/AboutASIM
+  - Title: ASIM File Event Schema
+    Link: https://aka.ms/ASimFileEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
 Description: |
   This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
 ParserName: vimFileEventMicrosoftWindowsEvents
+EquivalentBuiltInParser: _Im_FileEvent_MicrosoftWindowsEvents
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  let Parser=()
-  {
-  let EventTypeLookup = datatable (AccessMask:string,EventType:string)
-  [
-      "0x1", "ObjectAccessed"
-      , "0x10", "MetadataModified"
-      , "0x100", "MetadataModified"
-      , "0x10000", "ObjectDeleted"
-      , "0x2", "ObjectModified"
-      , "0x20000", "MetadataAccessed"
-      , "0x4", "ObjectModified"
-      , "0x40", "ObjectDeleted"
-      , "0x40000", "MetadataModified"
-      , "0x6", "ObjectModified"
-      , "0x8", "MetadataAccessed"
-      , "0x80", "MetadataAccessed"
-      , "0x80000", "MetadataModified"
+  let Parser=(
+    starttime: datetime=datetime(null),
+    endtime: datetime=datetime(null),
+    eventtype_in: dynamic=dynamic([]),
+    srcipaddr_has_any_prefix: dynamic=dynamic([]),
+    actorusername_has_any: dynamic=dynamic([]),
+    targetfilepath_has_any: dynamic=dynamic([]),
+    srcfilepath_has_any: dynamic=dynamic([]),
+    hashes_has_any: dynamic=dynamic([]),
+    dvchostname_has_any: dynamic=dynamic([]),
+    disabled: bool=false
+    ) {
+    let EventTypeLookup = datatable (AccessMask: string, EventType: string)
+        [
+    "0x1", "ObjectAccessed"
+        ,
+    "0x10", "MetadataModified"
+        ,
+    "0x100", "MetadataModified"
+        ,
+    "0x10000", "ObjectDeleted"
+        ,
+    "0x2", "ObjectModified"
+        ,
+    "0x20000", "MetadataAccessed"
+        ,
+    "0x4", "ObjectModified"
+        ,
+    "0x40", "ObjectDeleted"
+        ,
+    "0x40000", "MetadataModified"
+        ,
+    "0x6", "ObjectModified"
+        ,
+    "0x8", "MetadataAccessed"
+        ,
+    "0x80", "MetadataAccessed"
+        ,
+    "0x80000", "MetadataModified"
   ];
-  let UserTypeLookup = datatable (AccountType:string, ActorUserType:string)
-  [
-    'User', 'Regular',
-    'Machine', 'Machine'
+      let UserTypeLookup = datatable (AccountType: string, ActorUserType: string)
+          [
+      'User', 'Regular',
+      'Machine', 'Machine'
   ];    
-  let KnownSIDs = datatable (sid:string, username:string, type:string)
-  [
-    'S-1-5-18', 'Local System', 'Simple',
-    'S-1-0-0', 'Nobody', 'Simple'
+      let KnownSIDs = datatable (sid: string, username: string, type: string)
+          [
+      'S-1-5-18', 'Local System', 'Simple',
+      'S-1-0-0', 'Nobody', 'Simple'
   ];
-  union isfuzzy=false (WindowsEvent
-  | where EventID == 4663 
-    and EventData.ObjectType == "File"
-    and EventData.ObjectName !startswith @"\Device\"
-  | project TimeGenerated
-    , EventID, AccessMask = tostring(EventData.AccessMask)
-    , ProcessName = tostring(EventData.ProcessName)
-    , SubjectUserSid = tostring(EventData.SubjectUserSid)
-    , AccountType = tostring(EventData.AccountType)
-    , Computer = tostring(EventData.Computer)
-    , ObjectName = tostring(EventData.ObjectName)
-    , ProcessId = tostring(EventData.ProcessId)
-    , SubjectUserName = tostring(EventData.SubjectUserName)
-    , SubjectAccount = tostring(EventData.SubjectAccount)
-    , SubjectLogonId = tostring(EventData.SubjectLogonId)
-    , HandleId = tostring(EventData.HandleId)
-  )
-  , (SecurityEvent
-  | where EventID == 4663 
-    and ObjectType == "File"
-    and ObjectName !startswith @"\Device\"
-  | project TimeGenerated, EventID, AccessMask, ProcessName, SubjectUserSid, AccountType, Computer, ObjectName, ProcessId, SubjectUserName, SubjectAccount, SubjectLogonId, HandleId)
-  | lookup EventTypeLookup on AccessMask
-  | lookup UserTypeLookup on AccountType
-  | lookup KnownSIDs on $left.SubjectUserSid == $right.sid
-  | extend ActingProcessName = ProcessName
-    , ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount)
-    , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , TargetFilePath = ObjectName
-    , TargetFilePathFormat = "Windows Local"
-    , ActingProcessId = tostring(toint(ProcessId))
-    , EventOriginalType = tostring(EventID)
-  | project-away EventID, ProcessId, AccountType, type, username
-  | project-rename ActorUserId = SubjectUserSid
-    , DvcHostname = Computer
-    , Process = ProcessName
-    , FilePath = ObjectName
-    , ActorSessionId = SubjectLogonId
-    , FileSessionId = HandleId
-  | extend EventSchema = "FileEvent"
-    , EventSchemaVersion = "0.1.1"
-    , EventResult = "Success"
-    , EventCount = int(1)
-    , EventVendor = 'Microsoft'
-    , EventProduct = 'Security Events'
-    , Dvc = DvcHostname
-    , ActorWindowsUsername = ActorUsername
-    , User = ActorUsername
-    , ActorUserSid = ActorUserId
+      union isfuzzy=false
+          (WindowsEvent
+          | where EventID == 4663 
+              and EventData.ObjectType == "File"
+              and EventData.ObjectName !startswith @"\Device\"
+          | project
+              TimeGenerated
+              ,
+              EventID,
+              AccessMask = tostring(EventData.AccessMask)
+              ,
+              ProcessName = tostring(EventData.ProcessName)
+              ,
+              SubjectUserSid = tostring(EventData.SubjectUserSid)
+              ,
+              AccountType = tostring(EventData.AccountType)
+              ,
+              Computer = tostring(EventData.Computer)
+              ,
+              ObjectName = tostring(EventData.ObjectName)
+              ,
+              ProcessId = tostring(EventData.ProcessId)
+              ,
+              SubjectUserName = tostring(EventData.SubjectUserName)
+              ,
+              SubjectAccount = tostring(EventData.SubjectAccount)
+              ,
+              SubjectLogonId = tostring(EventData.SubjectLogonId)
+              ,
+              HandleId = tostring(EventData.HandleId)
+          )
+          ,
+          (SecurityEvent
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | where EventID == 4663 
+              and ObjectType == "File"
+              and ObjectName !startswith @"\Device\"
+          | where (array_length(srcipaddr_has_any_prefix) == 0) and 
+              ((array_length(targetfilepath_has_any) == 0) or (ObjectName has_any (targetfilepath_has_any))) and 
+              (array_length(srcfilepath_has_any) == 0) and
+              (array_length(hashes_has_any) == 0) and 
+              (array_length(dvchostname_has_any) == 0 or Computer has_any (dvchostname_has_any))
+          | project
+              TimeGenerated,
+              EventID,
+              AccessMask,
+              ProcessName,
+              SubjectUserSid,
+              AccountType,
+              Computer,
+              ObjectName,
+              ProcessId,
+              SubjectUserName,
+              SubjectAccount,
+              SubjectLogonId,
+              HandleId)
+      | lookup EventTypeLookup on AccessMask
+      | where ((array_length(eventtype_in) == 0 or EventType in~ (eventtype_in)))
+      | lookup UserTypeLookup on AccountType
+      | lookup KnownSIDs on $left.SubjectUserSid == $right.sid
+      | extend
+          ActingProcessName = ProcessName
+          ,
+          ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount)
+          ,
+          ActorUsernameType = iff(SubjectUserName == '-', type, 'Windows')
+          ,
+          EventStartTime = TimeGenerated
+          ,
+          EventEndTime = TimeGenerated
+          ,
+          TargetFilePath = ObjectName
+          ,
+          TargetFilePathFormat = "Windows Local"
+          ,
+          ActingProcessId = tostring(toint(ProcessId))
+          ,
+          EventOriginalType = tostring(EventID)
+    | where (array_length(actorusername_has_any) == 0) or (ActorUsername has_any (actorusername_has_any))
+      | project-away EventID, ProcessId, AccountType, type, username
+      | project-rename
+          ActorUserId = SubjectUserSid
+          ,
+          DvcHostname = Computer
+          ,
+          Process = ProcessName
+          ,
+          FilePath = ObjectName
+          ,
+          ActorSessionId = SubjectLogonId
+          ,
+          FileSessionId = HandleId
+      | extend
+          EventSchema = "FileEvent"
+          ,
+          EventSchemaVersion = "0.1.1"
+          ,
+          EventResult = "Success"
+          ,
+          EventCount = int(1)
+          ,
+          EventVendor = 'Microsoft'
+          ,
+          EventProduct = 'Security Events'
+          ,
+          Dvc = DvcHostname
+          ,
+          ActorWindowsUsername = ActorUsername
+          ,
+          User = ActorUsername
+          ,
+          ActorUserSid = ActorUserId
   };
-  Parser
+  Parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      eventtype_in=eventtype_in,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      actorusername_has_any=actorusername_has_any,
+      targetfilepath_has_any=targetfilepath_has_any,
+      srcfilepath_has_any=srcfilepath_has_any,
+      hashes_has_any=hashes_has_any,
+      dvchostname_has_any=dvchostname_has_any,
+      disabled=disabled
+  )
