@@ -23,8 +23,6 @@ relevantTechniques:
 query: |
   AuditLogs
   | where OperationName has "Delete partner specific cross-tenant access setting"
-  | extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
-  | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress
   | mv-apply TargetResource = TargetResources on
     (
         where TargetResource.type =~ "Policy"
@@ -35,17 +33,34 @@ query: |
         where Property.displayName =~ "tenantId"
         | extend ExtTenantDeleted = trim('"',tostring(Property.oldValue))
     )
-  | extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: Name
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
       - identifier: UPNSuffix
-        columnName: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: InitiatedByIPAdress
-version: 1.0.2
+        columnName: InitiatingIPAddress
+version: 1.1.0
 kind: Scheduled
