@@ -3,7 +3,8 @@ param($Timer)
 
 # Get the current universal time in the default string format
 $currentUTCtime = (Get-Date).ToUniversalTime()
-
+[int]$maxdurationminutes=10
+$script_start_time=([System.DateTime]::UtcNow)
 # The 'IsPastDue' porperty is 'true' when the current function invocation is later than scheduled.
 if ($Timer.IsPastDue) {
     Write-Host "PowerShell timer is running late!"
@@ -12,6 +13,33 @@ if ($Timer.IsPastDue) {
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
 
+<#
+.SYNOPSIS
+##
+
+.DESCRIPTION
+Long description
+
+.PARAMETER percentage
+Parameter description
+
+.PARAMETER script_start_time
+Parameter description
+
+.EXAMPLE
+An example
+
+.NOTES
+General notes
+#>
+function check_if_script_runs_too_long($percentage, $script_start_time)
+{
+ [int]$seconds=(60)
+ [int]$duration = $(([System.DateTime]::UtcNow - $script_start_time).Seconds)
+ [int]$temp=$maxdurationminutes * $seconds 
+ [double]$maxduration= $temp * 0.8
+ return $duration -gt $maxduration
+}
 function Write-OMSLogfile {
     <#
     .SYNOPSIS
