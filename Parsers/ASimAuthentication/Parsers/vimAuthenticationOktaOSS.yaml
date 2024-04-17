@@ -62,9 +62,40 @@ ParserQuery: |
     let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
     let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED', 'DENY']);
     let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
-    let emptyTable = datatable(TimeGenerated: datetime)[];
+    let emptyOctV1Table = datatable(TimeGenerated:datetime)[];
+    let emptyOctaV2Table = datatable(
+    TimeGenerated: datetime,
+    ActorDetailEntry: string,
+    ActorDisplayName: string,
+    AuthenticationContext: string,
+    AuthenticationProvider: string,
+    AuthenticationStep: string,
+    AuthenticationContextAuthenticationProvider: string,
+    AuthenticationContextAuthenticationStep:string,
+    AuthenticationContextCredentialProvider:string,
+    AuthenticationContextInterface:string,
+    AuthenticationContextIssuerId:string,
+    AuthenticationContextIssuerType:string,
+    DebugData:string,
+    DvcAction:string,
+    OriginalActorAlternateId:string,
+    OriginalClientDevice:string,
+    OriginalOutcomeResult:string,
+    OriginalSeverity:string,
+    OriginalTarget:string,
+    OriginalUserId:string,
+    OriginalUserType:string,
+    Request:string,
+    SecurityContextAsNumber:string,
+    SecurityContextAsOrg:string,
+    SecurityContextDomain:string,
+    SecurityContextIsProxy:string,
+    TransactionDetail:string,
+    TransactionId:string,
+    TransactionType:string
+  )[];
     // https://developer.okta.com/docs/reference/api/event-types/#catalog
-    let OktaV1 = Okta_CL 
+    let OktaV1 = union isfuzzy=true emptyOctV1Table, Okta_CL 
         | where not(disabled)
         // ************************************************************************* 
         //       <Prefiltering>
@@ -154,6 +185,17 @@ ParserQuery: |
         // Filtering on 'eventresult' and 'eventtype_in'
         | where (eventresult == "*" or (EventResult == eventresult))
             and ((array_length(eventtype_in) == 0) or EventType in~ (eventtype_in))
+        // mapping ASimMatchingUsername
+        | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+        // ActorUsername not coming from source. Hence, not mapped.
+        | extend ASimMatchingUsername = case
+                                    (
+                                        array_length(username_has_any) == 0,
+                                        "-",
+                                        temp_isMatchTargetUsername,
+                                        "TargetUsername",
+                                        "No match"
+                                    )
         // ** Aliases
         | extend 
             User=TargetUsername
@@ -162,7 +204,7 @@ ParserQuery: |
             ,
             IpAddr=SrcIpAddr
         | project-away *_s, *_d, *_b, *_g, *_t;
-    let OktaV2 = OktaV2_CL
+    let OktaV2 = union isfuzzy=true emptyOctaV2Table, OktaV2_CL
         | extend
             EventOriginalType=column_ifexists('EventOriginalType', "") 
             ,
