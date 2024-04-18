@@ -1,5 +1,5 @@
 Parser:
-  Title: ASIM Authentication filtering parser for Salesforce Service Cloud
+  Title: ASIM Authentication filtering parser for Github
   Version: "0.1.0"
   LastUpdated: Apr 12, 2024
 Product:
@@ -52,10 +52,10 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-    let parser = (
+     let parser = (
      starttime:datetime=datetime(null), 
      endtime:datetime=datetime(null), 
-     actor_has_any:dynamic = dynamic([]),
+     username_has_any:dynamic = dynamic([]),
      targetappname_has_any:dynamic = dynamic([]),
      srcipaddr_has_any_prefix:dynamic = dynamic([]),
      srchostname_has_any:dynamic = dynamic([]),
@@ -63,8 +63,9 @@ ParserQuery: |
      eventresultdetails_in:dynamic = dynamic([]),
      eventresult:string = '*',
      disabled:bool=false
-     ){
-  let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventResult:string,EventType:string )
+     )
+     {
+     let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventResult:string,EventType:string )
      ["user.login","Success","logon",
      "user.logout","Success","logoff",
      "user.two_factor_challenge_success","Success","logon",
@@ -81,19 +82,12 @@ ParserQuery: |
      "user.promote","Success","Elevate",
      "user.two_factor_challenge_failure","Failure","logon",
      "user.two_factor_challenge_success","Success","logon",
-  ];
-    GitHubAuditLogPolling_CL
+     ];
+     GitHubAuditLogPolling_CL
      |where not(disabled)
      | extend TimeGenerated = todatetime(tostring(split(TimeGenerated, '.', 0)[0]))
-      //  -- Pre filtering
-     | where 
-          (isnull(starttime) or TimeGenerated >= starttime) 
-          and (isnull(endtime) or TimeGenerated <= endtime)
-          and ((array_length(actor_has_any) == 0) or (actor_s  has_any (actor_has_any)))
-          and ((array_length(targetappname_has_any) == 0)) // targetappname not available on source
-          and ((array_length(srcipaddr_has_any_prefix) == 0))// ip address for source not available
-          and ((array_length(srchostname_has_any) == 0)) // SrcHostname not available in source
-     |where operation_type_s =='authentication'
+      //  -- Pre filtering       
+     |where operation_type_s =='create'
      |project TimeGenerated=unixtime_milliseconds_todatetime(created_at_d),   
         EventCount=int(1),
         EventProduct = 'Github',
@@ -103,14 +97,24 @@ ParserQuery: |
         EventUid=_document_id_s,    
         TargetUsername=actor_s,
         EventStartTime=TimeGenerated,
+        EventEndTime=TimeGenerated,
         EventOriginalResultDetails=action_s
      |lookup EventResultDetailslookup on EventOriginalResultDetails    
-     | where EventResult == eventresult
-   };
-  parser(
+     | where 
+         (isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and ((array_length(username_has_any) == 0) or (TargetUsername  has_any (username_has_any)))
+          and ((array_length(targetappname_has_any) == 0)) // targetappname not available on source
+          and ((array_length(srcipaddr_has_any_prefix) == 0))// ip address for source not available
+          and ((array_length(srchostname_has_any) == 0)) // SrcHostname not available in source
+          and eventresult == EventResult 
+          and eventtype_in == EventType
+          and eventresultdetails_in == EventOriginalResultDetails
+     };
+     parser(
       starttime=starttime,
       endtime=endtime,
-      actor_has_any=actor_has_any,
+      username_has_any=username_has_any,
       targetappname_has_any=targetappname_has_any,
       srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
       srchostname_has_any=srchostname_has_any,
@@ -118,4 +122,4 @@ ParserQuery: |
       eventresultdetails_in=eventresultdetails_in,
       eventresult=eventresult,
       disabled=disabled
-  )
+    )
