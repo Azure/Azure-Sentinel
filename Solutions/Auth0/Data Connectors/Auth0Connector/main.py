@@ -111,6 +111,7 @@ class Auth0Connector:
         events.sort(key=lambda item: item['date'], reverse=True)
         last_log_id = events[0]['log_id']
         for el in events:
+            self.restructure_event(el)
             self.sentinel.send(el)
         self.sentinel.flush()
         logging.info('Events sent to Sentinel.')
@@ -148,6 +149,7 @@ class Auth0Connector:
                         last_log_id = events[0]['log_id']
                         
                         for el in events:
+                            self.restructure_event(el)
                             self.sentinel.send(el)
                         self.sentinel.flush()
 
@@ -209,6 +211,70 @@ class Auth0Connector:
         duration = now - script_start_time
         max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
         return duration > max_duration
+
+    """This method is used to  limit the column count
+        Returns:
+            events: Updated Events
+    """
+    def restructured_event(self, el):
+        if "details" in el:
+            if "body" in el["details"]:
+                if "app" in el["details"]["body"]:
+                    if "metadata" in el["details"]["body"]["app"]:
+                        el["details"]["body"]["app"]["metadata"] = json.dumps(el["details"]["body"]["app"]["metadata"])
+
+                if "transaction" in el["details"]["body"]:
+                    el["details"]["body"]["transaction"] = json.dumps(el["details"]["body"]["transaction"])
+
+                if "user" in el["details"]["body"]:
+                    if "metadata" in el["details"]["body"]["user"]:
+                        el["details"]["body"]["user"]["metadata"] = json.dumps(el["details"]["body"]["user"]["metadata"])
+
+            if "request" in el["details"]:
+                if "auth" in el["details"]["request"]:
+                    el["details"]["request"]["auth"] = json.dumps(el["details"]["request"]["auth"])
+                
+                if "body" in el["details"]["request"]:
+                    if "app" in el["details"]["request"]["body"]:
+                        if "metadata" in el["details"]["request"]["body"]["app"]:
+                            el["details"]["request"]["body"]["app"]["metadata"] = json.dumps(el["details"]["request"]["body"]["app"]["metadata"])
+
+                    if "client" in el["details"]["request"]["body"]:
+                        el["details"]["request"]["body"]["client"] = json.dumps(el["details"]["request"]["body"]["client"])
+
+                    if "refresh" in el["details"]["request"]["body"]:
+                        if "token" in el["details"]["request"]["body"]["refresh"]:
+                            el["details"]["request"]["body"]["refresh"]["token"] = json.dumps(el["details"]["request"]["body"]["refresh"]["token"])
+
+                    if "template" in el["details"]["request"]["body"]:
+                        el["details"]["request"]["body"]["template"] = json.dumps(el["details"]["request"]["body"]["template"])
+
+                    if "user" in el["details"]["request"]["body"]:
+                        if "metadata" in el["details"]["request"]["body"]["user"]:
+                            el["details"]["request"]["body"]["user"]["metadata"] = json.dumps(el["details"]["request"]["body"]["user"]["metadata"])
+
+            if "response" in el["details"]:	
+                if "body" in el["details"]["response"]:
+                    if "app" in el["details"]["response"]["body"]:
+                        if "metadata" in el["details"]["response"]["body"]["app"]:
+                            el["details"]["response"]["body"]["app"]["metadata"] = json.dumps(el["details"]["response"]["body"]["app"]["metadata"])
+
+                    if "flags" in el["details"]["response"]["body"]:
+                        el["details"]["response"]["body"]["flags"] = json.dumps(el["details"]["response"]["body"]["flags"])
+                    
+                    if "refresh" in el["details"]["response"]["body"]:
+                        if "token" in el["details"]["response"]["body"]["refresh"]:
+                            el["details"]["response"]["body"]["refresh"]["token"] = json.dumps(el["details"]["response"]["body"]["refresh"]["token"])
+
+                    if "universal" in el["details"]["response"]["body"]:
+                        if "login" in el["details"]["response"]["body"]["universal"]:
+                            el["details"]["response"]["body"]["universal"]["login"] = json.dumps(el["details"]["response"]["body"]["universal"]["login"])
+                    
+                    if "user" in el["details"]["response"]["body"]:
+                        if "metadata" in el["details"]["response"]["body"]["user"]:
+                            el["details"]["response"]["body"]["user"]["metadata"] = json.dumps(el["details"]["response"]["body"]["user"]["metadata"])
+
+        return el         
 
     """This method is used to update the statemareker file with lastprocessed event details
     """
