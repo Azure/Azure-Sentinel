@@ -4,4 +4,4 @@ If the raw data is in the below format
 "
 ## Squid proxy parser.
 
-If raw data is in the above format [Squid proxy Parser](https://github.com/Azure/Azure-Sentinel\Solutions\SquidProxy\Parsers\SquidProxyv1.txt) .
+If raw data is in the above format [Squid proxy Parser](https://github.com/Azure/Azure-Sentinel\Solutions\SquidProxy\Parsers\SquidProxyv1.yaml) .
