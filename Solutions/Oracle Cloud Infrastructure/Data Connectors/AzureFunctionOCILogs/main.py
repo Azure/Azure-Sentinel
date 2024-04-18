@@ -56,7 +56,8 @@ def main(mytimer: func.TimerRequest):
        if (not GroupInstanceName or str(GroupInstanceName).isspace()) or (str(GroupInstanceName) in "<Optional>") :
         raise Exception("Please enter valid Group Instance Name")
        try:
-         cursor = get_cursor_by_group(stream_client, StreamOcid, GroupName, GroupInstanceName)
+         cursor = get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
+         ##cursor = get_cursor_by_group(stream_client, StreamOcid, GroupName, GroupInstanceName)
        except oci.exceptions.ServiceError as ex:
             if ex.status == 400:
              cursor=get_cursor_by_partition(stream_client, StreamOcid, partition=PARTITIONS)
