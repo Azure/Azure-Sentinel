@@ -58,3 +58,9 @@ The `ConfigAwsConnector.ps1` script has two parameters:
 - `-LogPath` specifies a custom path to create the script activity log file.
 - `-AwsLogType` specifies the AWS log type to configure. Valid options are: "VPC", "CloudTrail", "GuardDuty". If this parameter is specified, the user will not be prompted for this information.
 
+##Known issues
+###AWS connector script to create a bucket fails on tags on Power shell core on macOS and following is the error
+- Error parsing parameter '--tagging': Invalid JSON: Expecting property name enclosed in double quotes: line 1 column 2 (char 1) JSON received: {\"TagSet\":[{\"Key\": \"Operator\", \"Value\": \"Microsoft_Sentinel_Automation_Script\"}]}
+
+- Please use this script to over come the AWS bucket tagging issue in mac os and Navigate to [AWS Bucket Tagging MacOS]("https://github.com/Azure/Azure-Sentinel\DataConnectors\AWS-S3\Utils\AwsResourceCreatorV1.ps1") 
+

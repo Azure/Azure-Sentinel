@@ -166,7 +166,7 @@ function New-S3Bucket
                 {
                     Write-Log "S3 Bucket $bucketName created successfully" -LogFileName $LogFileName -Indent 2
                     Write-Log "Executing: aws s3api put-bucket-tagging --bucket $bucketName --tagging  ""{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}""" -LogFileName $LogFileName -Severity Verbose
-                    aws s3api put-bucket-tagging --bucket $bucketName --tagging  "{\""TagSet\"":[$(Get-SentinelTagInJsonFormat)]}"
+                    aws s3api put-bucket-tagging --bucket BUCKET_NAME --tagging '{"TagSet":[{"Key": "Operator", "Value": "Microsoft_Sentinel_Automation_Script"}]}'
                 }
                 elseif($error[0] -Match "InvalidBucketName")
                 {
