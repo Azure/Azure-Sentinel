@@ -20,6 +20,7 @@ FILE_SHARE_CONNECTION_STRING = os.environ['AzureWebJobsStorage']
 LOG_TYPE = 'Auth0AM'
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
+FIELD_SIZE_LIMIT_BYTES = 1000 * 32
 logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.ERROR)
 
 
@@ -111,7 +112,7 @@ class Auth0Connector:
         events.sort(key=lambda item: item['date'], reverse=True)
         last_log_id = events[0]['log_id']
         for el in events:
-            self.restructure_event(el)
+            self.customize_event(el)
             self.sentinel.send(el)
         self.sentinel.flush()
         logging.info('Events sent to Sentinel.')
@@ -149,7 +150,7 @@ class Auth0Connector:
                         last_log_id = events[0]['log_id']
                         
                         for el in events:
-                            self.restructure_event(el)
+                            self.customize_event(el)
                             self.sentinel.send(el)
                         self.sentinel.flush()
 
@@ -216,7 +217,7 @@ class Auth0Connector:
         Returns:
             events: Updated Events
     """
-    def restructured_event(self, el):
+    def customize_event(self, el):
         if "details" in el:
             if "body" in el["details"]:
                 if "app" in el["details"]["body"]:
@@ -225,6 +226,15 @@ class Auth0Connector:
 
                 if "transaction" in el["details"]["body"]:
                     el["details"]["body"]["transaction"] = json.dumps(el["details"]["body"]["transaction"])
+                    details_request_body_template = el["details"]["request"]["body"]["template"]
+                    if(len(json.dumps(details_request_body_template).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                            queue_list = self._split_big_request(details_request_body_template)
+                            count = 1
+                            for q in queue_list:
+                                columnname = 'templatePart' + str(count)
+                                el['details']['request']['body'][columnname] = q
+                                count+=1
+
 
                 if "user" in el["details"]["body"]:
                     if "metadata" in el["details"]["body"]["user"]:
@@ -274,7 +284,36 @@ class Auth0Connector:
                         if "metadata" in el["details"]["response"]["body"]["user"]:
                             el["details"]["response"]["body"]["user"]["metadata"] = json.dumps(el["details"]["response"]["body"]["user"]["metadata"])
 
-        return el         
+                    if "bindings" in el['details']['response']['body']:
+                        details_response_body_bindings = el['details']['response']['body']['bindings']
+                        if(len(json.dumps(details_response_body_bindings).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                            queue_list = self._split_big_request(details_response_body_bindings)
+                            count = 1
+                            for q in queue_list:
+                                columnname = 'bindingsPart' + str(count)
+                                el['details']['response']['body'][columnname] = q
+                                count+=1
+        self.clear_event(el)
+        return el 
+
+    def _check_size(self, queue):
+        data_bytes_len = len(json.dumps(queue).encode())
+        return data_bytes_len < FIELD_SIZE_LIMIT_BYTES
+
+    def _split_big_request(self, queue):
+        if self._check_size(queue):
+            return [queue]
+        else:
+            middle = int(len(queue) / 2)
+            queues_list = [queue[:middle], queue[middle:]]
+            return self._split_big_request(queues_list[0]) + self._split_big_request(queues_list[1])
+
+    def clear_event(self, el):
+        if 'details' in el and 'response' in el['details'] and 'body' in el['details']['response'] and 'bindingsPart2' in el['details']['response']['body']:
+            del el['details']['response']['body']['bindings']
+        if 'details' in el and 'request' in el['details'] and 'body' in el['details']['request'] and 'templatePart2' in el['details']['request']['body']:
+            del el["details"]["request"]["body"]["template"]
+        return el        
 
     """This method is used to update the statemareker file with lastprocessed event details
     """
