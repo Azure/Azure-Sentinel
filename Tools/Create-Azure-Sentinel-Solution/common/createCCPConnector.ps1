@@ -218,18 +218,14 @@ function Get-ArmResource($name, $type, $kind, $properties){
         "Microsoft.Insights/dataCollectionRules" = "2022-06-01";
     }
 
-    $resource = [PSCustomObject]@{
+    return [PSCustomObject]@{
         name       = $name;
         apiVersion = $apiVersion[$type]
         type       = $type;
         location   = "[parameters('workspace-location')]";
+        kind       = $kind;
         properties = $properties;
     }
-    if ($null -ne $kind) {
-        $resource | Add-Member -MemberType NoteProperty -Name "kind" -Value $kind
-    }
-
-    return $resource
 }
 
 function addNewParameter($templateResourceObj, $parameterName, $isSecret = $false) {
@@ -245,39 +241,15 @@ function addNewParameter($templateResourceObj, $parameterName, $isSecret = $fals
     return $templateResourceObj;
 }
 
-function replacePlaceHolders($actualFieldValue, $propMatchedPlaceHolderValues) {
-    $finalStringName = "[[concat("
-    $closureBrackets = ")]"
-
-    foreach ($currentPlaceHolder in $propMatchedPlaceHolderValues) {
-        if ($currentPlaceHolder.Value -ne '') {
-            $currentPlaceHolderValue = $currentPlaceHolder.Value
-            $placeHolderName = $currentPlaceHolderValue.replace("{{", "").replace("}}", "")
-            $startIndexOfPlaceholder = $actualFieldValue.IndexOf($currentPlaceHolderValue)
-
-            if ($startIndexOfPlaceholder -eq 0) {
-                $finalStringName += "parameters('" + $placeHolderName + "')"
-                $actualFieldValue = $actualFieldValue.Replace($currentPlaceHolder, "");
-            } else {
-                $strSubString = $actualFieldValue.Substring(0, $startIndexOfPlaceholder);
-                $finalStringName += ",'" + $strSubString + "', parameters('" + $placeHolderName + "')"
-                $actualFieldValue = $actualFieldValue.Replace($currentPlaceHolder, "");
-                $actualFieldValue = $actualFieldValue.Substring($strSubString.Length, $actualFieldValue.Length - $strSubString.Length);
-            }
-        }
-    }
-    if ($actualFieldValue -ne '') {
-        $finalStringName += ",'" + $actualFieldValue + "'"
-    }
-
-    return $finalStringName + $closureBrackets;
-}
-
 # THIS IS THE STARTUP FUNCTION FOR CCP RESOURCE CREATOR
 function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict, $solutionBasePath, $solutionName, $ccpTables, $ccpTablesCounter) {
     Write-Host "Inside of CCP Connector Code!"
     $solutionId = $solutionFileMetadata.publisherId + "." + $solutionFileMetadata.offerId
     $placeHolderPatternMatches = '\{{[a-zA-Z0-9]+\}}'
+
+    if (!$global:baseMainTemplate.variables.workspaceResourceId) {
+        $global:baseMainTemplate.variables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+    }
 
     if (!$global:baseMainTemplate.variables._solutionName) {
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionName" -NotePropertyValue $dataFileMetadata.Name
@@ -396,28 +368,12 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                     
                     Write-Host "Processing for CCP Poller file path: $ccpPollerFilePath"
                     $dataConnectorPollerName = $null -eq $fileContent.Name -or $fileContent.Name -eq '' ? $fileContent.properties.connectorDefinitionName : $fileContent.Name; 
-
-                    if ($dataConnectorPollerName.contains("{{")) {
-                        $resourceName = $dataConnectorPollerName
-                    } else {
-                        $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$dataConnectorPollerName')]"
-                    }
-
+                    $resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$dataConnectorPollerName')]"
                     #$resourceName = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', '$templateName')]"
                     $armResource = Get-ArmResource $resourceName $fileContent.type $fileContent.kind $fileContent.properties
                     $armResource.type = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors"
                     $armResource.kind = $ccpItem.PollerKind;
-
-                    # data connector poller containing placeholder
-                    if ($dataConnectorPollerName.contains("{{")) {
-                        $placeHoldersMatched = $dataConnectorPollerName | Select-String $placeHolderPatternMatches -AllMatches
-
-                        if ($placeHoldersMatched.Matches.Count -gt 0) {
-                            $finalizedName = replacePlaceHolders -actualFieldValue $dataConnectorPollerName -propMatchedPlaceHolderValues $placeHoldersMatched.Matches
-                            $armResource.name = $finalizedName
-                        }
-                    }
-
+    
                     # dataCollectionEndpoint : this is optional field for users to add.
                     $hasDataCollectionEndpoint = [bool](($armResource.properties.dcrConfig).PSobject.Properties.name -match "dataCollectionEndpoint")
                     if ($hasDataCollectionEndpoint) {
@@ -547,10 +503,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             }
                         }
                     }
-                    else {
-                        $authTypeValue = $armResource.properties.auth.type
-                        Write-Host "Data Connector Poller file has invalid auth 'type' property value '$($authTypeValue)'. Supported auth 'type' property value are OAuth2, Basic or APIKey!"
-                    }
     
                     if ($armResource.properties.request.apiEndPoint.contains("{{")) {
                         # identify any placeholders in apiEndpoint
@@ -594,33 +546,6 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                             $armResource.properties.request.apiEndPoint = $finalizedEndpointUrl + $closureBrackets
                         }
                     }
-
-                    # headers placeholder
-                    $hasHeaders = [bool]($armResource.properties.request.PSobject.Properties.name -match "headers")
-                    if ($hasHeaders) {
-                        foreach ($headerProps in $armResource.properties.request.headers.PsObject.Properties) {
-                            $headerPropName = $headerProps.Name
-                            $headerPropValue = $headerProps.Value
-
-                            if ($headerPropValue.contains("{{")) {
-                                $placeHoldersMatched = $headerPropValue | Select-String $placeHolderPatternMatches -AllMatches
-                                if ($placeHoldersMatched.Matches.Value.Count -gt 0) {
-                                    $placeHolderName = $placeHoldersMatched.Matches.Value.replace("{{", "").replace("}}", "")
-                                    $armResource.properties.request.headers."$headerPropName" = "[[parameters('$($placeHolderName)')]"
-                                    $templateContentConnections.properties.mainTemplate = addNewParameter -templateResourceObj $templateContentConnections.properties.mainTemplate -parameterName "$placeHolderName" -isSecret $false
-                                }
-                            }
-                        }
-                    }
-
-                    if ($dataConnectorPollerName.contains("{{")) {
-                        $placeHoldersMatched = $dataConnectorPollerName | Select-String $placeHolderPatternMatches -AllMatches
-
-                        if ($placeHoldersMatched.Matches.Count -gt 0) {
-                            $finalizedName = replacePlaceHolders -actualFieldValue $dataConnectorPollerName -propMatchedPlaceHolderValues $placeHoldersMatched.Matches
-                            $armResource.name = $finalizedName
-                        }
-                    }
                     $templateContentConnections.properties.mainTemplate.resources += $armResource
                 }
             }
@@ -650,7 +575,7 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
                 Write-Host "Processing for CCP DCR file path: $ccpDCRFilePath"
                 foreach ($logAnalyticDestination in $fileContent.properties.destinations.logAnalytics)
                 {
-                    $logAnalyticDestination.workspaceResourceId = "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]"
+                    $logAnalyticDestination.workspaceResourceId = "[variables('workspaceResourceId')]"
                 }
 
                 $dcrPlaceHolderMatched = $fileContent.name | Select-String $placeHolderPatternMatches -AllMatches
@@ -833,39 +758,27 @@ function createCCPConnectorResources($contentResourceDetails, $dataFileMetadata,
 
             $connectorDescriptionText = "This Solution installs the data connector for $solutionName. You can get $solutionName data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
 
-            $hasDataConnectorDetails = $false
-            foreach($item in $global:baseCreateUiDefinition.parameters.steps.elements) {
-                if ($item.name -like "*dataconnectors-text*") {
-                    $optionText = $item.options.text;
-                    if ($optionText -eq $connectorDescriptionText) {
-                        $hasDataConnectorDetails = $true
-                    }
+            $baseDataConnectorTextElement = [PSCustomObject] @{
+                name    = "dataconnectors$global:connectorCounter-text";
+                type    = "Microsoft.Common.TextBlock";
+                options = [PSCustomObject] @{
+                    text = $connectorDescriptionText;
                 }
             }
-            
-            if (!$hasDataConnectorDetails) {
-                $baseDataConnectorTextElement = [PSCustomObject] @{
-                    name    = "dataconnectors-text$global:connectorCounter";
-                    type    = "Microsoft.Common.TextBlock";
-                    options = [PSCustomObject] @{
-                        text = $connectorDescriptionText;
-                    }
-                }
 
-                $currentStepNum = $global:baseCreateUiDefinition.parameters.steps.Count - 1
-                $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $baseDataConnectorTextElement
-                $connectDataSourcesLink = [PSCustomObject] @{
-                    name    = "dataconnectors-link$global:connectorCounter";
-                    type    = "Microsoft.Common.TextBlock";
-                    options = [PSCustomObject] @{
-                        link = [PSCustomObject] @{
-                            label = "Learn more about connecting data sources";
-                            uri   = "https://docs.microsoft.com/azure/sentinel/connect-data-sources";
-                        }
+            $currentStepNum = $global:baseCreateUiDefinition.parameters.steps.Count - 1
+            $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $baseDataConnectorTextElement
+            $connectDataSourcesLink = [PSCustomObject] @{
+                name    = "dataconnectors-link2";
+                type    = "Microsoft.Common.TextBlock";
+                options = [PSCustomObject] @{
+                    link = [PSCustomObject] @{
+                        label = "Learn more about connecting data sources";
+                        uri   = "https://docs.microsoft.com/azure/sentinel/connect-data-sources";
                     }
                 }
-                $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
             }
+            $global:baseCreateUiDefinition.parameters.steps[$currentStepNum].elements += $connectDataSourcesLink
 
             $global:connectorCounter += 1
         }
