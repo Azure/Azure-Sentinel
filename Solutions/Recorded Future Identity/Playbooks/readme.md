@@ -4,15 +4,15 @@
 
 # Recorded Future Identity Solution 
 
-Recorded Future Identity Intelligence enables security and IT teams to detect identity compromises, for both employees and customers. 
+Recorded Future Identity Intelligence enables security and IT teams to detect identity compromises. 
 
-To do this, Recorded Future automates the collection, analysis, and production of identity intelligence from a vast range of sources. 
+Recorded Future automates the collection, analysis, and production of identity intelligence from a vast range of sources. 
 
-Organizations can incorporate identity intelligence into automated workflows that regularly monitor for compromised credentials and take immediate action using Recorded Future Identity data and Microsoft Entra ID.
+You can incorporate identity intelligence into automated workflows that regularly monitor for compromised credentials and take immediate action using Recorded Future Identity data and Microsoft Entra ID.
 
-There are many ways organizations can utilize Recorded Future Identity Intelligence; the playbooks in this Solution are just a quick introduction to some of those ways. 
+There are many ways organizations can utilize Recorded Future Identity Intelligence. The Azure Logic Apps in this Solution provided as exampes and are a quick introduction to some of those ways. 
 
-In particular, these playbooks include several actions that can be coordinated, or used separately. 
+These playbooks include several actions that can be coordinated, or used separately. 
 
 They include:
 
@@ -59,11 +59,11 @@ Possible remediations include requiring a password reset, or temporarily locking
 3) [Deployment](#deployment)
    1) [Prerequisites](#prerequisites)  
       2) [Deploy Playbooks (Logic Apps) one by one](#deployment_custom_template_playbooks)
-         1) [RecordedFutureIdentity-add-EntraID-security-group-user](#deployment_custom_template_playbooks_add_EntraID_security_group_user)
-         2) [RecordedFutureIdentity-confirm-EntraID-risky-user](#deployment_custom_template_playbooks_confirm_EntraID_risky_user)
-         3) [RecordedFutureIdentity-lookup-and-save-user](#deployment_custom_template_playbooks_lookup_and_save_user)
-         4) [RecordedFutureIdentity-search-workforce-user](#deployment_custom_template_playbooks_search_workforce_user)
-         5) [RecordedFutureIdentity-search-external-user](#deployment_custom_template_playbooks_search_external_user)
+         1) [RFI-add-EntraID-security-group-user](#deployment_custom_template_playbooks_add_EntraID_security_group_user)
+         2) [RFI-confirm-EntraID-risky-user](#deployment_custom_template_playbooks_confirm_EntraID_risky_user)
+         3) [RFI-lookup-and-save-user](#deployment_custom_template_playbooks_lookup_and_save_user)
+         4) [RFI-search-workforce-user](#deployment_custom_template_playbooks_search_workforce_user)
+         5) [RFI-search-external-user](#deployment_custom_template_playbooks_search_external_user)
 4) [How to configure playbooks](#configuration)
    1) [How to find the playbooks (Logic Apps) after deployment](#find_playbooks_after_deployment)
    2) [Configuring Logic Apps Connections](#configuration_connections)
@@ -85,19 +85,20 @@ This Solution consists of 5 Playbooks (Logic Apps).
 
 | Playbook Name                                     | Description                               |
 |---------------------------------------------------|-------------------------------------------|
-| **RecordedFutureIdentity-search-workforce-user**  | Search new exposures for Workforce users. |
-| **RecordedFutureIdentity-search-external-user**   | Search new exposures for External users.  |
+| **RFI-search-workforce-user**  | Search new exposures for Workforce users. |
+| **RFI-search-external-user**   | Search new exposures for External users.  |
 
 
 <br/>
 
 "Reactive" playbooks:
+Theese are sub playbooks that are called by the base playbooks. 
 
 | Playbook Name                                          | Description                                                                            |
 |--------------------------------------------------------|----------------------------------------------------------------------------------------|
-| **RecordedFutureIdentity-add-EntraID-security-group-user** | Add risky user to Active Directory Security Group for users at risk.                   |
-| **RecordedFutureIdentity-confirm-EntraID-risky-user**      | Confirm to Active Directory Identity Protection that user is compromised.              |
-| **RecordedFutureIdentity-lookup-and-save-user**        | Lookup additional information on a compromised user and save results to Log Analytics. |
+| **RFI-add-EntraID-security-group-user** | Add risky user to Active Directory Security Group for users at risk.                   |
+| **RFI-confirm-EntraID-risky-user**      | Confirm to Active Directory Identity Protection that user is compromised.              |
+| **RFI-lookup-and-save-user**        | Lookup additional information on a compromised user and save results to Log Analytics. |
 
 
 <a id="playbooks"></a>
@@ -164,7 +165,7 @@ Logic App Parameters for Base Logic App "External use case" are the same as for 
 
 <a id="add_risky_user_to_active_directory_security_group"></a>
 
-#### RecordedFutureIdentity-add-EntraID-security-group-user
+#### RFI-add-EntraID-security-group-user
 
 This playbook adds a compromised user to an EntraID security group. Triage and remediation should be handled in follow up playbooks or actions.
 
@@ -202,7 +203,7 @@ HTTP request parameters:
 
 <a id="active_directory_identity_protection_confirm_user_is_compromised"></a>
 
-#### RecordedFutureIdentity-confirm-EntraID-risky-user
+#### RFI-confirm-EntraID-risky-user
 
 This playbook confirms compromise of users deemed "high risk" by Microsoft Entra ID Identity Protection.
 
@@ -236,7 +237,7 @@ HTTP request parameters:
 
 <a id="lookup_risky_user_and_save_results"></a>
 
-#### RecordedFutureIdentity-lookup-and-save-user
+#### RFI-lookup-and-save-user
 
 This playbook gets compromise identity details from Recorded Future Identity Intelligence and saves the data for further review and analysis.
 
@@ -280,7 +281,7 @@ Logic App Parameters:
 
 If you use this playbook to Lookup leaks info for an email and response lookup data is empty (for specified email and lookback range) - the playbook will still save empty results to the Log Analytics Custom Log. 
 
-This case is possible if you set up the Logic Apps in that way that Lookup lookback range (in `RecordedFutureIdentity-lookup-and-save-user` playbook) is smaller than Search lookback range (in `RecordedFutureIdentity-search-workforce-user` and `RecordedFutureIdentity-search-external-user` playbooks).
+This case is possible if you set up the Logic Apps in that way that Lookup lookback range (in `RFI-lookup-and-save-user` playbook) is smaller than Search lookback range (in `RFI-search-workforce-user` and `RFI-search-external-user` playbooks).
 
 In that case you will see some empty records in the corresponding Log Analytics Custom Log (see the screenshot). 
 
@@ -289,7 +290,7 @@ In that case you will see some empty records in the corresponding Log Analytics 
 
 To mitigate this case: make sure you set up the Lookup lookback range equal to or larger than the Search lookback range.
 
-Another way to cover this case - you can add a corresponding check to RecordedFutureIdentity-lookup-and-save-user playbook and not save the results to Log Analytics if the result is empty.
+Another way to cover this case - you can add a corresponding check to RFI-lookup-and-save-user playbook and not save the results to Log Analytics if the result is empty.
 
 
 
@@ -324,7 +325,7 @@ Another way to cover this case - you can add a corresponding check to RecordedFu
 
 <a id="deployment_custom_template_playbooks_add_EntraID_security_group_user"></a>
 
-##### RecordedFutureIdentity-add-EntraID-security-group-user
+##### RFI-add-EntraID-security-group-user
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-EntraID-security-group-user%2Fazuredeploy.json) 
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-add-EntraID-security-group-user%2Fazuredeploy.json)
@@ -336,14 +337,14 @@ Parameters for deployment:
 | **Subscription**   | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**         | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
-| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-add-EntraID-security-group-user").                                                                     |
+| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RFI-add-EntraID-security-group-user").                                                                     |
 
 
 <br/>
 
 <a id="deployment_custom_template_playbooks_confirm_EntraID_risky_user"></a>
 
-##### RecordedFutureIdentity-confirm-EntraID-risky-user
+##### RFI-confirm-EntraID-risky-user
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-EntraID-risky-user%2Fazuredeploy.json) 
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-confirm-EntraID-risky-user%2Fazuredeploy.json)
@@ -355,14 +356,14 @@ Parameters for deployment:
 | **Subscription**   | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**         | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
-| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-confirm-EntraID-risky-user").                                                                          |
+| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RFI-confirm-EntraID-risky-user").                                                                          |
 
 
 <br/>
 
 <a id="deployment_custom_template_playbooks_lookup_and_save_user"></a>
 
-##### RecordedFutureIdentity-lookup-and-save-user
+##### RFI-lookup-and-save-user
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user%2Fazuredeploy.json) 
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-lookup-and-save-user%2Fazuredeploy.json)
@@ -374,14 +375,14 @@ Parameters for deployment:
 | **Subscription**   | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
 | **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**         | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
-| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-lookup-and-save-user").                                                                            |
+| **Playbook-Name**  | Playbook name to use for this playbook (ex. "RFI-lookup-and-save-user").                                                                            |
 
 
 <br/>
 
 <a id="deployment_custom_template_playbooks_search_workforce_user"></a>
 
-##### RecordedFutureIdentity-search-workforce-user
+##### RFI-search-workforce-user
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user%2Fazuredeploy.json) 
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-workforce-user%2Fazuredeploy.json)
@@ -393,17 +394,17 @@ Parameters for deployment:
 | **Subscription**                              | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
 | **Resource group**                            | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**                                    | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
-| **Playbook-Name**                             | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-search-workforce-user").                                                                           |
-| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RecordedFutureIdentity-add-EntraID-security-group-user" playbook.                                                                                |
-| **Playbook-Name-confirm-EntraID-risky-user**      | Playbook name to use for "RecordedFutureIdentity-confirm-EntraID-risky-user" playbook.                                                                                     |
-| **Playbook-Name-lookup-and-save-user**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
+| **Playbook-Name**                             | Playbook name to use for this playbook (ex. "RFI-search-workforce-user").                                                                           |
+| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RFI-add-EntraID-security-group-user" playbook.                                                                                |
+| **Playbook-Name-confirm-EntraID-risky-user**      | Playbook name to use for "RFI-confirm-EntraID-risky-user" playbook.                                                                                     |
+| **Playbook-Name-lookup-and-save-user**        | Playbook name to use for "RFI-lookup-and-save-user" playbook.                                                                                       |
 
 
 <br/>
 
 <a id="deployment_custom_template_playbooks_search_external_user"></a>
 
-##### RecordedFutureIdentity-search-external-user
+##### RFI-search-external-user
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user%2Fazuredeploy.json) 
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRecordedFutureIdentity-search-external-user%2Fazuredeploy.json)
@@ -415,10 +416,10 @@ Parameters for deployment:
 | **Subscription**                              | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
 | **Resource group**                            | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
 | **Region**                                    | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
-| **Playbook-Name**                             | Playbook name to use for this playbook (ex. "RecordedFutureIdentity-search-external-user").                                                                            |
-| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RecordedFutureIdentity-add-EntraID-security-group-user" playbook.                                                                                |
-| **Playbook-Name-confirm-EntraID-risky-user**      | Playbook name to use for "RecordedFutureIdentity-confirm-EntraID-risky-user" playbook.                                                                                     |
-| **Playbook-Name-lookup-and-save-user**        | Playbook name to use for "RecordedFutureIdentity-lookup-and-save-user" playbook.                                                                                       |
+| **Playbook-Name**                             | Playbook name to use for this playbook (ex. "RFI-search-external-user").                                                                            |
+| **Playbook-Name-add-EntraID-security-group-user** | Playbook name to use for "RFI-add-EntraID-security-group-user" playbook.                                                                                |
+| **Playbook-Name-confirm-EntraID-risky-user**      | Playbook name to use for "RFI-confirm-EntraID-risky-user" playbook.                                                                                     |
+| **Playbook-Name-lookup-and-save-user**        | Playbook name to use for "RFI-lookup-and-save-user" playbook.                                                                                       |
 
 
 <br/>
