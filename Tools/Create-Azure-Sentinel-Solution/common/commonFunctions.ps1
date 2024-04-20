@@ -1756,6 +1756,12 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         $ccpPollingConfig = [PSCustomObject] @{}
                         $ccpConnector = $false
                         $connectorData = ConvertFrom-Json $rawData
+
+                        $hasIsGenericConnectorProp = [bool]($connectorData.PSobject.Properties.name -match "isGenericConnector");
+                        if ($hasIsGenericConnectorProp) {
+                            # has property isGenericConnector in data connector file.
+                            $isGenericConnector = $connectorData.isGenericConnector
+                        }
                         # If both ID and Title exist, is standard GenericUI data connector
                         if ($connectorData.resources -and
                         $connectorData.resources[0] -and
@@ -1879,12 +1885,12 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                         }
                         # Data Connector Content -- *Assumes GenericUI
-                        if($contentToImport.Is1PConnector)
+                        if($contentToImport.Is1PConnector -and !$isGenericConnector)
                         {
                             $1pconnectorData = $templateSpecConnectorData
                             $1pconnectorData = $1pconnectorData | Select-Object -Property id,title,publisher,descriptionMarkdown, graphQueries, connectivityCriterias,dataTypes
                         }
-                        $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true) ? $1pconnectorData : $templateSpecConnectorData
+                        $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true -and !$isGenericConnector) ? $1pconnectorData : $templateSpecConnectorData
                         $templateSpecConnectorUiConfig.id = "[variables('_uiConfigId$global:connectorCounter')]"
                         if($contentToImport.Is1PConnector -eq $false)
                         {
@@ -1895,7 +1901,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
-                            kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : (($ccpConnector -eq $true) ? $connectorData.resources[0].kind : "GenericUI");
+                            kind       = ($contentToImport.Is1PConnector -eq $true -and !$isGenericConnector) ? "StaticUI" : (($ccpConnector -eq $true) ? $connectorData.resources[0].kind : "GenericUI");
                             properties = [PSCustomObject]@{
                                 connectorUiConfig = $templateSpecConnectorUiConfig
                             }
@@ -2031,7 +2037,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
-                            kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
+                            kind       = ($contentToImport.Is1PConnector -eq $true -and !$isGenericConnector) ? "StaticUI" : "GenericUI";
                             properties = [PSCustomObject]@{
                                 connectorUiConfig = $standardConnectorUiConfig
                             }
