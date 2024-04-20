@@ -30,22 +30,22 @@ Please follow terraform script steps mentioned in below link as may miss some st
 
 if you don't want to perform above steps please use the below link for manual set up
 
-https://learn.microsoft.com/en-us/azure/sentinel/connect-google-cloud-platform?tabs=manual%2Cauditlogs#tabpanel_2_manual
+* https://learn.microsoft.com/en-us/azure/sentinel/connect-google-cloud-platform?tabs=manual%2Cauditlogs#tabpanel_2_manual
 
 ### GCP Audit Logs Setup
 
 Please follow terraform script steps mentioned in below link to set up GCP audit logs
 
-https://learn.microsoft.com/en-us/azure/sentinel/connect-google-cloud-platform?tabs=terraform%2Cauditlogs#tabpanel_2_terraform
+* https://learn.microsoft.com/en-us/azure/sentinel/connect-google-cloud-platform?tabs=terraform%2Cauditlogs#tabpanel_2_terraform
 
 
 if you don't want to perform above steps please use the below link for manual set up
 
-https://learn.microsoft.com/en-us/azure/sentinel/connect-google-cloud-platform?tabs=manual%2Cauditlogs#tabpanel_2_manual
+* https://learn.microsoft.com/en-us/azure/sentinel/connect-google-cloud-platform?tabs=manual%2Cauditlogs#tabpanel_2_manual
 
 
 # Note
 
-if want to use want to use existing project/account details need to modify the above scripts accordingly and run in GCP cloud console.
+* if want to  use existing project/account details need to modify the above scripts accordingly and run in GCP cloud console.
 
 
