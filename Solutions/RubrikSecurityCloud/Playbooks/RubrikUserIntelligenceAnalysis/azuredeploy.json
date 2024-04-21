@@ -30,12 +30,13 @@
             "5. Members: select managed identity for assigned access to and add your logic app as member as shown in screenshot below",
             "6. Click on review+assign",
             "**c. Add Access policy in Keyvault**",
-            "Add access policy for the playbook's managed identity to read, and write secrets of key vault.",
+            "Add access policy for the playbook's managed identity and authorized user to read, and write secrets of key vault.",
             "1. Go to logic app → <your logic app> → identity → System assigned Managed identity and copy Object (principal) ID.",
             "2. Go to keyvaults → <your keyvault> → Access policies → create.",
             "3. Select all keys & secrets permissions. Click next.",
             "4. In the principal section, search by copied object ID. Click next.",
             "5. Click review + create.",
+            "6. Repeat the above step 2 to 5 to add accee policy for the user account using which connection is authorized.",
             "**d. Configurations in Microsoft Sentinel**",
             "1. In Microsoft Sentinel, Configure the analytic rules to trigger an incident.",
             "a. Analytic Rule must contain at least one of the below fields mapped in Custom Details to successfully run this playbook.",
@@ -62,6 +63,7 @@
             "tier": "community",
             "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
         },
+        "lastUpdateTime": "2024-04-21T00:00:00.000Z",
         "author": {
             "name": "Rubrik"
         }
@@ -223,7 +225,7 @@
                                                                         "expression": {
                                                                             "and": [
                                                                                 {
-                                                                                    "equals": [
+                                                                                    "greaterOrEquals": [
                                                                                         "@variables('incidentCommentCount')",
                                                                                         98
                                                                                     ]
@@ -284,7 +286,7 @@
                                                                                 "type": "ApiConnection",
                                                                                 "inputs": {
                                                                                     "body": {
-                                                                                        "incidentArmId": "@body('Update_incident_severity_to_medium')?['id']",
+                                                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
                                                                                         "severity": "Low"
                                                                                     },
                                                                                     "host": {
@@ -465,7 +467,7 @@
                                                                     "inputs": {
                                                                         "body": {
                                                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                                            "message": "<p>Sensitive Data Access information is not available related to user @{variables('Username')}</p>"
+                                                                            "message": "<p>Sensitive Data Access information is not available related to user @{outputs('Username_or_Email')}</p>"
                                                                         },
                                                                         "host": {
                                                                             "connection": {
@@ -750,7 +752,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Initialize_AccessToken": [
+                                "Username_or_Email": [
                                     "Succeeded"
                                 ]
                             },
@@ -779,7 +781,7 @@
                                                     "inputs": {
                                                         "body": {
                                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                                            "message": "<p>No user with email @{variables('Email')} is available in Rubrik.</p>"
+                                                            "message": "<p>No user with email @{outputs('Username_or_Email')} is available in Rubrik.</p>"
                                                         },
                                                         "host": {
                                                             "connection": {
@@ -1844,6 +1846,15 @@
                                     }
                                 ]
                             }
+                        },
+                        "Username_or_Email": {
+                            "inputs": "@if(empty(variables('Username')),variables('Email'),variables('Username'))",
+                            "runAfter": {
+                                "Initialize_AccessToken": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose"
                         }
                     },
                     "outputs": {}
@@ -1916,7 +1927,7 @@
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
                 },
                 "parameterValues": {
-                    "token:TenantId": "[parameters('tenantId')]",
+                    "token:TenantId": "[parameters('TenantId')]",
                     "token:grantType": "code",
                     "vaultName": "[parameters('KeyvaultName')]"
                 }
