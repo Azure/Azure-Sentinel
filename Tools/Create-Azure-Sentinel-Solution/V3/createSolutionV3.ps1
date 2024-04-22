@@ -1,6 +1,6 @@
 Write-Host '=======Starting Package Creation using V3 tool========='
 $path = Read-Host "Enter solution data file path "
-$defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
+$defaultPackageVersion = "3.0.1" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
 if ($path.length -eq 0)
