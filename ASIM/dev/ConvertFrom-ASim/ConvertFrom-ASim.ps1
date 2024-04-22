@@ -115,7 +115,7 @@ try {
                         category           = 'ASIM'
                         FunctionAlias      = $yamlObject.ParserName
                         query              = $yamlObject.ParserQuery
-                        version            = $yamlObject.Parser.Version
+                        version            = 1.0
                         functionParameters = $stringParams.replace("string=*", "string='*'").trim(', ')
                     }
                 }
@@ -125,7 +125,7 @@ try {
 
                 $metadata = [PSCustomObject]@{
                     "title"       = $yamlObject.Parser.Title
-                    "version"     = $yamlObject.Parser.Version
+                    "version"     = [single]$yamlObject.Parser.Version
                     "lastUpdated" = $yamlObject.Parser.lastUpdated
                     "description" = $yamlObject.Description
                 }
