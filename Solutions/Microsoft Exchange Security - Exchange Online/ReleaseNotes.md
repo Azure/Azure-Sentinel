@@ -1,5 +1,8 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.2       | 18-04-2024                     | Repackaged for parser issue while update       |
+| 3.1.1       | 19-03-2024                     | Manually updated package content       |
+| 3.0.5       | 20-02-2024                     | Correct DataConnector last Log indicator       |
 | 3.0.4       | 18-12-2023                     | Correct Parser parameters and force version update       |
 | 3.0.3       | 05-12-2023                     | Added parameters in **Parser** to fix default values issue.        |
 | 3.0.2       | 01-11-2023                     | Added a **Parser** to verify if user is Microsoft Exchange Security VIP (Watchlist)          |
