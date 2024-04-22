@@ -24,7 +24,7 @@ foreach ($api in $endpoints) {
     try {
         # continue if the cursor does not exist and proceed with the lastRunTime
         $cursor = Get-Cursor @storagePayload -cursor $api -ErrorAction SilentlyContinue
-        if ($cursor) {
+        if ($cursor -and $cursor -ne "none") {
             $results += Get-AuditLogs -cursor $cursor -api $api
         } else {
             $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
