@@ -143,7 +143,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                     $objectKeyLowercase = $objectProperties.Name.ToLower()
                     if ($objectKeyLowercase -eq "workbooks") {
                         Write-Host "Generating Workbook using $file"
-						$solutionName = $solutionName -replace '[(]',' ' -replace '[)]','';
+						#$solutionName = $solutionName -replace '[(]',' ' -replace '[)]','';
 						$solutionRename = Replace-SpecialChars -InputString $solutionName -Type 'solutionname'
                         $fileName = Split-Path $file -leafbase;
 						#$fileName = $fileName -replace '[(\)]','';
