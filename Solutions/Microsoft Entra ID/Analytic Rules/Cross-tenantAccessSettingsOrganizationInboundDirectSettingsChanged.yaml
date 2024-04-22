@@ -21,7 +21,7 @@ relevantTechniques:
   - T1136.003
   - T1087.004
 query: |
-  //In User & Groups and in Applications, the following "AccessType" values in columns PremodifiedInboundSettings and ModifiedInboundSettings are interpreted accordingly:
+  // In User & Groups and in Applications, the following "AccessType" values in columns PremodifiedInboundSettings and ModifiedInboundSettings are interpreted accordingly
   // When Access Type in premodified inbound settings value was 1 that means that the initial access was allowed. When Access Type in premodified inbound settings value was 2 that means that the initial access was blocked. 
   // When Access Type in modified inbound settings value is 1 that means that now access is allowed. When Access Type in modified inbound settings value is 2 that means that now access is blocked. 
   AuditLogs
@@ -37,20 +37,35 @@ query: |
         | extend PremodifiedInboundSettings = trim('"',tostring(Property.oldValue)),
                  ModifiedInboundSettings = trim(@'"',tostring(Property.newValue))
     )
-  | extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
-  | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress
   | where PremodifiedInboundSettings != ModifiedInboundSettings
-  | extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: Name
+        columnName: InitiatingAppName
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatingAccountName
       - identifier: UPNSuffix
-        columnName: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: InitiatedByIPAdress
-version: 1.0.1
+        columnName: InitiatingIPAddress
+version: 1.1.0
 kind: Scheduled
