@@ -10,12 +10,33 @@ Following are the configuration steps to deploy Function App.
 
 ## **Pre-requisites**
 
-A GitHub API Token is required. See the documentation to learn more about the [GitHub OAuth APP Token].
+A GitHub API Token is required. See the documentation to learn more about the **GitHub OAuth APP Token**.
 Please follow below steps :- 
 
 Step 1: Create a GitHub app in GitHub repo : 
 
 ![](Images/a.png?raw=true)
+
+Step 2: Give the requested permission to App :
+
+![](Images/b.png?raw=true)
+
+Step 3: Get the App ID and Note down for use it in ARM template deployment :  
+
+![](Images/c.png?raw=true)
+
+Step 4: Install the App where you want to use in Organization :
+![](Images/d.png?raw=true)
+
+![](Images/e.png?raw=true)
+
+Step 5: Get the the App name and Copy/Note down to use it in ARM template deployment :
+
+![](Images/f.png?raw=true)
+
+Step 6: Generate the Primary Key and Note it down : 
+
+![](Images/g.png?raw=true)
 
 
 
@@ -31,13 +52,11 @@ Step 1: Create a GitHub app in GitHub repo :
    Best practice : Create new Resource Group while deploying - all the resources of your custom Data connector will reside in the newly created Resource 
    Group
    
-3. Enter the following value in the ARM template deployment
-	```
-	"PersonalAccessToken": This is the GITHUB PAT  
-	"Workspace Id": The Sentinel Log Analytics Workspace Id  
-	"Workspace Key": The Sentinel Log Analytics Workspace Key  
-	"Function Schedule": The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule  
-	```
+3. Enter the Noted/ Copied values in the ARM template deployment : - 
+
+   ![](Images/g.png?raw=true)
+   
+
 
 ## Post Deployment Steps
 1. There are two json files (ORGS.json and lastrun-Audit.json) in Function Dependencies folder
