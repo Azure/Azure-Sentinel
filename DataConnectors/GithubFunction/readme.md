@@ -23,11 +23,13 @@ Step 2: Give the requested permission to App :
 
 Step 3: Get the App ID and Note down for use it in ARM template deployment :  
 
-**Note :- While installing the App in a Organization, please make sure to select respective repository and appropriate permission for it**
 
 ![](Images/c.png?raw=true)
 
 Step 4: Install the App where you want to use in Organization :
+
+**Note :- While installing the App in a Organization, please make sure to select respective repository and appropriate permission for it**
+
 ![](Images/d.png?raw=true)
 
 Step 5: Get the the App name and Copy/Note down to use it in ARM template deployment :
