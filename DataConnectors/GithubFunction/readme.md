@@ -62,7 +62,7 @@ Step 7: Edit the Primary Key and Note it down to use for ARM template deployment
 
 
 ## Post Deployment Steps
-1. There are two json files (ORGS.json and lastrun-Audit.json) in Function Dependencies folder
+1. There are one json files (ORGS.json) in Function Dependencies folder
 2. Edit the ORGS.json file and update "org": "sampleorg" and replace sample org with your org name. 
 	```
 	If you have single org
