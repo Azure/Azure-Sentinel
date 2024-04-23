@@ -10,8 +10,7 @@ Following are the configuration steps to deploy Function App.
 
 ## **Pre-requisites**
 
-A GitHub API Token is required. See the documentation to learn more about the **GitHub OAuth APP Token**.
-Please follow below steps :- 
+A. Please follow below steps :- 
 
 Step 1: Create a GitHub app in GitHub repo : 
 
