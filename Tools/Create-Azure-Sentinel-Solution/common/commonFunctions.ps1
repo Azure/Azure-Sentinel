@@ -3352,7 +3352,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
                 "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
-                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
+                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.functionAlias)')]"
                 contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
                 kind      = "Parser";
                 version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
@@ -3402,7 +3402,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
             $parserTemplateSpecContent = SetContentTemplateDefaultValuesToProperties -templateSpecResourceObj $parserTemplateSpecContent
             $parserTemplateSpecContent.properties.contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]"
             $parserTemplateSpecContent.properties.contentKind = "Parser"
-            $parserTemplateSpecContent.properties.displayName = "$($displayDetails.displayName)"
+            $parserTemplateSpecContent.properties.displayName = "$($displayDetails.functionAlias)"
 
             #$global:baseMainTemplate.variables | Add-Member -NotePropertyName "_parsercontentProductId$global:parserCounter" -NotePropertyValue "[concat(take(variables('_solutionId'),50),'-','$($ContentKindDict.ContainsKey("Parser") ? $ContentKindDict["Parser"] : '')','-', uniqueString(concat(variables('_solutionId'),'-','Parser','-',variables('parserObject$global:parserCounter').parserContentId$global:parserCounter,'-', '$($global:parserVersion)')))]"
             
@@ -3447,7 +3447,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
                 "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
-                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
+                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.functionAlias)')]"
                 contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
                 kind      = "Parser";
                 version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
@@ -3516,10 +3516,9 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     }
     
     $displayDetails = getParserDetails $global:solutionId $yaml $isyaml
-    $parserName = $fileName + " Data Parser"
-    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($parserName)')]"
+    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($displayDetails.functionAlias)')]"
 
-    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($parserName)')]"
+    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.functionAlias)')]"
 
     $functionAlias = ($null -ne $yaml -and $yaml.Count -gt 0) ? $yaml.FunctionName : "$($displayDetails.functionAlias)"
     $parserContentIdValue = "$($functionAlias)-Parser"
