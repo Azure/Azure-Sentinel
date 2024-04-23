@@ -10,12 +10,17 @@ Following are the configuration steps to deploy Function App.
 
 ## **Pre-requisites**
 
-A GitHub API Token is required. See the documentation to learn more about the [GitHub Personal Access Token](https://github.com/settings/tokens/).
+A GitHub API Token is required. See the documentation to learn more about the [GitHub OAuth APP Token].
+Please follow below steps :- 
+
+Step 1: Create a GitHub app in GitHub repo : 
+![](Images/image(1).png?raw=true)
+
 
 
 ## Configuration Steps to Deploy Function App
 1. Click on Deploy to Azure (For both Commercial & Azure GOV)  
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FGithubFunction%2Fazuredeploy.json)
+[![Deploy to Azure](https://github.com/Azure/Azure-Sentinel/blob/users/v-muuppugund/GithubfunctionappV2/DataConnectors/GithubFunction/azuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FDataConnectors%2FGithubFunction%2Fazuredeploy.json)
 
   
@@ -58,42 +63,12 @@ A GitHub API Token is required. See the documentation to learn more about the [G
 	]
 	```
 
-3. Edit lastrun-Audit.json and update "org": "sampleorg" and replace sample org with your org name
-
-	```
-	If you have single org
-
-	[
-		{
-			"org":  "sampleorg1",
-			"lastContext":  "",
-			"lastRun":  ""
-		}
-	]  
-
-	If you have multiple org's
-
-	[
-		{
-			"org":  "sampleorg1",
-			"lastContext":  "",
-			"lastRun":  ""
-		},
-		{
-			"org":  "sampleorg2",
-			"lastContext":  "",
-			"lastRun":  ""
-		}
-	]
-	```
-
-4. Upload the following files to the storage account "github-repo-logs" container from 
+3. Upload the following files to the storage account "github-repo-logs" container from 
 	```
 	ORGS.json
-	lastrun-Audit.json
 	```
 
-5. PersonalAccessToken and Workspace Key will be placed as "Secrets" in the Azure KeyVault `<<Function App Name>><<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
+4. PEM and Workspace Key will be placed as "Secrets" in the Azure KeyVault `<<Function App Name>><<uniqueid>>` with only Azure Function access policy. If you want to see/update these secrets,
 
 	```
 		a. Go to Azure KeyVault `<<Function App Name>><<uniqueid>>`
@@ -107,7 +82,7 @@ A GitHub API Token is required. See the documentation to learn more about the [G
 
 	```
 
-6. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
+5. The `TimerTrigger` makes it incredibly easy to have your functions executed on a schedule. This sample demonstrates a simple use case of calling your function based on your schedule provided while deploying. If you want to change
    the schedule 
    ```
    a.	Click on Function App "Configuration" under Settings 
@@ -118,3 +93,5 @@ A GitHub API Token is required. See the documentation to learn more about the [G
 
 	
 Note: there are two parsers (here)[https://github.com/Azure/Azure-Sentinel/blob/master/Parsers/GitHub] to make the logs useful
+
+
