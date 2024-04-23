@@ -28,17 +28,21 @@ Step 3: Get the App ID and Note down for use it in ARM template deployment :
 Step 4: Install the App where you want to use in Organization :
 ![](Images/d.png?raw=true)
 
-![](Images/e.png?raw=true)
-
 Step 5: Get the the App name and Copy/Note down to use it in ARM template deployment :
 
-![](Images/f.png?raw=true)
+![](Images/e.png?raw=true)
 
 Step 6: Generate the Primary Key and Note it down : 
 
+![](Images/f.png?raw=true)
+
+
+
 ![](Images/g.png?raw=true)
 
+Step 7: Edit the Primary Key and Note it down to use for ARM template deployment :
 
+![](Images/g.png?raw=true)
 
 ## Configuration Steps to Deploy Function App
 1. Click on Deploy to Azure (For both Commercial & Azure GOV)  
