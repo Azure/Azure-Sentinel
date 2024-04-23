@@ -36,10 +36,6 @@ Step 6: Generate the Primary Key and Note it down :
 
 ![](Images/f.png?raw=true)
 
-
-
-![](Images/g.png?raw=true)
-
 Step 7: Edit the Primary Key and Note it down to use for ARM template deployment :
 
 ![](Images/g.png?raw=true)
@@ -58,7 +54,7 @@ Step 7: Edit the Primary Key and Note it down to use for ARM template deployment
    
 3. Enter the Noted/ Copied values in the ARM template deployment : - 
 
-   ![](Images/g.png?raw=true)
+   ![](Images/h.png?raw=true)
    
 
 
