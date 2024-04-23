@@ -14,7 +14,7 @@ A GitHub API Token is required. See the documentation to learn more about the [G
 Please follow below steps :- 
 
 Step 1: Create a GitHub app in GitHub repo : 
-![](Images/image(1).png?raw=true)
+![](Images/image (1).png?raw=true)
 
 
 
