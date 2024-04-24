@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM filtering parser for Microsoft Defender for IoT endpoint logs 
-  Version: '0.1.2'
-  LastUpdated: Sept 18, 2023
+  Version: '0.1.3'
+  LastUpdated: Apr 10, 2024
 Product:
   Name: Microsoft Defender for IoT
 Normalization:
@@ -23,31 +23,66 @@ ParserParams:
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
     Type: string
     Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let Authentication_MD4IoT=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false)
-    {
-      SecurityIoTRawEvent  | where not(disabled)
-      | where RawEventName == "Login"
+  let Authentication_MD4IoT=(
+    starttime: datetime=datetime(null), 
+    endtime: datetime=datetime(null), 
+    username_has_any: dynamic = dynamic([]),
+    targetappname_has_any: dynamic = dynamic([]),
+    srcipaddr_has_any_prefix: dynamic = dynamic([]),
+    srchostname_has_any: dynamic = dynamic([]),
+    eventtype_in: dynamic = dynamic([]),
+    eventresultdetails_in: dynamic = dynamic([]),
+    eventresult: string = '*',
+    disabled: bool=false
+    ) {
+    SecurityIoTRawEvent
+    | where not(disabled)
+    | where RawEventName == "Login"
     // ************************************************************************* 
     //       <Prefilterring>
     // *************************************************************************
     | where 
-      (isnull(starttime)   or TimeGenerated >= starttime) 
-      and (isnull(endtime)     or TimeGenerated <= endtime)
-      and (targetusername_has=='*' or EventDetails has targetusername_has)
+        (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and ((array_length(username_has_any) == 0) or EventDetails has_any (username_has_any))
+        and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+        and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(EventDetails, srcipaddr_has_any_prefix)))
+        and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
+        // Filtering for eventtype_in done later in the parser
+        and (array_length(eventresultdetails_in) == 0) // EventResultDetails not available in source
+    // Filtering for eventresult done later in the parser
     // ************************************************************************* 
     //       </Prefilterring>
     // ************************************************************************* 
-      | extend
+    | extend
         EventDetails = todynamic(EventDetails)
-        //
-      | extend
+    //
+    | extend
         EventOriginalUid = tostring(EventDetails.OriginalEventId), 
         EventProduct = 'Microsoft Defender for IoT',
         EventCount=int(1),
@@ -57,34 +92,53 @@ ParserQuery: |
         EventEndTime = todatetime(TimeGenerated), 
         EventType = iff (EventDetails.Operation == 'Logout', 'Logoff', 'Logon'),  
         EventResult = iff (EventDetails.Operation == 'LoginFailed', 'Failure', 'Success')  
-        //
-      | extend
+    // Filtering on 'eventtype_in' and 'eventresult'
+    | where ((array_length(eventtype_in) == 0) or EventType in~ (eventtype_in))
+        and (eventresult == "*" or (EventResult == eventresult))
+    | extend
         ActingProcessId = tostring(EventDetails.ProcessId),  
         ActingProcessName = tostring(EventDetails.Executable),  // -- Linux input device or service used to authenticate, for example pts/1, tty1, pts/0, ssh:notty 
         DvcOs = iif (EventDetails.MessageSource == "Linux", "Linux", "Windows"),  // -- Intermediate fix
         TargetUsernameType = "Simple",
         TargetUsername = tostring(EventDetails.UserName)
-        // ************************************************************************* 
-        //       <Postfilterring>
-        // *************************************************************************
-        | where 
-            (targetusername_has=='*' or TargetUsername has targetusername_has)
-        // ************************************************************************* 
-        //       <Postfilterring>
-        // *************************************************************************
-      | extend  SrcIpAddr = tostring(EventDetails.RemoteAddress) 
-      | project-rename
+    | extend SrcIpAddr = tostring(EventDetails.RemoteAddress)
+    // Post-filtering on username_has_any and srcipaddr_has_any_prefix
+    | where ((array_length(username_has_any) == 0) or TargetUsername has_any (username_has_any))
+        and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)))
+    // mapping ASimMatchingUsername
+    | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+    // ActorUsername not coming from source. Hence, not mapped.
+    | extend ASimMatchingUsername = case
+        (
+                                    array_length(username_has_any) == 0,
+                                    "-",
+                                    temp_isMatchTargetUsername,
+                                    "TargetUsername",
+                                    "No match"
+                                )
+    | project-rename
         DvcHostname = DeviceId, 
         EventProductVersion = AgentVersion,  // -- Not available in Windows
         _ResourceId = AssociatedResourceId, 
         _SubscriptionId = AzureSubscriptionId 
-        //
-        // -- aliases
-      | extend 
+    //
+    // -- aliases
+    | extend 
         User = TargetUsername, 
         Process = ActingProcessName, 
         Dvc = DvcHostname,
         SrcDvcIpAddr = SrcIpAddr,
         IpAddr = SrcIpAddr
-      };
-      Authentication_MD4IoT(starttime, endtime, targetusername_has, disabled)
+  };
+    Authentication_MD4IoT(
+    starttime=starttime,
+    endtime=endtime,
+    username_has_any=username_has_any,
+    targetappname_has_any=targetappname_has_any,
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+    srchostname_has_any=srchostname_has_any,
+    eventtype_in=eventtype_in,
+    eventresultdetails_in=eventresultdetails_in,
+    eventresult=eventresult,
+    disabled=disabled
+  )

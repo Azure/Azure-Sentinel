@@ -26,8 +26,8 @@ Requires **/recordedfuturev2** API keys as described in the [Connector authoriza
 
 Retrieves the [Microsoft Sentinel Domain Default Risk List ](https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules) (requires login), Domain IOC with risk greater than 65 and adds the IOCs to the ThreatIntelligenceIndicator table.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FDomain-IndicatorImport%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FDomain-IndicatorImport%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-Domain-IndicatorImport%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-Domain-IndicatorImport%2Fazuredeploy.json)
 
 
 ## RecordedFuture-Hash-IndicatorImport
