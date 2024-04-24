@@ -66,58 +66,63 @@ ParserQuery: |
      )
      {
      let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventResult:string,EventType:string,EventSeverity:string )
-     ["user.login","Success","logon","Informational",
-     "user.logout","Success","logoff","Informational",
-     "user.two_factor_challenge_success","Success","logon","Informational",
-     "user.two_factor_challenge_failure","Failure","logon","Informational",
-     "user.two_factor_requested","Success","logon","Informational",
-     "user.failed_login","Failure","logon","Informational",
-     "user.sign_in_from_unrecognized_device_and_location","Success","logon","High",
-     "user.sign_in_from_unrecognized_device","NA","logon","High",
-     "user.reset_password","Success","logon","Informational",
-     "user.device_verification_requested","Success","logon","Informational",
-     "user.device_verification_requested","Success","logon","Informational",
-     "user.two_factor_recovery_codes_downloaded","Success","logon","Informational",
-     "user.forgot_password","Success","logon","Informational",
-     "user.new_device_used","Success","logon","Informational",
+     ["user.login","Success","Logon","Informational",
+     "user.logout","Success","Logoff","Informational",
+     "user.two_factor_challenge_success","Success","Logon","Informational",
+     "user.two_factor_challenge_failure","Failure","Logon","Informational",
+     "user.two_factor_requested","Success","Logon","Informational",
+     "user.failed_login","Failure","Logon","Informational",
+     "user.sign_in_from_unrecognized_device_and_location","Success","Logon","High",
+     "user.sign_in_from_unrecognized_device","Success","Logon","High",
+     "user.two_factor_recovery_codes_downloaded","Success","Logon","Informational",
+     "user.new_device_used","Success","Logon","Informational",
      "user.promote","Success","Elevate","Informational",
      ];
      let GithubAuthenticationEvent=EventResultDetailslookup 
      |project EventOriginalResultDetails
-     | summarize make_set(EventOriginalResultDetails);r.promote","Success","Elevate","Informational",
-     ];
+     | summarize make_set(EventOriginalResultDetails);  
      GitHubAuditLogPolling_CL
-     |where not(disabled)
+     | where not(disabled)
+          and operation_type_s == 'authentication'
+          and action_s in (GithubAuthenticationEvent)
      | extend TimeGenerated = todatetime(tostring(split(TimeGenerated, '.', 0)[0]))      
-     |where operation_type_s =='authentication'
-     |project TimeGenerated=unixtime_milliseconds_todatetime(created_at_d),   
+     | where operation_type_s =='authentication'
+          and(isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)          
+          and ((array_length(targetappname_has_any) == 0) or ('Github' has_any (targetappname_has_any)))
+          and ((array_length(srchostname_has_any) == 0)) //SrcHostname not available in source  
+          //username,srcIp addr, Eventtype and eventresult done down in the parser      
+     | project TimeGenerated=unixtime_milliseconds_todatetime(created_at_d),   
         EventCount=int(1),
         EventProduct = 'Github',
         EventVendor = 'Microsoft',
         EventSchema='Authentication',
         EventSchemaVersion='0.1.3',
         EventUid =_ItemId,
-        TargetAppname='Github',
-        TargetAppType='SaaS application'
+        TargetAppName='Github',
+        TargetAppType='SaaS application',
         EventOriginalUid= _document_id_s,
         TargetUsername=actor_s,
-        UserId=user_id_d,
-        SrcIpAddress=actor_ips_s,
-        SrcGeoCountry=actor_location_country_code_s,
+        TargetUsernameType='simple',
         EventStartTime=TimeGenerated,
-        EventEndtime=TimeGenerated,
-        EventOriginalResultDetails=action_s    
-     |lookup EventResultDetailslookup on EventOriginalResultDetails    
-     | where 
-         (isnull(starttime) or TimeGenerated >= starttime) 
-          and (isnull(endtime) or TimeGenerated <= endtime)
-          and ((array_length(username_has_any) == 0) or (TargetUsername  has_any (username_has_any)))
-          and ((array_length(targetappname_has_any) == 0)) // targetappname not available on source
-          and ((array_length(srcipaddr_has_any_prefix) == 0))(SrcIpAddress has_any (srcipaddr_has_any_prefix)))
-          and ((array_length(srchostname_has_any) == 0)) // SrcHostname not available in source
-          and eventresult == EventResult 
-          and eventtype_in == EventType
-          and eventresultdetails_in == EventOriginalResultDetails
+        EventEndTime=TimeGenerated,
+        EventOriginalResultDetails=action_s,
+        SrcIpAddr=actor_ip_s,
+        SrcGeoCountry=actor_location_country_code_s,
+        HttpUserAgent=user_agent_s,
+        LogonMethod=user_programmatic_access_name_s,    
+        Type  
+     |where   ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)))
+          and ((array_length(srcipaddr_has_any_prefix) == 0)) or (SrcIpAddr has_any (srcipaddr_has_any_prefix))
+          and  ((array_length(eventtype_in) == 0))// EventType is not available at source
+          and  eventresultdetails_in == EventOriginalResultDetails    
+     |lookup EventResultDetailslookup on EventOriginalResultDetails
+     |extend EventResultDetails=iff((EventOriginalResultDetails in("user.two_factor_challenge_failure")),"Logon violates policy","other"),
+             EventSubType=iff((EventOriginalResultDetails in ("user.promote")),"AssumeRole ","Remote"),
+             DvcAction=EventType,
+             Application=TargetAppName,
+             IpAddr=SrcIpAddr
+     | where ((array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in)))                      
      };
      parser(
       starttime=starttime,
