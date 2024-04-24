@@ -252,7 +252,7 @@ if (-Not [string]::IsNullOrEmpty($LAURI)){
 }
 $LoginURL = $env:loginEndpoint
 if (-Not [string]::IsNullOrEmpty($LoginURL)){
-	if($LoginURL.Trim() -notin @("https://login.microsoftonline.us","https://login.partner.microsoftonline.cn","https://login.microsoftonline.com"))
+	if($LoginURL.Trim() -notin @("https://login.microsoftonline.us/","https://login.partner.microsoftonline.cn/","https://login.microsoftonline.com/"))
 	{
 		Write-Error -Message "MCASActivity-SecurityEvents: Invalid Login Endpoint Uri." -ErrorAction Stop
 		Exit
