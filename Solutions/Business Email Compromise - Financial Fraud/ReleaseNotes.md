@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.8       | 04-04-2024                     | Updataed Entity Mappings                                                     |
 | 3.0.7       | 28-02-2024                     | Removed usage of BlastRadius from **Hunting Queries**                        |
 | 3.0.6       | 16-02-2024                     | Updated the solution to fix **Analytic Rules** deployment issue                               |
 | 3.0.5       | 08-02-2024                     | Tagged for dependent solutions for deployment                                |
