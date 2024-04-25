@@ -226,15 +226,6 @@ class Auth0Connector:
 
                 if "transaction" in el["details"]["body"]:
                     el["details"]["body"]["transaction"] = json.dumps(el["details"]["body"]["transaction"])
-                    details_request_body_template = el["details"]["request"]["body"]["template"]
-                    if(len(json.dumps(details_request_body_template).encode()) > FIELD_SIZE_LIMIT_BYTES):
-                            queue_list = self._split_big_request(details_request_body_template)
-                            count = 1
-                            for q in queue_list:
-                                columnname = 'templatePart' + str(count)
-                                el['details']['request']['body'][columnname] = q
-                                count+=1
-
 
                 if "user" in el["details"]["body"]:
                     if "metadata" in el["details"]["body"]["user"]:
@@ -258,6 +249,14 @@ class Auth0Connector:
 
                     if "template" in el["details"]["request"]["body"]:
                         el["details"]["request"]["body"]["template"] = json.dumps(el["details"]["request"]["body"]["template"])
+                        details_request_body_template = el["details"]["request"]["body"]["template"]
+                        if(len(json.dumps(details_request_body_template).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                            queue_list = self._split_big_request(details_request_body_template)
+                            count = 1
+                            for q in queue_list:
+                                columnname = 'templatePart' + str(count)
+                                el['details']['request']['body'][columnname] = q
+                                count+=1
 
                     if "user" in el["details"]["request"]["body"]:
                         if "metadata" in el["details"]["request"]["body"]["user"]:
@@ -285,6 +284,7 @@ class Auth0Connector:
                             el["details"]["response"]["body"]["user"]["metadata"] = json.dumps(el["details"]["response"]["body"]["user"]["metadata"])
 
                     if "bindings" in el['details']['response']['body']:
+                        el['details']['response']['body']['bindings'] = json.dumps(el['details']['response']['body']['bindings'])
                         details_response_body_bindings = el['details']['response']['body']['bindings']
                         if(len(json.dumps(details_response_body_bindings).encode()) > FIELD_SIZE_LIMIT_BYTES):
                             queue_list = self._split_big_request(details_response_body_bindings)
