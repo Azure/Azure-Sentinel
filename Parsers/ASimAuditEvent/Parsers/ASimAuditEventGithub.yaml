@@ -300,16 +300,8 @@ ParserQuery: |
      |project EventOriginalResultDetails
      | summarize make_set(EventOriginalResultDetails); 
      GitHubAuditLogPolling_CL 
-     | where not(disabled)
-          and operation_type_s == 'authentication'
-          and action_s in (GithubAuditEvents)
-     | extend TimeGenerated = todatetime(tostring(split(TimeGenerated, '.', 0)[0]))      
-     | where operation_type_s =='authentication'
-          and(isnull(starttime) or TimeGenerated >= starttime) 
-          and (isnull(endtime) or TimeGenerated <= endtime)          
-          and ((array_length(targetappname_has_any) == 0) or ('Github' has_any (targetappname_has_any)))
-          and ((array_length(srchostname_has_any) == 0)) //SrcHostname not available in source  
-          //username,srcIp addr, Eventtype and eventresult done down in the parser     
+     | where action_s in (GithubAuditEvents)
+     | extend TimeGenerated = todatetime(tostring(split(TimeGenerated, '.', 0)[0]))          
      |project 
      TimeGenerated=unixtime_milliseconds_todatetime(created_at_d),
      EventCount=int(1),
@@ -330,11 +322,7 @@ ParserQuery: |
      Operation=operation_type_s,     
      ObjectType='Other',
      HttpUserAgent=user_agent_s,
-     Type     
-     |where   ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)))
-          and ((array_length(srcipaddr_has_any_prefix) == 0)) or (SrcIpAddr has_any (srcipaddr_has_any_prefix))
-          and  ((array_length(eventtype_in) == 0))// EventType is not available at source
-          and  eventresultdetails_in == EventOriginalResultDetails                 
+     Type                     
      |lookup EventResultDetailslookup on EventOriginalResultDetails
      |extend Object=EventType,
              ObjectType=case(EventOriginalResultDetails hasprefix "pull","repo_s",
@@ -344,19 +332,6 @@ ParserQuery: |
              DvcAction=EventType,
              IpAddr=SrcIpAddr,
              Application=TargetAppName,
-             User=TargetUsername              
-      };
-      parser(
-      starttime=starttime,
-      endtime=endtime,
-      username_has_any=username_has_any,
-      targetappname_has_any=targetappname_has_any,
-      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
-      srchostname_has_any=srchostname_has_any,
-      eventtype_in=eventtype_in,
-      eventresultdetails_in=eventresultdetails_in,
-      eventresult=eventresult,
-      disabled=disabled
-      )
+             User=TargetUsername
      };
      parser (disabled = disabled)
