@@ -44,10 +44,10 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-      let parser = (
+            let parser = (
       starttime:datetime=datetime(null), 
       endtime:datetime=datetime(null), 
-      actor_has_any:dynamic = dynamic([]),
+      username_has_any:dynamic = dynamic([]),
       targetappname_has_any:dynamic = dynamic([]),
       srcipaddr_has_any_prefix:dynamic = dynamic([]),
       srchostname_has_any:dynamic = dynamic([]),
@@ -319,12 +319,10 @@ ParserQuery: |
      |project EventOriginalResultDetails
      | summarize make_set(EventOriginalResultDetails); 
      GitHubAuditLogPolling_CL 
-     | where not(disabled)
-          and operation_type_s == 'authentication'
-          and action_s in (GithubAuthenticationEvent)
+     | where not(disabled)          
+          and action_s in (GithubAuditEvents)
      | extend TimeGenerated = todatetime(tostring(split(TimeGenerated, '.', 0)[0]))      
-     | where operation_type_s =='authentication'
-          and(isnull(starttime) or TimeGenerated >= starttime) 
+     | where (isnull(starttime) or TimeGenerated >= starttime) 
           and (isnull(endtime) or TimeGenerated <= endtime)          
           and ((array_length(targetappname_has_any) == 0) or ('Github' has_any (targetappname_has_any)))
           and ((array_length(srchostname_has_any) == 0)) //SrcHostname not available in source  
@@ -346,27 +344,32 @@ ParserQuery: |
      EventOriginalResultDetails=action_s,
      SrcIpAddr=actor_ip_s,
      SrcGeoCountry=actor_location_country_code_s,
-     Operation=operation_type_s,     
-     ObjectType='Other',
+     Operation=operation_type_s,
+     Object=iff(isnotempty(repo_s),repo_s,"Other"),    
      HttpUserAgent=user_agent_s,
-     Type     
+     ActorUserId=actor_id_d,
+     TargetUrl=iff(isnotempty(pull_request_url_s),pull_request_url_s,"N/A"),
+     TargetDescription=iff(isnotempty(pull_request_title_s),pull_request_title_s,"N/A"),
+     Type      
      |where   ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)))
           and ((array_length(srcipaddr_has_any_prefix) == 0)) or (SrcIpAddr has_any (srcipaddr_has_any_prefix))
           and  ((array_length(eventtype_in) == 0))// EventType is not available at source
-          and  eventresultdetails_in == EventOriginalResultDetails              
+          and  ((array_length(eventresultdetails_in) == 0))             
      |lookup EventResultDetailslookup on EventOriginalResultDetails
-     |extend Object=case(EventOriginalResultDetails hasprefix "pull","repo_s",
-                    EventOriginalResultDetails hasprefix "push","repo_s",
-                    EventOriginalResultDetails hasprefix "repo","repo_s",
-                    "Configuration Atom"),
+     ||extend ObjectType=case(EventOriginalResultDetails hasprefix "pull","Configuration Atom",
+                    EventOriginalResultDetails hasprefix "push","Configuration Atom",
+                    EventOriginalResultDetails hasprefix "repo","Configuration Atom",
+                    "Other"),             
              DvcAction=EventType,
              IpAddr=SrcIpAddr,
-             Application=TargetAppName   
+             Application=TargetAppName,
+             User=TargetUsername,
+             ActorUsername=TargetUsername 
       };
       parser(
       starttime=starttime,
       endtime=endtime,
-      actor_has_any=actor_has_any,
+      username_has_any=username_has_any,
       targetappname_has_any=targetappname_has_any,
       srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
       srchostname_has_any=srchostname_has_any,

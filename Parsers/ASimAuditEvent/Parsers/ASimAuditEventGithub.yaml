@@ -24,19 +24,6 @@ ParserQuery: |
      let parser = (
      disabled:bool = false
      )
-     {
-      let parser = (
-      starttime:datetime=datetime(null), 
-      endtime:datetime=datetime(null), 
-      username_has_any:dynamic = dynamic([]),
-      targetappname_has_any:dynamic = dynamic([]),
-      srcipaddr_has_any_prefix:dynamic = dynamic([]),
-      srchostname_has_any:dynamic = dynamic([]),
-      eventtype_in:dynamic = dynamic([]),
-      eventresultdetails_in:dynamic = dynamic([]),
-      eventresult:string = '*',
-      disabled:bool=false
-      )
       {
       let EventResultDetailslookup=datatable(EventOriginalResultDetails:string,EventResult:string, EventType:string, EventSeverity: string )
       ["user.device_verification_success","Success","Other","Informational",
@@ -317,21 +304,24 @@ ParserQuery: |
      EventOriginalUid= _document_id_s,     
      TargetUsernameType='simple',
      EventOriginalResultDetails=action_s,
-     SrcIpAddr=actor_ip_s,
+     SrcIpAddr=iff(isnotempty(actor_ip_s),actor_ip_s,"Ip Not available at source for the event"),
      SrcGeoCountry=actor_location_country_code_s,
-     Operation=operation_type_s,     
-     ObjectType='Other',
+     Operation=operation_type_s,
+     Object=iff(isnotempty(repo_s),repo_s,"Other"),    
      HttpUserAgent=user_agent_s,
+     ActorUserId=actor_id_d,
+     TargetUrl=iff(isnotempty(pull_request_url_s),pull_request_url_s,"N/A"),
+     TargetDescription=iff(isnotempty(pull_request_title_s),pull_request_title_s,"N/A"),
      Type                     
      |lookup EventResultDetailslookup on EventOriginalResultDetails
-     |extend Object=EventType,
-             ObjectType=case(EventOriginalResultDetails hasprefix "pull","repo_s",
-                    EventOriginalResultDetails hasprefix "push","repo_s",
-                    EventOriginalResultDetails hasprefix "repo","repo_s",
-                    "Configuration Atom"),
+     |extend ObjectType=case(EventOriginalResultDetails hasprefix "pull","Configuration Atom",
+                    EventOriginalResultDetails hasprefix "push","Configuration Atom",
+                    EventOriginalResultDetails hasprefix "repo","Configuration Atom",
+                    "Other"),             
              DvcAction=EventType,
              IpAddr=SrcIpAddr,
              Application=TargetAppName,
-             User=TargetUsername
+             User=TargetUsername,
+             ActorUsername=TargetUsername
      };
      parser (disabled = disabled)
