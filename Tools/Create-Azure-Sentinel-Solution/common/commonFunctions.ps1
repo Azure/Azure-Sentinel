@@ -1638,7 +1638,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
 
                         $playbookVariables | Add-Member -NotePropertyName "workspace-name" -NotePropertyValue "[parameters('workspace')]"
-                        #$playbookVariables | Add-Member -NotePropertyName "workspaceResourceId" -NotePropertyValue "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
                         $playbookResources = $playbookResources + $playbookMetadata;
 
                         $playbookMetadata = [PSCustomObject]@{};
