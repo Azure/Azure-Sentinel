@@ -1,9 +1,6 @@
 import os
-from aiobotocore.session import get_session
-from botocore.config import Config as BotoCoreConfig
 import time
 import logging
-import azure.functions as func
 import azure.functions as func
 from .azure_storage_queue import AzureStorageQueueHelper
 

@@ -114,14 +114,12 @@ async def main(mytimer: func.TimerRequest):
 
                 if 'Messages' in response: # this is an array
                     for msg in response['Messages']: # typically only one message since client.receive_message retrieves only one msg by default                        
-                        if msg['Body'] == '':
-                            next
                         body_obj = json.loads(msg['Body'])
                         file_path, file_size, bucket_name = process_body_obj(body_obj)
 
                         if fileToBeFiltered(file_path):
                             logging.warn('[AWSQueue] Skipping file since logs to be consumed is {}, but file is {}'.format(LOGS_TO_CONSUME, file_path))
-                            next                        
+                            continue                        
 
                         files_processed += 1
 

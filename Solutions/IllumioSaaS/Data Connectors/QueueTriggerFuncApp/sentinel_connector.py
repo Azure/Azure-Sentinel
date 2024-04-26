@@ -1,7 +1,5 @@
-import json
 import aiohttp
 import asyncio
-import logging
 from collections import deque
 from azure.identity import DefaultAzureCredential
 from azure.monitor.ingestion.aio import LogsIngestionClient
