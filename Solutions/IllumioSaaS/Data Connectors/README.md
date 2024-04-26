@@ -39,5 +39,5 @@ This might result in additional data ingestion costs. Check the [Azure Functions
 
 Use the following template:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fashwinvenkatesha%2FAzure-Sentinel%2FIllumio-Integration%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FIllumioDataConnectorLogsIngestionAPI%2FIllumioFunctionAppDeployment%2FFunctionAppDeployment%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fashwinvenkatesha%2FAzure-Sentinel%2FIllumio-Integration-With-Sentinel%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FIllumioDataConnectorLogsIngestionAPI%2FIllumioFunctionAppDeployment%2FFunctionAppDeployment%2FcreateUiDefinition.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fillumio-shield%2FAzure-Sentinel%2FIllumio-Integration%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FIllumioFunctionAppDeployment%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fillumio-shield%2FAzure-Sentinel%2FIllumio-Integration-With-Sentinel%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FIllumioFunctionAppDeployment%2FcreateUiDefinition.json) 
 
