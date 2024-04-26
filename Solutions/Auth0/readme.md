@@ -6,9 +6,9 @@ The following are steps to be followed in Auth0 App.
 ![](Images/Applications.png?raw=true)
 
 2. Click on settings of the App and note down the credentials
-<br>a.Copy the domain><br>
-<br>b.Get the client id value<br>
-<br>c.Get the client secret<br>
+<br>***a. Copy the domain
+    b. Get the client id value
+    c. Get the client secret***<br>
 
 3. Under Application properties --> Select Application type as Machine to Machine. Please find below screen shot for reference :-
 
