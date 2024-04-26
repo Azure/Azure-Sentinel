@@ -350,7 +350,23 @@ function getParserDetails($solutionName,$yaml,$isyaml)
                 if ($null -ne $parserTemplate) {
                     $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
                     $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
-                    $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
+                    $parserNameValue = $parserTemplate.name
+                    if ($parserNameValue -like "*variables('parserObject*") {
+                        #[variables('parserObject1')._parserName1]
+                        $splitParserObjectName = $parserNameValue -split "parserObject"
+                        $lastSingleQuoteIndex = $splitParserObjectName[1].LastIndexOf("'");
+                        $parserCountValue = $splitParserObjectName[1].Substring(0, $lastSingleQuoteIndex)
+
+                        $parserActualName = $templateVariables."parserObject$parserCountValue"."_parserName$parserCountValue"
+
+                        $replaceConcatValue = $parserActualName.LastIndexOf(",'") + 2
+                        $lastIndexOfQuotation = $parserActualName.LastIndexOf("'")
+                        $finalizedParserName = $parserActualName.Substring($replaceConcatValue, $lastIndexOfQuotation - $replaceConcatValue)
+
+                        $parserDisplayDetails.name = $finalizedParserName;
+                    } else {
+                        $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
+                    }
 
                     $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
                     if ($suppressedOutput -and $matches[1]) {
@@ -3506,9 +3522,9 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     }
     
     $displayDetails = getParserDetails $global:solutionId $yaml $isyaml
-    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($displayDetails.functionAlias)')]"
+    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($displayDetails.name)')]"
 
-    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.functionAlias)')]"
+    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
 
     $functionAlias = ($null -ne $yaml -and $yaml.Count -gt 0) ? $yaml.FunctionName : "$($displayDetails.functionAlias)"
     $parserContentIdValue = "$($functionAlias)-Parser"
