@@ -6,9 +6,9 @@ The following are steps to be followed in Auth0 App.
 ![](Images/Applications.png?raw=true)
 
 2. Click on settings of the App and note down the credentials
-**a.Copy the domain
-b.Get the client id value
-c.Get the client secret**
+<br>a.Copy the domain><br>
+<br>b.Get the client id value<br>
+<br>c.Get the client secret<br>
 
 3. Under Application properties --> Select Application type as Machine to Machine. Please find below screen shot for reference :-
 
@@ -22,7 +22,7 @@ c.Get the client secret**
 
 ![](Images/API.png?raw=true)
 
-6. Please make sure the domain value under settings --> Environment Varaibles, please refer below screen shot for reference and other values are entered from the above step copied values and Domain should be  starts with https://,then click on Apply  and restart function app
+6. Please make sure the domain value under settings --> Environment Variables, please refer below screen shot for reference and other values are entered from the above step copied values and Domain should be  starts with https://,then click on Apply  and restart function app
 
 ![](Images/functionappvalues.png?raw=true)
 
