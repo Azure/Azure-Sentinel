@@ -1,0 +1,185 @@
+    Parser:
+  Title: ASIM Authentication filtering parser for Okta Auth0
+  Version: "0.1.0"
+  LastUpdated: Apr 27, 2024
+Product:
+  Name: Auth0
+Normalization:
+  Schema: Authentication
+  Version: "0.1.3"
+References:
+  - Title: Using functions
+    Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+  - Title: ASIM Authentication Schema
+    Link: https://aka.ms/ASimAuthenticationDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
+  - Title: Auth0
+    Link: https://auth0.com/docs/deploy-monitor/logs/log-event-type-codes
+Description: |
+  This ASIM parser supports filtering and normalizing the Auth0 logs stored in 'Auth0AM_CL_CL' table to the ASIM authentication normalized schema.
+ParserName: vimAuthenticationAuth0
+EquivalentBuiltInParser: _Im_Authentication_Auth0
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      username_has_any: dynamic = dynamic([]),
+      targetappname_has_any: dynamic = dynamic([]),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      srchostname_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      disabled: bool=false
+      )
+     {
+     let EventResultDetailslookup=datatable
+     ( 
+     EventOriginalResultDetails:string,
+     EventResult:string,
+     EventType:string,
+     EventResultDetails:string,
+     EventSeverity:string,
+     EventSubType:string
+     )
+     ["s","Success","Logon","Other","Informational","Remote",
+     "seccft","Success","Logon","Other","Informational","Remote",
+     "sede","Success","Logon","Other","Informational","Interactive",
+     "sens","Success","Logon","Other","Informational","Interactive",
+     "seoobft","Success","Logon","Other","Informational","Interactive",
+     "seotpft","Success","Logon","Other","Informational","Interactive",
+     "sepft","Success","Logon","Other","Informational","Interactive",
+     "sercft","Success","Logon","Other","Informational","Interactive",
+     "sertft","Success","Logon","Other","Informational","Interactive",
+     "ssa","Success","Logon","Other","Informational","Interactive",
+     "scoa","Success","Logon","Other","Informational","Interactive",
+     "signup_pwd_leak","Failure","Logon","Incorrect key","High","Interactive",
+     "limit_wc","Failure","Logon","Other","High","Interactive",
+     "limit_sul","Failure","Logon","User locked","High","Interactive",
+     "limit_mu","Failure","Logon","Other","High","Interactive",
+     "f","Failure","Logon","Other","High","Interactive",
+     "fu","Failure","Logon","No such user","High","Interactive",
+     "fp","Failure","Logon","Incorrect password","High","Interactive",
+     "flo","Failure","Logoff","Other","Medium","Interactive",
+     "feccft","Failure","Logon","Other","High","Interactive",
+     "fede","Failure","Logon","Other","High","Interactive",
+     "fens","Failure","Logon","Other","High","Interactive",
+     "feoobft","Failure","Logon","Other","High","Interactive",
+     "feotpft","Failure","Logon","Other","High","Interactive",
+     "fepft","Failure","Logon","Other","High","Interactive",
+     "fepotpft","Failure","Logon","Other","High","Interactive",
+     "fercft","Failure","Logon","Other","High","Interactive",
+     "fertft","Failure","Logon","Incorrect key","High","Interactive",
+     "ferrt","Failure","Logon","Incorrect key","High","Interactive",
+     "oidc_backchannel_logout_failed","Failure","Logoff","Other","Informational","Interactive",
+     "fn","Failure","Logon","Other","Informational","Interactive",
+     "fsa","Failure","Logon","Other","Informational","Interactive",
+     "fco","Failure","Logon","Other","Informational","Interactive",
+     "fcoa","Failure","Logon","Incorrect key","Informational","Interactive",
+     "fdeaz","Failure","Logon","Incorret key","Informational","Interactive",
+     "api_limit","Failure","Logon","Other","Informational","Interactive",
+     "gd_recovery_failed","Failure","Logon","Incorrect key","Medium","Interactive",
+     "gd_send_pn","Success","Logon","Other","Informational","Interactive",
+     "gd_recovery_rate_limit_exceed","Failure","Logon","Incorrect key","High","Interactive",
+     "gd_recovery_succeed","Success","Logon","Other","Informational","Interactive",
+     "gd_otp_rate_limit_exceed","Failure","Logon","Incorrect key","High","Interactive",
+     "gd_start_auth","Success","Logon","Other","Informational","Interactive",
+     "gd_auth_failed","Failure","Logon","Other","High","Interactive",
+     "oidc_backchannel_logout_succeeded","Success","Logoff","Other","Informational","Interactive"
+      ];
+     let AuthenticationEvent=EventResultDetailslookup 
+     | project EventOriginalResultDetails
+     | summarize make_set(EventOriginalResultDetails);
+     Auth0AM_CL   
+     |   where type_s in (AuthenticationEvent)
+	      and (isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)          
+          and ((array_length(targetappname_has_any) == 0) or ('Auth0' has_any (targetappname_has_any)))
+          and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(ip_s,srchostname_has_any)))
+          and ((array_length(srchostname_has_any) == 0))//srchostname not available at host 
+        //username, Eventtype and eventresult done down in the parser
+     |   project TimeGenerated,
+         EventCount=int(1),
+         EventVendor="Okta",
+         EventProduct="Auth0",
+         EventSchema="Authentication",
+         EventSchemaVersion='0.1.3',
+         EventUid=_ItemId,
+         EventStartTime=date_t,
+         EventEndTime=TimeGenerated,
+         TargetUsername=details_request_auth_user_name_s,
+         TargetUserId=details_request_auth_user_user_id_s,         
+         DvcFQDN=hostname_s,         
+         DvcIpAddr=ip_s,
+         DvcDomainType='FQDN',
+         DvcId=client_id_s,         
+         DvcAction=scope_s,         
+         EventMessage=description_s,         
+         EventOriginalResultDetails=type_s,
+         EventProductVersion='4.3.1',
+         EventOriginalType=details_request_auth_strategy_s,
+         TargetIpAddr=details_request_ip_s,
+         HttpUserAgent=user_agent_s,
+         TargetAppName="Auth0",
+         TargetAppType="Saas application",      
+         Type 
+     |lookup EventResultDetailslookup on EventOriginalResultDetails
+     | where((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)))
+       and ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))
+       and (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+       and (eventresult == "*" or (EventResult == eventresult))
+     | extend  TargetUsernameType=_ASIM_GetUsernameType(TargetUsername),
+               TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+               Dvc=DvcFQDN,
+               DvcHostname=DvcFQDN,
+               Dst=TargetIpAddr,
+               SrcIpAddr=DvcIpAddr,
+               Src=DvcIpAddr,
+               IpAddr=DvcIpAddr,
+               DvcDomain=DvcFQDN,
+               Application=TargetAppName                 
+     };
+      parser(
+      starttime=starttime,
+      endtime=endtime,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      eventtype_in=eventtype_in,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled
+     )
