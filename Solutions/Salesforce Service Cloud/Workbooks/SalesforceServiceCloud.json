@@ -1,0 +1,659 @@
+{
+    "version": "Notebook/1.0",
+    "items": [
+      {
+        "type": 1,
+        "content": {
+          "json": "## Salesforce Service Cloud Workbook\n---\n\nThis workbook brings together queries and visualizations to assist you in identifying potential threats in your Salesforce Service cloud audit data. Visualizations may not appear if no data is present.\n\nTo begin select the desired TimeRange to filter the data to the timeframe you want to focus on. Note if you have a large amount of salesforce service cloud data, queries may timeout with a large time range, if this is the case simply select a smaller time range.: ",
+          "style": "info"
+        },
+        "name": "text - 2"
+      },
+      {
+        "type": 9,
+        "content": {
+          "version": "KqlParameterItem/1.0",
+          "parameters": [
+            {
+              "id": "412a09a0-64ae-4614-aec6-cbfc9273b82b",
+              "version": "KqlParameterItem/1.0",
+              "name": "TimeRange",
+              "type": 4,
+              "isRequired": true,
+              "value": {
+                "durationMs": 1800000
+              },
+              "typeSettings": {
+                "selectableValues": [
+                  {
+                    "durationMs": 300000
+                  },
+                  {
+                    "durationMs": 900000
+                  },
+                  {
+                    "durationMs": 1800000
+                  },
+                  {
+                    "durationMs": 3600000
+                  },
+                  {
+                    "durationMs": 14400000
+                  },
+                  {
+                    "durationMs": 43200000
+                  },
+                  {
+                    "durationMs": 86400000
+                  },
+                  {
+                    "durationMs": 172800000
+                  },
+                  {
+                    "durationMs": 259200000
+                  },
+                  {
+                    "durationMs": 604800000
+                  },
+                  {
+                    "durationMs": 1209600000
+                  },
+                  {
+                    "durationMs": 2419200000
+                  },
+                  {
+                    "durationMs": 2592000000
+                  },
+                  {
+                    "durationMs": 5184000000
+                  },
+                  {
+                    "durationMs": 7776000000
+                  }
+                ],
+                "allowCustom": true
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              }
+            }
+          ],
+          "style": "pills",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces"
+        },
+        "name": "parameters - 32"
+      },
+      {
+        "type": 11,
+        "content": {
+          "version": "LinkItem/1.0",
+          "style": "tabs",
+          "links": [
+            {
+              "id": "ae90d1dc-20da-4948-80da-127b210bf152",
+              "cellValue": "view_tab",
+              "linkTarget": "parameter",
+              "linkLabel": "User Logins",
+              "subTarget": "1",
+              "style": "link"
+            },
+            {
+              "id": "af58b4d9-a888-43ed-91a9-6e9f539a61d4",
+              "cellValue": "view_tab",
+              "linkTarget": "parameter",
+              "linkLabel": "API Usage",
+              "subTarget": "2",
+              "style": "link"
+            }
+          ]
+        },
+        "name": "links - 34"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "title": "User login locations",
+          "items": [
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "let Countrydb = externaldata(Network:string, geoname_id:string, continent_code:string, continent_name:string, country_iso_code:string, country_name:string)\n[@\"https://raw.githubusercontent.com/datasets/geoip2-ipv4/master/data/geoip2-ipv4.csv\"];\nlet UsersLocation = SalesforceServiceCloud\n| where EventType == \"Login\"\n| project TimeGenerated, SourceIp;\nUsersLocation\n| extend Dummy=1\n| summarize count() by Hour=bin(TimeGenerated,24h), SourceIp,Dummy\n| partition by Hour(\n                  lookup (Countrydb|extend Dummy=1) on Dummy\n                | where ipv4_is_match(SourceIp, Network)\n                )\n| summarize sum(count_) by country_name",
+                "size": 3,
+                "title": "Heat Map- Geographical - {TimeRange:label}",
+                "timeContextFromParameter": "TimeRange",
+                "exportedParameters": [
+                  {
+                    "fieldName": "TimeGenerated",
+                    "parameterName": "RetTime"
+                  },
+                  {
+                    "parameterType": 1
+                  }
+                ],
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "map",
+                "chartSettings": {
+                  "showLegend": true
+                },
+                "mapSettings": {
+                  "locInfo": "CountryRegion",
+                  "locInfoColumn": "country_name",
+                  "sizeSettings": "sum_count_",
+                  "sizeAggregation": "Sum",
+                  "legendMetric": "sum_count_",
+                  "legendAggregation": "Sum",
+                  "itemColorSettings": {
+                    "nodeColorField": "sum_count_",
+                    "colorAggregation": "Sum",
+                    "type": "heatmap",
+                    "heatmapPalette": "greenRed"
+                  }
+                }
+              },
+              "customWidth": "70",
+              "name": "query - 2"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| where EventType == 'Login'\r\n| summarize AvgLogintime = avg(toint(RunTime)), MaxLoginTime = max(toint(RunTime)), TotalLoginRequests = count() by EventType\r\n| project-away EventType",
+                "size": 1,
+                "title": "Overview - User login requests",
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table",
+                "gridSettings": {
+                  "formatters": [
+                    {
+                      "columnMatch": "AvgLogintime",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "min": 0,
+                        "palette": "categorical"
+                      },
+                      "numberFormat": {
+                        "unit": 23,
+                        "options": {
+                          "style": "decimal"
+                        }
+                      }
+                    },
+                    {
+                      "columnMatch": "MaxLoginTime",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "min": 0,
+                        "palette": "categorical"
+                      },
+                      "numberFormat": {
+                        "unit": 23,
+                        "options": {
+                          "style": "decimal"
+                        }
+                      }
+                    },
+                    {
+                      "columnMatch": "TotalLoginRequests",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "min": 0,
+                        "palette": "categorical"
+                      },
+                      "numberFormat": {
+                        "unit": 17,
+                        "options": {
+                          "style": "decimal"
+                        }
+                      }
+                    }
+                  ],
+                  "rowLimit": 1
+                },
+                "sortBy": [],
+                "tileSettings": {
+                  "showBorder": false
+                }
+              },
+              "customWidth": "30",
+              "name": "query - 8",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| where EventType == 'Login'\r\n| summarize count() by bin(TimeGenerated, 1h),User, ClientIp \r\n| top 10 by count_",
+                "size": 0,
+                "title": "Top 10 users with maximun logins - {TimeRange:label}",
+                "exportFieldName": "UserId",
+                "exportParameterName": "RetUser",
+                "exportDefaultValue": "all users",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "timechart",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "user_name_s",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "TimeGenerated",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal",
+                        "maximumFractionDigits": 2,
+                        "maximumSignificantDigits": 3
+                      }
+                    }
+                  },
+                  "showBorder": false
+                },
+                "chartSettings": {
+                  "showLegend": true
+                }
+              },
+              "customWidth": "60",
+              "name": "query - 2"
+            },
+            {
+              "type": 1,
+              "content": {
+                "json": "To leverage infomation about Malicious IP, Threat Indicator solution should be configured and ThreatIntelligenceIndicator table should have information of malicious IP.",
+                "style": "info"
+              },
+              "customWidth": "10",
+              "name": "text - 8"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "  let malicious_ips =\r\n  ThreatIntelligenceIndicator\r\n  | where isnotempty(NetworkIP)\r\n  | summarize make_list(NetworkIP);  \r\n  SalesforceServiceCloud\r\n  | where EventType == 'Login'\r\n  | distinct User,ClientIp\r\n  | where ClientIp   in (malicious_ips)\r\n  | project UserName = User, MaliciousIP = ClientIp\r\n",
+                "size": 1,
+                "title": "Malicious IP- User Login",
+                "noDataMessage": "No Malicious IP found",
+                "timeBrushParameterName": "TimeBrush",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table",
+                "gridSettings": {
+                  "formatters": [
+                    {
+                      "columnMatch": "UserName",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "min": 0,
+                        "palette": "categorical"
+                      },
+                      "numberFormat": {
+                        "unit": 0,
+                        "options": {
+                          "style": "decimal"
+                        }
+                      }
+                    },
+                    {
+                      "columnMatch": "MaliciousIP",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    }
+                  ]
+                },
+                "graphSettings": {
+                  "type": 0
+                },
+                "chartSettings": {
+                  "showMetrics": false
+                }
+              },
+              "customWidth": "30",
+              "name": "query - 23",
+              "styleSettings": {
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| where EventType == 'LoginAS'\r\n| project UserID = UserId,DerivedUSerID = UserIdDerived,EventType = EventType, IPAddress = ClientIp, LoginKey = LoginKey, OrgID = OrganizationId, RequestID = RequestId, SessionKey = SessionKey\r\n| limit 10",
+                "size": 0,
+                "title": "User Activity- LoginAS(Top 10)",
+                "noDataMessage": "No user impersonation found",
+                "exportFieldName": "IPAddress",
+                "exportParameterName": "RetIP",
+                "exportDefaultValue": "all IP addresses",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "IPAddress",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "TotalRecords",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "maximumSignificantDigits": 3,
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  },
+                  "showBorder": false
+                }
+              },
+              "customWidth": "60",
+              "name": "query - 3"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| where EventType == 'LoginAs'\r\n| where isnotempty(User)\r\n| summarize  count() by User,UserIdDerived,ClientIp\r\n| project UserName = User,DerivedUSerID = UserIdDerived,IPAddress = ClientIp, count_",
+                "size": 1,
+                "title": "User Impersonation from different IP Addresses",
+                "color": "blue",
+                "noDataMessage": "No user impersonation found",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table",
+                "gridSettings": {
+                  "formatters": [
+                    {
+                      "columnMatch": "UserName",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    },
+                    {
+                      "columnMatch": "DerivedUSerID",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    },
+                    {
+                      "columnMatch": "IPAddress",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    },
+                    {
+                      "columnMatch": "count_",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    }
+                  ],
+                  "labelSettings": [
+                    {
+                      "columnId": "UserName",
+                      "label": "User Name"
+                    },
+                    {
+                      "columnId": "DerivedUSerID",
+                      "label": "Impersonated ID"
+                    },
+                    {
+                      "columnId": "IPAddress",
+                      "label": "IP Address"
+                    },
+                    {
+                      "columnId": "count_",
+                      "label": "Total Login"
+                    }
+                  ]
+                },
+                "chartSettings": {
+                  "xAxis": "IPAddress",
+                  "yAxis": [
+                    "count_"
+                  ],
+                  "showLegend": true
+                }
+              },
+              "customWidth": "40",
+              "name": "query - 24"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| where EventType == 'Login'\r\n| where isnotempty(User)\r\n| project UserName= User,APIType= ApiType, Browser= BrowserType, CipherSuite =CipherSuite, IP =ClientIp, CPUTime=CpuTime, UserType = UserType\r\n| take 200",
+                "size": 0,
+                "title": "User Successful Login Activity",
+                "timeContext": {
+                  "durationMs": 86400000
+                },
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table"
+              },
+              "customWidth": "60",
+              "name": "query - 4"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| where EventType == 'Login'\r\n| where isnotempty(User)\r\n| where LoginStatus !has('LOGIN_NO_ERROR')\r\n| summarize  count() by User, ClientIp\r\n| project UserName = User, IP = ClientIp, Count = count_",
+                "size": 1,
+                "title": "User Unsuccessful Logins by IP",
+                "noDataMessage": "No Unsucessful Login found",
+                "timeContext": {
+                  "durationMs": 86400000
+                },
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table",
+                "gridSettings": {
+                  "formatters": [
+                    {
+                      "columnMatch": "UserName",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    },
+                    {
+                      "columnMatch": "IP",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    },
+                    {
+                      "columnMatch": "Count",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    }
+                  ],
+                  "labelSettings": [
+                    {
+                      "columnId": "UserName",
+                      "label": "User Name"
+                    },
+                    {
+                      "columnId": "IP",
+                      "label": "IP Address"
+                    },
+                    {
+                      "columnId": "Count",
+                      "label": "Count"
+                    }
+                  ]
+                },
+                "chartSettings": {
+                  "xAxis": "UserName",
+                  "yAxis": [
+                    "Count"
+                  ],
+                  "ySettings": {
+                    "numberFormatSettings": {
+                      "unit": 0,
+                      "options": {
+                        "style": "decimal",
+                        "useGrouping": true
+                      }
+                    }
+                  }
+                }
+              },
+              "customWidth": "30",
+              "name": "query - 5"
+            }
+          ]
+        },
+        "conditionalVisibility": {
+          "parameterName": "view_tab",
+          "comparison": "isEqualTo",
+          "value": "1"
+        },
+        "name": "Retrieval Events"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "title": "API Usage",
+          "items": [
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| summarize  count() by EventType",
+                "size": 0,
+                "title": "Most fired events",
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "piechart"
+              },
+              "customWidth": 50,
+              "name": "query - 4"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| where EventType == \"ApiTotalUsage\"\r\n| summarize count() by IPAddress = ClientIp,Entity = EntityName\r\n| order by Entity",
+                "size": 0,
+                "title": "Most accessed entities by IP Address",
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "table",
+                "gridSettings": {
+                  "formatters": [
+                    {
+                      "columnMatch": "user_id_s",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      },
+                      "numberFormat": {
+                        "unit": 0,
+                        "options": {
+                          "style": "decimal"
+                        }
+                      }
+                    },
+                    {
+                      "columnMatch": "entity_name_s",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    },
+                    {
+                      "columnMatch": "client_ip_s",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      }
+                    },
+                    {
+                      "columnMatch": "count_",
+                      "formatter": 8,
+                      "formatOptions": {
+                        "palette": "categorical"
+                      },
+                      "numberFormat": {
+                        "unit": 17,
+                        "options": {
+                          "style": "decimal"
+                        }
+                      }
+                    }
+                  ],
+                  "labelSettings": [
+                    {
+                      "columnId": "count_",
+                      "label": "Count"
+                    }
+                  ]
+                }
+              },
+              "customWidth": "50",
+              "name": "query - 5",
+              "styleSettings": {
+                "maxWidth": "30%",
+                "showBorder": true
+              }
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "SalesforceServiceCloud\r\n| where EventType  == \"ApiTotalUsage\"\r\n| summarize count() by EntityName",
+                "size": 0,
+                "title": "Most accessed Entities",
+                "timeContextFromParameter": "TimeRange",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "barchart"
+              },
+              "name": "query - 6"
+            }
+          ]
+        },
+        "conditionalVisibility": {
+          "parameterName": "view_tab",
+          "comparison": "isEqualTo",
+          "value": "2"
+        },
+        "name": "APIUsage"
+      }
+    ],
+    "styleSettings": {},
+    "fromTemplateId": "sentinel-SalesforceServiceCloudWorkbook",
+    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+  }

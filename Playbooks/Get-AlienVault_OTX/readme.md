@@ -5,6 +5,8 @@ This is a Logic App to import threat indicators from AlienVault into Azure Senti
 
 Refer to the following link for a more detailed description: https://azurecloudai.blog/2020/11/19/how-to-connect-alienvault-otx-to-azure-sentinel/ 
 
+The connector "Threat Intelligence Platforms (Preview)" is needed to activate the integration with Microsoft Graph Security API.
+
 **Summary:**
 
 Designed to exceed the 1000 workflow limit for large datasets by breaking the results into pages. Set the Lookback to gather historic IOC data. Prevents failed collections when results exceed 1000 records. Tested using 200k records (5 years).
@@ -15,6 +17,7 @@ Designed to exceed the 1000 workflow limit for large datasets by breaking the re
 3.	Import the Logic App (disabled by default)
 4.	Set the run variables (Tennant ID, Client ID, App Secret, and OTX API Key).
 5.	Enable and run.
+6.  Enable the "Threat Intelligence Platforms (Preview)" connector in the Sentinel workspace.
 
 **Historic Data Lookback (RUN ONCE):**
 1.	Set the lookback days to a desired value (example 365)

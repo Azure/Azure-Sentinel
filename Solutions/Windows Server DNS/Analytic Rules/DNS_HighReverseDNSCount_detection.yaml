@@ -1,0 +1,45 @@
+id: 15ae38a2-2e29-48f7-883f-863fb25a5a06
+name: Rare client observed with high reverse DNS lookup count
+description: |
+  'Identifies clients with a high reverse DNS counts that could be carrying out reconnaissance or discovery activity.
+  Alerts are generated if the IP performing such reverse DNS lookups was not seen doing so in the preceding 7-day period.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+queryFrequency: 1d
+queryPeriod: 8d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1046
+query: |
+  let starttime = 8d;
+  let endtime = 1d;
+  let threshold = 10;
+  DnsEvents
+  | where TimeGenerated > ago(endtime)
+  | where Name has "in-addr.arpa"
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(Name), ReverseDNSLookup_List = make_set(Name,100) by ClientIP
+  | where dcount_Name > threshold
+  | project StartTimeUtc, EndTimeUtc, ClientIP , dcount_Name, ReverseDNSLookup_List
+  // Filter out previously seen IPs
+  // Returns all the records from the left side that don't have matches from the right
+  | join kind=leftanti (DnsEvents
+      | where TimeGenerated between(ago(starttime)..ago(endtime))
+      | where Name has "in-addr.arpa"
+      | summarize dcount(Name) by ClientIP, bin(TimeGenerated, 1d)
+      | where dcount_Name > threshold
+      | project ClientIP , dcount_Name
+  ) on ClientIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.2
+kind: Scheduled

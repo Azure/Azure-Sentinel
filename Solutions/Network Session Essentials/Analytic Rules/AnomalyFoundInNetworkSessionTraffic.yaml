@@ -1,0 +1,188 @@
+id: cd6def0d-3ef0-4d55-a7e3-faa96c46ba12
+name: Anomaly found in Network Session Traffic (ASIM Network Session schema)
+description: |
+  'The rule identifies anomalous pattern in network session traffic based on previously seen data, different Device Action, Network Protocol, Network Direction or overall volume. The rule utilize [ASIM](https://aka.ms/AboutASIM) normalization, and is applied to any source which supports the ASIM Network Session schema'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimNetworkSessions
+    SchemaVersion: 0.2.4
+requiredDataConnectors:
+  - connectorId: AWSS3
+    dataTypes:
+      - AWSVPCFlow
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: MicrosoftSysmonForLinux
+    dataTypes:
+      - Syslog
+  - connectorId: PaloAltoNetworks
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: AzureMonitor(VMInsights)
+    dataTypes:
+      - VMConnection
+  - connectorId: AzureFirewall
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: AzureNSG
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: CiscoASA
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Corelight
+    dataTypes:
+      - Corelight_CL
+  - connectorId: AIVectraStream
+    dataTypes:
+      - VectraStream
+  - connectorId: CheckPoint
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: Fortinet
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: CiscoMeraki
+    dataTypes:
+      - Syslog
+      - CiscoMerakiNativePoller
+
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+  - Discovery
+  - Exfiltration
+  - LateralMovement
+relevantTechniques:
+  - T1095
+  - T1071
+  - T1046
+  - T1030
+  - T1210
+query: |
+  let min_t = ago(14d);
+  let max_t = now();
+  let dt = 1d;
+  let fieldForDvcAction = "DvcAction";
+  let fieldForNetworkDirection = "NetworkDirection";
+  let fieldForNetworkProtocol = "NetworkProtocol";
+  let AnomalyThreshold = 2.5;
+  let eps = materialize (_Im_NetworkSession | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
+  let maxSummarizedTime = toscalar (
+      union isfuzzy=true 
+          (
+              NetworkCustomAnalytics_protocol_CL
+                  | where EventTime_t > min_t
+                  | summarize max_TimeGenerated=max(EventTime_t)
+                  | extend max_TimeGenerated = datetime_add('minute',10,max_TimeGenerated)
+          ),
+          (
+              print(min_t)
+              | project max_TimeGenerated = print_0
+          )
+        | summarize maxTimeGenerated = max(max_TimeGenerated) 
+      );
+  let nosummary = materialize(
+                union isfuzzy=true 
+                  (
+                      NetworkCustomAnalytics_protocol_CL
+                      | where EventTime_t > ago(1d) 
+                      | project v = int(2)
+                  ),
+                  (
+                      print int(1) 
+                      | project v = print_0
+                  )
+                  | summarize maxv = max(v)
+                  | extend nosum = (maxv > 1)
+                );
+  let allData = union isfuzzy=true 
+      (
+          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) > 1000 | join (nosummary) on nosum) | join (
+          _Im_NetworkSession(starttime=todatetime(ago(2d)), endtime=now())
+          | where TimeGenerated > maxSummarizedTime
+          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
+          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+          ) on exists
+          | project-away exists, maxv, nosum*
+      ),
+      (
+          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (nosummary) on nosum) | join (
+          _Im_NetworkSession(starttime=todatetime(ago(3d)), endtime=now())
+          | where TimeGenerated > maxSummarizedTime
+          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
+          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+          ) on exists
+          | project-away exists, maxv, nosum*
+      ),
+      (
+          (datatable(exists:int, nosum:bool)[1,false] | where toscalar(eps) <= 500 | join (nosummary) on nosum) | join (
+          _Im_NetworkSession(starttime=todatetime(ago(4d)), endtime=now())
+          | where TimeGenerated > maxSummarizedTime
+          | summarize Count=count() by NetworkProtocol, DstPortNumber, DstAppName, NetworkDirection, DvcAction, bin(TimeGenerated,10m)
+          | extend EventTime = TimeGenerated, Count = toint(Count), DstPortNumber = toint(DstPortNumber), exists=int(1)
+          ) on exists
+          | project-away exists, maxv, nosum*
+      ),
+      (
+          NetworkCustomAnalytics_protocol_CL
+          | where EventTime_t > min_t
+          | project-rename NetworkProtocol=NetworkProtocol_s, DstPortNumber=DstPortNumber_d, DstAppName=DstAppName_s, NetworkDirection=NetworkDirection_s, DvcAction=DvcAction_s, Count=count__d, EventTime=EventTime_t
+          | extend Count = toint(Count),DstPortNumber = toint(DstPortNumber) 
+      )
+  ;
+  let findVolumneBasedAnomaly = allData
+          | make-series total=sum(Count) on EventTime from min_t to max_t step dt
+          | extend (anomalies, score, baseline) = series_decompose_anomalies(total, AnomalyThreshold, -1, 'linefit') 
+          | mv-expand anomalies, score, baseline, EventTime, total
+          | extend anomalies = toint(anomalies), score = toint(score), baseline = toint(baseline), EventTime = todatetime(EventTime), total = tolong(total)
+          | where EventTime >= ago(1d)
+          | where score >= 2*AnomalyThreshold
+          ;
+  let findAnomalies = (field:string){
+      allData
+          | where isnotempty(column_ifexists(field,""))
+          | make-series total=sum(Count) on EventTime from min_t to max_t step dt by column_ifexists(field,"")
+          | extend (anomalies, score, baseline) = series_decompose_anomalies(total, AnomalyThreshold, -1, 'linefit')
+          | mv-expand anomalies, score, baseline, EventTime, total
+          | extend anomalies = toint(anomalies), score = toint(score), baseline = toint(baseline), EventTime = todatetime(EventTime), total = tolong(total)
+          | where EventTime >= ago(1d)
+          | where score >= 2*AnomalyThreshold
+  };
+  union findAnomalies(fieldForDvcAction), findAnomalies(fieldForNetworkDirection), findAnomalies(fieldForNetworkProtocol), findVolumneBasedAnomaly
+  | extend anomalyFieldType  = case (isnotempty(column_ifexists(fieldForDvcAction,"")), "DvcAction",
+                                    isnotempty(column_ifexists(fieldForNetworkDirection,"")), "NetworkDirection",
+                                    isnotempty(column_ifexists(fieldForNetworkProtocol,"")), "NetworkProtocol",
+                                    "TotalVolume"
+                                  ),
+          anomalyFieldValue  = case (isnotempty(column_ifexists(fieldForDvcAction,"")), column_ifexists(fieldForDvcAction,""),
+                                    isnotempty(column_ifexists(fieldForNetworkDirection,"")), column_ifexists(fieldForNetworkDirection,""),
+                                    isnotempty(column_ifexists(fieldForNetworkProtocol,"")), column_ifexists(fieldForNetworkProtocol,""),
+                                    "Overall"
+                                  )
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  AnomalyFieldType: anomalyFieldType
+  AnomalyFieldValue: anomalyFieldValue
+  Score: score
+
+alertDetailsOverride:
+  alertDisplayNameFormat: Anomaly was observed with {{anomalyFieldValue}} Traffic
+  alertDescriptionFormat: 'Based on past data, anomaly was observed in {{anomalyFieldValue}} Traffic with a score of {{score}}.'
+version: 1.0.0
+kind: Scheduled

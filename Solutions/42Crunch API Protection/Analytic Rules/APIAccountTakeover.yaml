@@ -1,0 +1,45 @@
+id: 25c86f99-0a91-4b7f-88f3-599a008e5ab8
+name: API - Account Takeover
+description: |
+  '42Crunch API protection against account takeover'
+severity: High
+requiredDataConnectors:
+  - connectorId: 42CrunchAPIProtection
+    dataTypes:
+      - apifirewall_log_1_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+status: Available
+tactics:
+  - CredentialAccess
+  - Discovery
+relevantTechniques:
+  - T1110
+  - T1087
+query: |
+  let firstRec = apifirewall_log_1_CL 
+  | where TimeGenerated >= ago(5m) 
+  | project-away Non_blocking_mode_b, Source_Port_d, Destination_Port_d, Query_s, API_ID_g, Request_Header_s, Response_Header_s, Errors_s, Type, UUID_g
+  | where Instance_Name_s == "Instance_1" and (URI_Path_s has "/api/register" or URI_Path_s has "/api/reset") and Status_d == 403;
+  let recCount = iff((toscalar(firstRec | count) >= 20), 1, 0);
+  firstRec | take recCount
+customDetails:
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Source_IP_s
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Hostname_s
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Instance_Name_s
+version: 1.0.0
+kind: Scheduled

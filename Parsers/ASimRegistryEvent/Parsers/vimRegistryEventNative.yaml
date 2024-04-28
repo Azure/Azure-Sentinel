@@ -1,0 +1,99 @@
+Id: a721f7bd-3ad0-4c61-bfcb-8f3e297e2f71
+Parser:
+  Title: Registry Event ASIM filtering  parser for Microsoft Sentinel native Registry Event table
+  Version: "0.1.0"
+  LastUpdated: Nov 22 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: RegistryEvent
+  Version: "0.1.2"
+References:
+  - Title: ASIM Registry Schema
+    Link: https://aka.ms/ASimRegistryEventDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Registry Event table (ASimRegistryEventLogs) to the ASIM Registry Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: vimRegistryEventNative
+EquivalentBuiltInParser: _Im_RegistryEvent_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registrykey_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registryvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: registrydata_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime: datetime=datetime(null), 
+    endtime: datetime=datetime(null),
+    eventtype_in: dynamic=dynamic([]),
+    actorusername_has_any: dynamic=dynamic([]),
+    registrykey_has_any: dynamic =dynamic([]),
+    registryvalue_has_any: dynamic =dynamic([]),
+    registrydata_has_any: dynamic =dynamic([]),
+    dvchostname_has_any: dynamic=dynamic([]),
+    disabled: bool=false
+    ) {
+    ASimRegistryEventLogs
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in)) and
+        (array_length(actorusername_has_any) == 0 or (ActorUsername has_any (actorusername_has_any))) and
+        ((array_length(registrykey_has_any)) == 0 or (RegistryKey has_any (registrykey_has_any))) and 
+        ((array_length(registryvalue_has_any)) == 0 or (RegistryValue has_any (registryvalue_has_any))) and 
+        (array_length(registrydata_has_any) == 0 or RegistryValueData has_any (registrydata_has_any)) and
+        (array_length(dvchostname_has_any) == 0 or DvcHostname has_any (dvchostname_has_any))
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "RegistryEvent",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        User =  ActorUsername,
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        Process =  ActingProcessName
+    | project-away
+        TenantId,
+        SourceSystem,
+        _SubscriptionId,
+        _ResourceId
+  };
+  parser (
+      starttime                = starttime,
+      endtime                  = endtime,
+      eventtype_in             = eventtype_in,
+      actorusername_has_any    = actorusername_has_any,
+      registrykey_has_any = registrykey_has_any,
+      registryvalue_has_any = registryvalue_has_any,
+      registrydata_has_any = registrydata_has_any,
+      dvchostname_has_any= dvchostname_has_any,
+      disabled                 = disabled
+  )

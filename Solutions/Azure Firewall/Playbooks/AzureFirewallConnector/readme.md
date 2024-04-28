@@ -12,7 +12,7 @@
 
 ## Overview
 Azure Firewall is a cloud-based network security service, sitting at the edge of the Azure virtual network resources, to provide additional security beyond what is offered by NSGs. <br>
-This integration allows to automate response to Azure Sentinel incidents which contains IPs. <br>
+This integration allows to automate response to Microsoft Sentinel incidents which contains IPs. <br>
 I contains actions that work on: IP Groups, Azure Firewall and Azure Firewall Policy.
 
 
@@ -60,10 +60,10 @@ Prior using this custom connector, it should be deployed in the Resource Group w
 
 ## Authentication
 This connector supports Service Principal authentication type.
-### Azure Active Directory Service principal
-To use your own application with the Azure Sentinel connector, perform the following steps:
+### Microsoft Entra ID Service principal
+To use your own application with the Microsoft Sentinel connector, perform the following steps:
 
-1. Register the application with Azure AD and create a service principal. [Learn how](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal).
+1. Register the application with Microsoft Entra ID and create a service principal. [Learn how](https://docs.microsoft.com/azure/active-directory/develop/howto-create-service-principal-portal#register-an-application-with-azure-ad-and-create-a-service-principal).
 
 1. Get credentials (for future authentication).
     In the registered application blade, get the application credentials for later signing in:
@@ -80,7 +80,7 @@ To use your own application with the Azure Sentinel connector, perform the follo
 
     - Select the role you wish to assign to the application: **Contributor** role.
 
-    - Find the required application and save. By default, Azure AD applications aren't displayed in the available options. To find your application, search for the name and select it.
+    - Find the required application and save. By default, Microsoft Entra ID applications aren't displayed in the available options. To find your application, search for the name and select it.
 
 1. Authenticate
 

@@ -1,7 +1,7 @@
 id: 643c2025-9604-47c5-833f-7b4b9378a1f5
 name: Failed AzureAD logons but success logon to AWS Console
 description: |
-  'Identifies a list of IP addresses with a minimum number(defualt of 5) of failed logon attempts to Azure Active Directory.
+  'Identifies a list of IP addresses with a minimum number (defualt of 5) of failed logon attempts to Microsoft Entra ID.
   Uses that list to identify any successful AWS Console logons from these IPs within the same timeframe.'
 severity: Medium
 requiredDataConnectors:
@@ -25,12 +25,11 @@ relevantTechniques:
   - T1078
   - T1110
 query: |
-
   //Adjust this threshold to fit your environment
-  let signin_threshold = 5; 
+  let signin_threshold = 5;
   //Make a list of IPs with AAD signin failures above our threshold
   let aadFunc = (tableName:string){
-  let Suspicious_signins = 
+  let Suspicious_signins =
   table(tableName)
   | where ResultType !in ("0", "50125", "50140")
   | where IPAddress !in ("127.0.0.1", "::1")
@@ -41,28 +40,45 @@ query: |
   };
   let aadSignin = aadFunc("SigninLogs");
   let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
-  let Suspicious_signins = 
+  let Suspicious_signins =
   union isfuzzy=true aadSignin, aadNonInt
   | summarize make_set(set_IPAddress);
   //See if any of those IPs have sucessfully logged into the AWS console
   AWSCloudTrail
   | where EventName =~ "ConsoleLogin"
-  | extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin) 
+  | extend LoginResult = tostring(parse_json(ResponseElements).ConsoleLogin)
   | where LoginResult =~ "Success"
   | where SourceIpAddress in (Suspicious_signins)
   | extend Reason = "Multiple failed AAD logins from IP address"
   | extend MFAUsed = tostring(parse_json(AdditionalEventData).MFAUsed)
-  | extend User = iif(isempty(UserIdentityUserName), UserIdentityType, UserIdentityUserName) 
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Reason, LoginResult, EventTypeName, UserIdentityType, User, AWSRegion, SourceIpAddress, UserAgent, MFAUsed
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = User, IPCustomEntity = SourceIpAddress
+  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by Reason, LoginResult, EventTypeName, UserIdentityType, RecipientAccountId, AccountName, AccountUPNSuffix, AWSRegion, SourceIpAddress, UserAgent, MFAUsed
+  | extend timestamp = StartTime
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: SourceIpAddress
+version: 1.0.5
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

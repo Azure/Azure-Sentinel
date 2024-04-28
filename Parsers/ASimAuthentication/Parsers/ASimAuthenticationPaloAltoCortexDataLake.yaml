@@ -1,0 +1,172 @@
+Parser:
+  Title: Authentication ASIM parser for Palo Alto Cortex Data Lake
+  Version: '0.1.0'
+  LastUpdated: Dec 08 2023
+Product:
+  Name: Palo Alto Cortex Data Lake
+Normalization:
+  Schema: Authentication
+  Version: '0.2.6'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Palo Alto Cortex Data Lake Documentation
+  Link: https://docs.paloaltonetworks.com/cortex/cortex-data-lake/log-forwarding-schema-reference/network-logs/network-authentication-log/network-auth-cef-fields
+Description: |
+  This ASIM parser supports normalizing Palo Alto Cortex Data Lake logs to the ASIM Authentication normalized schema. These events are captured through the Palo Alto Networks CDL data connector that ingests CDL logs into Microsoft Sentinel.
+ParserName: ASimAuthenticationPaloAltoCortexDataLake
+EquivalentBuiltInParser: _ASim_Authentication_PaloAltoCortexDataLake
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+  [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Low",
+      "5", "Low",
+      "6", "Medium",
+      "7", "Medium",
+      "8", "Medium",
+      "9", "High",
+      "10", "High"
+  ];
+  let parser = (disabled: bool=false) {
+      CommonSecurityLog
+      | where not(disabled)
+          and DeviceVendor == "Palo Alto Networks" and DeviceProduct == "LF"
+          and DeviceEventClassID == "AUTH"
+      | parse-kv AdditionalExtensions as (PanOSSourceDeviceHost: string, PanOSSourceDeviceOSFamily: string, PanOSAuthenticationProtocol: string, PanOSAuthenticatedUserDomain: string, PanOSAuthenticatedUserName: string, PanOSAuthenticatedUserUUID: string, start: string, PanOSLogSource: string, PanOSRuleMatchedUUID: string, PanOSAuthenticationDescription: string, PanOSClientTypeName: string, PanOSConfigVersion: string, PanOSMFAVendor: string, PanOSSourceDeviceCategory: string, PanOSSourceDeviceModel: string, PanOSSourceDeviceProfile: string, PanOSSourceDeviceVendor: string, PanOSUserAgentString: string, PanOSCortexDataLakeTenantID: string, PanOSSessionID: string) with (pair_delimiter=";", kv_delimiter="=")
+      | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+      | invoke _ASIM_ResolveSrcFQDN('PanOSSourceDeviceHost')
+      | lookup EventSeverityLookup on LogSeverity
+      | extend
+          EventStartTime = todatetime(start),
+          SrcIpAddr = coalesce(SourceIP, DeviceCustomIPv6Address2),
+          TargetIpAddr = coalesce(DestinationIP, DeviceCustomIPv6Address3),
+          EventMessage = Message,
+          LogonMethod = case(
+                        FieldDeviceCustomNumber1 == 1, "Username & Password",
+                        FieldDeviceCustomNumber1 == 2, "Multi factor authentication",
+                        FieldDeviceCustomNumber1 == 3, "Multi factor authentication",
+                        ""
+          ),
+          AdditionalFields = bag_pack(
+                        "FileName",
+                        FileName,
+                        "PanOSLogSource",
+                        PanOSLogSource,
+                        "PanOSRuleMatchedUUID",
+                        PanOSRuleMatchedUUID,
+                        DeviceCustomNumber1Label,
+                        FieldDeviceCustomNumber1, 
+                        DeviceCustomNumber2Label,
+                        FieldDeviceCustomNumber2,
+                        DeviceCustomString3Label,
+                        DeviceCustomString3,
+                        DeviceCustomString4Label,
+                        DeviceCustomString4,
+                        DeviceCustomString5Label,
+                        DeviceCustomString5,
+                        DeviceCustomString6Label,
+                        DeviceCustomString6,
+                        "PanOSAuthenticationDescription",
+                        PanOSAuthenticationDescription,
+                        "PanOSClientTypeName",
+                        PanOSClientTypeName,
+                        "PanOSConfigVersion",
+                        PanOSConfigVersion,
+                        "PanOSMFAVendor",
+                        PanOSMFAVendor,
+                        "PanOSSourceDeviceCategory",
+                        PanOSSourceDeviceCategory,
+                        "PanOSSourceDeviceModel",
+                        PanOSSourceDeviceModel,
+                        "PanOSSourceDeviceProfile",
+                        PanOSSourceDeviceProfile,
+                        "PanOSSourceDeviceVendor",
+                        PanOSSourceDeviceVendor
+                    )
+      | project-rename
+          DvcIpAddr = Computer,
+          EventUid = _ItemId,
+          DvcId = DeviceExternalID,
+          EventOriginalResultDetails = Message,
+          EventOriginalSeverity = LogSeverity,
+          EventOriginalType = DeviceEventClassID,
+          EventOriginalUid = ExtID,
+          EventProductVersion = DeviceVersion,
+          LogonProtocol = PanOSAuthenticationProtocol,
+          SrcDvcOs = PanOSSourceDeviceOSFamily,
+          TargetUsername = PanOSAuthenticatedUserName,
+          TargetUserId = PanOSAuthenticatedUserUUID,
+          TargetDomain = PanOSAuthenticatedUserDomain,
+          EventOriginalSubType = Activity,
+          HttpUserAgent =  PanOSUserAgentString,
+          TargetDvcScopeId = PanOSCortexDataLakeTenantID,
+          TargetSessionId = PanOSSessionID,
+          TargetDvc = DeviceCustomString1
+      | extend
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),
+          EventEndTime = EventStartTime,
+          EventResult = iff(EventMessage has "Invalid Certificate", "Failure", "Success"),
+          Dst = TargetIpAddr,
+          Src = coalesce(SrcFQDN, SrcHostname, SrcIpAddr),
+          TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+          User = TargetUsername,
+          IpAddr = SrcIpAddr,
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          TargetDomainType = case(
+                        array_length(split(DestinationUserName, ".")) > 1, "FQDN",
+                        array_length(split(DestinationUserName, "\\")) > 1, "Windows",
+                        ""
+                    ),
+          TargetUserIdType = iff(isnotempty(TargetUserId), "UID", ""),
+          TargetUsernameType = _ASIM_GetUsernameType(TargetUsername)
+      | extend
+          EventSchema = "Authentication",
+          EventSchemaVersion = "0.1.3",
+          EventType = "Logon",
+          EventProduct = "Cortex Data Lake",
+          EventVendor = "Palo Alto"
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          EventOutcome,
+          PanOS*,
+          start,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          Protocol,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          Threat*,
+          ExternalID,
+          ReportReferenceLink,
+          ReceiptTime,
+          Reason,
+          ApplicationProtocol,
+          Indicator*,
+          _ResourceId
+  };
+  parser(disabled=disabled)

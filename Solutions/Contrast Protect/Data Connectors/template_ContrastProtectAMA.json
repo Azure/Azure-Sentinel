@@ -1,0 +1,136 @@
+{
+  "id": "ContrastProtectAma",
+  "title": "[Recommended] Contrast Protect via AMA",
+  "publisher": "Contrast Security",
+  "descriptionMarkdown": "Contrast Protect mitigates security threats in production applications with runtime protection and observability.  Attack event results (blocked, probed, suspicious...) and other information can be sent to Microsoft Microsoft Sentinel to blend with security information from other systems.",
+  "graphQueries": [
+    {
+      "metricName": "Total data received",
+      "legend": "ContrastProtect",
+      "baseQuery": "CommonSecurityLog\n |where DeviceVendor =~ 'Contrast Security'\n  |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)"
+    }
+  ],
+  "sampleQueries": [
+    {
+      "description": "All attacks",
+      "query": "let extract_data=(a:string, k:string) {\r\n  parse_urlquery(replace(@';', @'&', a))[\"Query Parameters\"][k]\r\n};\r\nCommonSecurityLog \r\n| where DeviceVendor == 'Contrast Security'\r\n| extend Outcome = replace(@'INEFFECTIVE', @'PROBED', tostring(coalesce(column_ifexists(\"EventOutcome\", \"\"), extract_data(AdditionalExtensions, 'outcome'), \"\")))\r\n| where Outcome != 'success'\r\n| extend Rule = extract_data(AdditionalExtensions, 'pri')\r\n| project TimeGenerated, ApplicationProtocol, Rule, Activity, Outcome, RequestURL, SourceIP\r\n| order by TimeGenerated desc\r\n"
+    },
+    {
+      "description": "Effective attacks",
+      "query": "let extract_data=(a:string, k:string) {\n  parse_urlquery(replace(@';', @'&', a))[\"Query Parameters\"][k]\n};\nCommonSecurityLog \n| where DeviceVendor == 'Contrast Security'\n| extend Outcome = tostring(coalesce(column_ifexists(\"EventOutcome\", \"\"), extract_data(AdditionalExtensions, 'outcome'), \"\"))\n| where Outcome in ('EXPLOITED','BLOCKED','SUSPICIOUS')\n| extend Rule = extract_data(AdditionalExtensions, 'pri')\n| project TimeGenerated, ApplicationProtocol, Rule, Activity, Outcome, RequestURL, SourceIP\n| order by TimeGenerated desc\n"
+    }
+  ],
+  "dataTypes": [
+    {
+      "name": "CommonSecurityLog (ContrastProtect)",
+      "lastDataReceivedQuery": "CommonSecurityLog\n |where DeviceVendor =~ 'Contrast Security'\n  |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+    }
+  ],
+  "connectivityCriterias": [
+    {
+      "type": "IsConnectedQuery",
+      "value": [
+        "CommonSecurityLog\n |where DeviceVendor =~ 'Contrast Security'\n  |extend sent_by_ama = column_ifexists('CollectorHostName','')\n |where isnotempty(sent_by_ama)\n | summarize LastLogReceived = max(TimeGenerated)\n | project IsConnected = LastLogReceived > ago(30d)"
+      ]
+    }
+  ],
+  "availability": {
+    "status": 1,
+    "isPreview": false
+  },
+  "permissions": {
+    "resourceProvider": [
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces",
+        "permissionsDisplayText": "read and write permissions are required.",
+        "providerDisplayName": "Workspace",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "read": true,
+          "write": true,
+          "delete": true
+        }
+      },
+      {
+        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+        "providerDisplayName": "Keys",
+        "scope": "Workspace",
+        "requiredPermissions": {
+          "action": true
+        }
+      }
+    ],
+	"customs": [
+      {
+        "description": "To collect data from non-Azure VMs, they must have Azure Arc installed and enabled. [Learn more](https://docs.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-install?tabs=ARMAgentPowerShell,PowerShellWindows,PowerShellWindowsArc,CLIWindows,CLIWindowsArc)"
+      },
+      {
+        "description": "Common Event Format (CEF) via AMA and Syslog via AMA data connectors must be installed [Learn more](https://learn.microsoft.com/azure/sentinel/connect-cef-ama#open-the-connector-page-and-create-the-dcr)"
+      }	  
+    ]
+  },
+  "instructionSteps": [
+    {
+      "title": "",
+      "description": "Install and configure the Linux agent to collect your Common Event Format (CEF) Syslog messages and forward them to Microsoft Sentinel.\n\n> Notice that the data from all regions will be stored in the selected workspace",
+      "instructions": [
+			       {
+                    "parameters": {
+                        "title": "1. Kindly follow the steps to configure the data connector",
+                        "instructionSteps": [
+                            {
+                                "title": "Step A. Configure the Common Event Format (CEF) via AMA data connector",
+                                "description": "_Note:- CEF logs are collected only from Linux Agents_\n\n1. Navigate to Microsoft Sentinel workspace ---> configuration ---> Data connector blade .\n\n2. Search for 'Common Event Format (CEF) via AMA' data connector and open it.\n\n3. Check If there is no existing DCR configured to collect required facility of logs, Create a new DCR (Data Collection Rule)\n\n\t_Note:- It is recommended to install minimum 1.27 version of AMA agent [Learn more](https://learn.microsoft.com/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=azure-portal ) and ensure there is no duplicate DCR as it can cause log duplicacy_\n\n4. Run the command provided in the CEF via AMA data connector page to configure the CEF collector on the machine",
+                                "instructions": [
+                                ]
+                            },
+                            {
+                                "title": "Step B. Forward Common Event Format (CEF) logs to Syslog agent",
+                                "description": "Configure the Contrast Protect agent to forward events to syslog as described here: https://docs.contrastsecurity.com/en/output-to-syslog.html. Generate some attack events for your application.",
+                                "instructions": [
+                                ]
+                            },
+							{
+								"title": "Step C. Validate connection",
+								"description": "Follow the instructions to validate your connectivity:\n\nOpen Log Analytics to check if the logs are received using the CommonSecurityLog schema.\n\nIt may take about 20 minutes until the connection streams data to your workspace.\n\nIf the logs are not received, run the following connectivity validation script:\n\n 1. Make sure that you have Python on your machine using the following command: python -version\n\n2. You must have elevated permissions (sudo) on your machine",
+								"instructions": [
+									{
+										"parameters": {
+										"label": "Run the following command to validate your connectivity:",
+										"value": "sudo wget -O Sentinel_AMA_troubleshoot.py https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/DataConnectors/Syslog/Sentinel_AMA_troubleshoot.py&&sudo python Sentinel_AMA_troubleshoot.py --cef"
+										},
+										"type": "CopyableLabel"
+									}
+								]
+							}							
+                        ]
+                    },
+                    "type": "InstructionStepsGroup"
+                }
+            ]    
+    },
+    
+    {
+      "title": "2. Secure your machine ",
+      "description": "Make sure to configure the machine's security according to your organization's security policy\n\n\n[Learn more >](https://aka.ms/SecureCEF)"
+    }
+  ],
+  "metadata": {
+    "id": "838441a0-8138-4ff4-8a2f-aa86696ceaa4",
+    "version": "1.0.0",
+    "kind": "dataConnector",
+    "source": {
+      "kind": "community"
+    },
+    "author": {
+      "name": "Contrast Security"
+    },
+    "support": {
+      "tier": "community",
+      "name": "Contrast Security",
+      "email": "support@contrastsecurity.com",
+      "link": "https://docs.contrastsecurity.com/"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimUserManagement",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "User Management ASIM parser",
+            "category": "ASIM",
+            "FunctionAlias": "ASimUserManagement",
+            "query": "let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers')\n  | where SearchKey in ('Any', 'ExcludeASimUserManagement')\n  | extend SourceSpecificParser=column_ifexists('SourceSpecificParser', '')\n  | distinct SourceSpecificParser);\nlet ASimBuiltInDisabled=toscalar('ExcludeASimUserManagement' in (DisabledParsers) or 'Any' in (DisabledParsers)); \nlet parser=(\n    pack: bool=false\n    ) {\n    union isfuzzy=true\n        vimUserManagementEmpty,\n        ASimUserManagementMicrosoftSecurityEvent (ASimBuiltInDisabled or ('ExcludeASimUserManagementMicrosoftSecurityEvent' in (DisabledParsers))),\n        ASimUserManagementCiscoISE (ASimBuiltInDisabled or ('ExcludeASimUserManagementCiscoISE' in (DisabledParsers))),\n        ASimUserManagementSentinelOne (ASimBuiltInDisabled or ('ExcludeASimUserManagementSentinelOne' in (DisabledParsers))),\n        ASimUserManagementLinuxAuthpriv (ASimBuiltInDisabled or ('ExcludeASimUserManagementLinuxAuthpriv' in (DisabledParsers))),\n        ASimUserManagementNative (ASimBuiltInDisabled or ('ExcludeASimUserManagementNative' in (DisabledParsers)))\n}; \nparser (\n    pack=pack\n)",
+            "version": 1,
+            "functionParameters": "pack:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

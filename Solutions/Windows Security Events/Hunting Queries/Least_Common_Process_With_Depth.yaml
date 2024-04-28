@@ -1,0 +1,34 @@
+id: 6d04a1ef-1b4d-4ff8-a76c-ad7d1a396136
+name: Least Common Processes Including Folder Depth
+description: |
+  'Looks across your environment for least common Process Command Lines, may be noisy and require allowlisting.  By ZanCo'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 7d;  
+  let Allowlist = dynamic (['foo.exe', 'baz.exe']);
+  let Sensitivity = 15;
+  SecurityEvent
+  | where TimeGenerated between(lookback..endtime)
+  | where EventID == 4688
+  | extend ProcArray = split(NewProcessName, '\\')
+  // ProcArrayLength is Folder Depth
+  | extend ProcArrayLength = array_length(ProcArray)
+  | extend LastIndex = ProcArrayLength - 1
+  | extend Proc = ProcArray[LastIndex]
+  | where Proc !in (Allowlist)
+  // ProcArray[0] is the proc's Drive
+  | extend DriveDepthProc = strcat(ProcArray[0], '-', ProcArrayLength, '-', Proc)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TimesSeen = count(), HostCount = dcount(Computer), Hosts = make_set(Computer,maxSize=2000), UserCount = dcount(SubjectUserName), Users = make_set(SubjectUserName,maxSize=2000) by DriveDepthProc
+  | where TimesSeen < Sensitivity
+  | extend timestamp = StartTimeUtc
+version: 2.0.1

@@ -1,0 +1,788 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Enrich multiple entities - AlienVault-OTX",
+    "description": "This playbook will enrich a Sentinel Incident with pulse information from AlienVault OTX.  If any pulses are found the Incident will also be tagged and the severity raised to High.",
+    "version": "1.0.1",
+    "mainSteps": [ "The following entity types will be enriched with this playbook: \n\n - IP \n\n - URL \n\n - File hash \n\n - DNS" ],
+    "prerequisites": [ "After deploying the the playbook you will need to grant the playbook's Managed Identity \n\n **Microsoft Sentinel Responder** \n\n (or greater) access to the resource group where Microsoft Sentinel is installed. This gives the Managed Identity the necessary permissions to add comments, tags, and change incident severity." ],
+    "lastUpdateTime": "2022-07-25T10:00:00.000Z",
+    "entities": [ "Ip", "URL", "FileHash", "DnsResolution" ],
+    "tags": [ "Enrichment" ],
+    "support": {
+      "tier": "community"
+    },
+    "categories": {
+      "domains": ["Security - Automation (SOAR)"]
+    },
+    "author": {
+      "name": "Brian Delaney"
+    },
+    "releaseNotes": [
+      {
+        "version": "1.0.1",
+        "title": "Enrich multiple entities - AlienVault-OTX",
+        "notes": [
+          "Added encodeUriComponent(..) to HTTP_-_OTX_URL step to avoid 404 when URL contains special characters"
+        ]
+      },
+      {
+        "version": "1.0.0",
+        "title": "Enrich multiple entities - AlienVault-OTX",
+        "notes": [
+          "Initial version"
+        ]
+      }
+    ],
+    "source": {
+      "kind": "Community"
+    }
+  },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Enrich-Incident-Alienvault-OTX",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the playbook (Logic Apps resource) which will be created"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "tags": {
+                "LogicAppsCategory": "security",
+                "hidden-SentinelTemplateName": "AlienVault-OTX-Enrichment",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Check_for_DNS_Entity": {
+                            "actions": {
+                                "For_each_Domain": {
+                                    "foreach": "@body('Filter_array_-_DNS_Entities')",
+                                    "actions": {
+                                        "Condition_-_Check_for_Domain_Pulses": {
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)_-_Domain_TI": {
+                                                    "runAfter": {
+                                                        "Compose_-_Domain": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>@{outputs('Compose_-_Domain')} Found for @{items('For_each_Domain')['properties']['domainName']}, A maximum of 5 will be displayed.<br>\n@{body('Create_HTML_table_-_Domain')}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Compose_-_Domain": {
+                                                    "runAfter": {
+                                                        "Create_HTML_table_-_Domain": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "<a href=\"https://otx.alienvault.com/indicator/domain/@{items('For_each_Domain')['properties']['domainName']}\">@{body('HTTP_-_OTX_Domain')['pulse_info']['count']} OTX Pulses</a>"
+                                                },
+                                                "Create_HTML_table_-_Domain": {
+                                                    "runAfter": {
+                                                        "Set_threatFound_-_Domain": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "columns": [
+                                                            {
+                                                                "header": "Name",
+                                                                "value": "@item()?['name']"
+                                                            },
+                                                            {
+                                                                "header": "Description",
+                                                                "value": "@if(greater(length(item()?['description']), 400), substring(item()?['description'],0,400), item()?['description'])"
+                                                            },
+                                                            {
+                                                                "header": "ViewPulse",
+                                                                "value": "https://otx.alienvault.com/pulse/@{item()?['id']}"
+                                                            }
+                                                        ],
+                                                        "format": "HTML",
+                                                        "from": "@take(body('HTTP_-_OTX_Domain')['pulse_info']['pulses'],5)"
+                                                    }
+                                                },
+                                                "Set_threatFound_-_Domain": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "threatFound",
+                                                        "value": 1
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_OTX_Domain": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@body('HTTP_-_OTX_Domain')['pulse_info']['count']",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_OTX_Domain": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://otx.alienvault.com/api/v1/indicators/domain/@{items('For_each_Domain')['properties']['domainName']}/general"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Filter_array_-_DNS_Entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Filter_array_-_DNS_Entities'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_Check_for_FileHash_Entity": {
+                            "actions": {
+                                "For_each_FileHash": {
+                                    "foreach": "@body('Entities_-_Get_FileHashes')?['Filehashes']",
+                                    "actions": {
+                                        "Condition_-_Check_for_FileHash_Pulses": {
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)_-_File_TI": {
+                                                    "runAfter": {
+                                                        "Compose_-_FIle_Pulses": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>@{outputs('Compose_-_FIle_Pulses')} Found for @{items('For_each_FileHash')?['Value']}, A maximum of 5 will be displayed.<br>\n@{body('Create_HTML_table_-_File')}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Compose_-_FIle_Pulses": {
+                                                    "runAfter": {
+                                                        "Create_HTML_table_-_File": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "<a href=\"https://otx.alienvault.com/indicator/file/@{items('For_each_FileHash')?['Value']}\">@{body('HTTP_-_OTX_File')['pulse_info']['count']} OTX Pulses</a>"
+                                                },
+                                                "Create_HTML_table_-_File": {
+                                                    "runAfter": {
+                                                        "Set_threatFound_-_File": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "columns": [
+                                                            {
+                                                                "header": "Name",
+                                                                "value": "@item()?['name']"
+                                                            },
+                                                            {
+                                                                "header": "Description",
+                                                                "value": "@if(greater(length(item()?['description']), 400), substring(item()?['description'],0,400), item()?['description'])"
+                                                            },
+                                                            {
+                                                                "header": "Value",
+                                                                "value": "https://otx.alienvault.com/pulse/@{item()?['id']}"
+                                                            }
+                                                        ],
+                                                        "format": "HTML",
+                                                        "from": "@take(body('HTTP_-_OTX_File')['pulse_info']['pulses'],5)"
+                                                    }
+                                                },
+                                                "Set_threatFound_-_File": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "threatFound",
+                                                        "value": 1
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_OTX_File": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@body('HTTP_-_OTX_File')['pulse_info']['count']",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_OTX_File": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://otx.alienvault.com/api/v1/indicators/file/@{items('For_each_FileHash')?['Value']}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_FileHashes": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_FileHashes')?['Filehashes'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_Check_for_IP_Entity": {
+                            "actions": {
+                                "For_each_IP": {
+                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                                    "actions": {
+                                        "Condition_-_Check_for_IP_Pulses": {
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)_-_IP_TI": {
+                                                    "runAfter": {
+                                                        "Compose_-_IP_Pulses": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>@{outputs('Compose_-_IP_Pulses')} Found for @{items('For_each_IP')?['Address']}, A maximum of 5 will be displayed.<br>\n@{body('Create_HTML_table_-_IP')}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Compose_-_IP_Pulses": {
+                                                    "runAfter": {
+                                                        "Create_HTML_table_-_IP": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "<a href=\"https://otx.alienvault.com/indicator/ip/@{items('For_each_IP')?['Address']}\">@{body('HTTP_-_OTX_IP')['pulse_info']['count']} OTX Pulses</a>"
+                                                },
+                                                "Create_HTML_table_-_IP": {
+                                                    "runAfter": {
+                                                        "Set_threatFound_-_IP": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "columns": [
+                                                            {
+                                                                "header": "Name",
+                                                                "value": "@item()?['name']"
+                                                            },
+                                                            {
+                                                                "header": "Description",
+                                                                "value": "@if(greater(length(item()?['description']), 400), substring(item()?['description'],0,400), item()?['description'])"
+                                                            },
+                                                            {
+                                                                "header": "ViewPulse",
+                                                                "value": "https://otx.alienvault.com/pulse/@{item()?['id']}"
+                                                            }
+                                                        ],
+                                                        "format": "HTML",
+                                                        "from": "@take(body('HTTP_-_OTX_IP')['pulse_info']['pulses'],5)"
+                                                    }
+                                                },
+                                                "Set_threatFound_-_IP": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "threatFound",
+                                                        "value": 1
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_OTX_IP": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@body('HTTP_-_OTX_IP')['pulse_info']['count']",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_OTX_IP": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://otx.alienvault.com//api/v1/indicators/IPv4/@{items('For_each_IP')?['Address']}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_Check_for_URL_Entity": {
+                            "actions": {
+                                "For_each_URL": {
+                                    "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                                    "actions": {
+                                        "Condition_-_Check_for_URL_Pulses": {
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)_-_URL_TI": {
+                                                    "runAfter": {
+                                                        "Compose_-_URL": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p>@{outputs('Compose_-_URL')} Found for @{replace(items('For_each_URL')?['Url'], 'http', 'unlink')}, A maximum of 5 will be displayed.<br>\n@{body('Create_HTML_table_-_URL')}</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Compose_-_URL": {
+                                                    "runAfter": {
+                                                        "Create_HTML_table_-_URL": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": "<a href=\"https://otx.alienvault.com/indicator/url/@{items('For_each_URL')?['Url']}\">@{body('HTTP_-_OTX_URL')['pulse_info']['count']} OTX Pulses</a>"
+                                                },
+                                                "Create_HTML_table_-_URL": {
+                                                    "runAfter": {
+                                                        "Set_threatFound_-_URL": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "columns": [
+                                                            {
+                                                                "header": "Name",
+                                                                "value": "@item()?['name']"
+                                                            },
+                                                            {
+                                                                "header": "Description",
+                                                                "value": "@if(greater(length(item()?['description']), 400), substring(item()?['description'],0,400), item()?['description'])"
+                                                            },
+                                                            {
+                                                                "header": "ViewPulse",
+                                                                "value": "https://otx.alienvault.com/pulse/@{item()?['id']}"
+                                                            }
+                                                        ],
+                                                        "format": "HTML",
+                                                        "from": "@take(body('HTTP_-_OTX_URL')['pulse_info']['pulses'],5)"
+                                                    }
+                                                },
+                                                "Set_threatFound_-_URL": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "threatFound",
+                                                        "value": 1
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_-_OTX_URL": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@body('HTTP_-_OTX_URL')['pulse_info']['count']",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "HTTP_-_OTX_URL": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "method": "GET",
+                                                "uri": "https://otx.alienvault.com/api/v1/indicators/url/@{encodeUriComponent(items('For_each_URL')?['Url'])}/general"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_URLs')?['URLs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_FileHashes": {
+                            "runAfter": {
+                                "Initialize_threatFound": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/filehash"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_threatFound": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {
+                                "Initialize_threatFound": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "Filter_array_-_DNS_Entities": {
+                            "runAfter": {
+                                "Initialize_EntityArray": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Query",
+                            "inputs": {
+                                "from": "@variables('EntityArray')",
+                                "where": "@equals(item()?['kind'], 'DnsResolution')"
+                            }
+                        },
+                        "Initialize_EntityArray": {
+                            "runAfter": {
+                                "Initialize_threatFound": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EntityArray",
+                                        "type": "array",
+                                        "value": "@array(triggerBody()?['object']?['properties']?['relatedEntities'])"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_threatFound": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "threatFound",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Tag_Based_on_TI": {
+                            "actions": {
+                                "Update_incident_-_Raise_Severity_and_Tag": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "severity": "High",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                    {
+                                                        "Tag": "ThreatIntelFound"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_-_Check_for_DNS_Entity": [
+                                    "Succeeded"
+                                ],
+                                "Condition_-_Check_for_FileHash_Entity": [
+                                    "Succeeded"
+                                ],
+                                "Condition_-_Check_for_IP_Entity": [
+                                    "Succeeded"
+                                ],
+                                "Condition_-_Check_for_URL_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Update_incident__-_Tag": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": {
+                                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                "tagsToAdd": {
+                                                    "TagsToAdd": [
+                                                        {
+                                                            "Tag": "NoThreatIntelFound"
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                }
+                                            },
+                                            "method": "put",
+                                            "path": "/Incidents"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@variables('threatFound')",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

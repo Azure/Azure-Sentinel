@@ -1,0 +1,64 @@
+id: 9bd18b63-f1ca-4375-95db-39fda00bfe20
+name: Progress MOVEIt File transfer above threshold
+description: |
+  'Identifies Progress MOVEIt File Transfers above certain threshold in a 15min time period.
+   Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that
+   value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,
+   if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1020
+query: |
+  let threshold = 500;
+  Event
+  | where EventID == 0 and Source == "MOVEit DMZ Audit" and EventLog == "Application"
+  | where RenderedDescription has_any ("Downloaded", "Uploaded")
+  | parse RenderedDescription with * "User '" userdisplayname "' (" *
+  | parse RenderedDescription with * "IPAddress: " ipaddress " FileID:" * " FileName: " filename " FolderID: " folderid " FolderPath: " folderpath " Username: " username " AgentBrand: " *
+  | summarize count_=count(), fileslist=make_set(filename) by Computer,userdisplayname,ipaddress,bin(TimeGenerated, 1d)
+  | where count_ >= threshold
+  | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField","_", tostring(hash(tostring(fileslist)))))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: userdisplayname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipaddress
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileSample
+customDetails:
+  TransferCount: count_
+  FilesList: fileslist
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+    - Account
+    - Host
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+version: 1.0.0
+kind: Scheduled

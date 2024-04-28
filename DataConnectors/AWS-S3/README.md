@@ -2,9 +2,9 @@
 
 ## Introduction
 
-AWS S3 Sentinel connector ingests many AWS service logs into Azure Sentinel. Currently supported logs include: AWS VPC Flow Logs, GuardDuty, Cloud Trail (management and data events). 
+AWS S3 Sentinel connector ingests many AWS service logs into Azure Sentinel. Currently supported logs include: AWS VPC Flow Logs, GuardDuty, Cloud Watch, Cloud Trail (management and data events). 
 
-This connector requires that each AWS service publish its logs to an S3 bucket in your account. In addition you must configure SQS notifications and permissions for the connector to retreive the logs.
+This connector requires that each AWS service publish its logs to an S3 bucket in your account. In addition you must configure SQS notifications and permissions for the connector to retrieve the logs.
 
 More information on the connector and configuration instructions can be found on the Azure Sentinel data connector page in the Azure portal.
 
@@ -29,8 +29,8 @@ You must have PowerShell and the AWS CLI installed before using these scripts.
   - Run from PowerShell `aws configure`. For more details please see [AWS configure documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html)
 
 ## Using the scripts
-
-Download the scripts in this folder and subfolders or download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer. 
+For Microsoft Azure, please download and extract the `ConfigAwsS3DataConnectorScripts.zip` file to your computer.
+For Microsoft Azure Government, please download and extract the `ConfigAwsS3DataConnectorGOVScripts.zip` file to your computer.
 Make sure that you have PowerShell and the AWS CLI installed.
 
 > IMPORTANT 

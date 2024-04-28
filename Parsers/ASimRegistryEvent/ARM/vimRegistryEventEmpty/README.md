@@ -1,6 +1,6 @@
 # Microsoft ASIM RegistryEvent Normalization Parser
 
-This template deploys the ASIM RegistryEvent schema parser for Microsoft.
+ARM template for ASIM RegistryEvent schema parser for Microsoft.
 
 This function returns an empty ASIM Registry Event schema
 

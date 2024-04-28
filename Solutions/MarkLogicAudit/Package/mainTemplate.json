@@ -1,0 +1,698 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for MarkLogicAudit"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-marklogicaudit",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "MarkLogic",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "MarkLogic",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "MarkLogicAudit-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "MarkLogicAudit",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "MarkLogicAudit data connector with template",
+        "displayName": "MarkLogicAudit template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "MarkLogicAudit data connector with template version 2.0.3",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "MarkLogic Audit",
+                  "publisher": "MarkLogic",
+                  "descriptionMarkdown": "MarkLogic data connector provides the capability to ingest [MarkLogicAudit](https://www.marklogic.com/) logs into Microsoft Sentinel. Refer to [MarkLogic documentation](https://docs.marklogic.com/guide/getting-started) for more information.",
+                  "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "MarkLogicAudit_CL",
+                      "baseQuery": "MarkLogicAudit_CL"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "MarkLogicAudit - All Activities.",
+                      "query": "MarkLogicAudit_CL\n | sort by TimeGenerated desc"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "MarkLogicAudit_CL",
+                      "lastDataReceivedQuery": "MarkLogicAudit_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "MarkLogicAudit_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "read": true,
+                          "delete": true
+                        }
+                      },
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                        "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                        "providerDisplayName": "Keys",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "action": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias MarkLogicAudit and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MarkLogicAudit/Parsers/MarkLogicAudit.txt) on the second line of the query, enter the hostname(s) of your MarkLogicAudit device(s) and any other unique identifiers for the logstream. The function usually takes 10-15 minutes to activate after solution installation/update."
+                    },
+                    {
+                      "description": "Install the agent on the Tomcat Server where the logs are generated.\n\n> Logs from MarkLogic Server deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Linux agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux or Windows"
+                    },
+                    {
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Windows agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Windows Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Windows Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "Perform the following steps to enable auditing for a group:\n\n>Access the Admin Interface with a browser;\n\n>Open the Audit Configuration screen (Groups > group_name > Auditing);\n\n>Select True for the Audit Enabled radio button;\n\n>Configure any audit events and/or audit restrictions you want;\n\n>Click OK.\n\n Refer to the [MarkLogic documentation for more details](https://docs.marklogic.com/guide/admin/auditing)",
+                      "title": "2. Configure MarkLogicAudit to enable auditing"
+                    },
+                    {
+                      "description": "Configure the custom log directory to be collected",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "linkType": "OpenCustomLogsSettings"
+                          },
+                          "type": "InstallAgent"
+                        }
+                      ],
+                      "title": "3. Configure the logs to be collected"
+                    },
+                    {
+                      "description": "1. Select the link above to open your workspace advanced settings \n2. From the left pane, select **Settings**, select **Custom Logs** and click **+Add custom log**\n3. Click **Browse** to upload a sample of a MarkLogicAudit log file. Then, click **Next >**\n4. Select **Timestamp** as the record delimiter and click **Next >**\n5. Select **Windows** or **Linux** and enter the path to MarkLogicAudit logs based on your configuration \n6. After entering the path, click the '+' symbol to apply, then click **Next >** \n7. Add **MarkLogicAudit** as the custom log Name (the '_CL' suffix will be added automatically) and click **Done**."
+                    },
+                    {
+                      "description": "It may take upwards of 20 minutes until your logs start to appear in Microsoft Sentinel.",
+                      "title": "Validate connectivity"
+                    }
+                  ],
+                  "metadata": {
+                    "id": "Unique Identifier (GUID) used to identify dependencies and content from solutions or community.",
+                    "version": "1.0.0",
+                    "kind": "dataConnector",
+                    "source": {
+                      "kind": "community"
+                    },
+                    "author": {
+                      "name": "Microsoft"
+                    },
+                    "support": {
+                      "tier": "community",
+                      "name": "Microsoft",
+                      "link": "https://github.com/Azure/Azure-Sentinel/issues"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "MarkLogicAudit",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "MarkLogicAudit",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "MarkLogic Audit",
+          "publisher": "MarkLogic",
+          "descriptionMarkdown": "MarkLogic data connector provides the capability to ingest [MarkLogicAudit](https://www.marklogic.com/) logs into Microsoft Sentinel. Refer to [MarkLogic documentation](https://docs.marklogic.com/guide/getting-started) for more information.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "MarkLogicAudit_CL",
+              "baseQuery": "MarkLogicAudit_CL"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "MarkLogicAudit_CL",
+              "lastDataReceivedQuery": "MarkLogicAudit_CL\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "MarkLogicAudit_CL\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "MarkLogicAudit - All Activities.",
+              "query": "MarkLogicAudit_CL\n | sort by TimeGenerated desc"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              },
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces/sharedKeys",
+                "permissionsDisplayText": "read permissions to shared keys for the workspace are required. [See the documentation to learn more about workspace keys](https://docs.microsoft.com/azure/azure-monitor/platform/agent-windows#obtain-workspace-id-and-key).",
+                "providerDisplayName": "Keys",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected which is deployed as part of the solution. To view the function code in Log Analytics, open Log Analytics/Microsoft Sentinel Logs blade, click Functions and search for the alias MarkLogicAudit and load the function code or click [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/MarkLogicAudit/Parsers/MarkLogicAudit.txt) on the second line of the query, enter the hostname(s) of your MarkLogicAudit device(s) and any other unique identifiers for the logstream. The function usually takes 10-15 minutes to activate after solution installation/update."
+            },
+            {
+              "description": "Install the agent on the Tomcat Server where the logs are generated.\n\n> Logs from MarkLogic Server deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Linux agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux or Windows"
+            },
+            {
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Windows agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Windows Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Windows Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ]
+            },
+            {
+              "description": "Perform the following steps to enable auditing for a group:\n\n>Access the Admin Interface with a browser;\n\n>Open the Audit Configuration screen (Groups > group_name > Auditing);\n\n>Select True for the Audit Enabled radio button;\n\n>Configure any audit events and/or audit restrictions you want;\n\n>Click OK.\n\n Refer to the [MarkLogic documentation for more details](https://docs.marklogic.com/guide/admin/auditing)",
+              "title": "2. Configure MarkLogicAudit to enable auditing"
+            },
+            {
+              "description": "Configure the custom log directory to be collected",
+              "instructions": [
+                {
+                  "parameters": {
+                    "linkType": "OpenCustomLogsSettings"
+                  },
+                  "type": "InstallAgent"
+                }
+              ],
+              "title": "3. Configure the logs to be collected"
+            },
+            {
+              "description": "1. Select the link above to open your workspace advanced settings \n2. From the left pane, select **Settings**, select **Custom Logs** and click **+Add custom log**\n3. Click **Browse** to upload a sample of a MarkLogicAudit log file. Then, click **Next >**\n4. Select **Timestamp** as the record delimiter and click **Next >**\n5. Select **Windows** or **Linux** and enter the path to MarkLogicAudit logs based on your configuration \n6. After entering the path, click the '+' symbol to apply, then click **Next >** \n7. Add **MarkLogicAudit** as the custom log Name (the '_CL' suffix will be added automatically) and click **Done**."
+            },
+            {
+              "description": "It may take upwards of 20 minutes until your logs start to appear in Microsoft Sentinel.",
+              "title": "Validate connectivity"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "These queries are dependent on a parser based on a Kusto Function deployed as part of the solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "MarkLogicAudit Data Parser with template",
+        "displayName": "MarkLogicAudit Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "MarkLogicAudit Data Parser with template version 2.0.3",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "MarkLogicAudit",
+                "category": "Samples",
+                "functionAlias": "MarkLogicAudit",
+                "query": "\nlet EventData = MarkLogicAudit_CL\r\n| extend EventVendor = 'MarkLogic',\r\n         EventProduct = 'MarkLogic Audit',\r\n         EventCount = 1;\r\nlet auditlog = EventData\r\n| where RawData has 'event='\r\n| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><\" ]+)', dynamic([\"key\",\"value\"]), RawData) on (\r\n    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))\r\n    | summarize bag = make_bag(packed1)\r\n)\r\n| evaluate bag_unpack(bag)\r\n| extend EventResult = case(success=true, 'Success', 'Failure')\r\n| project-rename Change=change\r\n                ,Database=database\r\n                ,EventType=event\r\n                ,Expr=expr\r\n                ,File=file\r\n                ,Function=function\r\n                ,Roles=roles\r\n                ,EventSubType=type\r\n                ,UrlOriginal=uri\r\n                ,ActorUsername=user\r\n| project-away success\r\n               ,RawData;\r\nlet acceslog = EventData\r\n| where RawData matches regex @\"\\A(\\d+\\.\\d+\\.\\d+\\.\\d+|[0-9a-f:]{39}|::1|::)\"\r\n| extend EventType = 'AccessLog'\r\n| extend EventData = split(RawData, '\"')\r\n| extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')\r\n| extend SubEventData1 = split(EventData[1], ' ')\r\n| extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')\r\n| extend SrcIpAddr = tostring(SubEventData0[0])\r\n| extend ClientIdentity = SubEventData0[1]\r\n| extend SrcUserName = SubEventData0[2]\r\n| extend EventStartTime = todatetime(replace_regex(replace_regex(tostring(extract(@'\\[(.*?)\\]', 1, RawData)), @'(\\d{2}\\/\\w{3}\\/\\d{4}):(\\d{2}\\:\\d{2}\\:\\d{2})', @'\\1 \\2'), @'(\\d{2})\\/(\\w{3})\\/(\\d{4})\\s(\\d{2}\\:\\d{2}\\:\\d{2})', @'\\1-\\2-\\3 \\4'))\r\n| extend HttpRequestMethod = SubEventData1[0]\r\n| extend UrlOriginal = SubEventData1[1]\r\n| extend HttpVersion = SubEventData1[2]\r\n| extend HttpStatusCode = SubEventData2[0]\r\n| extend HttpResponseBodyBytes = SubEventData2[1]\r\n| extend HttpReferrerOriginal = EventData[3]\r\n| extend HttpUserAgentOriginal = EventData[5]\r\n| project-away SubEventData0\r\n               ,SubEventData1\r\n               ,SubEventData2\r\n               ,EventData\r\n               ,RawData;\r\nlet errorlog = EventData\r\n| where RawData matches regex @\"\\A\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\s+\\w+:\"\r\n| extend EventData = split(RawData, ' ')\r\n| extend EventOriginalResult = extract(@'\\A\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\s+\\w+:\\s(.*)', 1, RawData)\r\n| extend EventStartTime=todatetime(strcat(EventData[0], ' ',  EventData[1]))\r\n        ,EventSeverity=replace_string(tostring(EventData[2]), ':', '')\r\n| project-away EventData\r\n             , RawData;\r\nunion isfuzzy=false auditlog, acceslog, errorlog",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "MarkLogicAudit"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "MarkLogicAudit",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "MarkLogicAudit",
+        "category": "Samples",
+        "functionAlias": "MarkLogicAudit",
+        "query": "\nlet EventData = MarkLogicAudit_CL\r\n| extend EventVendor = 'MarkLogic',\r\n         EventProduct = 'MarkLogic Audit',\r\n         EventCount = 1;\r\nlet auditlog = EventData\r\n| where RawData has 'event='\r\n| mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><\" ]+)', dynamic([\"key\",\"value\"]), RawData) on (\r\n    project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))\r\n    | summarize bag = make_bag(packed1)\r\n)\r\n| evaluate bag_unpack(bag)\r\n| extend EventResult = case(success=true, 'Success', 'Failure')\r\n| project-rename Change=change\r\n                ,Database=database\r\n                ,EventType=event\r\n                ,Expr=expr\r\n                ,File=file\r\n                ,Function=function\r\n                ,Roles=roles\r\n                ,EventSubType=type\r\n                ,UrlOriginal=uri\r\n                ,ActorUsername=user\r\n| project-away success\r\n               ,RawData;\r\nlet acceslog = EventData\r\n| where RawData matches regex @\"\\A(\\d+\\.\\d+\\.\\d+\\.\\d+|[0-9a-f:]{39}|::1|::)\"\r\n| extend EventType = 'AccessLog'\r\n| extend EventData = split(RawData, '\"')\r\n| extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')\r\n| extend SubEventData1 = split(EventData[1], ' ')\r\n| extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')\r\n| extend SrcIpAddr = tostring(SubEventData0[0])\r\n| extend ClientIdentity = SubEventData0[1]\r\n| extend SrcUserName = SubEventData0[2]\r\n| extend EventStartTime = todatetime(replace_regex(replace_regex(tostring(extract(@'\\[(.*?)\\]', 1, RawData)), @'(\\d{2}\\/\\w{3}\\/\\d{4}):(\\d{2}\\:\\d{2}\\:\\d{2})', @'\\1 \\2'), @'(\\d{2})\\/(\\w{3})\\/(\\d{4})\\s(\\d{2}\\:\\d{2}\\:\\d{2})', @'\\1-\\2-\\3 \\4'))\r\n| extend HttpRequestMethod = SubEventData1[0]\r\n| extend UrlOriginal = SubEventData1[1]\r\n| extend HttpVersion = SubEventData1[2]\r\n| extend HttpStatusCode = SubEventData2[0]\r\n| extend HttpResponseBodyBytes = SubEventData2[1]\r\n| extend HttpReferrerOriginal = EventData[3]\r\n| extend HttpUserAgentOriginal = EventData[5]\r\n| project-away SubEventData0\r\n               ,SubEventData1\r\n               ,SubEventData2\r\n               ,EventData\r\n               ,RawData;\r\nlet errorlog = EventData\r\n| where RawData matches regex @\"\\A\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\s+\\w+:\"\r\n| extend EventData = split(RawData, ' ')\r\n| extend EventOriginalResult = extract(@'\\A\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\s+\\w+:\\s(.*)', 1, RawData)\r\n| extend EventStartTime=todatetime(strcat(EventData[0], ' ',  EventData[1]))\r\n        ,EventSeverity=replace_string(tostring(EventData[2]), ':', '')\r\n| project-away EventData\r\n             , RawData;\r\nunion isfuzzy=false auditlog, acceslog, errorlog",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "MarkLogicAudit",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.3",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "MarkLogicAudit",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            },
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-08-01",
+        "providers": [
+          "MarkLogic"
+        ],
+        "categories": {
+          "domains": [
+            "DevOps",
+            "IT Operations"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

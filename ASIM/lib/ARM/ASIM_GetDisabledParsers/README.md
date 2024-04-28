@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function to check if a parser is disabled
+# Log Analytics KQL function An ASIM function to check if a parser is disabled
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function to check if a parser is disabled
+ARM template for deploying the Log Analytics KQL function An ASIM function to check if a parser is disabled
 
 This ASIM function reads the ASimDisabledParsers watchlist and determined based on it if the the parser provided as parameter is disabled.
 

@@ -1,6 +1,6 @@
 # Source Agnostic ASIM RegistryEvent Normalization Parser
 
-This template deploys the ASIM RegistryEvent schema parser for Source Agnostic.
+ARM template for ASIM RegistryEvent schema parser for Source Agnostic.
 
 This ASIM parser supports normalizing Registry Event logs from all supported sources to the ASIM Registry Event normalized schema.
 

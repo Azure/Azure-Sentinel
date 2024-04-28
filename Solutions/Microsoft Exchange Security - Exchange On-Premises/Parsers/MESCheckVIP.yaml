@@ -1,0 +1,29 @@
+id: 9f0e2122-f511-4e51-83a0-51fbd86d3121
+Function:
+  Title: Parser for VIP Check for Exchange
+  Version: '1.0.0'
+  LastUpdated: '2023-11-01'
+Category: Microsoft Sentinel Parser
+FunctionName: MESCheckVIP
+FunctionAlias: MESCheckVIP
+FunctionParams:
+  - Name: UserToCheck
+    Type: string
+    Description: The user to verifiy if is a VIP or not. Default value is "all".
+    DefaultValue: 'All'
+FunctionQuery: |
+  //let UserToCheck = "SampleEntry";
+  let _UserToCheck = iif(UserToCheck == "" or UserToCheck == "All","All",tolower(UserToCheck));
+  let fuzzyWatchlist = datatable(displayName:string, userPrincipalName:string, sAMAccountName:string, objectSID:string, objectGUID:guid, canonicalName:string, comment:string) [
+      "NONE","NONE","NONE","NONE","00000001-0000-1000-0000-100000000000","NONE","NONE"];
+  let Watchlist = union isfuzzy=true withsource=TableName _GetWatchlist('ExchangeVIP'), fuzzyWatchlist | where objectGUID != "00000001-0000-1000-0000-100000000000" | project-away TableName;
+  let SearchUser = Watchlist | where _UserToCheck =~ canonicalName 
+      or _UserToCheck =~ displayName 
+      or _UserToCheck =~ userPrincipalName 
+      or _UserToCheck =~ sAMAccountName 
+      or _UserToCheck =~ objectSID 
+      or _UserToCheck == tostring(objectGUID) 
+      or _UserToCheck =~ distinguishedName
+      or _UserToCheck == "All"
+      | extend ValueChecked = iif(_UserToCheck=="All",strcat("#",displayName,"#",userPrincipalName,"#",sAMAccountName,"#",objectGUID,"#",objectSID,"#",distinguishedName,"#"),_UserToCheck);
+  SearchUser

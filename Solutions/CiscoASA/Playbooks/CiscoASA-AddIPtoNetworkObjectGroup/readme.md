@@ -9,7 +9,7 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 2. An adaptive card is sent to a Teams channel with information about the incident and giving the option to ignore an IP, or depdening on it's current status block it by adding it to the Network Object Group or unblock it by removing it from the Network Object Group
 
     ![Adaptive card](./images/AddIPtoNetworkObjectGroup-AdaptiveCard.png)
-3. Comment is added to Azure Sentinel incident.
+3. Comment is added to Microsoft Sentinel incident.
     ![playbook overview](./images/AddIPtoNetworkObjectGroup-AzureSentinel-Comments.png)
 
 **IP is added to Cisco ASA object group:**
@@ -23,7 +23,7 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 
 
 ### Prerequisites
-1. **This playbook template is based on Azure Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
+1. **This playbook template is based on Microsoft Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.
 2. Cisco ASA custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.
 3. In Cisco ASA there needs to be a Network Object Group. You can create a Network Object Group using Cisco ASDM, [Configure a Network Object Group](https://www.cisco.com/c/en/us/td/docs/security/asa/asa96/asdm76/firewall/asdm-76-firewall-config/access-objects.html#ariaid-title6), or using the CLI, [Configuring a Network Object Group](https://www.cisco.com/c/en/us/td/docs/security/asa/asa90/configuration/guide/asa_90_cli_config/acl_objects.html#86292). The Network Object Group can be blocked using an access rule, [Configure Access Rules](https://www.cisco.com/c/en/us/td/docs/security/asa/asa96/asdm76/firewall/asdm-76-firewall-config/access-rules.html#ID-2124-00000152)
 
@@ -46,7 +46,7 @@ When a new Sentinel incident is created,this playbook gets triggered and perform
 ### Post-Deployment instructions 
 #### a. Authorize connections
 Once deployment is complete, you will need to authorize each connection.
-1.	Click the Azure Sentinel connection resource
+1.	Click the Microsoft Sentinel connection resource
 2.	Click edit API connection
 3.	Click Authorize
 4.	Sign in
@@ -62,5 +62,5 @@ The Teams channel to which the adaptive card will be posted will need to be conf
 5. Save the Logic App
 
 #### c. Configurations in Sentinel
-1. In Azure sentinel analytical rules should be configured to trigger an incident with IP Entity.
+1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.
 2. Configure the automation rules to trigger this playbook
