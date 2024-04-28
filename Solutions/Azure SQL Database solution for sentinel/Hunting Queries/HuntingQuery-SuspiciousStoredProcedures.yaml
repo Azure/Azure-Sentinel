@@ -1,0 +1,51 @@
+id: db5b0a77-1b1d-4a31-8ebb-c508ebc3bb38
+name: Suspicious SQL Stored Procedures
+description: |
+  'This hunting query will detect SQL queries where suspicious stored procedures are called. Suspicious procedures included in the query are based on data seen by the MSTIC Deception honeypot.'
+requiredDataConnectors:
+  - connectorId: AzureSql
+    dataTypes:
+      - AzureDiagnostics
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - SQL
+query: |
+  let abusedProcedures = dynamic(["xp_cmdshell", "xp_regwrite", "xp_regdeletekey", "xp_regdeletevalue", "xp_dirtree", "xp_fileexist", "xp_msver", "xp_makecab", "xp_sqlshell", "xp_fixeddrivesd", "xp_regread", "sp_configure", "sp_oacreate", "sp_password", "sp_OACreate", "sp_addextendedproc", "sp_dropextendedproc", "sp_makewebtask", "sp_delete", "SP_OAcreate", "sp_OADestroy"]);
+  AzureDiagnostics
+  | where Category =~ "SQLSecurityAuditEvents"
+  | where statement_s has_any (abusedProcedures)
+  | project TimeGenerated, SubscriptionId, ResourceId, ClientIp=client_ip_s, PrincipalName=session_server_principal_name_s, statement_s, action_id_s, HostName=host_name_s, ApplicationName=application_name_s
+  | extend Name = tostring(split(PrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(PrincipalName, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend IP_0_Address = ClientIp
+  | extend Host_0_Hostname = HostName
+  | extend CloudApplication_0_Name = ApplicationName
+  | extend AzureResource_0_ResourceId = ResourceId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: ApplicationName
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 1.0.1

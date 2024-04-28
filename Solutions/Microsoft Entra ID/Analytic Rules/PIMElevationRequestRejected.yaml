@@ -1,0 +1,74 @@
+id: 7d7e20f8-3384-4b71-811c-f5e950e8306c
+name: PIM Elevation Request Rejected
+description: |
+  'Identifies when a user is rejected for a privileged role elevation via PIM. Monitor rejections for indicators of attacker compromise of the requesting account.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  AuditLogs
+  | where ActivityDisplayName =~'Add member to role request denied (PIM activation)'
+  | mv-apply ResourceItem = TargetResources on 
+    (
+        where ResourceItem.type =~ "Role"
+        | extend Role = trim(@'"',tostring(ResourceItem.displayName))
+    )
+  | mv-apply ResourceItem = TargetResources on 
+    (
+        where ResourceItem.type =~ "User"
+        | extend TargetUserPrincipalName = trim(@'"',tostring(ResourceItem.userPrincipalName))
+    )
+  | where isnotempty(InitiatedBy.user)
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+  | extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+  | project-reorder TimeGenerated, TargetUserPrincipalName, Role, OperationName, Result, ResultDescription
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName    
+      - identifier: Name
+        columnName: InitiatedByName      
+      - identifier: UPNSuffix
+        columnName: InitiatedByUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUserPrincipalName   
+      - identifier: Name
+        columnName: TargetName      
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
+version: 1.0.8
+kind: Scheduled

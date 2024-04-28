@@ -1,0 +1,64 @@
+id: 26a993ca-0a96-45a0-8405-05a210fb98f8
+name: Progress MOVEIt File transfer folder count above threshold
+description: |
+  'Identifies Progress MOVEIt File Transfers  with distinct folder count above certain threshold in a 15min time period.
+   Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that
+   value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally,
+   if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1020
+query: |
+  let threshold = 500;
+  Event
+  | where EventID == 0 and Source == "MOVEit DMZ Audit" and EventLog == "Application"
+  | where RenderedDescription has_any ("Downloaded", "Uploaded")
+  | parse RenderedDescription with * "User '" userdisplayname "' (" *
+  | parse RenderedDescription with * "IPAddress: " ipaddress " FileID:" * " FileName: " filename " FolderID: " folderid " FolderPath: " folderpath " Username: " username " AgentBrand: " *
+  | summarize count_distinct_folderpath=dcount(folderpath), dirlist=make_set(folderpath) by Computer,userdisplayname,username,ipaddress,bin(TimeGenerated, 15m)
+  | where count_distinct_folderpath >= threshold
+  | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField","_", tostring(hash(tostring(dirlist)))))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: userdisplayname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipaddress
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: DirSample
+customDetails:
+  TransferCount: count_distinct_folderpath
+  FilesList: dirlist
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+    - Account
+    - Host
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+version: 1.0.0
+kind: Scheduled

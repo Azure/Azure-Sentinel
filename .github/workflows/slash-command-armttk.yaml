@@ -1,0 +1,44 @@
+# THIS WORKFLOW WILL RUN WHEN WE ADD SLASH COMMAND LIKE '/arm-ttk', '/ARM-TTK', '/Arm-Ttk', 'armttk' or 'ARMTTK'
+name: Slash Command ARM-TTK Tests
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  run-arm-ttk:
+    runs-on: ubuntu-latest
+    if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.head.repo.fork && github.event.issue.pull_request && contains(fromJson('["/armttk", "/Armttk", "/ARM-TTK", "/ARMTTK", "/arm-ttk", "/ArmTtk"]'), github.event.comment.body) }}
+    outputs:
+      solutionName: ${{ steps.step1.outputs.solutionName }}
+      mainTemplateChanged: ${{ steps.step1.outputs.mainTemplateChanged }}
+      createUiChanged: ${{ steps.step1.outputs.createUiChanged }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 5
+          ref: refs/pull/${{ github.event.issue.number }}/head
+      - shell: pwsh
+        id: step1
+        name: Identify Changes in PR
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml
+          ./.script/package-automation/arm-ttk-tests.ps1
+
+      - uses: docker/build-push-action@v2
+        id: publishGithubPackage
+        name: Run ARM-TTK
+        if: ${{ success() && steps.step1.outcome == 'success' && steps.step1.outputs.solutionName != '' && (steps.step1.outputs.mainTemplateChanged == 'true' || steps.step1.outputs.createUiChanged == 'true') }}
+        env: 
+          SolutionName: ${{ steps.step1.outputs.solutionName }}
+          mainTemplateChanged: ${{ steps.step1.outputs.mainTemplateChanged }}
+          createUiChanged: ${{ steps.step1.outputs.createUiChanged }}
+        with:
+          context: .
+          file: ./.github/actions/Dockerfile
+          push: false
+          build-args: |
+            SolutionName
+            mainTemplateChanged
+            createUiChanged

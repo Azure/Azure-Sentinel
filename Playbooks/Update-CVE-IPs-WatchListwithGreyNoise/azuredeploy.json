@@ -1,0 +1,1329 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Update Watchlist - CVE IPs by GreyNoise",
+        "description": "This playbook uses the GreyNoise API to search for interesting IPs discovered in the last day tagged per each CVE found in the mode you setup.",
+        "prerequisites": [
+            "1. A valid GreyNoise API Key"
+        ],
+        "postDeployment": [
+            "1. Once deployment is complete, you will need to authorize each connection.",
+            "2. Navigate to playbook --> API Connections --> Select connections one by one --> Edit API Connection --> (if required) Enter API key or credentials --> Save"
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "lastUpdateTime": "2022-12-15T00:00:00.000Z",
+        "entities": [ "ip" ],
+        "tags": [
+            "Enrichment",
+            "ThreatIntelligence",
+            "Watchlist",
+            "Detection"
+        ],
+        "support": {
+            "tier": "",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Nathan Swift"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Update-CVE-IPs-WatchListwithGreyNoise",
+            "type": "string"
+        },
+        "SentinelWorkspaceName": {
+            "defaultValue": "Sentinel Workspace Name",
+            "type": "string"
+        },
+        "SentinelWorkspaceId": {
+            "defaultValue": "Sentinel Workspace Id",
+            "type": "string"
+        },
+        "SentinelWorkspaceRGName": {
+            "defaultValue": "Sentinel Resource Group Name",
+            "type": "string"
+        },
+        "SentinelWorkspaceSubscriptionId": {
+            "defaultValue": "Sentinel Azure Subscription Id",
+            "type": "string"
+        },
+        "GreyNoiseAPIKey": {
+            "type": "securestring"
+        },
+        "CVEMode": {
+            "defaultValue": "Parameter",
+            "type": "string",
+            "allowedValues": [
+                "MDE",
+                "Watchlist",
+                "Parameter"
+            ]
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('SentinelWorkspaceName'), '/Microsoft.SecurityInsights/GreyNoiseCVEs')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
+            "kind": "",
+            "properties": {
+                "displayName": "GreyNoiseCVEs",
+                "watchlistAlias": "GreyNoiseCVEs",
+                "source": "GreyNoiseCVEs.csv",
+                "description": "CVEs to be monitoring GreyNoise for, these CVEs will be looked up on GreyNoise and return relevant IPs to be monitoring in another watchlist.",
+                "provider": "Custom",
+                "isDeleted": false,
+                "labels": [],
+                "defaultDuration": "P1000Y",
+                "contentType": "Text/Csv",
+                "numberOfLinesToSkip": 0,
+                "itemsSearchKey": "CVE",
+                "rawContent": "CVE\r\nCVE-2021-38647\r\nCVE-2021-44228\r\nCVE-2018-2628"
+            },
+            "apiVersion": "2022-08-01"
+        },
+        {
+            "name": "[concat(parameters('SentinelWorkspaceName'), '/Microsoft.SecurityInsights/GreyNoiseIPsbyCVEs')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
+            "kind": "",
+            "properties": {
+                "displayName": "GreyNoiseIPsbyCVEs",
+                "watchlistAlias": "GreyNoiseIPsbyCVEs",
+                "source": "GreyNoiseIPsbyCVEs.csv",
+                "description": "GreyNoise IP Addresses that were tagged from CVEs the security team was monitoring in logic app, sentinel watch list, or pulled from MDE enviroment.",
+                "provider": "Custom",
+                "isDeleted": false,
+                "labels": [],
+                "defaultDuration": "P1000Y",
+                "contentType": "Text/Csv",
+                "numberOfLinesToSkip": 0,
+                "itemsSearchKey": "SrcIpAddr",
+                "rawContent": "SrcIpAddr, SrcDomain, SrcOs, Asn, City, Region, Country, Organization, Tor, Bot, Vpn, Spoofable, Actor, Classification, CVE, LastSeen\r\n1.1.1.1, test.org, Linux, 1111, Test City, Test Region, Test Country, Test Organization, false, false, false, false, unknown, benign, CVE-TEST-001, 1999-06-01"
+            },
+            "apiVersion": "2022-08-01"
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "CVEMode": {
+                            "defaultValue": "[parameters('CVEMode')]",
+                            "type": "String"
+                        },
+                        "CVEs": {
+                            "defaultValue": [
+                                "CVE-2021-38647",
+                                "CVE-2021-44228",
+                                "CVE-2018-2628"
+                            ],
+                            "type": "Array"
+                        },
+                        "GreyNoiseAPIKey": {
+                            "defaultValue": "[parameters('GreyNoiseAPIKey')]",
+                            "type": "String"
+                        },
+                        "LookBack": {
+                            "defaultValue": "1d",
+                            "type": "String"
+                        },
+                        "SentinelRGName": {
+                            "defaultValue": "[parameters('SentinelWorkspaceRGName')]",
+                            "type": "String"
+                        },
+                        "SentinelSubscriptionId": {
+                            "defaultValue": "[parameters('SentinelWorkspaceSubscriptionId')]",
+                            "type": "String"
+                        },
+                        "SentinelWorkspaceID": {
+                            "defaultValue": "[parameters('SentinelWorkspaceId')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1,
+                                "schedule": {
+                                    "hours": [
+                                        "7"
+                                    ]
+                                }
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Day",
+                                "interval": 1,
+                                "schedule": {
+                                    "hours": [
+                                        "7"
+                                    ]
+                                }
+                            },
+                            "type": "Recurrence",
+                            "description": "Set initially as a daily run"
+                        }
+                    },
+                    "actions": {
+                        "Get_past_time": {
+                            "runAfter": {
+                                "Initialize_variable_CVEList": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Expression",
+                            "kind": "GetPastTime",
+                            "inputs": {
+                                "interval": 1,
+                                "timeUnit": "Month"
+                            },
+                            "description": "Used to look for MDE published CVEs in last 30 days, helps with filtering."
+                        },
+                        "Initialize_variable_CVEList": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "CVEList",
+                                        "type": "string",
+                                        "value": "@parameters('CVEMode')"
+                                    }
+                                ]
+                            },
+                            "description": "Where is the CVE List. \"Parameter\", \"MDE\", \"Watchlist\", or \"Test\" - Param - is the global parameters you locally add into a array | MDE - will query your MDE environment for CVEs | Watchlist will pull the GreyNoiseCVEs to use,"
+                        },
+                        "Switch": {
+                            "runAfter": {
+                                "Get_past_time": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "MDE": {
+                                    "case": "MDE",
+                                    "actions": {
+                                        "Filter_array": {
+                                            "runAfter": {
+                                                "GetCVEsFromMDE": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('GetCVEsFromMDE')?['value']",
+                                                "where": "@greaterOrEquals(item()?['exposedMachines'], 1)"
+                                            },
+                                            "description": "Filter further on vulnerability exposedMachines in your environment. "
+                                        },
+                                        "For_each_6": {
+                                            "foreach": "@body('Filter_array')",
+                                            "actions": {
+                                                "For_each_7": {
+                                                    "foreach": "@body('GetGreyNoiseCVEIPs4')?['data']",
+                                                    "actions": {
+                                                        "Compose_4": {
+                                                            "runAfter": {
+                                                                "Parse_JSON_4": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "Actor": "@{body('Parse_JSON_4')?['actor']}",
+                                                                "Asn": "@{body('Parse_JSON_4')?['metadata']?['asn']}",
+                                                                "Bot": "@body('Parse_JSON_4')?['bot']",
+                                                                "CVE": "CVE-2022-22947",
+                                                                "City": "@{body('Parse_JSON_4')?['metadata']?['city']}",
+                                                                "Classification": "@{body('Parse_JSON_4')?['classification']}",
+                                                                "Country": "@{body('Parse_JSON_4')?['metadata']?['country']}",
+                                                                "LastSeen": "@body('Parse_JSON_4')?['last_seen']",
+                                                                "Organization": "@{body('Parse_JSON_4')?['metadata']?['organization']}",
+                                                                "Region": "@{body('Parse_JSON_4')?['metadata']?['region']}",
+                                                                "Spoofable": "@body('Parse_JSON_4')?['spoofable']",
+                                                                "SrcDomain": "@{body('Parse_JSON_4')?['metadata']?['rdns']}",
+                                                                "SrcIpAddr": "@{body('Parse_JSON_4')?['ip']}",
+                                                                "SrcOs": "@{body('Parse_JSON_4')?['metadata']?['os']}",
+                                                                "Tor": "@body('Parse_JSON_4')?['metadata']?['tor']",
+                                                                "Vpn": "@body('Parse_JSON_4')?['vpn']"
+                                                            },
+                                                            "description": "Composing JSON object for Watchlist entry"
+                                                        },
+                                                        "Parse_JSON_4": {
+                                                            "runAfter": {},
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@items('For_each_7')",
+                                                                "schema": {
+                                                                    "properties": {
+                                                                        "actor": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "bot": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "classification": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "cve": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "first_seen": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "ip": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "last_seen": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "metadata": {
+                                                                            "properties": {
+                                                                                "asn": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "city": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "country": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "country_code": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "destination_countries": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "destination_country_codes": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "organization": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "os": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "rdns": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "region": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "source_country": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "source_country_code": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "tor": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "raw_data": {
+                                                                            "properties": {
+                                                                                "hassh": {
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "ja3": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "fingerprint": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "port": {
+                                                                                                "type": "integer"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "fingerprint",
+                                                                                            "port"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "scan": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "port": {
+                                                                                                "type": "integer"
+                                                                                            },
+                                                                                            "protocol": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "port",
+                                                                                            "protocol"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "web": {
+                                                                                    "properties": {
+                                                                                        "paths": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "useragents": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "seen": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "spoofable": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "tags": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "vpn": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "vpn_service": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "description": "Parsing to make this easier to compose JSON object"
+                                                        },
+                                                        "Watchlists_-_Add_a_new_watchlist_item_4": {
+                                                            "runAfter": {
+                                                                "Compose_4": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "@outputs('Compose_4')",
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SentinelSubscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('SentinelRGName'))}/workspaces/@{encodeURIComponent(parameters('SentinelWorkspaceID'))}/watchlists/@{encodeURIComponent('GreyNoiseIPsbyCVEs')}/watchlistItem"
+                                                            },
+                                                            "description": "Add IP address found in GreyNoise by CVE into Watchlist for daily detection"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "GetGreyNoiseCVEIPs4": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach",
+                                                    "description": "For each discovered IP Address by CVE compose a new JSON object to submit to a watchlist in sentinel for daily detections in network session logs"
+                                                },
+                                                "GetGreyNoiseCVEIPs4": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "headers": {
+                                                            "key": "@parameters('GreyNoiseAPIKey')"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://api.greynoise.io/v2/experimental/gnql?query=@{items('For_each_6')?['id']}%20AND%20last_seen%3A@{parameters('LookBack')}"
+                                                    },
+                                                    "description": "API call to GreyNoise for CVE tag and last days IPs discovered on GreyNoise Sensors"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_array": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach",
+                                            "description": "For each CVE in your environment look for the last day for any IPs found in GreyNoise and tagged by CVE"
+                                        },
+                                        "GetCVEsFromMDE": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://api.securitycenter.microsoft.com",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.securitycenter.microsoft.com/api/Vulnerabilities?$filter=publishedOn+ge+@{body('Get_past_time')}"
+                                            },
+                                            "description": "Query MDE for CVEs published in the last 30 days"
+                                        }
+                                    }
+                                },
+                                "Parameter": {
+                                    "case": "Parameter",
+                                    "actions": {
+                                        "For_each_4": {
+                                            "foreach": "@parameters('CVEs')",
+                                            "actions": {
+                                                "For_each_5": {
+                                                    "foreach": "@body('GetGreyNoiseCVEIPs3')?['data']",
+                                                    "actions": {
+                                                        "Compose_3": {
+                                                            "runAfter": {
+                                                                "Parse_JSON_3": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "Actor": "@{body('Parse_JSON_3')?['actor']}",
+                                                                "Asn": "@{body('Parse_JSON_3')?['metadata']?['asn']}",
+                                                                "Bot": "@body('Parse_JSON_3')?['bot']",
+                                                                "CVE": "CVE-2022-22947",
+                                                                "City": "@{body('Parse_JSON_3')?['metadata']?['city']}",
+                                                                "Classification": "@{body('Parse_JSON_3')?['classification']}",
+                                                                "Country": "@{body('Parse_JSON_3')?['metadata']?['country']}",
+                                                                "LastSeen": "@body('Parse_JSON_3')?['last_seen']",
+                                                                "Organization": "@{body('Parse_JSON_3')?['metadata']?['organization']}",
+                                                                "Region": "@{body('Parse_JSON_3')?['metadata']?['region']}",
+                                                                "Spoofable": "@body('Parse_JSON_3')?['spoofable']",
+                                                                "SrcDomain": "@{body('Parse_JSON_3')?['metadata']?['rdns']}",
+                                                                "SrcIpAddr": "@{body('Parse_JSON_3')?['ip']}",
+                                                                "SrcOs": "@{body('Parse_JSON_3')?['metadata']?['os']}",
+                                                                "Tor": "@body('Parse_JSON_3')?['metadata']?['tor']",
+                                                                "Vpn": "@body('Parse_JSON_3')?['vpn']"
+                                                            },
+                                                            "description": "Composing JSON object for Watchlist entry"
+                                                        },
+                                                        "Parse_JSON_3": {
+                                                            "runAfter": {},
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@items('For_each_5')",
+                                                                "schema": {
+                                                                    "properties": {
+                                                                        "actor": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "bot": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "classification": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "cve": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "first_seen": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "ip": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "last_seen": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "metadata": {
+                                                                            "properties": {
+                                                                                "asn": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "city": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "country": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "country_code": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "destination_countries": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "destination_country_codes": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "organization": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "os": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "rdns": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "region": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "source_country": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "source_country_code": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "tor": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "raw_data": {
+                                                                            "properties": {
+                                                                                "hassh": {
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "ja3": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "fingerprint": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "port": {
+                                                                                                "type": "integer"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "fingerprint",
+                                                                                            "port"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "scan": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "port": {
+                                                                                                "type": "integer"
+                                                                                            },
+                                                                                            "protocol": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "port",
+                                                                                            "protocol"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "web": {
+                                                                                    "properties": {
+                                                                                        "paths": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "useragents": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "seen": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "spoofable": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "tags": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "vpn": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "vpn_service": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "description": "Parsing to make this easier to compose JSON object"
+                                                        },
+                                                        "Watchlists_-_Add_a_new_watchlist_item_3": {
+                                                            "runAfter": {
+                                                                "Compose_3": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "@outputs('Compose_3')",
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SentinelSubscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('SentinelRGName'))}/workspaces/@{encodeURIComponent(parameters('SentinelWorkspaceID'))}/watchlists/@{encodeURIComponent('GreyNoiseIPsbyCVEs')}/watchlistItem"
+                                                            },
+                                                            "description": "Add IP address found in GreyNoise by CVE into Watchlist for daily detection"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "GetGreyNoiseCVEIPs3": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach",
+                                                    "description": " For each discovered IP Address by CVE compose a new JSON object to submit to a watchlist in sentinel for daily detections in network session logs"
+                                                },
+                                                "GetGreyNoiseCVEIPs3": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "headers": {
+                                                            "key": "@parameters('GreyNoiseAPIKey')"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://api.greynoise.io/v2/experimental/gnql?query=@{items('For_each_4')}%20AND%20last_seen%3A@{parameters('LookBack')}"
+                                                    },
+                                                    "description": "API call to GreyNoise for CVE tag and last days IPs discovered on GreyNoise Sensors"
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach",
+                                            "description": "For each CVE listed in your Logic App Global Parameters look for the last day for any IPs found in GreyNoise and tagged by CVEs: CVE-2021-38647 | AZURE OMI RCE ATTEMPT CVE-2021-44228 | APACHE LOG4J RCE ATTEMPT CVE-2018-2628  | ORACLE WEBLOGIC RCE CVE",
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Testing": {
+                                    "case": "Test",
+                                    "actions": {
+                                        "For_each": {
+                                            "foreach": "@body('GetGreyNoiseCVEIPs')?['data']",
+                                            "actions": {
+                                                "Compose": {
+                                                    "runAfter": {
+                                                        "Parse_JSON": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Actor": "@{body('Parse_JSON')?['actor']}",
+                                                        "Asn": "@{body('Parse_JSON')?['metadata']?['asn']}",
+                                                        "Bot": "@body('Parse_JSON')?['bot']",
+                                                        "CVE": "CVE-2022-22947",
+                                                        "City": "@{body('Parse_JSON')?['metadata']?['city']}",
+                                                        "Classification": "@{body('Parse_JSON')?['classification']}",
+                                                        "Country": "@{body('Parse_JSON')?['metadata']?['country']}",
+                                                        "LastSeen": "@body('Parse_JSON')?['last_seen']",
+                                                        "Organization": "@{body('Parse_JSON')?['metadata']?['organization']}",
+                                                        "Region": "@{body('Parse_JSON')?['metadata']?['region']}",
+                                                        "Spoofable": "@body('Parse_JSON')?['spoofable']",
+                                                        "SrcDomain": "@{body('Parse_JSON')?['metadata']?['rdns']}",
+                                                        "SrcIpAddr": "@{body('Parse_JSON')?['ip']}",
+                                                        "SrcOs": "@{body('Parse_JSON')?['metadata']?['os']}",
+                                                        "Tor": "@body('Parse_JSON')?['metadata']?['tor']",
+                                                        "Vpn": "@body('Parse_JSON')?['vpn']"
+                                                    },
+                                                    "description": "Composing JSON object for Watchlist entry"
+                                                },
+                                                "Parse_JSON": {
+                                                    "runAfter": {},
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@items('For_each')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "actor": {
+                                                                    "type": "string"
+                                                                },
+                                                                "bot": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "classification": {
+                                                                    "type": "string"
+                                                                },
+                                                                "cve": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "first_seen": {
+                                                                    "type": "string"
+                                                                },
+                                                                "ip": {
+                                                                    "type": "string"
+                                                                },
+                                                                "last_seen": {
+                                                                    "type": "string"
+                                                                },
+                                                                "metadata": {
+                                                                    "properties": {
+                                                                        "asn": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "category": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "city": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "country": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "country_code": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "destination_countries": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "destination_country_codes": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "organization": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "os": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "rdns": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "region": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "source_country": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "source_country_code": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "tor": {
+                                                                            "type": "boolean"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "raw_data": {
+                                                                    "properties": {
+                                                                        "hassh": {
+                                                                            "type": "array"
+                                                                        },
+                                                                        "ja3": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "fingerprint": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "port": {
+                                                                                        "type": "integer"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "fingerprint",
+                                                                                    "port"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "scan": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "port": {
+                                                                                        "type": "integer"
+                                                                                    },
+                                                                                    "protocol": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "required": [
+                                                                                    "port",
+                                                                                    "protocol"
+                                                                                ],
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "web": {
+                                                                            "properties": {
+                                                                                "paths": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "useragents": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "seen": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "spoofable": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "tags": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "vpn": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "vpn_service": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "description": " Parsing to make this easier to compose JSON object"
+                                                },
+                                                "Watchlists_-_Add_a_new_watchlist_item": {
+                                                    "runAfter": {
+                                                        "Compose": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": "@outputs('Compose')",
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SentinelSubscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('SentinelRGName'))}/workspaces/@{encodeURIComponent(parameters('SentinelWorkspaceID'))}/watchlists/@{encodeURIComponent('GreyNoiseIPsbyCVEs')}/watchlistItem"
+                                                    },
+                                                    "description": "Add IP address found in GreyNoise by CVE into Watchlist for daily detection"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "GetGreyNoiseCVEIPs": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach",
+                                            "description": "For each discovered IP Address by CVE compose a new JSON object to submit to a watchlist in sentinel for daily detections in network session logs"
+                                        },
+                                        "GetGreyNoiseCVEIPs": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "key": "@parameters('GreyNoiseAPIKey')"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://api.greynoise.io/v2/experimental/gnql?query=CVE-2022-22947%20AND%20last_seen%3A@{parameters('LookBack')}"
+                                            },
+                                            "description": "Get the recent GreyNoise IPs by CVE - Using for testing API calls and mechanisms - CVE Hardcoded in URI below"
+                                        }
+                                    }
+                                },
+                                "Watchlist": {
+                                    "case": "Watchlist",
+                                    "actions": {
+                                        "For_each_2": {
+                                            "foreach": "@body('Watchlists_-_Get_all_watchlist_Items_for_a_given_watchlist')?['properties']?['watchlistItems']",
+                                            "actions": {
+                                                "For_each_3": {
+                                                    "foreach": "@body('GetGreyNoiseCVEIPs2')?['data']",
+                                                    "actions": {
+                                                        "Compose_2": {
+                                                            "runAfter": {
+                                                                "Parse_JSON_2": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "Actor": "@{body('Parse_JSON_2')?['actor']}",
+                                                                "Asn": "@{body('Parse_JSON_2')?['metadata']?['asn']}",
+                                                                "Bot": "@body('Parse_JSON_2')?['bot']",
+                                                                "CVE": "CVE-2022-22947",
+                                                                "City": "@{body('Parse_JSON_2')?['metadata']?['city']}",
+                                                                "Classification": "@{body('Parse_JSON_2')?['classification']}",
+                                                                "Country": "@{body('Parse_JSON_2')?['metadata']?['country']}",
+                                                                "LastSeen": "@body('Parse_JSON_2')?['last_seen']",
+                                                                "Organization": "@{body('Parse_JSON_2')?['metadata']?['organization']}",
+                                                                "Region": "@{body('Parse_JSON_2')?['metadata']?['region']}",
+                                                                "Spoofable": "@body('Parse_JSON_2')?['spoofable']",
+                                                                "SrcDomain": "@{body('Parse_JSON_2')?['metadata']?['rdns']}",
+                                                                "SrcIpAddr": "@{body('Parse_JSON_2')?['ip']}",
+                                                                "SrcOs": "@{body('Parse_JSON_2')?['metadata']?['os']}",
+                                                                "Tor": "@body('Parse_JSON_2')?['metadata']?['tor']",
+                                                                "Vpn": "@body('Parse_JSON_2')?['vpn']"
+                                                            },
+                                                            "description": "Composing JSON object for Watchlist entry"
+                                                        },
+                                                        "Parse_JSON_2": {
+                                                            "runAfter": {},
+                                                            "type": "ParseJson",
+                                                            "inputs": {
+                                                                "content": "@items('For_each_3')",
+                                                                "schema": {
+                                                                    "properties": {
+                                                                        "actor": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "bot": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "classification": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "cve": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "first_seen": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "ip": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "last_seen": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "metadata": {
+                                                                            "properties": {
+                                                                                "asn": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "category": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "city": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "country": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "country_code": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "destination_countries": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "destination_country_codes": {
+                                                                                    "items": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "organization": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "os": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "rdns": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "region": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "source_country": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "source_country_code": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "tor": {
+                                                                                    "type": "boolean"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "raw_data": {
+                                                                            "properties": {
+                                                                                "hassh": {
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "ja3": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "fingerprint": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "port": {
+                                                                                                "type": "integer"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "fingerprint",
+                                                                                            "port"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "scan": {
+                                                                                    "items": {
+                                                                                        "properties": {
+                                                                                            "port": {
+                                                                                                "type": "integer"
+                                                                                            },
+                                                                                            "protocol": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "required": [
+                                                                                            "port",
+                                                                                            "protocol"
+                                                                                        ],
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "type": "array"
+                                                                                },
+                                                                                "web": {
+                                                                                    "properties": {
+                                                                                        "paths": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "useragents": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "seen": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "spoofable": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "tags": {
+                                                                            "items": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "vpn": {
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "vpn_service": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "description": "Parsing to make this easier to compose JSON object"
+                                                        },
+                                                        "Watchlists_-_Add_a_new_watchlist_item_2": {
+                                                            "runAfter": {
+                                                                "Compose_2": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": "@outputs('Compose_2')",
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SentinelSubscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('SentinelRGName'))}/workspaces/@{encodeURIComponent(parameters('SentinelWorkspaceID'))}/watchlists/@{encodeURIComponent('GreyNoiseIPsbyCVEs')}/watchlistItem"
+                                                            },
+                                                            "description": "Add IP address found in GreyNoise by CVE into Watchlist for daily detection"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "GetGreyNoiseCVEIPs2": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach",
+                                                    "description": "For each discovered IP Address by CVE compose a new JSON object to submit to a watchlist in sentinel for daily detections in network session logs"
+                                                },
+                                                "GetGreyNoiseCVEIPs2": {
+                                                    "runAfter": {},
+                                                    "type": "Http",
+                                                    "inputs": {
+                                                        "headers": {
+                                                            "key": "@parameters('GreyNoiseAPIKey')"
+                                                        },
+                                                        "method": "GET",
+                                                        "uri": "https://api.greynoise.io/v2/experimental/gnql?query=@{items('For_each_2')?['properties.itemsKeyValue']?['CVE']}%20AND%20last_seen%3A@{parameters('LookBack')}"
+                                                    },
+                                                    "description": "API call to GreyNoise for CVE tag and last days IPs discovered on GreyNoise Sensors"
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Watchlists_-_Get_all_watchlist_Items_for_a_given_watchlist": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach",
+                                            "description": "For each CVE in your watchlist look for the last day for any IPs found in GreyNoise and tagged by CVE",
+                                            "runtimeConfiguration": {
+                                                "concurrency": {
+                                                    "repetitions": 1
+                                                }
+                                            }
+                                        },
+                                        "Watchlists_-_Get_all_watchlist_Items_for_a_given_watchlist": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/Watchlists/subscriptions/@{encodeURIComponent(parameters('SentinelSubscriptionId'))}/resourceGroups/@{encodeURIComponent(parameters('SentinelRGName'))}/workspaces/@{encodeURIComponent(parameters('SentinelWorkspaceID'))}/watchlists/@{encodeURIComponent('GreyNoiseCVEs')}/watchlistItems"
+                                            },
+                                            "description": " Query CVE Watchlist for CVEs added via entity or security operations team"
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {}
+                            },
+                            "expression": "@variables('CVEList')",
+                            "type": "Switch",
+                            "description": "Switch for different modes to collect CVE and Search for Relevant GreyNoise IPs"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

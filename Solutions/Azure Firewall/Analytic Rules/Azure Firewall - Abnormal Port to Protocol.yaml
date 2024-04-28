@@ -1,0 +1,83 @@
+id: 826f930c-2f25-4508-8e75-a95b809a4e15
+name: Abnormal Port to Protocol
+description: |
+  'Identifies communication for well known protocol over a non-standard port based on learning period activity. This can indicate malicious communication (C2) or exfiltration by attackers trying to communicate over known ports (22:SSH, 80:HTTP) but dont use the known protocol headers to match the port number.
+  
+  Configurable Parameters:
+  
+  - Learning period time - learning period for protocol learning in days. Default is set to 7.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureFirewall
+    dataTypes: 
+      - AzureDiagnostics
+      - AZFWApplicationRule
+      - AZFWNetworkRule
+queryFrequency: 1h
+queryPeriod: 8d
+triggerOperator: gt
+triggerThreshold: 1
+tactics:
+  - DefenseEvasion
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques: []
+query: |
+  let LearningPeriod = 7d;
+  let RunTime = 1d;
+  let StartLearningPeriod = LearningPeriod + RunTime;
+  let EndRunTime = RunTime - 1d;
+  let LearningPortToProtocol1 =  (AzureDiagnostics
+  | where OperationName == "AzureFirewallApplicationRuleLog"
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | extend msg_s= column_ifexists('msg_s',Message)
+  | parse msg_s with Protocol " request from " SourceIp ":" SourcePort:int " to " Fqdn ":" DestinationPort:int "." *
+  | where isnotempty(DestinationPort)
+  | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+  let LearningPortToProtocol2 = (AZFWNetworkRule
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | where isnotempty(DestinationPort)
+  | extend Fqdn = DestinationIp
+  | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+  let LearningPortToProtocol3 = (AZFWApplicationRule
+  | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+  | where isnotempty(DestinationPort)
+  | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = Protocol, SourceIp, Fqdn);
+  let AlertTimePortToProtocol1 = (AzureDiagnostics
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | where OperationName == "AzureFirewallApplicationRuleLog"
+  | extend msg_s= column_ifexists('msg_s',Message)
+  | parse msg_s with Protocol " request from " SourceIp ":" SourcePort " to " Fqdn ":" DestinationPort:int "." *
+  | where isnotempty(DestinationPort)
+  | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
+  let AlertTimePortToProtocol2 = (AZFWNetworkRule
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | where isnotempty(DestinationPort)
+  | extend Fqdn = DestinationIp
+  | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
+  let AlertTimePortToProtocol3 = (AZFWApplicationRule
+  | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+  | where isnotempty(DestinationPort)
+  | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = Protocol);
+  (union isfuzzy=true 
+  (AlertTimePortToProtocol1 
+  | join kind=leftouter (LearningPortToProtocol1) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
+  | where LearningTimeProtocol != AlertTimeProtocol),
+  (AlertTimePortToProtocol2 
+  | join kind=leftouter (LearningPortToProtocol2) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
+  | where LearningTimeProtocol != AlertTimeProtocol),
+  (AlertTimePortToProtocol3 
+  | join kind=leftouter (LearningPortToProtocol3) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
+  | where LearningTimeProtocol != AlertTimeProtocol))
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIp
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Fqdn
+version: 1.1.1
+kind: Scheduled

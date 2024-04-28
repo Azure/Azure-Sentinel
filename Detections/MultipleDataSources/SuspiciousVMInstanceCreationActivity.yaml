@@ -1,0 +1,143 @@
+id: 1cc0ba27-c5ca-411a-a779-fbc89e26be83
+name: Suspicious VM Instance Creation Activity Detected
+description: |
+  '
+  This detection identifies high-severity alerts across various Microsoft security products, including Microsoft Defender XDR and Microsoft Entra ID, and correlates them with instances of Google Cloud VM creation. It focuses on instances where VMs were created within a short timeframe of high-severity alerts, potentially indicating suspicious activity.
+  '
+severity: Medium
+requiredDataConnectors:
+  - connectorId: GCPAuditLogsDefinition
+    dataTypes:
+      - GCPAuditLogs
+  - connectorId: AzureActiveDirectoryIdentityProtection
+    dataTypes:
+      - SecurityAlert (IPC)
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - SecurityAlert
+  - connectorId: MicrosoftDefenderAdvancedThreatProtection
+    dataTypes:
+      - SecurityAlert (MDATP)
+  - connectorId: MicrosoftCloudAppSecurity
+    dataTypes:
+      - SecurityAlert
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - IdentityInfo
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Execution
+  - Discovery
+relevantTechniques:
+  - T1078
+  - T1106
+  - T1526
+query: |
+    // Filter alerts from specific Microsoft security products with medium and high severity
+    SecurityAlert 
+    | where ProductName in ("Microsoft 365 Defender", "Azure Active Directory", "Microsoft Defender Advanced Threat Protection", "Microsoft Cloud App Security", "Azure Active Directory Identity Protection", "Microsoft Defender ATP")
+    | where AlertSeverity has_any ("Medium", "High")
+    // Parse JSON entities and extend AlertTimeGenerated
+    | extend Entities = parse_json(Entities), AlertTimeGenerated=TimeGenerated
+    // Extract and process IP entities
+    | mv-apply Entity = Entities on 
+        ( 
+        where Entity.Type == 'ip' 
+        | extend EntityIp = tostring(Entity.Address) 
+        ) 
+    // Extract and process account entities
+    | mv-apply Entity = Entities on 
+        ( 
+        where Entity.Type == 'account' 
+        | extend AccountObjectId = tostring(Entity.AadUserId)
+        )
+    // Filter out records with empty EntityIp
+    | where isnotempty(EntityIp)
+    // Summarize data and create sets of entities and system alert IDs
+    | summarize Entitys=make_set(Entity), SystemAlertIds=make_set(SystemAlertId)
+        by 
+        AlertName,
+        ProductName,
+        AlertSeverity,
+        EntityIp,
+        Tactics,
+        Techniques,
+        ProviderName,
+        AlertTime= bin(AlertTimeGenerated, 1d),
+        AccountObjectId
+    // Join with GCPAuditLogs for VM instance creation
+    | join kind=inner (
+        GCPAuditLogs
+        | where ServiceName == "compute.googleapis.com" and MethodName endswith "instances.insert"
+        | extend
+            GCPUserUPN= tostring(parse_json(AuthenticationInfo).principalEmail),
+            GCPUserIp = tostring(parse_json(RequestMetadata).callerIp),
+            GCPUserUA= tostring(parse_json(RequestMetadata).callerSuppliedUserAgent),
+            VMStatus =  tostring(parse_json(Response).status),
+            VMOperation=tostring(parse_json(Response).operationType),
+            VMName= tostring(parse_json(Request).name),
+            VMType = tostring(split(parse_json(Request).machineType, "/")[-1])
+        | where GCPUserUPN !has "gserviceaccount.com"
+        | where VMOperation == "insert" and isnotempty(GCPUserIp) and GCPUserIp != "private"
+        | project
+            GCPOperationTime=TimeGenerated,
+            VMName,
+            VMStatus,
+            MethodName,
+            GCPUserUPN,
+            ProjectId,
+            GCPUserIp,
+            GCPUserUA,
+            VMOperation,
+            VMType
+        )
+        on $left.EntityIp == $right.GCPUserIp 
+    // Join with IdentityInfo to enrich user identity details
+    | join kind=inner (IdentityInfo 
+        | distinct AccountObjectId, AccountUPN, JobTitle
+        )
+        on AccountObjectId 
+    // Calculate the time difference between the alert and VM creation for further analysis
+    | extend TimeDiff= datetime_diff('day', AlertTime, GCPOperationTime),Name = split(GCPUserUPN, "@")[0], UPNSuffix = split(GCPUserUPN, "@")[1]
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: GCPUserIp
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: GCPUserUPN
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+customDetails:
+  AlertName: AlertName
+  AlertProDuctName: ProductName
+  AlertUserName: AccountUPN
+  AlertUserObjectId: AccountObjectId
+  AlertIds: SystemAlertIds
+  AlertIp: EntityIp
+  GCPUserAgent: GCPUserUA
+  GCPVMName: VMName
+  GCPProjectId: ProjectId
+  GCPVMType: VMType
+  CorrelationWith: "GCPAuditLogs"
+alertDetailsOverride:
+  alertDisplayNameFormat: "IP address {{GCPUserIp}} Assocated with {{AlertName}} found in GCP VM creation event by {{GCPUserUPN}}"
+  alertDescriptionFormat: "This detection correlates '{{ProductName}}' Alert IP addresse Entity found in VM instance creation in GCP {{ProjectId}}. It identifies successful compute instance creation, from suspicious IP addresse. By joining these datasets on network entities and IP addresses, it detects unauthorized Initial access attempts across GCP environments."
+  alertSeverityColumnName: AlertSeverity
+  alertDynamicProperties:
+    - alertProperty: ProviderName
+      value: "Microsoft Security"
+    - alertProperty: ProductName
+      value: "Microsoft Defender"
+    - alertProperty: ProductComponentName
+      value: "Microsoft Defender"
+kind: Scheduled
+version: 1.0.3

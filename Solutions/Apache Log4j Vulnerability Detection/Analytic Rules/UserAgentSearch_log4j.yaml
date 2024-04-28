@@ -1,0 +1,101 @@
+id: 29283b22-a1c0-4d16-b0a9-3460b655a46a
+name: User agent search for log4j exploitation attempt
+description: |
+  'This query uses various log sources having user agent data to look for log4j CVE-2021-44228 exploitation attempt based on user agent pattern. Log4j is an open-source Apache logging library that is used in 
+   many Java-based applications. The regex and the string matching look for the most common attacks. This might not be comprehensive to detect every possible user agent variation.
+   Reference: https://msrc-blog.microsoft.com/2021/12/11/microsofts-response-to-cve-2021-44228-apache-log4j2/'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: SquidProxy
+    dataTypes:
+      - SquidProxy_CL
+  - connectorId: Zscaler
+    dataTypes:
+      - CommonSecurityLog
+  - connectorId: WAF
+    dataTypes:
+      - AzureDiagnostics
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+    - log4j
+    - log4shell
+    - CVE2021-44228
+    - Schema: ASimWebSession
+    - SchemaVersion: 0.2.1
+    - Schema: ASimNetworkSessions
+    - SchemaVersion: 0.2.1
+query: |
+  let UserAgentString = dynamic (["${jndi:ldap:/", "${jndi:rmi:/", "${jndi:ldaps:/", "${jndi:dns:/", "${jndi:iiop:/","${jndi:","${jndi:nds:/","${jndi:corba/"]);
+  let UARegexMinimalString=dynamic(['{','%7b', '%7B']);
+  let UARegex = @'(\\$|%24)(\\{|%7B)([^jJ]*[jJ])([^nN]*[nN])([^dD]*[dD])([^iI]*[iI])(:|%3A|\\$|%24|}|%7D)';
+  (union isfuzzy=true
+  (OfficeActivity
+  | where UserAgent has_any (UserAgentString) or UserAgent matches regex UARegex
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = ClientIP, Account = UserId, Type, Operation
+  ),
+  (AzureDiagnostics
+  | where Category in ("FrontdoorWebApplicationFirewallLog", "FrontdoorAccessLog", "ApplicationGatewayFirewallLog", "ApplicationGatewayAccessLog")
+  | where userAgent_s has_any (UserAgentString) or userAgent_s matches regex UARegex
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent = userAgent_s, SourceIP = column_ifexists("clientIp_s",clientIP_s), Type, column_ifexists("originalHost_s",host_s), Url = requestUri_s, HttpStatus = column_ifexists("httpStatusDetails_s",httpStatus_d), column_ifexists("transactionId_g",trackingReference_s), ruleName_s, ResourceType, ResourceId
+  ),
+  (
+  W3CIISLog
+  | where csUserAgent has_any (UserAgentString) or csUserAgent matches regex UARegex
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent = csUserAgent, SourceIP = cIP, Account = csUserName, Type, sSiteName, csMethod, Url = csUriStem
+  ),
+  (
+  AWSCloudTrail
+  | where UserAgent has_any (UserAgentString) or UserAgent matches regex UARegex
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = SourceIpAddress, Account = UserIdentityUserName, Type, EventName
+  ),
+  (SigninLogs
+  | where UserAgent has_any (UserAgentString) or UserAgent matches regex UARegex
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, Operation = OperationName, tostring(LocationDetails), tostring(DeviceDetail),    AppDisplayName, ClientAppUsed
+  ),
+  (AADNonInteractiveUserSignInLogs 
+  | where UserAgent has_any (UserAgentString) or UserAgent matches regex UARegex
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserAgent, SourceIP = IPAddress, Account = UserPrincipalName, Type, Operation = OperationName, tostring(LocationDetails), tostring(DeviceDetail), AppDisplayName, ClientAppUsed
+  ),
+  (_Im_WebSession (httpuseragent_has_any=array_concat(UserAgentString,UARegexMinimalString))
+  | where HttpUserAgent has_any (UserAgentString) or HttpUserAgent matches regex UARegex
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by HttpUserAgent, SourceIP = SrcIpAddr, DstIpAddr, Account = SrcUsername, Url, Type
+  )
+  )
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Url
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Account
+version: 1.0.7
+kind: Scheduled

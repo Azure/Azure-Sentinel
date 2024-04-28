@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimFileEventMicrosoftWindowsEvents",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "File Event ASIM parser for Microsoft Windows Events",
+            "category": "ASIM",
+            "FunctionAlias": "ASimFileEventMicrosoftWindowsEvents",
+            "query": "let Parser=(disabled:bool=false)\n{\nlet EventTypeLookup = datatable (AccessMask:string,EventType:string)\n[\n    \"0x1\", \"ObjectAccessed\"\n    , \"0x10\", \"MetadataModified\"\n    , \"0x100\", \"MetadataModified\"\n    , \"0x10000\", \"ObjectDeleted\"\n    , \"0x2\", \"ObjectModified\"\n    , \"0x20000\", \"MetadataAccessed\"\n    , \"0x4\", \"ObjectModified\"\n    , \"0x40\", \"ObjectDeleted\"\n    , \"0x40000\", \"MetadataModified\"\n    , \"0x6\", \"ObjectModified\"\n    , \"0x8\", \"MetadataAccessed\"\n    , \"0x80\", \"MetadataAccessed\"\n    , \"0x80000\", \"MetadataModified\"\n];\nlet UserTypeLookup = datatable (AccountType:string, ActorUserType:string)\n[\n  'User', 'Regular',\n  'Machine', 'Machine'\n];    \nlet KnownSIDs = datatable (sid:string, username:string, type:string)\n[\n  'S-1-5-18', 'Local System', 'Simple',\n  'S-1-0-0', 'Nobody', 'Simple'\n];\nunion isfuzzy=false (WindowsEvent\n| where EventID == 4663 \n  and EventData.ObjectType == \"File\"\n  and EventData.ObjectName !startswith @\"\\Device\\\"\n| project TimeGenerated\n  , EventID, AccessMask = tostring(EventData.AccessMask)\n  , ProcessName = tostring(EventData.ProcessName)\n  , SubjectUserSid = tostring(EventData.SubjectUserSid)\n  , AccountType = tostring(EventData.AccountType)\n  , Computer = tostring(EventData.Computer)\n  , ObjectName = tostring(EventData.ObjectName)\n  , ProcessId = tostring(EventData.ProcessId)\n  , SubjectUserName = tostring(EventData.SubjectUserName)\n  , SubjectAccount = tostring(EventData.SubjectAccount)\n  , SubjectLogonId = tostring(EventData.SubjectLogonId)\n  , HandleId = tostring(EventData.HandleId)\n)\n, (SecurityEvent\n| where not(disabled)\n| where EventID == 4663 \n  and ObjectType == \"File\"\n  and ObjectName !startswith @\"\\Device\\\"\n| project TimeGenerated, EventID, AccessMask, ProcessName, SubjectUserSid, AccountType, Computer, ObjectName, ProcessId, SubjectUserName, SubjectAccount, SubjectLogonId, HandleId)\n| lookup EventTypeLookup on AccessMask\n| lookup UserTypeLookup on AccountType\n| lookup KnownSIDs on $left.SubjectUserSid == $right.sid\n| extend ActingProcessName = ProcessName\n  , ActorUsername = iff (SubjectUserName == \"-\", username, SubjectAccount)\n  , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')\n  , EventStartTime = TimeGenerated\n  , EventEndTime = TimeGenerated\n  , TargetFilePath = ObjectName\n  , TargetFilePathFormat = \"Windows Local\"\n  , ActingProcessId = tostring(toint(ProcessId))\n  , EventOriginalType = tostring(EventID)\n| project-away EventID, ProcessId, AccountType, type, username\n| project-rename ActorUserId = SubjectUserSid\n  , DvcHostname = Computer\n  , Process = ProcessName\n  , FilePath = ObjectName\n  , ActorSessionId = SubjectLogonId\n  , FileSessionId = HandleId\n| extend EventSchema = \"FileEvent\"\n  , EventSchemaVersion = \"0.1.1\"\n  , EventResult = \"Success\"\n  , EventCount = int(1)\n  , EventVendor = 'Microsoft'\n  , EventProduct = 'Security Events'\n  , Dvc = DvcHostname\n  , ActorWindowsUsername = ActorUsername\n  , User = ActorUsername\n  , ActorUserSid = ActorUserId\n};\nParser (disabled = disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

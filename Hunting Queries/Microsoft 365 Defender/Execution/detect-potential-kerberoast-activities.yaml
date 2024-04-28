@@ -1,0 +1,31 @@
+id: ed25a5c7-2051-44f4-be22-b6cd2f0ad2d0
+name: Detect potential kerberoast activities
+description: |
+  This query aim to detect if someone requests service tickets (where count => maxcount)
+  The query requires trimming to set a baseline level for MaxCount  
+  Mitre Technique: Kerberoasting (T1558.003)
+  @MattiasBorg82
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - IdentityLogonEvents
+tactics:
+- Lateral movement
+query: |
+  let MaxCount = 70; //Number of requests per 2 minute timeframe, depending on org size.
+  IdentityLogonEvents
+  | where Timestamp > ago(1d)
+  | where ActionType == "LogonSuccess"
+  | where Protocol == "Kerberos"
+  | extend json = todynamic(parse_json(tostring(AdditionalFields)))
+  | extend SPN = json.Spns,
+         AttackTechniques = json.AttackTechniques
+        | project-away json
+  | where isnotempty(SPN)
+  | where AttackTechniques has "T1558.003"
+  | mv-expand SPN
+          | extend SPNType = tostring(extract(@"^\w+",0,tostring(SPN)))
+  | distinct tostring(SPN),DeviceName,AccountUpn, AccountSid,bin(Timestamp,2m),ReportId, tostring(AttackTechniques)
+  | summarize count(), SPNS=(make_list(SPN)),ReportId=tostring((make_list(ReportId))[0]) by AccountUpn,AccountSid,DeviceName, bin(Timestamp, 2m), tostring(AttackTechniques)
+  | extend SPNS = (replace_regex(tostring(SPNS), @'[^\w+-\/]+', ''))
+  | where count_ >= MaxCount

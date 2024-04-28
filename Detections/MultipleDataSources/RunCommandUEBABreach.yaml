@@ -8,6 +8,9 @@ requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
       - AzureActivity
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
 queryFrequency: 1d
 queryPeriod: 2d
 triggerOperator: gt
@@ -21,13 +24,13 @@ relevantTechniques:
 query: |
   AzureActivity
   // Isolate run command actions
-  | where OperationNameValue == "MICROSOFT.COMPUTE/VIRTUALMACHINES/RUNCOMMAND/ACTION"
+  | where OperationNameValue =~ "MICROSOFT.COMPUTE/VIRTUALMACHINES/RUNCOMMAND/ACTION"
   // Confirm that the operation impacted a virtual machine
   | where Authorization has "virtualMachines"
   // Each runcommand operation consists of three events when successful, Started, Accepted (or Rejected), Successful (or Failed).
   | summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), max(CallerIpAddress), make_list(ActivityStatusValue) by CorrelationId, Authorization, Caller
   // Limit to Run Command executions that Succeeded
-  | where list_ActivityStatusValue has "Success"
+  | where list_ActivityStatusValue has_any ("Success", "Succeeded")
   // Extract data from the Authorization field
   | extend Authorization_d = parse_json(Authorization)
   | extend Scope = Authorization_d.scope
@@ -50,15 +53,28 @@ query: |
   | extend UEBAWindowStart = UEBAEventTime - 1h, UEBAWindowEnd = UEBAEventTime + 6h
   | where StartTime between (UEBAWindowStart .. UEBAWindowEnd)
   | project StartTime, EndTime, Subscription, VirtualMachineName, Caller, CallerIpAddress, UEBAEventTime, UEBAActionType, UEBASourceIPLocation, UEBAActivityInsights, UEBAUsersInsights
-  | extend timestamp = StartTime, AccountCustomEntity=Caller, IPCustomEntity=CallerIpAddress
+  | extend AccountName = tostring(split(Caller, "@")[0]), AccountUPNSuffix = tostring(split(Caller, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Caller
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.5
+        columnName: CallerIpAddress
+version: 1.0.9
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Rearch
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Platform" ]

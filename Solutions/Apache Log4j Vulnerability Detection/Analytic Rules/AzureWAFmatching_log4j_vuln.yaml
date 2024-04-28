@@ -1,0 +1,47 @@
+id: 2de8abd6-a613-450e-95ed-08e503369fb3
+name: Azure WAF matching for Log4j vuln(CVE-2021-44228)
+description: |
+  'This query will alert on a positive pattern match by Azure WAF for CVE-2021-44228 log4j vulnerability exploitation attempt. If possible, it then decodes the malicious command for further analysis.
+   Refrence: https://www.microsoft.com/security/blog/2021/12/11/guidance-for-preventing-detecting-and-hunting-for-cve-2021-44228-log4j-2-exploitation/'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: WAF
+    dataTypes:
+      - AzureDiagnostics
+queryFrequency: 6h
+queryPeriod: 6h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - CVE-2021-44228
+  - log4j 
+  - log4shell
+query: |
+  let log4jioc = dynamic(["jndi","ldap","${::"]);
+  AzureDiagnostics
+  | where ResourceProvider == "MICROSOFT.NETWORK" and Category in ("ApplicationGatewayFirewallLog", "FrontdoorWebApplicationFirewallLog")
+  | extend details_data_s = column_ifexists("details_data_s", tostring(AdditionalFields.details_data))
+  |where requestUri_s has_any (log4jioc) or details_message_s has_any (log4jioc) or details_data_s has_any (log4jioc)
+  | extend Malicious = iff(isnotempty( details_data_s),details_data_s,iff(isnotempty( requestUri_s),requestUri_s,""))
+  |parse Malicious with * '${' MaliciousCommand '}' * 
+  | extend EncodeCmd = iff(MaliciousCommand has 'Base64/', split(split(MaliciousCommand, "Base64/",1)[0], "}", 0)[0], "")
+  | extend EncodeCmd1 = iff(MaliciousCommand has 'base64/', split(split(MaliciousCommand, "base64/",1)[0], "}", 0)[0], "")
+  | extend CmdLine = iff( isnotempty(EncodeCmd), EncodeCmd, EncodeCmd1)
+  | extend DecodedCmdLine = base64_decode_tostring(tostring(CmdLine))
+  | extend DecodedCmdLine = iff( isnotempty(DecodedCmdLine), DecodedCmdLine, "Unable to decode/Doesn't need decoding")
+  | project TimeGenerated, Target=column_ifexists("hostname_s", tostring(AdditionalFields.hostname)), MaliciousHost = column_ifexists("clientIp_s", tostring(AdditionalFields.clientIp)) , MaliciousCommand, details_data_s = column_ifexists("details_data_s", tostring(AdditionalFields.details_data)), DecodedCmdLine, Message,
+  ruleSetType_s = column_ifexists("ruleSetType_s", tostring(AdditionalFields.ruleSetType)), OperationName, SubscriptionId, details_message_s = column_ifexists("details_message_s", tostring(AdditionalFields.details_message)), 
+  details_file_s = column_ifexists("details_message_s", tostring(AdditionalFields.details_file))
+  | extend timestamp = TimeGenerated
+entityMappings: 
+- entityType: IP
+  fieldMappings:
+    - identifier: Address
+      columnName: MaliciousHost
+version: 1.0.3
+kind: Scheduled

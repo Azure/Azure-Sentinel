@@ -1,0 +1,472 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "CiscoSDWANReport",
+        "description": "This playbook provides an end-to-end example of sending an email for suspicious activity found in the data.",
+        "prerequisites": "",
+    "postDeployment": [
+        "**Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Click the Azuremonitorlogs connection resource",
+            "2. Click edit API connections",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections"
+    ],
+    "prerequisitesDeployTemplateFile": "",
+    "lastUpdateTime": "2023-07-03T00:00:00Z",
+"entities": [],
+"tags": [],
+"support": {
+"tier": "community",
+"armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+},
+"author": {
+"name": ""
+}
+},
+"parameters": {
+"PlaybookName": {
+"defaultValue": "CiscoSDWANReport",
+"type": "string"
+},
+"Azure_Resource_Group": {
+"type": "string",
+"metadata": {
+    "description": "Enter the Azure Resource Group name in which you want to deploy the Logic App."
+}
+},
+"Azure_Subscription_ID": {
+"type": "string",
+"metadata": {
+    "description": "Enter Azure Subscription ID which is present in the subscription tab in Microsoft Sentinel."
+}
+},
+"Azure_Workspace_Name": {
+"type": "string",
+"metadata": {
+    "description": "Enter Microsoft Sentinel Workspace Name of Log Analytics workspace."
+}
+},
+"Email": {
+    "type": "string",
+    "metadata": {
+        "description": "Enter comma-separated email addresses on which reports will be sent."
+    }
+    }
+},
+"variables": {
+"AzuremonitorlogsConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+"OutlookConnectionName": "[concat('Outlook-', parameters('PlaybookName'))]"
+},
+"resources": [
+{
+"properties": {
+    "provisioningState": "Succeeded",
+    "state": "Disabled",
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "parameters": {
+            "$connections": {
+            "defaultValue": {},
+            "type": "Object"
+        },
+        "ResourceGroup": {
+            "defaultValue": "[parameters('Azure_Resource_Group')]",
+            "type": "string"
+        },
+        "SubscriptionID": {
+            "defaultValue": "[parameters('Azure_Subscription_ID')]",
+            "type": "string"
+        },
+        "WorkSpaceName": {
+            "defaultValue": "[parameters('Azure_Workspace_Name')]",
+            "type": "string"
+        },
+        "Email": {
+            "defaultValue": "[parameters('Email')]",
+            "type": "string"
+        }
+    },
+    "triggers": {
+        "Recurrence": {
+            "recurrence": {
+                "frequency": "Hour",
+                "interval": 24
+            },
+            "evaluatedRecurrence": {
+                "frequency": "Hour",
+                "interval": 24
+            },
+            "type": "Recurrence"
+        }
+    },
+    "actions": {
+        "Chart_for_AMP_Events": {
+            "runAfter": {
+                "Table_for_AMP_Events": [
+                    "Succeeded"
+                ]
+            },
+            "type": "ApiConnection",
+            "inputs": {
+                "body": {
+                    "query": "CiscoSyslogUTD \n| where isnotempty(FileInspectionLogs) and isnotempty(SourceIP)\n| project FileInspectionLogs, SourceIP\n| join kind=inner MapNetflowUsername on SourceIP\n| summarize [\"Count\"] =count() by FileInspectionLogs",
+                    "timerange": {
+                        "relativeTimeRange": "Last 24 hours"
+                    },
+                    "timerangetype": "2"
+                },
+                "host": {
+                    "connection": {
+                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                    }
+                },
+                "method": "post",
+                "path": "/visualizeQueryV2",
+                "queries": {
+                    "resourcegroups": "@variables('ResourceGroup')",
+                    "resourcename": "@variables('WorkspaceName')",
+                    "resourcetype": "Log Analytics Workspace",
+                    "subscriptions": "@variables('SubscriptionID')",
+                    "visType": "Pie Chart"
+                }
+            }
+        },
+        "Chart_for_IPS_Events": {
+            "runAfter": {
+                "Table_for_IPS_Events": [
+                    "Succeeded"
+                ]
+            },
+            "type": "ApiConnection",
+            "inputs": {
+                "body": {
+                    "query": "CiscoSyslogUTD \n| where isnotempty(Classification) and isnotempty(SourceIP)\n| project Classification, SourceIP\n| join kind=inner MapNetflowUsername on SourceIP\n| summarize ['Count']=count() by Classification",
+                    "timerange": {
+                        "relativeTimeRange": "Last 24 hours"
+                    },
+                    "timerangetype": "2"
+                },
+                "host": {
+                    "connection": {
+                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                    }
+                },
+                "method": "post",
+                "path": "/visualizeQueryV2",
+                "queries": {
+                    "resourcegroups": "@variables('ResourceGroup')",
+                    "resourcename": "@variables('WorkspaceName')",
+                    "resourcetype": "Log Analytics Workspace",
+                    "subscriptions": "@variables('SubscriptionID')",
+                    "visType": "Pie Chart"
+                }
+            }
+        },
+        "Initialize_variable_ResourceGroup": {
+            "runAfter": {
+                "Initialize_variable_SubscriptionID": [
+                    "Succeeded"
+                ]
+            },
+            "type": "InitializeVariable",
+            "inputs": {
+                "variables": [
+                    {
+                        "name": "ResourceGroup",
+                        "type": "string"
+                    }
+                ]
+            }
+        },
+        "Initialize_variable_SubscriptionID": {
+        "runAfter": {},
+        "type": "InitializeVariable",
+        "inputs": {
+            "variables": [
+                {
+                    "name": "SubscriptionID",
+                    "type": "string"
+                }
+            ]
+        }
+    },
+    "Initialize_variable_WorkspaceName": {
+        "runAfter": {
+            "Initialize_variable_ResourceGroup": [
+                "Succeeded"
+            ]
+        },
+        "type": "InitializeVariable",
+        "inputs": {
+            "variables": [
+                {
+                    "name": "WorkspaceName",
+                    "type": "string"
+                }
+            ]
+        }
+    },
+    "Send_an_email_(V2)": {
+        "runAfter": {
+            "Table_for_Application_Used": [
+                "Succeeded"
+            ]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+            "body": {
+                "Attachments": [
+                    {
+                        "ContentBytes": "@{body('Chart_for_AMP_Events')?['attachmentContent']}",
+                        "Name": "@body('Chart_for_AMP_Events')?['attachmentName']"
+                    },
+                    {
+                        "ContentBytes": "@{body('Chart_for_IPS_Events')?['attachmentContent']}",
+                        "Name": "@body('Chart_for_IPS_Events')?['attachmentName']"
+                    }
+                ],
+                "Body": "<p>Hi team, please find the following reports:<br>\n<br>\nReport of IPS Events by Classification (Last 24 hours)<br>\n@{base64ToString(body('Table_for_IPS_Events')?['attachmentContent'])}<br>\n<br>\nReport of AMP Events by AMP Disposition (Last 24 hours)<br>\n@{base64ToString(body('Table_for_AMP_Events')?['attachmentContent'])}<br>\n<br>\nReport of Internet Browsing done by User (Last 24 hours)<br>\n@{base64ToString(body('Table_for_Internet_Browsing')?['attachmentContent'])}<br>\n<br>\nReport of Application Usage (Last 24 hours)<br>\n@{base64ToString(body('Table_for_Application_Used')?['attachmentContent'])}<br>\n<br>\nSee the attached files for more details</p>",
+                "Importance": "Normal",
+                "Subject": "Reports of Internet Browsing, Threat and Application",
+                "To": "@parameters('Email')"
+            },
+            "host": {
+                "connection": {
+                    "name": "@parameters('$connections')['outlook_1']['connectionId']"
+                }
+            },
+            "method": "post",
+            "path": "/v2/Mail"
+        }
+    },
+    "Set_variable_ResourceGroup": {
+        "runAfter": {
+            "Set_variable_SubscriptionID": [
+                "Succeeded"
+            ]
+        },
+        "type": "SetVariable",
+        "inputs": {
+            "name": "ResourceGroup",
+            "value": "@parameters('ResourceGroup')"
+        }
+    },
+    "Set_variable_SubscriptionID": {
+        "runAfter": {
+            "Initialize_variable_WorkspaceName": [
+                "Succeeded"
+            ]
+        },
+        "type": "SetVariable",
+        "inputs": {
+            "name": "SubscriptionID",
+            "value": "@parameters('SubscriptionID')"
+        }
+    },
+    "Set_variable_WorkspaceName": {
+        "runAfter": {
+            "Set_variable_ResourceGroup": [
+                "Succeeded"
+            ]
+        },
+        "type": "SetVariable",
+        "inputs": {
+            "name": "WorkspaceName",
+            "value": "@parameters('WorkSpaceName')"
+        }
+    },
+    "Table_for_AMP_Events": {
+        "runAfter": {
+            "Chart_for_IPS_Events": [
+                "Succeeded"
+            ]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+            "body": {
+                "query": "CiscoSyslogUTD\n| where isnotempty(FileInspectionLogs) and isnotempty(SourceIP)\n| project FileInspectionLogs, SourceIP\n| join kind=inner MapNetflowUsername on SourceIP\n| summarize [\"Count\"] = count() by [\"AMP_Disposition\"] = FileInspectionLogs,Username\n| sort by Count",
+                "timerange": {
+                    "relativeTimeRange": "Last 24 hours"
+                },
+                "timerangetype": "2"
+            },
+            "host": {
+                "connection": {
+                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                }
+            },
+            "method": "post",
+            "path": "/visualizeQueryV2",
+            "queries": {
+                "resourcegroups": "@variables('ResourceGroup')",
+                "resourcename": "@variables('WorkspaceName')",
+                "resourcetype": "Log Analytics Workspace",
+                "subscriptions": "@variables('SubscriptionID')",
+                "visType": "Html Table"
+            }
+        }
+    },
+    "Table_for_Application_Used": {
+        "runAfter": {
+            "Table_for_Internet_Browsing": [
+                "Succeeded"
+            ]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+            "body": {
+                "query": "CiscoSyslogUTD\n| where isnotempty(Category) and isnotempty(Reputation) and isnotempty(SourceIP)\n| distinct Category, Reputation, SourceIP\n| join kind=inner(\nCiscoSDWANNetflow\n| where isnotempty(NetflowApplicationTag) and isnotempty(NetflowFwSrcAddrIpv4)\n| project [\"SourceIP\"]=NetflowFwSrcAddrIpv4, NetflowApplicationTag\n| join kind=inner(CiscoSDWANNetflow\n| where isnotempty(NetflowApplicationTag) and isnotempty(NetflowApplicationName)\n| distinct NetflowApplicationTag, NetflowApplicationName,TimeGenerated) on NetflowApplicationTag ) on SourceIP\n| project Category, Reputation, NetflowApplicationName, TimeGenerated\n| summarize [\"Count\"]=count(), arg_max(TimeGenerated, *) by [\"Application\"] = NetflowApplicationName\n| project Application, Category, Reputation, Count\n| sort by Count",
+                "timerange": {
+                    "relativeTimeRange": "Last 24 hours"
+                },
+                "timerangetype": "2"
+            },
+            "host": {
+                "connection": {
+                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                }
+            },
+            "method": "post",
+            "path": "/visualizeQueryV2",
+            "queries": {
+                "resourcegroups": "@variables('ResourceGroup')",
+                "resourcename": "@variables('WorkspaceName')",
+                "resourcetype": "Log Analytics Workspace",
+                "subscriptions": "@variables('SubscriptionID')",
+                "visType": "Html Table"
+            }
+        }
+    },
+    "Table_for_IPS_Events": {
+        "runAfter": {
+            "Set_variable_WorkspaceName": [
+                "Succeeded"
+            ]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+            "body": {
+                "query": "CiscoSyslogUTD\n| where isnotempty(Classification) and isnotempty(SourceIP)\n| project Classification, SourceIP\n| join kind=inner MapNetflowUsername on SourceIP\n| summarize [\"Count\"] = count() by [\"Classification\"] = Classification,Username\n| sort by Count",
+                "timerange": {
+                    "relativeTimeRange": "Last 24 hours"
+                },
+                "timerangetype": "2"
+            },
+            "host": {
+                "connection": {
+                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                }
+            },
+            "method": "post",
+            "path": "/visualizeQueryV2",
+            "queries": {
+                "resourcegroups": "@variables('ResourceGroup')",
+                "resourcename": "@variables('WorkspaceName')",
+                "resourcetype": "Log Analytics Workspace",
+                "subscriptions": "@variables('SubscriptionID')",
+                "visType": "Html Table"
+            }
+        }
+    },
+    "Table_for_Internet_Browsing": {
+        "runAfter": {
+            "Chart_for_AMP_Events": [
+                "Succeeded"
+            ]
+        },
+        "type": "ApiConnection",
+        "inputs": {
+            "body": {
+                "query": "CiscoSyslogUTD\n| where isnotempty(Category) and isnotempty(URL) and isnotempty(Reputation) and isnotempty(SourceIP)\n| project Category, URL, Reputation,SourceIP\n| join kind=inner MapNetflowUsername on SourceIP\n| summarize [\"Count\"]=count() by Category, URL, Reputation,SourceIP, Username\n| sort by Count",
+                "timerange": {
+                    "relativeTimeRange": "Last 24 hours"
+                },
+                "timerangetype": "2"
+            },
+            "host": {
+                "connection": {
+                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                }
+            },
+            "method": "post",
+            "path": "/visualizeQueryV2",
+            "queries": {
+                "resourcegroups": "@variables('ResourceGroup')",
+                "resourcename": "@variables('WorkspaceName')",
+                "resourcetype": "Log Analytics Workspace",
+                "subscriptions": "@variables('SubscriptionID')",
+                "visType": "Html Table"
+            }
+        }
+    }
+},
+"outputs": {}
+},
+"parameters": {
+"$connections": {
+"value": {
+    "azuremonitorlogs": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+        "connectionName": "[variables('AzuremonitorlogsConnectionName')]",
+        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+    },
+    "outlook_1": {
+        "connectionId": "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]",
+        "connectionName": "[variables('OutlookConnectionName')]",
+        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
+    }
+}
+}
+}
+},
+"name": "[parameters('PlaybookName')]",
+"type": "Microsoft.Logic/workflows",
+"location": "[resourceGroup().location]",
+"tags": {
+"hidden-SentinelTemplateName": "CiscoSDWANReport",
+"hidden-SentinelTemplateVersion": "1.0"
+},
+"identity": {
+"type": "SystemAssigned"
+},
+"apiVersion": "2017-07-01",
+"dependsOn": [
+"[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+"[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]"
+]
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('AzuremonitorlogsConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('AzuremonitorlogsConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+}
+}
+},
+{
+"type": "Microsoft.Web/connections",
+"apiVersion": "2016-06-01",
+"name": "[variables('OutlookConnectionName')]",
+"location": "[resourceGroup().location]",
+"kind": "V1",
+"properties": {
+"displayName": "[variables('OutlookConnectionName')]",
+"customParameterValues": {},
+"api": {
+"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
+}
+}
+}
+]
+}

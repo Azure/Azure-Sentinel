@@ -1,0 +1,44 @@
+id: 161ed3ac-b242-4b13-8c6b-58716e5e9972
+name: BitSight - diligence risk category detected
+description: |
+  'Rule helps to detect whenever there is a diligence risk category found in BitSight.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: BitSight
+    dataTypes:
+      - BitSightFindingsData
+queryFrequency: 1d
+queryPeriod: 24h
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics:
+  - Execution
+query: |
+    let timeframe = 24h;
+    BitSightFindingsData
+    | where ingestion_time() > ago(timeframe)
+    | where RiskCategory == "Diligence"
+    | extend Severity = toreal(Severity)
+    | extend Severity = case( Severity <= 6.9 and Severity >= 4.0, "Low",
+                              Severity <= 8.9 and Severity >= 7.0, "Medium",
+                              Severity <= 10.0 and Severity >= 9.0, "High",
+                              "Informational")
+    | project FirstSeen, CompanyName, Severity, RiskCategory, TemporaryId, RiskVector
+incidentConfiguration:
+    createIncident: false
+eventGroupingSettings:
+    aggregationKind: AlertPerResult
+alertDetailsOverride:
+    alertDisplayNameFormat: 'BitSight: Alert for {{RiskVector}} in {{CompanyName}} from BitSight'
+    alertDescriptionFormat: 'Alert is generated for {{CompanyName}}.\n\nRisk Vector: {{RiskVector}}\nTemporaryId: {{TemporaryId}}\nRisk Category: Diligence'
+    alertSeverityColumnName: Severity
+entityMappings:
+  - entityType: Malware
+    fieldMappings:
+      - identifier: Name
+        columnName: RiskVector
+      - identifier: Category
+        columnName: RiskCategory
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,55 @@
+id: b24da091-25e9-40ee-a6da-091eef3517e8
+Function:
+  Title: Parser for Fortiweb
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: Fortiweb
+FunctionAlias: Fortiweb
+FunctionQuery: |
+    CommonSecurityLog
+    | project-away EventType
+    | where DeviceVendor =~ 'Fortinet' and DeviceProduct has 'Fortiweb'
+    | extend EventVendor = 'Fortinet'
+    | extend EventProduct = 'Fortiweb'
+    | extend EventSchemaVersion = 0.2
+    | extend EventCount = 1
+    | extend DeviceCustomNumber1 = coalesce(column_ifexists("FieldDeviceCustomNumber1", long(null)),DeviceCustomNumber1),
+             DeviceCustomNumber2 = coalesce(column_ifexists("FieldDeviceCustomNumber2", long(null)),DeviceCustomNumber2),
+             DeviceCustomNumber3 = coalesce(column_ifexists("FieldDeviceCustomNumber3", long(null)),DeviceCustomNumber3),
+             ExternalID = coalesce(column_ifexists("ExtID", ""),tostring(ExternalID))
+    | extend Threatweight = iff(DeviceCustomNumber1Label =~ "threatWeight",DeviceCustomNumber1,long(null))
+             ,Length = iff(DeviceCustomNumber2Label =~ "length",DeviceCustomNumber2,long(null))
+             ,SignatureID = iff(DeviceCustomNumber3Label =~ "signatureID",DeviceCustomNumber3,long(null))
+             ,AppName = iff(DeviceCustomString1Label =~ "appName",DeviceCustomString1,'')
+             ,srcCountry = iff(DeviceCustomString2Label =~ "srcCountry",DeviceCustomString2,'')
+             ,mainType = iff(DeviceCustomString3Label =~ "mainType",DeviceCustomString3,'')
+             ,subType = iff(DeviceCustomString4Label =~ "subType",DeviceCustomString4,'')
+             ,ThreatLevel = iff(DeviceCustomString5Label =~ "threatLevel",DeviceCustomString5,'')
+             ,owaspTop10 = iff(DeviceCustomString6Label =~ "owaspTop10",DeviceCustomString6,'')
+    | parse-kv AdditionalExtensions as (cat:string) with (pair_delimiter=';', kv_delimiter='=')
+    | extend EventEndTime = todatetime(ReceiptTime),
+             EventType = coalesce(column_ifexists("DeviceEventCategory", ""),cat)
+    | project-rename EventProductVersion=DeviceVersion
+                    , EventOriginalType=DeviceEventClassID
+                    , EventSeverity=LogSeverity
+                    , EventMessage=Message
+                    , DstPortNumber=DestinationPort
+                    , DstIpAddr=DestinationIP
+                    , DstDvcHostname=DestinationHostName
+                    , DstUserName=DestinationUserName
+                    , DvcIpAddr=DeviceAddress
+                    , DvcAction=DeviceAction
+                    , DvcHostname=DeviceName
+                    , DstMacAddr=DestinationMACAddress
+                    , NetworkApplicationProtocol=Protocol
+                    , SrcPortNumber=SourcePort
+                    , SrcIpAddr=SourceIP
+                    , SrcMacAddr=SourceMACAddress
+                    , EventId=ExternalID
+                    , SrcDvcHostname=SourceHostName
+                    , EventSubType=Activity
+    | project-away AdditionalExtensions
+                , ReceiptTime
+                , cat
+                , Device*

@@ -1,0 +1,56 @@
+id: 36abe031-962d-482e-8e1e-a556ed99d5a3
+name: Cscript script daily summary breakdown
+description: |
+  'breakdown of scripts running in the environment'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+  let ProcessCreationEvents=() {
+  let processEvents=SecurityEvent
+  | where EventID==4688
+  | project EventTime=TimeGenerated, ComputerName=Computer,AccountName=SubjectUserName, AccountDomain=SubjectDomainName,
+  FileName=tostring(split(NewProcessName, '\\')[-1]),  ProcessCommandLine = CommandLine, 
+  InitiatingProcessFileName=ParentProcessName,InitiatingProcessCommandLine="",InitiatingProcessParentFileName="";
+  processEvents;
+  };
+  // Daily summary of cscript activity - extracting script name and parameters from commandline:
+  ProcessCreationEvents 
+  | where FileName =~ "cscript.exe"
+  // remove commandline switches
+  | project EventTime, ComputerName, AccountName, removeSwitches = replace(@"/+[a-zA-Z0-9:]+", "", ProcessCommandLine)
+  // remove the leading cscript.exe process name 
+  | project EventTime, ComputerName, AccountName, CommandLine = trim(@"[a-zA-Z0-9\\:""]*cscript(.exe)?("")?(\s)+", removeSwitches)
+  // extract the script name:
+  | project EventTime, ComputerName, AccountName, 
+  // handle case where script name is enclosed in " characters or is not enclosed in quotes 
+  ScriptName= iff(CommandLine startswith @"""", 
+  extract(@"([:\\a-zA-Z_\-\s0-9\.()]+)(""?)", 0, CommandLine), 
+  extract(@"([:\\a-zA-Z_\-0-9\.()]+)(""?)", 0, CommandLine)), CommandLine 
+  | project EventTime, ComputerName, AccountName, ScriptName=trim(@"""", ScriptName) , ScriptNameLength=strlen(ScriptName), CommandLine 
+  // extract remainder of commandline as script parameters: 
+  | project EventTime, ComputerName, AccountName, ScriptName, ScriptParams = iff(ScriptNameLength < strlen(CommandLine), substring(CommandLine, ScriptNameLength +1), "")
+  | summarize min(EventTime), count() by ComputerName, AccountName, ScriptName, ScriptParams
+  | order by count_ asc nulls last
+  | extend HostName = tostring(split(ComputerName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(ComputerName, '.'), 1, -1), '.'))
+  | extend Account_0_Name = AccountName
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 2.0.1

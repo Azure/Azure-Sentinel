@@ -1,0 +1,86 @@
+  Parser:
+    Title: Process Event ASIM parser for CrowdStrike Falcon Data Replicator
+    Version: '0.1'
+    LastUpdated: Jun 7, 2023
+  Product:
+    Name: Falcon Data Replicator
+  Normalization:
+    Schema: ProcessEvent
+    Version: '0.1.4'
+  References:
+    - Title: ASIM Authentication Event Schema
+      Link: https://aka.ms/ASimProcessEventDoc
+    - Title: ASIM
+      Link: https://aka.ms/AboutASIM
+  Description: |
+    This ASIM parser supports normalizing CrowdStrike Falcon Data Replicator logs produced by the Microsoft Sentinel AWS S3 connector to the ASIM Process Event normalized schema.
+  ParserName: ASimAuthenticationEventCrowdStrikeFalcon
+  ParserParams:
+    - Name: disabled
+      Type: bool
+      Default: false
+  ParserQuery: |
+      let EventTypeLookup = parse_json('{"WmiCreateProcess": "ProcessCreated","UnsignedModuleLoad": "ProcessCreated","TerminateProcess": "ProcessTerminated","SyntheticProcessRollup2": "ProcessCreated","ProcessSelfDeleted": "ProcessTerminated","ProcessRollup2": "ProcessCreated","ProcessInjection": "ProcessCreated","ProcessBlocked": "ProcessTerminated","ModuleLoadV3DetectInfo": "ProcessCreated","FileWrittenAndExecutedInContainer": "ProcessCreated","ExecutableDeleted": "ProcessTerminated","EndOfProcess": "ProcessTerminated"}');
+      let EventSubTypeLookup = parse_json('{"0": "Others",  "1": "Others",  "2": "NT Create Process",  "3": "Create Process",  "4": "Sheel Execute",  "5": "CRT System"}');
+      let IntegrityLevelLookup = parse_json('{"0": "Untrusted",  "4096": "Low",  "8192": "Medium",  "8448": "Medium",  "12288": "High",  "16384": "System",  "20480": "Protected"}');
+      source
+      | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01'))
+      | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())
+      | project-rename
+          DvcIpAddr = aip,
+          DvcId = aid,
+          EventOriginalType = name,
+          EventOriginalUid = id,
+          EventProductVersion = ConfigBuild,
+          TargetUserId = UserSid,
+          ActorUsername = UserName,
+          ParentProcessName = ParentBaseFileName,
+          TargetProcessMD5 = MD5HashData,
+          TargetProcessSHA256 = SHA256HashData,
+          TargetProcessSHA1 = SHA1HashData,
+          TargetProcessCommandLine = CommandLine
+      | extend
+          DvcOs = case(event_platform == "Win", "Windows", 
+                      event_platform == "Mac", "Macintosh",
+                      event_platform == "Lin", "Linux", 
+                      ""),
+          TargetProcessName = case (event_simpleName == "ProcessInjection", InjecteeImageFileName,
+                                ""),
+          ActingProcessName = case (event_simpleName == "ProcessInjection", InjectorImageFileName,
+                                ""),
+          TargetProcessIntegrityLevel = tostring(IntegrityLevelLookup[IntegrityLevel]),
+          ParentProcessId = ParentProcessId,
+          TargetProcessId = TargetProcessId,
+          ActingProcessId = case(event_simpleName == "EndOfProcess", ConHostProcessId, 
+                                  event_simpleName == "FileWrittenAndExecutedInContainer", WritingProcessId, 
+                                  SourceProcessId),          
+          TargetProcessFileInternalName = case(isnotempty(TargetFileName), TargetFileName,
+                                                  isnotempty(ImageFileName), ImageFileName,
+                                                  ""),
+          AdditionalFields = todynamic(AdditionalFields),
+          ActingProcessFileOriginalName = iff(event_simpleName == "FileWrittenAndExecutedInContainer", WritingProcessImageFileName, ""),
+          ActingProcessCommandLine = iff(event_simpleName == "FileWrittenAndExecutedInContainer", WritingProcessCommandLine, ""),
+          TargetProcessFileOriginalName = iff(event_simpleName == "ProcessBlocked", OriginalFilename, ""),
+          TargetUserIdType = iff(isnotempty(TargetUserId),"SID",""),
+          TargetUsername = case(TargetUserId == "S-1-5-18", "Local System",
+                                TargetUserId == "S-1-0-0", "Nobody",
+                                ""),
+          EventStartTime = case(isnotempty(ProcessStartTime), datetime_add('MilliSecond', tolong(todouble(ProcessStartTime) * 1000), todatetime('1970-01-01')),
+                                isnotempty(ContextTimeStamp), datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01')),
+                                isnotempty(ProcessEndTime), datetime_add('MilliSecond', tolong(todouble(ProcessEndTime) * 1000), todatetime('1970-01-01')),
+                                eventDatetime),
+          EventEndTime = case(isnotempty(ProcessEndTime), datetime_add('MilliSecond', tolong(todouble(ProcessEndTime) * 1000), todatetime('1970-01-01')),
+                                isnotempty(ContextTimeStamp), datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01')),
+                                isnotempty(ProcessStartTime), datetime_add('MilliSecond', tolong(todouble(ProcessStartTime) * 1000), todatetime('1970-01-01')),
+                                eventDatetime),
+          EventSubType = tostring(EventSubTypeLookup[CreateProcessType]),
+          EventType = tostring(EventTypeLookup[event_simpleName]),
+          EventSeverity = "Informational",
+          EventResult = "Success",
+          EventCount = toint(1),
+          EventSchemaVersion = "0.1.4",
+          EventVendor = "CrowdStrike",
+          EventProduct = "Falcon Data Replicator"
+      | extend 
+                TargetUsernameType = iff(TargetUsername == "","","Simple"),
+                ActorUsernameType = iff(ActorUsername == "","","Simple")

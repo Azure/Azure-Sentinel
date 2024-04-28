@@ -1,0 +1,49 @@
+id: c2697b81-7fe9-4f57-ba1d-de46c6f91f9c
+name: MFA Fatigue (OKTA)
+description: |
+    'MFA fatigue attack is a cybersecurity threat where attackers exploit user exhaustion from multi-factor authentication prompts to trick them into providing their MFA details thus compromising their own security. The query identifies MFA fatigue attempts in the Okta data. 
+     Ref: https://sec.okta.com/everythingisyes.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: OktaSSO
+    dataTypes:
+      - Okta_CL
+  - connectorId: OktaSSOv2
+    dataTypes:
+      - OktaSSO
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1621
+query: |
+  let PushThreshold = 10;
+  OktaSSO
+  | where ((eventType_s =="user.authentication.auth_via_mfa" and debugContext_debugData_factor_s == "OKTA_VERIFY_PUSH") or eventType_s == "system.push.send_factor_verify_push" or eventType_s == "user.mfa.okta_verify.deny_push") 
+  | summarize IPAddress = make_set(client_ipAddress_s,100), City = make_set(client_geographicalContext_city_s,100),
+            successes = countif(eventType_s == "user.authentication.auth_via_mfa"),
+            denies = countif(eventType_s == "user.mfa.okta_verify.deny_push"),
+            pushes = countif(eventType_s == "system.push.send_factor_verify_push") by TimeGenerated, authenticationContext_externalSessionId_s, actor_alternateId_s,actor_displayName_s, outcome_result_s 
+  | summarize lasttime = max(TimeGenerated), firsttime = min(TimeGenerated),
+            successes = sum(successes), failures = sum(denies), pushes = sum(pushes) by  authenticationContext_externalSessionId_s, actor_alternateId_s,actor_displayName_s, outcome_result_s 
+  | extend seconds = lasttime - firsttime
+  | where pushes >  (PushThreshold)
+  | extend totalattempts = successes + failures
+  | extend finding = case(
+              failures == pushes and pushes > 1, "Authentication attempts not successful because multiple pushes denied",
+              totalattempts == 0, "Multiple pushes sent and ignored",
+              successes > 0 and pushes > 3, "Multiple pushes sent, eventual successful authentication!",
+              "Normal authentication pattern")
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: actor_alternateId_s
+      - identifier: DisplayName
+        columnName: actor_displayName_s
+version: 1.1.0
+kind: Scheduled

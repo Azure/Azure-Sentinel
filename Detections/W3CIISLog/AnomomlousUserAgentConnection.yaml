@@ -16,30 +16,48 @@ tactics:
 relevantTechniques:
   - T1190
 query: |
-
   let short_uaLength = 5;
   let long_uaLength = 1000;
   let c_threshold = 100;
-  W3CIISLog 
+  W3CIISLog
   // Exclude local IPs as these create noise
   | where cIP !startswith "192.168." and cIP != "::1"
   | where isnotempty(csUserAgent) and csUserAgent !in~ ("-", "MSRPC") and (string_size(csUserAgent) <= short_uaLength or string_size(csUserAgent) >= long_uaLength)
   | extend csUserAgent_size = string_size(csUserAgent)
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ConnectionCount = count() by Computer, sSiteName, sPort, csUserAgent, csUserAgent_size, csUserName , csMethod, csUriStem, sIP, cIP, scStatus, scSubStatus, scWin32Status
   | where ConnectionCount < c_threshold
-  | extend timestamp = StartTimeUtc, AccountCustomEntity = csUserName, HostCustomEntity = Computer, IPCustomEntity = cIP
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(csUserName, "@")[0]), AccountUPNSuffix = tostring(split(csUserName, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: csUserName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: cIP
+version: 1.0.3
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

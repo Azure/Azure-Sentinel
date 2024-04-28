@@ -1,10 +1,11 @@
 # Ingest GitHub events into sentinel through Webhook dataconnector
 Author: Prathibha Tadikamalla
 
- The Azure function based github dataconnector using webhook pushes all the github subscribed events into Sentinel. All these events will be placed into the table called "githubscanaudit_CL". As of now the solution has 3 parsers based on the below events.
-  *	https://docs.github.com/en/rest/reference/code-scanning
-  *	https://docs.github.com/en/rest/reference/dependabot
-  *	https://docs.github.com/en/rest/reference/secret-scanning
+ The Azure function based github dataconnector using webhook pushes all the github subscribed events into Sentinel. All these events will be placed into the table called "githubscanaudit_CL". As of now the solution has 3 parsers based on the below events:
+  *	[Code Scanning Alert](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#code_scanning_alert)
+  *	[Repository Vulnerability Alert (Dependabot)](https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#repository_vulnerability_alert)
+  *	[Secret Scanning Alert](https://docs.github.com/en/enterprise-cloud@latest/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#secret_scanning_alert)
+  
 
 Following are the configuration steps to deploy Function App.
 
@@ -47,7 +48,7 @@ Following are the configuration steps to deploy Function App.
 
        ![](Images/GithubStep2.jpg)
 
-    *  Click on "Webhooks" and configure the function app endpoint as shown below. 
+    *  Click on "Webhooks" and configure the function app endpoint as shown below. Ensure you choose to GitHub Advanced Security events: `Code scanning alerts`, `Repository vulnerability alerts`, and `Secret scanning alerts` 
 
        ![](Images/GithubStep3.jpg)
 

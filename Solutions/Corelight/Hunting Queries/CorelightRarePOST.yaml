@@ -6,28 +6,26 @@ severity: Medium
 requiredDataConnectors:
   - connectorId: Corelight
     dataTypes:
-      - Corelight
+      - Corelight_v2_http
+      - corelight_http
 tactics:
   - Persistence
 relevantTechniques:
   - T1100
   - T1505
 query: |
-  Corelight
+  corelight_http
   | where TimeGenerated > ago(24h)
-  | where EventType =~ 'http'
-  | where HttpRequestMethod in~ ('POST', 'PUT')
-  | where HttpStatusCode !startswith '4'
-  | where HttpRequestBodyBytes != 0 or HttpResponseBodyBytes != 0
-  | extend fe = extract(@'.*(\.\w+)$', 1, UrlOriginal)
+  | where method in~ ('POST', 'PUT')
+  | where toint(status_code) >= 400 and toint(status_code) < 500
+  | where request_body_len != 0 or response_body_len != 0
+  | extend fe = extract(@'.*(\.\w+)$', 1, uri)
   | where fe in~ ('.aspx', '.asp', '.php', '.jsp', '.jspx', '.war', '.ashx', '.asmx', '.ascx', '.asx', '.cshtml', '.cfm', '.cfc', '.cfml', '.wss', '.do', '.action', '.pl', '.plx', '.pm', '.xs', '.t', '.pod', '.php-s', '.pht', '.phar', '.phps', '.php7', '.php5', '.php4', '.php3', '.phtml', '.py', '.rb', '.rhtml', '.cgi', '.dll', '.ayws', '.cgi', '.erb', '.rjs', '.hta', '.htc', '.cs', '.kt', '.lua', '.vbhtml')
-  | summarize count() by SrcIpAddr
+  | summarize count() by id_orig_h
   | where count_ < 10
   | order by count_ asc
-  | extend IPCustomEntity = SrcIpAddr
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-
+        columnName: id_orig_h

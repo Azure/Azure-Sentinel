@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function sets DnsResponseCode and DnsResponseCodeName based on an RCode provided as a parameter
+# Log Analytics KQL function An ASIM function sets DnsResponseCode and DnsResponseCodeName based on an RCode provided as a parameter
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function sets DnsResponseCode and DnsResponseCodeName based on an RCode provided as a parameter
+ARM template for deploying the Log Analytics KQL function An ASIM function sets DnsResponseCode and DnsResponseCodeName based on an RCode provided as a parameter
 
 This ASIM tabular function is intended for use in ASIM DNS parsers and sets the DnsResponseCode and DnsResponseCodeName based on an RCode provided as a parameter. For example, for the RCode 3, the function sets DnsResponseCode to 3 and DnsResponseCodeName to NXDOMAIN. The function is invoked using the [invoke operator](https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator) and requires the source table to have a TimeGenerated field.  
 

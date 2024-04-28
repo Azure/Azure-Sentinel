@@ -1,6 +1,11 @@
-import os
 import json
-import logging
+import os
+
+from shared_code.customized_logger.customized_json_logger import (
+    get_customized_json_logger,
+)
+
+logger = get_customized_json_logger()
 
 
 def _load_file(file_name):
@@ -77,7 +82,7 @@ def _convert_true_type_int(type):
     if key in MappingSet.file_true_type_mapping:
         return MappingSet.file_true_type_mapping[key]
     else:
-        logging.error(f'Key {type} not in FILE_TRUE_TYPE_MAPPING.')
+        logger.error(f'Key {type} not in FILE_TRUE_TYPE_MAPPING.')
         return type
 
 
@@ -86,7 +91,7 @@ def _convert_true_type(params):
     if key in MappingSet.file_true_type_mapping:
         return MappingSet.file_true_type_mapping[key]
     else:
-        logging.error(f'Key {params[0]} not in FILE_TRUE_TYPE_MAPPING.')
+        logger.error(f'Key {params[0]} not in FILE_TRUE_TYPE_MAPPING.')
         return params[0]
 
 
@@ -98,7 +103,7 @@ def _convert_sub_true_type(params):
             if sub_true_type in MappingSet.file_sub_true_type_mapping[true_type]:
                 return MappingSet.file_sub_true_type_mapping[true_type][sub_true_type]
 
-    logging.error(
+    logger.error(
         f'Connot find sub true type mapping. true_type: {true_type}, sub_true_type: {sub_true_type}'
     )
     return sub_true_type
@@ -123,9 +128,7 @@ def _convert_link(link_array):
         if operation_key in MappingSet.operation_mapping:
             link_item['operation'] = MappingSet.operation_mapping[operation_key]
         else:
-            logging.warning(
-                f'operation: "{link_item["operation"]}" not in mapping set.'
-            )
+            logger.warning(f'operation: "{link_item["operation"]}" not in mapping set.')
         src_obj = link_item['srcObj']
         tar_obj = link_item['tarObj']
 
@@ -136,7 +139,7 @@ def _convert_link(link_array):
 
         if tar_obj in parent_set:
             if parent_set[tar_obj] != src_obj:
-                logging.warning(
+                logger.warning(
                     f'target: "{tar_obj}" different in parent_set: {parent_set[tar_obj]}.'
                 )
         parent_set[tar_obj] = src_obj
@@ -163,7 +166,7 @@ def _convert_tag(tag_array):
                     else tag
                 )
             else:
-                logging.error(f'Tag {tag} not in Mapping set.')
+                logger.warning(f'Tag {tag} not in Mapping set.')
                 value = tag
 
             result.append({'name': tag, 'value': value})
@@ -189,7 +192,7 @@ def _convert_meta(meta_object):
             name = MappingSet.meta_key_mapping[key]
         else:
             # Unknown field name
-            logging.warning(f'rca meta key: "{key}" not in mapping set.')
+            logger.warning(f'rca meta key: "{key}" not in mapping set.')
             name = key
 
         if name in _META_VALUE_FUNC:
@@ -204,7 +207,7 @@ def _convert_meta(meta_object):
             if exec_func:
                 value = exec_func(params)
             else:
-                logging.error(f'Do not have function in _META_VALUE_FUNC: {name}')
+                logger.error(f'Do not have function in _META_VALUE_FUNC: {name}')
         else:
             value = meta_object[key]
 

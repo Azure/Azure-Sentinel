@@ -1,0 +1,62 @@
+id: b31b5d70-4c75-4a5f-8af7-6a83f6eb372c
+name: Increase in DNS Requests by client than the daily average count (ASIM DNS Solution)
+description: |
+  'Checking for a threefold increase or more in Full Name lookups per client IP for today vs. the daily average for the previous week.'
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1568
+  - T1008
+  - T1048
+query: |
+  let starttime = now();
+  let endtime = now();
+  let lookback = ago(7d);
+  //example of excluding Saturday and Sunday in Average as those are potentially low volume and decrease the average, feel free to change
+  let excludedDays = dynamic(["Saturday", "Sunday"]);
+  // average is across 5 days as we are dropping weekends, change as needed
+  let numDays = 5;
+  // limit to over 1000 lookups somewhat random but helps focus in on higher lookups, change as needed
+  let avglookupThreshold = 3;
+  let lookupThreshold = 1000;
+  //Setting to startofday so we get 7 days prior to today
+  _Im_Dns(starttime=startofday(lookback),endtime=startofday(starttime))
+  //getting the associated number of the day of the week so we can map to a given day for later parsing if needed
+  | extend DayNumberofWeek = tostring(dayofweek(TimeGenerated))
+  //Setting the Day of the week value so that certain days could be excluded if needed
+  | extend DayofWeek = iff(DayNumberofWeek == "00:00:00", "Sunday",
+  (iff(DayNumberofWeek == "1.00:00:00", "Monday",
+  (iff(DayNumberofWeek == "2.00:00:00", "Tuesday",
+  (iff(DayNumberofWeek == "3.00:00:00", "Wednesday",
+  (iff(DayNumberofWeek == "4.00:00:00", "Thursday",
+  (iff(DayNumberofWeek == "5.00:00:00", "Friday",
+  (iff(DayNumberofWeek == "6.00:00:00", "Saturday", DayNumberofWeek)))))))))))))
+  | where DayofWeek !in~ (excludedDays)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by SrcIpAddr, DnsQuery
+  | project StartTime, EndTime, SrcIpAddr, FullNameLookup = DnsQuery, DailyAvgLookupCountOverLastWeek = count_/numDays
+  | join ( _Im_Dns
+  | where TimeGenerated between(startofday(starttime)..endofday(endtime))
+  | summarize count() by SrcIpAddr, FullNameLookup = DnsQuery
+  | project SrcIpAddr, LookupCountToday = count_, FullNameLookup
+  )
+  on SrcIpAddr, FullNameLookup
+  | where LookupCountToday > (DailyAvgLookupCountOverLastWeek * avglookupThreshold) and LookupCountToday >= lookupThreshold
+  | project StartTime, EndTime, SrcIpAddr, LookupCountToday, DailyAvgLookupCountOverLastWeek, FullNameLookup
+  | order by LookupCountToday desc nulls last
+  | extend timestamp = StartTime
+  | extend IP_0_Address = SrcIpAddr
+  | extend DNS_0_DomainName = FullNameLookup
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: FullNameLookup
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr

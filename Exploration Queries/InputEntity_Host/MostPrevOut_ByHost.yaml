@@ -1,0 +1,30 @@
+Id: 9a0c01e4-3330-4050-88b1-28a4dff820cd
+DisplayName: Most Prevalent Outbound Network Connection Destinations
+Description: Top 10 (most prevalent) outbound network session destinations by a given host (set time range to +-30m when running the query)
+InputEntityType: Host
+InputFields:
+  - HostName
+OutputEntityTypes:
+  - Ip
+  - DNS
+QueryPeriodBefore: 30m
+QueryPeriodAfter: 30m
+DataSources:
+  - _Im_NetworkSession
+Tactics:
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+  let GetWireDataOutboundWithHost = (v_Host_HostName:string){
+  _Im_NetworkSession(hostname_has_any=v_Host_HostName)
+  | where EventResult =~ "success"
+  | where NetworkDirection =~ "Outbound"
+  | extend LocalAppName = column_ifexists("LocalAppName", "")
+  | extend info = pack('Computer', DvcHostname, 'LocalPortNumber', DstPortNumber, 'DstIpAddr', Dst, 'SrcIpAddr', Src,'Direction', NetworkDirection, 'NetworkProtocol', NetworkProtocol, "LocalAppName", LocalAppName, "DstFQDN", DstFQDN)
+  | summarize Process_Aux_Min_SessionStartTime=min(TimeGenerated), Process_Aux_Max_SessionStartTime=max(TimeGenerated), count(), IP_Aux_info = make_set(info, maxSize=1000) by Dst, Dvc, DstFQDN
+  | top 10 by count_ desc
+  | project-rename IP_Address=Dst, DomainName=DstFQDN
+  };
+  // change <HostName> value below
+  GetWireDataOutboundWithHost('<HostName>')

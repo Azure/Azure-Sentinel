@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimWebSessionNative",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM filtering parser for Microsoft Sentinel native Network Session table",
+            "category": "ASIM",
+            "FunctionAlias": "vimWebSessionNative",
+            "query": "let parser=(\n  starttime:datetime=datetime(null), \n  endtime:datetime=datetime(null),\n  srcipaddr_has_any_prefix:dynamic=dynamic([]), \n  ipaddr_has_any_prefix:dynamic=dynamic([]), \n  url_has_any:dynamic=dynamic([]),\n  httpuseragent_has_any:dynamic=dynamic([]),\n  eventresultdetails_in:dynamic=dynamic([]),\n  eventresult:string='*',\n  disabled:bool=false\n)\n{\n  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); \n  ASimWebSessionLogs\n    | where not(disabled)\n    | where (isnull(starttime) or TimeGenerated >= starttime)\n        and (isnull(endtime) or TimeGenerated <= endtime)\n    | where (array_length(url_has_any) == 0 or Url has_any (url_has_any))\n    | where (array_length(httpuseragent_has_any) == 0 or HttpUserAgent has_any(httpuseragent_has_any))\n    | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) has_any(eventresultdetails_in))\n    | where (eventresult == '*' or EventResult =~ eventresult)\n    | extend temp_SrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any)\n          , temp_DstMatch=has_any_ipv4_prefix(DstIpAddr,ipaddr_has_any_prefix)\n    | extend ASimMatchingIpAddr=case(\n                                  array_length(src_or_any) == 0 ,\"-\",\n                                  temp_SrcMatch and temp_DstMatch, \"Both\",\n                                  temp_SrcMatch, \"SrcIpAddr\",\n                                  temp_DstMatch, \"DstIpAddr\",\n                                  \"No match\"\n                              )\n    | where ASimMatchingIpAddr != \"No match\" \n    | project-away temp_*\n    // \n    // -- Schema fixed\n    | extend\n        FileSize = tolong(FileSize)\n    //\n    // -- Log Analytics global fields renaming\n    | project-rename\n        EventUid          = _ItemId,\n        DvcScopeId        = _SubscriptionId\n    //\n    // -- ASIM Global fields\n    | extend          \n        EventSchema       = \"WebSession\"\n    | extend\n        //\n        // -- Default values\n        EventEndTime      = coalesce (EventEndTime, TimeGenerated),\n        EventStartTime    = coalesce (EventStartTime, TimeGenerated),\n        //\n        // -- Multi-source aliases\n        Dvc = iff (EventType == 'HTTPSession',\n          coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, DstMacAddr, _ResourceId, strcat (EventVendor,'/', EventProduct)),\n          coalesce (DvcFQDN, DvcHostname, DstFQDN, DstHostname, DvcIpAddr, DstIpAddr, DvcId, DstDvcId, DstMacAddr, _ResourceId, strcat (EventVendor,'/', EventProduct))\n        ),\n        Dst               = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),\n        Src               = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),\n        Rule              = coalesce(RuleName, tostring(RuleNumber)),\n        //\n        // -- Aliases which depend on EventType\n        Hostname = iff  (EventType == \"EndpointNetworkSession\" and NetworkDirection == (\"Inbound\"), SrcHostname, DstHostname),\n        IpAddr = iff  (EventType == \"EndpointNetworkSession\" and NetworkDirection == (\"Inbound\"), DstIpAddr, SrcIpAddr),\n        //\n        // -- Simple aliases\n        Duration          = NetworkDuration,\n        SessionId         = NetworkSessionId,\n        User              = SrcUsername,\n        HttpStatusCode    = EventResultDetails,\n        UserAgent         = HttpUserAgent\n        // --\n        // -- Aliased fields not implemented in ASimWebSessionLogs yet \n        //InnerVlanId     = SrcVlanId,\n        //OuterVlanId     = DstVlanId,\n        //DvcInterface    = coalesce(DvcInterface, DvcInboundInterface, DvcOutboundInterface), \n    | project-away\n        TenantId, SourceSystem, _ResourceId\n};\nparser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),ipaddr_has_any_prefix:dynamic=dynamic([]),url_has_any:dynamic=dynamic([]),httpuseragent_has_any:dynamic=dynamic([]),eventresultdetails_in:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+id: 1d9951b7-51f0-4aa7-af0c-654359aadfff
+name: DNS - domain anomalous lookup increase
+description: |
+  'Checking for a threefold increase or more of domain lookups per client IP address for the current day compared to the daily average for the previous week.
+  This can potentially identify excessive traffic to a given location that could be indicative of data transfer out of your network to a group of systems based on the same second level domain.
+  For example, if one client is sending requests for test1.badguy.com and another client is sending requests for test2.badguy.com, you may not see a high enough count to be interesting.
+  However, a combination of the requests to badguy.com could have a high enough count to be interesting.
+  This is only Name lookups, so it would be recommended to review the firewall and web proxy logs in relation to the client IP address making the interesting requests.'
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+tactics:
+  - CommandAndControl
+  - Exfiltration
+relevantTechniques:
+  - T1568
+  - T1008
+  - T1048
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 7d;
+  //example of excluding Saturday and Sunday in Average as those are potentially low volume and decrease the average, feel free to change
+  let excludedDays = dynamic(["Saturday", "Sunday"]);
+  // average is across 5 days as we are dropping weekends, change as needed
+  let numDays = 5;
+  // limit to over 1000 lookups somewhat random but helps focus in on higher lookups, change as needed
+  let avglookupThreshold = 3;
+  let lookupThreshold = 1000;
+  DnsEvents
+  //Setting to startofday so we get 7 days prior to start
+  | where TimeGenerated >= startofday(lookback) and TimeGenerated <= startofday(starttime)
+  | where SubType =~ "LookupQuery"
+  //getting the associated number of the day of the week so we can map to a given day for later parsing if needed
+  | extend DayNumberofWeek = tostring(dayofweek(TimeGenerated))
+  //Setting the Day of the week value so that certain days could be excluded if needed
+  | extend DayofWeek = iff(DayNumberofWeek == "00:00:00", "Sunday",
+  (iff(DayNumberofWeek == "1.00:00:00", "Monday",
+  (iff(DayNumberofWeek == "2.00:00:00", "Tuesday",
+  (iff(DayNumberofWeek == "3.00:00:00", "Wednesday",
+  (iff(DayNumberofWeek == "4.00:00:00", "Thursday",
+  (iff(DayNumberofWeek == "5.00:00:00", "Friday",
+  (iff(DayNumberofWeek == "6.00:00:00", "Saturday", DayNumberofWeek)))))))))))))
+  | where DayofWeek !in~ (excludedDays)
+  | extend Domain = iff(countof(Name,'.') >= 2, strcat(split(Name,'.')[-2], '.',split(Name,'.')[-1]), Name)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by ClientIP, Domain, IPAddresses
+  | project StartTime, EndTime, ClientIP, Domain, IPAddresses, DailyAvgLookupCountOverLastWeek = count_/numDays
+  | join kind = inner ( DnsEvents
+  | where TimeGenerated between(startofday(starttime)..endofday(endtime))
+  | where SubType =~ "LookupQuery"
+  | extend Domain = iff(countof(Name,'.') >= 2, strcat(split(Name,'.')[-2], '.',split(Name,'.')[-1]), Name)
+  | summarize count() by ClientIP, Domain, IPAddresses
+  | project ClientIP, LookupCountToday = count_, Domain, IPAddresses
+  )
+  on ClientIP, Domain, IPAddresses
+  | where LookupCountToday > ( DailyAvgLookupCountOverLastWeek * avglookupThreshold) and LookupCountToday > lookupThreshold
+  | project StartTime, EndTime, ClientIP, SecondLevelDomain = Domain , LookupCountToday , DailyAvgLookupCountOverLastWeek, IPAddresses
+  | order by LookupCountToday desc nulls last
+  | extend DNS_0_DomainName = SecondLevelDomain
+  | extend DNS_0_IpAddress = IPAddresses
+  | extend IP_0_Address = ClientIP
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: SecondLevelDomain
+      - identifier: IpAddress
+        columnName: IPAddresses
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP

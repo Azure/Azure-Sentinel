@@ -2,8 +2,9 @@ id: 69a45b05-71f5-45ca-8944-2e038747fb39
 name: RDP Nesting
 description: |
   'Identifies when an RDP connection is made to a first system and then an RDP connection is made from the first system
-  to another system with the same account within the 60 minutes. Additionally, if historically daily
-  RDP connections are indicated by the logged EventID 4624 with LogonType = 10'
+  to another system with the same account within 60 minutes.
+  Connection counts of 5 or more to the same computer set from the same account are excluded.
+  RDP connections are indicated by the logged EventID 4624 with LogonType = 10.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: SecurityEvents
@@ -24,7 +25,6 @@ tactics:
 relevantTechniques:
   - T1021
 query: |
-
   let endtime = 1d;
   let starttime = 8d;
   // The threshold below excludes matching on RDP connection computer counts of 5 or more by a given account and IP in a given day.  Change the threshold as needed.
@@ -86,7 +86,7 @@ query: |
   | where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime)
   | where EventID == 4624 and EventData has ("10")
   | extend LogonType = tostring(EventData.LogonType)
-  | where  LogonType == 10 
+  | where  LogonType == 10
   | extend Account = strcat(tostring(EventData.TargetDomainName),"\\", tostring(EventData.TargetUserName))
   | extend IpAddress = tostring(EventData.IpAddress)
   | summarize makeset(Computer), ComputerCount = dcount(Computer) by bin(TimeGenerated, 1d), Account = tolower(Account), IpAddress
@@ -96,21 +96,51 @@ query: |
   | extend Computer = toupper(set_Computer)
   ))
   ) on Account, $left.SecondComputer == $right.Computer, $left.SecondIPAddress == $right.IpAddress
-  | summarize FirstHopFirstSeen = min(FirstHop), FirstHopLastSeen = max(FirstHop) by Account, FirstComputer, FirstIPAddress, SecondHop, SecondComputer, 
+  | summarize FirstHopFirstSeen = min(FirstHop), FirstHopLastSeen = max(FirstHop) by Account, FirstComputer, FirstIPAddress, SecondHop, SecondComputer,
   SecondIPAddress, AccountType, Activity, LogonTypeName, ProcessName
-  | extend timestamp = FirstHopFirstSeen, AccountCustomEntity = Account, HostCustomEntity = FirstComputer, IPCustomEntity = FirstIPAddress
+  | extend AccountName = tostring(split(Account, @"\")[1]), AccountNTDomain = tostring(split(Account, @"\")[0])
+  | extend HostName1 = tostring(split(FirstComputer, ".")[0]), DomainIndex = toint(indexof(FirstComputer, '.'))
+  | extend HostNameDomain1 = iff(DomainIndex != -1, substring(FirstComputer, DomainIndex + 1), FirstComputer)
+  | extend HostName2 = tostring(split(SecondComputer, ".")[0]), DomainIndex = toint(indexof(SecondComputer, '.'))
+  | extend HostNameDomain2 = iff(DomainIndex != -1, substring(SecondComputer, DomainIndex + 1), SecondComputer)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: FirstComputer
+      - identifier: HostName
+        columnName: HostName1
+      - identifier: NTDomain
+        columnName: HostNameDomain1
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: SecondComputer
+      - identifier: HostName
+        columnName: HostName2
+      - identifier: NTDomain
+        columnName: HostNameDomain2
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.2.1
+        columnName: FirstIPAddress
+version: 1.2.5
 kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

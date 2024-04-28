@@ -1,6 +1,6 @@
-# Log Analytics KQL function AAD STS Error Codes
+# Log Analytics KQL function AAD STS error codes
 
-ARM template for deploying the Log Analytics KQL function AAD STS Error Codes
+ARM template for deploying the Log Analytics KQL function AAD STS error codes
 
 This query creates a table for conversion of AAD STS Error Codes from a numeric value to a descriptive error message.
 

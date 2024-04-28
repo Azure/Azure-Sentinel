@@ -1,0 +1,54 @@
+id: a0907abe-6925-4d90-af2b-c7e89dc201a6
+name: Potential DGA detected
+description: |
+  'Identifies clients with a high NXDomain count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live).
+  Alerts are generated when a new IP address is seen (based on not being associated with
+  NXDomain records in the prior 10-day baseline period).'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+queryFrequency: 1d
+queryPeriod: 10d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+  - T1008
+query: |
+  let starttime = 10d;
+  let endtime = 1d;
+  let threshold = 100;
+  let nxDomainDnsEvents = DnsEvents
+  // ResultCode 3 => 'NXDOMAIN'
+  | where ResultCode == 3
+  | where QueryType in~ ("A", "AAAA")
+  | where ipv4_is_match("127.0.0.1", ClientIP) == False
+  | where Name !has "/"
+  | where Name has ".";
+  nxDomainDnsEvents
+  | where TimeGenerated > ago(endtime)
+  // sld = Second Level Domain
+  | extend sld = tostring(split(Name, ".")[-2])
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), dcount(sld), sampleNXDomainList=make_set(Name, 100) by ClientIP
+  | where dcount_sld > threshold
+  // Filter out previously seen IPs
+  // Returns all the records from the left side that don't have matches from the right
+  | join kind=leftanti (nxDomainDnsEvents
+      | where TimeGenerated between(ago(starttime)..ago(endtime))
+      | extend sld = tostring(split(Name, ".")[-2])
+      | summarize dcount(sld) by ClientIP, bin(TimeGenerated,1d)
+      | where dcount_sld > threshold
+      ) on ClientIP
+      | order by dcount_sld desc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.2
+kind: Scheduled

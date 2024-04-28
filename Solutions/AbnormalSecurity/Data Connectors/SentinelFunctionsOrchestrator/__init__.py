@@ -16,7 +16,8 @@ import azure.durable_functions as df
 from .soar_connector_async import AbnormalSoarConnectorAsync
 from .sentinel_connector_async import AzureSentinelConnectorAsync
 
-
+RESET_ORCHESTRATION = os.environ.get("RESET_OPERATION", "false")
+PERSIST_TO_SENTINEL = os.environ.get("PERSIST_TO_SENTINEL", "true")
 API_TOKEN = os.environ['ABNORMAL_SECURITY_REST_API_TOKEN']
 SENTINEL_WORKSPACE_ID = os.environ['SENTINEL_WORKSPACE_ID']
 SENTINEL_SHARED_KEY = os.environ['SENTINEL_SHARED_KEY']
@@ -30,31 +31,47 @@ if(not match):
     raise Exception("Invalid Log Analytics Uri.")
 
 def orchestrator_function(context: df.DurableOrchestrationContext):
-    logging.info(f"Executing orchestrator function version 1.1")
+    logging.info(f"Executing orchestrator function version 1.2")
     datetimeEntityId = df.EntityId("SoarDatetimeEntity", "latestDatetime")
-    stored_datetime = yield context.call_entity(datetimeEntityId, "get")
-    logging.info(f"retrieved stored datetime: {stored_datetime}")
+    
+    if should_reset_date_params():
+        context.signal_entity(datetimeEntityId, "reset")
+
+    stored_threats_datetime = yield context.call_entity(datetimeEntityId, "get", {"type": "threats_date"})
+    logging.info(f"Retrieved stored threats datetime: {stored_threats_datetime}")
+    
+    stored_cases_datetime = yield context.call_entity(datetimeEntityId, "get", {"type": "cases_date"})
+    logging.info(f"Retrieved stored cases datetime: {stored_cases_datetime}")
 
     current_datetime = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-    asyncio.run(transfer_abnormal_data_to_sentinel(stored_datetime, current_datetime))
+    
+    asyncio.run(transfer_abnormal_data_to_sentinel(stored_threats_datetime, stored_cases_datetime, current_datetime, context))
+    logging.info("Orchestrator execution finished") 
+    
+def should_reset_date_params():
+    return RESET_ORCHESTRATION == "true"
 
-    context.signal_entity(datetimeEntityId, "set", current_datetime)
-    logging.info(f"set last_datetime to {current_datetime}")
-
-
-async def transfer_abnormal_data_to_sentinel(stored_datetime, current_datetime):
-    context = {"gte_datetime": stored_datetime, "lte_datetime": current_datetime}
+async def transfer_abnormal_data_to_sentinel(stored_threats_datetime,stored_cases_datetime, current_datetime, context):
+    threats_date_filter = {"gte_datetime": stored_threats_datetime, "lte_datetime": current_datetime}
+    cases_date_filter = {"gte_datetime": stored_cases_datetime, "lte_datetime": current_datetime}
     queue = asyncio.Queue()
     api_connector = AbnormalSoarConnectorAsync(API_TOKEN)
-    sentinel_connector = AzureSentinelConnectorAsync(LOG_ANALYTICS_URI,SENTINEL_WORKSPACE_ID, SENTINEL_SHARED_KEY)
-    threat_message_producer = asyncio.create_task(api_connector.get_all_threat_messages(context, queue))
-    cases_producer = asyncio.create_task(api_connector.get_all_cases(context, queue))
-    consumers = [asyncio.create_task(consume(sentinel_connector, queue)) for _ in range(3)]
+    threat_message_producer = asyncio.create_task(api_connector.get_all_threat_messages(threats_date_filter, queue, context))
+    cases_producer = asyncio.create_task(api_connector.get_all_cases(cases_date_filter, queue, context))
     await asyncio.gather(threat_message_producer, cases_producer)
-    await queue.join()  # Implicitly awaits consumers, too
-    for c in consumers:
-        c.cancel()
-    await sentinel_connector.flushall()
+
+    if should_persist_data_to_sentinel():
+        logging.info("Persisting to sentinel")
+        sentinel_connector = AzureSentinelConnectorAsync(LOG_ANALYTICS_URI,SENTINEL_WORKSPACE_ID, SENTINEL_SHARED_KEY)
+        consumers = [asyncio.create_task(consume(sentinel_connector, queue)) for _ in range(3)]
+        await asyncio.gather(threat_message_producer, cases_producer)
+        await queue.join()  # Implicitly awaits consumers, too
+        for c in consumers:
+            c.cancel()
+        await sentinel_connector.flushall()
+    
+def should_persist_data_to_sentinel():
+   return PERSIST_TO_SENTINEL == "true"
     
 
 async def consume(sentinel_connector, queue):

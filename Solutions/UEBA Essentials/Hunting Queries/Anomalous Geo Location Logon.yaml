@@ -1,0 +1,46 @@
+id: eeea7fb9-21cf-4023-91dc-3f55d7548d14
+name: Anomalous Geo Location Logon
+description: |
+    'Adversaries may steal the credentials of a specific user or service account using credential access techniques or capture credentials earlier in their reconnaissance process through social engineering as a means of gaining initial access. APT33, for example, has used valid accounts for initial access. The query below generates an output of a successful sign-in performed by a user from a new geolocation he has never connected to before and none of his peers as well.'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+ BehaviorAnalytics
+ | where ActionType =~ "Sign-in"
+ | where ActivityInsights.FirstTimeConnectionFromCountryObservedInTenant == True and ActivityInsights.CountryUncommonlyConnectedFromAmongPeers == True
+     | join kind=inner (
+ SigninLogs
+ ) on $left.SourceRecordId == $right._ItemId
+ | extend UserPrincipalName = iff(UserPrincipalName has "#EXT#",replace_string(tostring(split(UserPrincipalName, "#")[0]),"_","@"),UserPrincipalName),
+ UserName = iff(UserName has "#EXT#",replace_string(tostring(split(UserPrincipalName, "#")[0]),"_","@"),UserName)
+ | project TimeGenerated, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType, ["Evidence"]=ActivityInsights, ResourceDisplayName, AppDisplayName, SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights, ResourceId
+ | extend Name=split(UserPrincipalName, "@")[0], UPNSuffix=split(UserPrincipalName, "@")[1]
+ | extend Account_0_Name = Name
+ | extend Account_0_UPNSuffix = UPNSuffix
+ | extend IP_0_Address = SourceIPAddress
+ | extend AzureResource_0_ResourceId = ResourceId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 2.0.0

@@ -1,7 +1,7 @@
 Parser:
   Title: DNS activity ASIM filtering parser for Azure Firewall
-  Version: '0.3'
-  LastUpdated: Jan 17 2022
+  Version: '0.3.1'
+  LastUpdated: Dec 26 2022
 Product:
   Name: Azure Firewall
 Normalization:
@@ -56,6 +56,7 @@ ParserQuery: |
     AzureDiagnostics | where not(disabled)
     // | where ResourceType == "AZUREFIREWALLS" -- Implicit in the next line
     | where Category == "AzureFirewallDnsProxy"
+    | project msg_s, TimeGenerated, ResourceId
     | where msg_s startswith "DNS Request:"
     //  --Pre-parsing filtering:
     | where
@@ -87,7 +88,7 @@ ParserQuery: |
         "s"
     // -- Post-filtering accurately now that message is parsed
     | where
-         (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
+        (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
           and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))
           and (responsecodename=="*" or EventResultDetails has responsecodename)
     | project-away msg_s
@@ -107,6 +108,7 @@ ParserQuery: |
     AzureDiagnostics
     // | where ResourceType == "AZUREFIREWALLS" -- Implicit in the next line
     | where Category == "AzureFirewallDnsProxy"
+    | project msg_s, TimeGenerated, ResourceId
     | where msg_s startswith " Error:"
     //  --Pre-parsing filtering:
     | where
@@ -119,7 +121,7 @@ ParserQuery: |
       and (array_length(domain_has_any) ==0 or  msg_s has_any (domain_has_any))
       and (responsecodename=='*') // Return empty list if response code is passed
     // --
-     | parse msg_s with 
+    | parse msg_s with 
         " Error: " nu:string 
         " " DnsQuery:string 
         ". " DnsQueryTypeName:string 
@@ -130,7 +132,7 @@ ParserQuery: |
         ": " EventResultOriginalDetails:string
     // -- Post-filtering accurately now that message is parsed
     | where
-         (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
+        (srcipaddr=="*" or  SrcIpAddr==srcipaddr)
           and (array_length(domain_has_any) ==0 or DnsQuery has_any (domain_has_any))
     | project-away msg_s
     | extend 
@@ -169,7 +171,7 @@ ParserQuery: |
         DnsFlagsRecursionDesired = DnsFlags has "rd",
         DnsFlagsTruncates = DnsFlags has "tc"
     | extend
-       // -- Aliases
+      // -- Aliases
         DnsResponseCodeName=EventResultDetails,
         Domain=DnsQuery,
         IpAddr=SrcIpAddr,

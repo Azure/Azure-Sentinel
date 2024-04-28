@@ -1,0 +1,69 @@
+id: 4f42b94f-b210-42d1-a023-7fa1c51d969f
+name: New onmicrosoft domain added to tenant
+description: |
+  'This detection looks for new onmicrosoft domains being added to a tenant. 
+  An attacker who compromises a tenant may register a new onmicrosoft domain in order to masquerade as a service provider for launching phishing campaigns.
+  Domain additions are not a common occurrence and users should validate that the domain was added by a legitimate user, with a legitimate purpose.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - ResourceDevelopment
+relevantTechniques:
+  - T1585.003
+query: |
+  AuditLogs
+  | where AADOperationType == "Add"
+  | where Result == "success"
+  | where OperationName in ("Add verified domain", "Add unverified domain")
+  | extend InitiatedBy = parse_json(InitiatedBy)
+  | extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIp = tostring(InitiatedBy.user.ipAddress)
+  | extend InitiatingApp = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingSPID = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend DomainAdded = tostring(TargetResources[0].displayName)
+  | where DomainAdded has "onmicrosoft"
+  | extend ActionInitiatedBy = case(isnotempty(InitiatingUser), InitiatingUser, strcat(InitiatingApp, " - ", InitiatingSPID))
+  | extend UserName = split(InitiatingUser, "@")[0]
+  | extend UPNSuffix = split(InitiatingUser, "@")[1]
+  | project-reorder TimeGenerated, OperationName, DomainAdded, ActionInitiatedBy, InitiatingIp
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUser
+      - identifier: Name
+        columnName: UserName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingSPID
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIp
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainAdded
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{DomainAdded}} added to tenant by {{ActionInitiatedBy}}'
+  alertDescriptionFormat: 'This detection looks for new onmicrosoft domains being added to a tenant. An attacker who compromises a tenant may register a new onmicrosoft domain in order to masquerade as a service provider for launching phishing accounts. Domain additions are not a common occurrence and users should validate that {{ActionInitiatedBy}} added {{DomainAdded}} with a legitimate purpose.'
+kind: Scheduled
+version: 1.0.1

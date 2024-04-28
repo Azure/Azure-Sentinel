@@ -1,0 +1,46 @@
+id: 4ab8b09e-3c23-4974-afbe-7e653779eb2b
+name: Detect excessive NXDOMAIN DNS queries - Static threshold based (ASIM DNS Solution)
+description: |
+  'This rule generates an alert when the configured threshold for DNS queries to non-existent domains is breached. This helps in identifying possible C2 communications. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+  - T1008
+query: |
+  let lookback = 1h;
+  let threshold = 200;
+  _Im_Dns(starttime=ago(lookback), responsecodename='NXDOMAIN')
+  | summarize NXDOMAINCount=count() by SrcIpAddr, bin(TimeGenerated, 15m)
+  | where NXDOMAINCount > threshold
+  | join kind=inner (_Im_Dns(starttime=ago(lookback), responsecodename='NXDOMAIN')
+    | summarize DNSQueries = makeset(DnsQuery) by SrcIpAddr)
+    on SrcIpAddr
+  | extend NXDOMAINthreshold=threshold
+  | project-away SrcIpAddr1
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  DNSQueries: DNSQueries
+  NXDOMAINthreshold: NXDOMAINthreshold
+  NXDOMAINCount: NXDOMAINCount
+alertDetailsOverride:
+  alertDisplayNameFormat: "[Static threshold] Excessive NXDOMAIN DNS Queries has been detected from client IP: '{{SrcIpAddr}}'"
+  alertDescriptionFormat: "Client is generating excessive amount of DNS queries for non-existent domains. This can be an indication of possible C2 communications. \n\n'NXDOMAIN' error count threshold: '{{NXDOMAINthreshold}}'\n\nCurrent 'NXDOMAIN' error count from this client: '{{NXDOMAINCount}}'\n\nDNS queries requested by the client include:\n\n'{{DNSQueries}}'"
+version: 1.0.2
+kind: Scheduled

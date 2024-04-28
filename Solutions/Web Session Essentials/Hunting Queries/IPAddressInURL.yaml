@@ -1,0 +1,80 @@
+id: e8adb0d9-c4fa-4557-97d0-cb9e221a63b2
+name: Detect IPAddress in the requested URL (ASIM Web Session)
+description: |
+  'This rule detects IPAddress in the requested URL'
+tags:
+  - Schema: WebSession
+    SchemaVersion: 0.2.6
+requiredDataConnectors: []
+tactics:
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1041
+  - T1071.001
+  - T1001
+query: |
+  let lookback = 1d;
+  // IPAddress Regex Pattern
+  let PlainText_IPv4_Regex_Pattern = @"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b";
+  // Identified base64 encoded IPv4 addresses
+  let ipv4_encoded_identification_regex = @"\=([a-zA-Z0-9\/\+]*(?:(?:MC|Au|wL|MS|Eu|xL|Mi|Iu|yL|My|Mu|zL|NC|Qu|0L|NS|Uu|1L|Ni|Yu|2L|Ny|cu|3L|OC|gu|4L|OS|ku|5L){1}[a-zA-Z0-9\/\+]{2,4}){3}[a-zA-Z0-9\/\+\=]*)";
+  // Extractes IPv4 addresses as hex values
+  let ipv4_decoded_hex_extract = @"((?:(?:61|62|63|64|65|66|67|68|69|6a|6b|6c|6d|6e|6f|70|71|72|73|74|75|76|77|78|79|7a|41|42|43|44|45|46|47|48|49|4a|4b|4c|4d|4e|4f|50|51|52|53|54|55|56|57|58|59|5a|2f|2b|3d),){6,14}(?:61|62|63|64|65|66|67|68|69|6a|6b|6c|6d|6e|6f|70|71|72|73|74|75|76|77|78|79|7a|41|42|43|44|45|46|47|48|49|4a|4b|4c|4d|4e|4f|50|51|52|53|54|55|56|57|58|59|5a|2f|2b|3d))";
+  let ipV4_FromPlainString = _Im_WebSession(starttime=ago(lookback), eventresult='Success')
+  | where Url matches regex PlainText_IPv4_Regex_Pattern and not(ipv4_is_private(DstIpAddr)) // take URLs containing IPV4 address and the requests going to internet
+  | project TimeGenerated, Url, SrcIpAddr, SrcUsername, SrcHostname
+  | extend ip_candidate = extract(PlainText_IPv4_Regex_Pattern, 0, Url)
+  | summarize EventEndTime = max(TimeGenerated), EventStartTime = min(TimeGenerated), Urls=tostring(make_set(Url,100)) by ip_candidate, SrcIpAddr, SrcUsername, SrcHostname;
+  let ipV4_FromEncodedString = _Im_WebSession(starttime=ago(lookback), eventresult='Success')
+  // Identify requests with encoded IPv4 addresses
+  | where Url matches regex ipv4_encoded_identification_regex and not(ipv4_is_private(DstIpAddr)) // take URLs containing encoded IPV4 address and the requests going to internet
+  | project TimeGenerated, Url, SrcIpAddr, SrcUsername, SrcHostname
+  // Extract IP candidates in their base64 encoded format, significantly reducing the dataset
+  | extend extracted_encoded_ip_candidate = extract_all(ipv4_encoded_identification_regex, Url)
+  // We could have more than one candidate, expand them out
+  | mv-expand extracted_encoded_ip_candidate to typeof(string)
+  | summarize EventStartTime=min(TimeGenerated), EventEndTime=max(TimeGenerated), make_set(Url,100) by extracted_encoded_ip_candidate, SrcIpAddr, SrcUsername, SrcHostname
+  // Pad if we need to
+  | extend extracted_encoded_ip_candidate = iff(strlen(extracted_encoded_ip_candidate) % 2 == 0, extracted_encoded_ip_candidate, strcat(extracted_encoded_ip_candidate, "="))
+  // Now decode the candidate to a long array, we cannot go straight to string as it cannot handle non-UTF8, we need to strip that first
+  | extend extracted_encoded_ip_candidate = tostring(base64_decode_toarray(extracted_encoded_ip_candidate))
+  // Extract the IP candidates from the array
+  | extend hex_extracted = extract_all(ipv4_decoded_hex_extract, extracted_encoded_ip_candidate)
+  // Expand, it's still possible that we might have more than 1 IP
+  | mv-expand hex_extracted
+  // Now we should have a clean string. We need to put it back into a dynamic array to convert back to a string.
+  | extend hex_extracted = trim_end(",", tostring(hex_extracted))
+  | extend hex_extracted = strcat("[", hex_extracted, "]")
+  | extend hex_extracted = todynamic(hex_extracted)
+  // Convert the array back into a string
+  | extend decoded_ip_candidate = unicode_codepoints_to_string(hex_extracted)
+  | where decoded_ip_candidate matches regex PlainText_IPv4_Regex_Pattern
+  | summarize by ip_candidate=decoded_ip_candidate, Urls=tostring(set_Url), EventStartTime, EventEndTime, SrcIpAddr, SrcUsername, SrcHostname;
+  union ipV4_FromPlainString,ipV4_FromEncodedString
+  | extend Name = iif(SrcUsername contains "@", tostring(split(SrcUsername,'@',0)[0]),SrcUsername), UPNSuffix = iif(SrcUsername contains "@",tostring(split(SrcUsername,'@',1)[0]),"")
+  | extend IP_0_Address = SrcIpAddr
+  | extend IP_1_Address = ip_candidate
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend Host_0_HostName = SrcHostname
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ip_candidate
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: SrcHostname
+version: 1.0.0

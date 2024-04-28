@@ -1,6 +1,6 @@
-# Log Analytics KQL function An ASIM Function to return the ICMP type name
+# Log Analytics KQL function An ASIM function to return the ICMP type name
 
-ARM template for deploying the Log Analytics KQL function An ASIM Function to return the ICMP type name
+ARM template for deploying the Log Analytics KQL function An ASIM function to return the ICMP type name
 
 This ASIM function returns ICMP Type name associated with the numerical value provided as a parameter. For example, for 8, the function returns "Echo" (which is the type used by the ping command).  
 

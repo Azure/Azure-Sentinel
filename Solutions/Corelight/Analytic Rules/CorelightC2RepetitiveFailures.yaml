@@ -7,7 +7,10 @@ status: Available
 requiredDataConnectors:
   - connectorId: Corelight
     dataTypes:
-      - Corelight
+      - Corelight_v2_dns
+      - Corelight_v2_dns_red
+      - corelight_dns
+      - corelight_dns_red
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -16,16 +19,15 @@ tactics:
   - CommandAndControl
 query: |
   let threshold = 25;
-  Corelight
-  | where EventType =~ 'dns'
-  | where DnsResponseCodeName in~ ('NXDOMAIN', 'SERVFAIL')
-  | summarize count() by DnsQueryName, SrcIpAddr, bin(TimeGenerated, 5m)
+  union corelight_dns, corelight_dns_red
+  // rcodes: SERVFAIL=2, NXDOMAIN=3
+  | where rcode in (2, 3)
+  | summarize count() by query, id_orig_h, bin(TimeGenerated, 5m)
   | where count_ > threshold
-  | extend IPCustomEntity = SrcIpAddr
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: id_orig_h
+version: 2.1.0
 kind: Scheduled
