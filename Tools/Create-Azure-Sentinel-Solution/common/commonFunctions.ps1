@@ -3364,7 +3364,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
         $parserMetadata = [PSCustomObject]@{
             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
             apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
-            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')))))]";
+            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)'),'/'))))]";
             dependsOn  =  @(
                 "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
             );
@@ -3459,7 +3459,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
             apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion #"2022-01-01-preview";
             location   = "[parameters('workspace-location')]";
-            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')))))]";
+            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)'),'/'))))]";
             dependsOn  =  @(
                 "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
             );
