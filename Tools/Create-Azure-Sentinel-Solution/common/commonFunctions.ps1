@@ -353,6 +353,13 @@ function getParserDetails($solutionName,$yaml,$isyaml)
                     #$parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
 
                     $parserNameValue = $parserTemplate.name
+                    #$parserNameValue = "[concat(parameters('workspace'),'/','ExchangeAdminAuditLogs')]"
+                    # use below
+                    if ($parserNameValue -like "*concat(parameters('workspace')*") {
+                        $splitParserObjectName = $parserNameValue -split ","
+                        $parserActualName = $splitParserObjectName[2].Replace("'", "").Replace(")]", "")
+                    }
+                    # remove below
                     if ($parserNameValue -like "*variables('parserObject*") {
                         $splitParserObjectName = $parserNameValue -split "parserObject"
                         $lastSingleQuoteIndex = $splitParserObjectName[1].LastIndexOf("'");
