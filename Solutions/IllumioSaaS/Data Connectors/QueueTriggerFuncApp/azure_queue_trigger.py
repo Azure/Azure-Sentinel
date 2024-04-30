@@ -44,6 +44,15 @@ def _create_s3_client():
                                     config=boto_config
                                     )
 
+def fileToBeFiltered(file_path):
+    if LOGS_TO_CONSUME == 'All':
+        return False 
+    
+    if 'auditable' in file_path:
+        return 'Flow Summaries' in LOGS_TO_CONSUME            
+    else:
+        return 'Auditable Events' in LOGS_TO_CONSUME
+    
 async def _generate_sentinel_connectors(session):
     stream_names = []
     sentinel_connectors = {}
@@ -90,6 +99,9 @@ async def main(msg: func.QueueMessage ):
             messageId = obj.get('sqs_message_id')
             file_size = obj.get('file_size', 0) 
             accumulated_file_size += file_size           
+            
+            if fileToBeFiltered(link):
+                continue
             
             file_stats = {"Trigger":"Queue", "Type":"FileStats", "link": link, "bucket": bucket, "sqs_message_id": messageId, "file_size_bytes": file_size}
             logging.info(json.dumps(file_stats))

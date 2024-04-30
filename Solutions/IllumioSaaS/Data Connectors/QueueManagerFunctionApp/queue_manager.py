@@ -35,7 +35,7 @@ async def main(mytimer: func.TimerRequest):
     logging.info("File count in main queue is {}".format(mainQueueCount))        
     
     while True:
-        # attempt too exhaust backlog queue and feed enough to mainQueue
+        # attempt to exhaust backlog queue and feed enough to mainQueue
         if backlogQueueCount > 0:
             if mainQueueCount >= MAX_QUEUE_MESSAGES_MAIN_QUEUE:
                 logging.info('Backlog queue and main queue are at limits, do not process any new messages from sqs')
