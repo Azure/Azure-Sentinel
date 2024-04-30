@@ -2,13 +2,13 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "title": "Pure Storage Volume Snapshot",
-    "description": "This playbook gets triggered when a Sentinel Incident created for suspicious activity and it takes snapshot of specific volumes mentioned in key vault.",
+    "title": "Pure Storage Protection Group Volume Snapshot",
+    "description": "This playbook gets triggered when a Sentinel Incident created for suspicious activity and it takes protection group snapshot of specific protection groups listed in key vault.",
     "prerequisites": [
       "1. Azure Key vault is required for storing the Pure Storage API token , create key vault if not exists",
       "2. Store API token as a secret in vault, with your storage array IP in dash notation as key name. Eg: 8-8-8-8",
-      "3. Store volumes list as a secret in vault, with key name as follows. Eg: 8-8-8-8-volumes",
-      "4. Store name of the volumes to be snapshotted as comma separated values for the key created in previous step"
+      "3. Store protection group list as a secret in vault, with key name as follows. Eg: 8-8-8-8-protection-groups",
+      "4. Store name of the protection group to be snapshotted as comma separated values for the key created in previous step"
     ],
     "postDeployment": [
       "**a. Authorize playbook**",
@@ -30,7 +30,7 @@
   },
   "parameters": {
     "PlaybookName": {
-      "defaultValue": "Pure-Storage-Volume-Snapshot",
+      "defaultValue": "Pure-Storage-Protection-Group-Snapshot",
       "type": "string"
     }
   },
@@ -56,13 +56,13 @@
             "Microsoft_Sentinel_incident": {
               "type": "ApiConnectionWebhook",
               "inputs": {
-                "body": {
-                  "callback_url": "@{listCallbackUrl()}"
-                },
                 "host": {
                   "connection": {
                     "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
                   }
+                },
+                "body": {
+                  "callback_url": "@{listCallbackUrl()}"
                 },
                 "path": "/incident-creation"
               }
@@ -73,53 +73,19 @@
               "runAfter": {},
               "type": "ApiConnection",
               "inputs": {
-                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                 "host": {
                   "connection": {
                     "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
                   }
                 },
                 "method": "post",
+                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
                 "path": "/entities/ip"
               }
             },
             "IP_Loop": {
               "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
               "actions": {
-                "Fetching_API_version": {
-                  "runAfter": {
-                    "Get_secret": [
-                      "Succeeded"
-                    ]
-                  },
-                  "type": "Http",
-                  "inputs": {
-                    "method": "GET",
-                    "uri": "https://@{items('IP_Loop')?['Address']}/api/api_version"
-                  },
-                  "runtimeConfiguration": {
-                    "contentTransfer": {
-                      "transferMode": "Chunked"
-                    }
-                  }
-                },
-                "Get_Volumes_list": {
-                  "runAfter": {
-                    "Retrieving_auth_token": [
-                      "Succeeded"
-                    ]
-                  },
-                  "type": "ApiConnection",
-                  "inputs": {
-                    "host": {
-                      "connection": {
-                        "name": "@parameters('$connections')['keyvault']['connectionId']"
-                      }
-                    },
-                    "method": "get",
-                    "path": "/secrets/@{encodeURIComponent(concat(replace(items('IP_Loop')?['Address'], '.', '-'),'-volumes'))}/value"
-                  }
-                },
                 "Get_secret": {
                   "type": "ApiConnection",
                   "inputs": {
@@ -132,19 +98,16 @@
                     "path": "/secrets/@{encodeURIComponent(replace(items('IP_Loop')?['Address'], '.', '-'))}/value"
                   }
                 },
-                "Logout": {
+                "Fetching_API_version": {
                   "runAfter": {
-                    "Volume_snapshot": [
+                    "Get_secret": [
                       "Succeeded"
                     ]
                   },
                   "type": "Http",
                   "inputs": {
-                    "headers": {
-                      "x-auth-token": "@{outputs('Retrieving_auth_token')?['headers']['x-auth-token']}"
-                    },
-                    "method": "POST",
-                    "uri": "https://@{items('IP_Loop')?['Address']}/api/@{last(body('Fetching_API_version')?['version'])}/logout"
+                    "uri": "https://@{items('IP_Loop')?['Address']}/api/api_version",
+                    "method": "GET"
                   },
                   "runtimeConfiguration": {
                     "contentTransfer": {
@@ -152,7 +115,7 @@
                     }
                   }
                 },
-                "Retrieving_auth_token": {
+                "Retreiving_auth_token": {
                   "runAfter": {
                     "Fetching_API_version": [
                       "Succeeded"
@@ -160,11 +123,11 @@
                   },
                   "type": "Http",
                   "inputs": {
+                    "uri": "https://@{items('IP_Loop')?['Address']}/api/@{last(body('Fetching_API_version')?['version'])}/login",
+                    "method": "POST",
                     "headers": {
                       "api-token": "@{body('Get_secret')?['value']}"
-                    },
-                    "method": "POST",
-                    "uri": "https://@{items('IP_Loop')?['Address']}/api/@{last(body('Fetching_API_version')?['version'])}/login"
+                    }
                   },
                   "runtimeConfiguration": {
                     "contentTransfer": {
@@ -172,22 +135,57 @@
                     }
                   }
                 },
-                "Volume_snapshot": {
+                "Get_PG_list": {
                   "runAfter": {
-                    "Get_Volumes_list": [
+                    "Retreiving_auth_token": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                      }
+                    },
+                    "method": "get",
+                    "path": "/secrets/@{encodeURIComponent(concat(replace(items('IP_Loop')?['Address'], '.', '-'),'-protection-groups'))}/value"
+                  }
+                },
+                "Protection_Group_Snapshot_": {
+                  "runAfter": {
+                    "Get_PG_list": [
                       "Succeeded"
                     ]
                   },
                   "type": "Http",
                   "inputs": {
-                    "headers": {
-                      "x-auth-token": "@{outputs('Retrieving_auth_token')?['headers']['x-auth-token']}"
-                    },
+                    "uri": "https://@{items('IP_Loop')?['Address']}/api/@{last(body('Fetching_API_version')?['version'])}/protection-group-snapshots",
                     "method": "POST",
-                    "queries": {
-                      "source_names": "@{body('Get_Volumes_list')?['value']}"
-                    },
-                    "uri": "https://@{items('IP_Loop')?['Address']}/api/@{last(body('Fetching_API_version')?['version'])}/volume-snapshots"
+                    "headers": {
+                      "x-auth-token": "@{outputs('Retreiving_auth_token')?['headers']['x-auth-token']}",
+                      "source_names": "@{body('Get_PG_list')?['value']}"
+                    }
+                  },
+                  "runtimeConfiguration": {
+                    "contentTransfer": {
+                      "transferMode": "Chunked"
+                    }
+                  }
+                },
+                "Logout": {
+                  "runAfter": {
+                    "Protection_Group_Snapshot_": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "uri": "https://@{items('IP_Loop')?['Address']}/api/@{last(body('Fetching_API_version')?['version'])}/logout",
+                    "method": "POST",
+                    "headers": {
+                      "x-auth-token": "@{outputs('Retreiving_auth_token')?['headers']['x-auth-token']}"
+                    }
                   },
                   "runtimeConfiguration": {
                     "contentTransfer": {
@@ -237,7 +235,7 @@
       "type": "Microsoft.Logic/workflows",
       "location": "[resourceGroup().location]",
       "tags": {
-        "hidden-SentinelTemplateName": "Pure-Storage-Volume-Snapshot",
+        "hidden-SentinelTemplateName": "Pure-Storage-Protection-Group-Snapshot",
         "hidden-SentinelTemplateVersion": "1.0"
       },
       "identity": {
