@@ -1,0 +1,121 @@
+Parser:
+    Title: Audit Event ASIM filtering parser for Microsoft GithubWebhook audit events
+    Version: "0.1.1"
+    LastUpdated: Apr 30 2024
+Product:
+    Name: Microsoft GithubWebhook
+Normalization:
+    Schema: AuditEvent
+    Version: "0.1"
+References:
+    - Title: ASIM Audit Event Schema
+      Link: https://aka.ms/ASimAuditEventDoc
+    - Title: ASIM
+      Link: https://aka.ms/AboutASIM
+    - Title: Microsoft GithubWebhook Events product documentation
+      Link: https://docs.github.com/en/webhooks/webhook-events-and-payloads
+Description: |
+    This ASIM parser supports filtering and normalizing Microsoft Github audit events in the Githubscanaudit_C.
+ParserName: vimAuditEventMicrosoftGithubWebhook
+EquivalentBuiltInParser: _Im_AuditEvent_MicrosoftGithubWebhook
+ParserParams:
+    - Name: starttime
+      Type: datetime
+      Default: datetime(null)
+    - Name: endtime
+      Type: datetime
+      Default: datetime(null)
+    - Name: srcipaddr_has_any_prefix
+      Type: dynamic
+      Default: dynamic([])
+    - Name: actorusername_has_any
+      Type: dynamic
+      Default: dynamic([])
+    - Name: operation_has_any
+      Type: dynamic
+      Default: dynamic([])
+    - Name: eventtype_in
+      Type: dynamic
+      Default: dynamic([])
+    - Name: eventresult
+      Type: string
+      Default: "*"
+    - Name: object_has_any
+      Type: dynamic
+      Default: dynamic([])
+    - Name: newvalue_has_any
+      Type: dynamic
+      Default: dynamic([])
+    - Name: disabled
+      Type: bool
+      Default: false
+ParserQuery: |
+let parser = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null), 
+    username_has_any:dynamic = dynamic([]),
+    targetappname_has_any:dynamic = dynamic([]),
+    srcipaddr_has_any_prefix:dynamic = dynamic([]),
+    srchostname_has_any:dynamic = dynamic([]),
+    eventtype_in:dynamic = dynamic([]),
+    eventresultdetails_in:dynamic = dynamic([]),
+    eventresult:string = '*',
+    disabled:bool=false
+)
+{
+     let EventResultDetailslookup=datatable(EventOriginalType:string,EventResult:string, EventType:string, EventSeverity:string)
+     ["push","Success","Install","Informational",
+      "create","Success","Create","Informational",
+      "delete","Success","Delete","Informational",
+      "repository","Success","Other","Informational",
+      "pull_request","Success","Other","Informational",
+      "membership","Success","Other","Informational",
+      "member","Success","Other","Informational",
+      "fork","Success","Create","Informational",
+      "installation","Success","Create","Informational",
+      "team","Success","Create","Informational",
+      "organization","Success","Other","Informational",
+      ];
+      githubscanaudit_CL
+     | where not(disabled)
+     | extend TimeGenerated = todatetime(tostring(split(TimeGenerated, '.', 0)[0]))
+      //  -- Pre filtering
+     | where 
+          (isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and ((array_length(targetappname_has_any) == 0)) // targetappname not available on source
+          and ((array_length(srcipaddr_has_any_prefix) == 0))// ip address for source not available
+          and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
+          // eventresult filtering done later in the parser
+          //  -- end pre-filtering
+     |project Timegenerated,
+     User = tostring(parse_json(sender_s).login),
+     EventReportUrl = tostring(parse_json(repository_s).url),
+     Object = tostring(parse_json(repository_s).name),
+     Application = tostring(parse_json(installation_s).app_slug),   
+     team_s = tostring(parse_json(team_s).name),
+     invitation_s = tostring(parse_json(invitation_s).login),
+     organization_s = tostring(parse_json(organization_s).login),
+     EventCount=int(1),
+     EventSchema='AuditEvent',
+     EventProduct='GithubWebhook',
+     EventVendor='Microsoft',
+     EventSchemaVersion='0.1',
+     EventStartTime=TimeGenerated,
+     EventEndTime=TimeGenerated,
+     Operation=action_s,
+     Type=Type,
+     EventOriginalType=event_s
+    |lookup EventResultDetailslookup on EventOriginalType
+};
+parser
+     ( starttime=starttime,
+      endtime=endtime,
+      username_has_any=username_has_any,
+      targetappname_has_any=targetappname_has_any,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      srchostname_has_any=srchostname_has_any,
+      eventtype_in=eventtype_in,
+      eventresultdetails_in=eventresultdetails_in,
+      eventresult=eventresult,
+      disabled=disabled)
