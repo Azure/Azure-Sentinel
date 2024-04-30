@@ -30,11 +30,10 @@ def ingest_backlog_unacked_message():
                 )
                 return
             subscription = list(json_data["result"]["subscription/backlog_message_count"].keys())[0]
-            backlog_message = json_data["result"]["subscription/backlog_message_count"][subscription][
-                "partition_num: 1"
-            ]
+            partition_key = list(json_data["result"]["subscription/backlog_message_count"][subscription].keys())[0]
+            backlog_message = json_data["result"]["subscription/backlog_message_count"][subscription][partition_key]
             oldest_unacked_message = json_data["result"]["subscription/oldest_unacked_message_age"][subscription][
-                "partition_num: 1"
+                partition_key
             ]
             data_to_post = []
             for key in backlog_message:
