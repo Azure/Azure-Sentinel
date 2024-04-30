@@ -108,7 +108,7 @@ class Auth0Connector:
             self.update_statemarker_file(config, last_log_id, [])
             return
         events = resp.json()
-        logging.info('\t response object : {events}')
+        logging.info(f'Response Object : {events}')
         events.sort(key=lambda item: item['date'], reverse=True)
         last_log_id = events[0]['log_id']
         for el in events:
