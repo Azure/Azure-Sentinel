@@ -340,9 +340,9 @@ function getParserDetails($solutionName,$yaml,$isyaml)
             $parserTemplate = $templateContent.resources | Where-Object { $_.type -eq $parserResourceType.templateSpecParserType -or $_.type -eq $parserResourceType.workspaceType }
 
             if ($null -ne $parserTemplate) {
-                if($null -ne $parserTemplate.resources)
+                if($null -ne $parserTemplate)
                 {
-                    $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
+                    $parserTemplate = $parserTemplate | Where-Object {$null -ne $_.properties.category -and $_.type -like "*savedSearches*" }
                 }
 
                 $parserTemplate = $parserTemplate | Where-Object {$_.properties.functionAlias -eq $(getFileNameFromPath $file)}
@@ -350,16 +350,16 @@ function getParserDetails($solutionName,$yaml,$isyaml)
                 if ($null -ne $parserTemplate) {
                     $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
                     $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
-                    #$parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
+                    $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
 
                     $parserNameValue = $parserTemplate.name
-                    #$parserNameValue = "[concat(parameters('workspace'),'/','ExchangeAdminAuditLogs')]"
-                    # use below
+
                     if ($parserNameValue -like "*concat(parameters('workspace')*") {
                         $splitParserObjectName = $parserNameValue -split ","
                         $parserActualName = $splitParserObjectName[2].Replace("'", "").Replace(")]", "")
+                        $parserDisplayDetails.name = $parserActualName
                     }
-                    # remove below
+
                     if ($parserNameValue -like "*variables('parserObject*") {
                         $splitParserObjectName = $parserNameValue -split "parserObject"
                         $lastSingleQuoteIndex = $splitParserObjectName[1].LastIndexOf("'");
@@ -372,8 +372,6 @@ function getParserDetails($solutionName,$yaml,$isyaml)
                         $finalizedParserName = $parserActualName.Substring($replaceConcatValue, $lastIndexOfQuotation - $replaceConcatValue)
 
                         $parserDisplayDetails.name = $finalizedParserName;
-                    } else {
-                        $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
                     }
 
                     $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
@@ -3313,7 +3311,7 @@ function Base32Encode([uint32]$charValue)
         return $sb.ToString()
 }
 
-function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceDetails, $displayDetails)
+function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceDetails)
 {
         # Add workspace resource ID if not available
         if (!$global:baseMainTemplate.variables.workspaceResourceId -and $contentResourceDetails.contentSchemaVersion -ne '3.0.0') {
@@ -3341,7 +3339,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
         }
         # Parser Content
         $parserContent = [PSCustomObject]@{
-            name       = "[concat(parameters('workspace'),'/','$($displayDetails.name)')]";
+            name       = "[variables('parserObject$global:parserCounter')._parserName$global:parserCounter]";
             apiVersion = $contentResourceDetails.savedSearchesApiVersion; #"2020-08-01";
             type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
             location   = "[parameters('workspace-location')]";
@@ -3371,9 +3369,9 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
         $parserMetadata = [PSCustomObject]@{
             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
             apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion; #"2022-01-01-preview";
-            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)'),'/'))))]";
+            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject$global:parserCounter')._parserId$global:parserCounter,'/'))))]";
             dependsOn  =  @(
-                "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
+                "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
                 parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
@@ -3443,7 +3441,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
         $parserObj = [PSCustomObject] @{
             type       = "Microsoft.OperationalInsights/workspaces/savedSearches";
             apiVersion = $contentResourceDetails.savedSearchesApiVersion; #"2020-08-01";
-            name       = "[concat(parameters('workspace'),'/','$($displayDetails.name)')]";
+            name       = "[variables('parserObject$global:parserCounter')._parserName$global:parserCounter]";
             location   = "[parameters('workspace-location')]";
             properties = [PSCustomObject] @{
                 eTag          = "*"
@@ -3466,9 +3464,9 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
             type       = "Microsoft.OperationalInsights/workspaces/providers/metadata";
             apiVersion = $contentResourceDetails.commonResourceMetadataApiVersion #"2022-01-01-preview";
             location   = "[parameters('workspace-location')]";
-            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)'),'/'))))]";
+            name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('parserObject$global:parserCounter')._parserId$global:parserCounter,'/'))))]";
             dependsOn  =  @(
-                "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
+                "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
                 parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
@@ -3540,6 +3538,9 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     }
     
     $displayDetails = getParserDetails $global:solutionId $yaml $isyaml
+    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($displayDetails.name)')]"
+
+    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
 
     $functionAlias = ($null -ne $yaml -and $yaml.Count -gt 0) ? $yaml.FunctionName : "$($displayDetails.functionAlias)"
     $parserContentIdValue = "$($functionAlias)-Parser"
@@ -3569,7 +3570,7 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
 
     if($contentToImport.TemplateSpec) {
         # Adding the Parser respective TemplateSpec Resources and Active Parser and Metadata Resource
-        addTemplateSpecParserResource $content $yaml $isyaml $contentResourceDetails $displayDetails
+        addTemplateSpecParserResource $content $yaml $isyaml $contentResourceDetails
     }
     else {
         if ($global:parserCounter -eq 1 -and $(queryResourceExists) -and !$contentToImport.TemplateSpec) {
