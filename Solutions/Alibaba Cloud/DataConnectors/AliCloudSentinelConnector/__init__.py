@@ -1,6 +1,7 @@
 from __future__ import print_function
 from aliyun.log import *
 import os
+import time
 import requests
 import datetime
 import hashlib
@@ -27,6 +28,8 @@ connection_string = os.environ['AzureWebJobsStorage']
 chunksize = 2000
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 workers = os.environ.get('AliCloudWorkers', '10')
+iteration_length_in_seconds = int(os.environ.get('AliCloudIterationLengthInSeconds', '60'))
+max_runtime_before_stopping_in_minutes = int(os.environ.get('AliCloudMaxRunTimeInMinutes', '18'))
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -37,9 +40,8 @@ if (not match):
     raise Exception("Ali Cloud: Invalid Log Analytics Uri")
 
 
-def generate_date():
+def generate_date(state):
     current_time = datetime.utcnow().replace(second=0, microsecond=0) - timedelta(minutes=10)
-    state = StateManager(connection_string=connection_string)
     i = state.get()
     if i is not None:
         past_time = datetime.strptime(state.get(), "%d.%m.%Y %H:%M:%S")
@@ -52,7 +54,6 @@ def generate_date():
         logging.info("There is no last time point, trying to get events for last hour")
         past_time = (current_time - timedelta(minutes=60))
 
-    state.post(current_time.strftime("%d.%m.%Y %H:%M:%S"))
     return past_time, current_time
 
 
@@ -128,6 +129,8 @@ def get_list_logstores(client, project):
 def process_logstores(client, project, start_time, end_time):
     logstores = get_list_logstores(client, project)
     logs_json_all = []
+    logging.info(f"Retrieving logs for project {project} from {len(logstores)} logstores for time range: {start_time.strftime('%Y-%m-%d %H:%M:%S')}-{end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
     for logstore in logstores:
         logs_json = []
         res = client.get_log_all(project, logstore, str(start_time), str(end_time), topic)
@@ -144,16 +147,17 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
     logging.getLogger().setLevel(logging.INFO)
     logging.info('Starting program')
-    start_time, end_time = generate_date()
+    stop_run_time = time.time() + datetime.timedelta(minutes=int(max_runtime_before_stopping_in_minutes))
+    
+    state = StateManager(connection_string=connection_string)
+    start_time, end_time = generate_date(state)
+    iteration_length = datetime.timedelta(seconds=iteration_length_in_seconds)
 
     if not endpoint or not accessKeyId or not accessKey:
         raise Exception("Endpoint, access_id and access_key cannot be empty")
 
     # authorization
     client = LogClient(endpoint, accessKeyId, accessKey, token)
-
-    # get logs
-    logs_json = []
     try:
         if user_projects == ['']:
             projects = client.list_project(size=-1).get_projects()
@@ -161,15 +165,35 @@ def main(mytimer: func.TimerRequest) -> None:
         else:
             project_names = user_projects
 
-        executor = concurrent.futures.ThreadPoolExecutor(int(workers))
-        futures = [executor.submit(process_logstores, client, project, start_time, end_time) for project in
-                   project_names]
-        concurrent.futures.wait(futures)
-        for future in futures:
-            if future.result() is not None:
-                logs_json += future.result()
+        logging.info(f"Processing logs for {len(project_names)} projects")
+
+        current_chunk_start_time = start_time
+        while current_chunk_start_time < end_time:
+            # get logs
+            logs_json = []
+
+            # Move to next minute chunk (or to )
+            current_chunk_end_time = min(current_chunk_start_time + iteration_length, end_time)            
+            logging.info(f"Processing logs for time range: start_time - {current_chunk_start_time.strftime('%Y-%m-%d %H:%M:%S')}, end_time - {current_chunk_end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+            executor = concurrent.futures.ThreadPoolExecutor(int(workers))
+            futures = [executor.submit(process_logstores, client, project, current_chunk_start_time, current_chunk_end_time) for project in project_names]
+            concurrent.futures.wait(futures)
+            for future in futures:
+                if future.result() is not None:
+                    logs_json += future.result()
+
+            # Send data via data collector API
+            gen_chunks(logs_json, start_time=current_chunk_start_time, end_time=current_chunk_end_time)
+
+            # Update current time for the next iteration
+            current_chunk_start_time = current_chunk_end_time
+
+            state.post(current_chunk_start_time.strftime("%d.%m.%Y %H:%M:%S"))
+
+            if time.time() > stop_run_time:
+                logging.info(f"Function execution time exceeded alloted time of {max_runtime_before_stopping_in_minutes} minutes. Gracefully stopping. No data loss encountered - next execution will continue from {current_chunk_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                break
+
     except Exception as err:
         logging.error("Something wrong. Exception error text: {}".format(err))
-
-    # Send data via data collector API
-    gen_chunks(logs_json, start_time=start_time, end_time=end_time)
