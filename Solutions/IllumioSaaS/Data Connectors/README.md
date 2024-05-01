@@ -15,29 +15,12 @@ This might result in additional data ingestion costs. Check the [Azure Functions
 
 ## Deployment:
 
-### Manual set up:
-
-1. Since [logs ingestion api](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview) is used, the below objects
-    
-    i. Data collection rules
-
-    ii. Data collection endpoint
-
-    iii. Custom tables
-
-    iv. App registration and secret
-
-    have to be created. 
-   
-    Please use the following template to set up DCR, DCE and custom tables. App registration and secret can be created in next step. 
-    
-
-2. To set up the function app, follow the next steps.
+1. To set up the function app, follow the next steps.
 
 
 ### ARM Deployment of function app, data collection rules, data collection endpoint and custom tables
 
 Use the following template:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fillumio-shield%2FAzure-Sentinel%2FIllumio-Integration%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FIllumioFunctionAppDeployment%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fillumio-shield%2FAzure-Sentinel%2FIllumio-Integration%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FIllumioFunctionAppDeployment%2FcreateUiDefinition.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fillumio-shield%2FAzure-Sentinel%2FIllumio-Integration%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FmainTemplate.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fillumio-shield%2FAzure-Sentinel%2FIllumio-Integration%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2Fazuredeploy_IllumioSaaS_FunctionApp.json) 
 

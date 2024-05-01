@@ -4,6 +4,7 @@ from collections import deque
 from azure.identity import DefaultAzureCredential
 from azure.monitor.ingestion.aio import LogsIngestionClient
 from azure.core.exceptions import HttpResponseError
+import logging
 
 class AzureSentinelConnectorAsync:
     def __init__(self, session: aiohttp.ClientSession, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=4000):
@@ -54,10 +55,9 @@ class AzureSentinelConnectorAsync:
     # credential : string
     # data : List of dictionary
     async def _post_data(self, dce_endpoint, dcr_id, stream_name, credential, data):
-        print('inside post data')                            
         client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential, logging_enable=True)
         async with client:
             try:
                 await client.upload(rule_id=dcr_id, stream_name=stream_name, logs=data)
             except HttpResponseError as e:
-                print(f"Upload failed: {e}")    
+                logging.error(f"Upload failed: {e}")    

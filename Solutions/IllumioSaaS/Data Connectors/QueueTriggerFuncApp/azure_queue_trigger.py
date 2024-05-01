@@ -103,14 +103,15 @@ async def main(msg: func.QueueMessage ):
             if fileToBeFiltered(link):
                 continue
             
-            file_stats = {"Trigger":"Queue", "Type":"FileStats", "link": link, "bucket": bucket, "sqs_message_id": messageId, "file_size_bytes": file_size}
+            stream_name = AUDIT_LOGS_CUSTOM_TABLE if 'auditable' in link else FLOW_LOGS_CUSTOM_TABLE                        
+
+            file_stats = {"Trigger":"Queue", "stream_name":stream_name, "Type":"file_stats", "link": link, "bucket": bucket, "sqs_message_id": messageId, "file_size_bytes": file_size}        
             logging.info(json.dumps(file_stats))
         
             async with _create_s3_client() as client:
                 async with aiohttp.ClientSession() as session:
                     
-                    if link:
-                        stream_name = AUDIT_LOGS_CUSTOM_TABLE if 'auditable' in link else FLOW_LOGS_CUSTOM_TABLE                        
+                    if link:                        
                         sentinel_connector = sentinel_connectors[stream_name]
                         if sentinel_connector is not None: # in case, user selected auditable only but flow event is being processed from sqs
                             total_events += await process_file(bucket, link, client, sentinel_connector)
@@ -118,7 +119,7 @@ async def main(msg: func.QueueMessage ):
         # ensure data is flushed at the end in case queue limit of 4000 is not reached
         for connector in sentinel_connectors.keys():
             await sentinel_connectors[connector].flush()
-        event_stats = {"Trigger":"Queue", "Type":"EventStats", "total_events": total_events, "file_count": len(body), "aggregated_file_size": accumulated_file_size}
+        event_stats = {"Trigger":"Queue", "Type":"event_stats", "total_events": total_events, "file_count": len(body), "aggregated_file_size": accumulated_file_size}
         logging.info(json.dumps(event_stats))
 
 
