@@ -4,16 +4,14 @@ namespace Varonis.Sentinel.Functions.Search.Model
 {
     internal class AlertItem
     {
-        public Guid ID { get; set; }
+        public Guid AlertId { get; set; }
         public string Name { get; set; }
         public DateTime Time { get; set; }
         public string Severity { get; set; }
-        public int SeverityId { get; set; }
         public string Category { get; set; }
         public string[] Country { get; set; }
         public string[] State { get; set; }
         public string Status { get; set; }
-        public int StatusId { get; set; }
         public string CloseReason { get; set; }
         public bool? BlacklistLocation { get; set; }
         public string[] AbnormalLocation { get; set; }

@@ -20,16 +20,14 @@ namespace Varonis.Sentinel.Functions.Helpers
             var alertItem = new AlertItem();
             try
             {
-                alertItem.ID = Guid.Parse(row[AlertAttributes.Id]);
+                alertItem.AlertId = Guid.Parse(row[AlertAttributes.Id]);
                 alertItem.Name = row[AlertAttributes.RuleName];
                 alertItem.Time = DateTime.Parse(row[AlertAttributes.Time]);
                 alertItem.Severity = row[AlertAttributes.RuleSeverityName];
-                alertItem.SeverityId = int.Parse(row[AlertAttributes.RuleSeverityId]);
                 alertItem.Category = row[AlertAttributes.RuleCategoryName];
                 alertItem.Country = MultiValueToStringArray(row[AlertAttributes.LocationCountryName]);
                 alertItem.State = MultiValueToStringArray(row[AlertAttributes.LocationSubdivisionName]);
                 alertItem.Status = row[AlertAttributes.StatusName];
-                alertItem.StatusId = int.Parse(row[AlertAttributes.StatusId]);
                 alertItem.CloseReason = row[AlertAttributes.CloseReasonName];
                 alertItem.BlacklistLocation = GetBoolValue(row, AlertAttributes.LocationBlacklistedLocation);
                 alertItem.AbnormalLocation = MultiValueToStringArray(row[AlertAttributes.LocationAbnormalLocation]);
