@@ -50,6 +50,7 @@ def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
         )
 
      req_body = req.get_json()
+     logging.info(f'Response Object : {req_body}')
      if "x-github-event" in req.headers:
         req_body["event"] = req.headers["x-github-event"]
      body = json.dumps(customizeJson(json.dumps(req_body)))
