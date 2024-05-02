@@ -16,7 +16,7 @@ References:
     Link: https:/aka.ms/AboutASIM
   - Title: Auth0
     Link: https://auth0.com/docs/deploy-monitor/logs/log-event-type-codes
-Description:
+Description: |
   This ASIM parser supports filtering and normalizing the Auth0 logs stored in 'Auth0AM_CL_CL' table to the ASIM authentication normalized schema.
 ParserName: vimAuthenticationAuth0
 EquivalentBuiltInParser: _Im_Authentication_Auth0
@@ -52,20 +52,20 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let parser = (
-      starttime: datetime=datetime(null), 
-      endtime: datetime=datetime(null), 
-      username_has_any: dynamic = dynamic([]),
-      targetappname_has_any: dynamic = dynamic([]),
-      srcipaddr_has_any_prefix: dynamic = dynamic([]),
-      srchostname_has_any: dynamic = dynamic([]),
-      eventtype_in: dynamic = dynamic([]),
-      eventresultdetails_in: dynamic = dynamic([]),
-      eventresult: string = '*',
-      disabled: bool=false
-      )
+  let parser=  (
+            starttime:datetime=datetime(null), 
+            endtime:datetime=datetime(null),
+            srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+            eventresult:string='*',
+            actorusername_has_any:dynamic=dynamic([]),
+            eventtype_in:dynamic=dynamic([]),
+            operation_has_any:dynamic=dynamic([]),
+            object_has_any:dynamic=dynamic([]),
+            newvalue_has_any:dynamic=dynamic([]),
+            disabled:bool = false
+            )
      {
-        let Auth0AuditEventLookup=datatable(EventOriginalResultDetails:string,EventType:string,EventSeverity:string,EventResult:string)
+     let Auth0AuditEventLookup=datatable(EventOriginalResultDetails:string,EventType:string,EventSeverity:string,EventResult:string)
      [
      "cls","other","Informational","Failure",
      "cs","Other","Informational","Failure",
@@ -124,13 +124,11 @@ ParserQuery: |
      |project EventOriginalResultDetails
      |summarize makeset(EventOriginalResultDetails);
      Auth0AM_CL
-        | where not(disabled)
+        |where not(disabled)
         |where type_s in (Auth0AuditEvent)
 	      and (isnull(starttime) or TimeGenerated >= starttime) 
           and (isnull(endtime) or TimeGenerated <= endtime)          
-          and ((array_length(targetappname_has_any) == 0) or ('Auth0' has_any (targetappname_has_any)))
           and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(ip_s,srcipaddr_has_any_prefix)))
-          and ((array_length(srchostname_has_any) == 0))  or(hostname_s has_any(srchostname_has_any))
         //username, Eventtype and eventresult done down in the parser
      |project TimeGenerated,
               EventCount=int(1),
@@ -163,31 +161,34 @@ ParserQuery: |
 			  DvcIdType='Other',      
 			  Type
 	  |lookup Auth0AuditEventLookup on EventOriginalResultDetails
-	  | where((array_length(username_has_any) == 0) or (ActorUsername  has_any (username_has_any)))
+	  | where      ( eventresult == '*' or EventResult =~eventresult)
+                   and((array_length(actorusername_has_any) == 0) or (ActorUsername  has_any (actorusername_has_any)))
 				   and ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))
-				   and (array_length(eventresultdetails_in) == 0) //Event Result details not available at source
-				   and (eventresult == "*" or (EventResult == eventresult))
-	  |extend Dvc=DvcFQDN,
+                   and (array_length(newvalue_has_any) == 0) //new value not available at source
+	|extend Dvc=DvcFQDN,
               DvcHostname=DvcFQDN,
               Dst=TargetIpAddr,
               SrcIpAddr=DvcIpAddr,
               Src=DvcIpAddr,
-              IpAddr=DvcIpAddr,105240
+              IpAddr=DvcIpAddr,
               DvcDomain=DvcFQDN,
               Application=TargetAppName,
 		      Operation=EventOriginalResultDetails,
               ActorUsernameType=ActorUserIdType,
-              User=ActorUsername                
+              User=ActorUsername
+      | where ((array_length(operation_has_any ) ==0) or(Operation has_any(operation_has_any )))
+		  and ((array_length(object_has_any )== 0) or (Object has_any(object_has_any)))          
      };
-      parser(
-      starttime=starttime,
-      endtime=endtime,
-      username_has_any=username_has_any,
-      targetappname_has_any=targetappname_has_any,
-      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
-      srchostname_has_any=srchostname_has_any,
-      eventtype_in=eventtype_in,
-      eventresultdetails_in=eventresultdetails_in,
-      eventresult=eventresult,
-      disabled=disabled
-     )
+ parser
+    (
+    starttime = starttime,
+    endtime = endtime,
+    srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+    actorusername_has_any = actorusername_has_any,
+    eventtype_in = eventtype_in,
+    eventresult = eventresult,
+    operation_has_any = operation_has_any,
+    object_has_any=object_has_any,
+    newvalue_has_any=newvalue_has_any,
+    disabled=disabled
+  )
