@@ -1,0 +1,125 @@
+Parser:
+  Title: Audit Event ASIM parser for Auth0
+  Version: '0.1.0'
+  LastUpdated: Apr 30 2024
+Product:
+  Name: Auth0
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Audit Logs Auth0
+  Link: https://auth0.com/docs/deploy-monitor/logs/log-event-type-codes
+Description:
+  This ASIM parser supports normalizing Barracuda WAF to the ASIM Audit Event schema.
+ParserName: ASimAuditEventAuth0
+EquivalentBuiltInParser: _ASim_AuditEvent_Auth0
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Auth0AuditEventLookup=datatable(EventOriginalResultDetails:string,EventType:string,EventSeverity:string,EventResult:string)
+[
+"cls","other","Informational","Failure",
+"cs","Other","Informational","Failure",
+"depnote","Other","Informational","Failure",
+"fc","Other","Informational","Failure",
+"fce","Other","Informational","Failure",
+"fcp","Other","Informational","Failure",
+"fcph","Other","Informational","Failure",
+"fcpn","Other","Informational","Failure",
+"fcpr","Other","Informational","Failure",
+"fcpro","Other","Informational","Failure",
+"fcu","Other","Informational","Failure",
+"fd","Other","Informational","Failure",
+"fdeac","Other","Informational","Failure",
+"fdeaz","Other","Informational","Failure",
+"fdecc","Other","Informational","Failure",
+"fn","Other","Informational","Failure",
+"fpar","Other","Informational","Failure",
+"fs","Other","Informational","Failure",
+"fui","Other","Informational","Failure",
+"fv","Other","Informational","Failure",
+"fvr","Other","Informational","Failure",
+"gd_send_email","Other","Informational","Success",
+"gd_send_pn_failure","Other","Informational","Failure",
+"gd_send_sms","Other","Informational","Success",
+"gd_send_sms_failure","Other","Informational","Failure",
+"gd_send_voice","Other","Informational","Success",
+"gd_send_voice_failure","Other","Informational","Failure",
+"gd_start_enroll","Other","Informational","Success",
+"gd_start_enroll_failed","Other","Informational","Failure",
+"gd_tenant_update","Other","Informational","Success",
+"gd_unenroll","Other","Informational","Success",
+"gd_update_device_account","Other","Informational","Success",
+"gd_webauthn_challenge_failed","Other","Informational","Failure",
+"gd_webauthn_enrollment_failed","Other","Informational","Failure",
+"limit_delegation","Other","Informational","Success",
+"pla","Other","Informational","Success",
+"resource_cleanup","Other","Informational","Success",
+"sapi","Create","Informational","Success",
+"sce","Other","Informational","Success",
+"scp","Other","Informational","Success",
+"scpn","Other","Informational","Success",
+"scpr","Other","Informational","Success",
+"scu","Other","Informational","Success",
+"sd","Other","Informational","Success",
+"sdu","Other","Informational","Success",
+"si","Other","Informational","Success",
+"signup_pwd_leak","Other","Informational","Failure",
+"srrt","Other","Informational","Success",
+"ss","Other","Informational","Success",
+"sui","Other","Informational","Success",
+"sv","Other","Informational","Success",
+"svr","Other","Informational","Success",
+];
+let Auth0AuditEvent=Auth0AuditEventLookup
+|project EventOriginalResultDetails
+|summarize makeset(EventOriginalResultDetails);
+Auth0AM_CL
+|where type_s in (Auth0AuditEvent)
+|project TimeGenerated,
+   EventCount=int(1),
+   EventStartTime=date_t,
+   EventEndTime=TimeGenerated,
+   EventProduct='Auth0',
+   EventVendor='Okta',
+   EventSchema='AuditEvent',
+   EventSchemaVersion='0.1',
+   EventUid=_ItemId,
+   DvcFQDN=hostname_s,         
+   DvcIpAddr=ip_s,
+   DvcDomainType='FQDN',
+   DvcId=client_id_s,         
+   DvcAction=scope_s,         
+   EventMessage=description_s,         
+   EventOriginalResultDetails=type_s,
+   EventProductVersion='4.3.1',
+   ActorUsername=coalesce ( details_request_auth_user_email_s, details_request_auth_user_name_s, user_name_s),
+   ActorUserIdType='Oktaid',
+   EventOriginalUid=_id_s,
+   Object=client_name_s,
+   ObjectType='Other',
+   TargetIpAddr=details_request_ip_s,
+   HttpUserAgent=coalesce(details_request_userAgent_s ,user_agent_s),
+   TargetAppName="Auth0",
+   TargetAppType="Saas application",
+   DvcIdType='Other',      
+   Type
+|lookup Auth0AuditEventLookup on EventOriginalResultDetails
+|extend Dvc=DvcFQDN,
+        DvcHostname=DvcFQDN,
+        Dst=TargetIpAddr,
+        SrcIpAddr=DvcIpAddr,
+        Src=DvcIpAddr,
+        IpAddr=DvcIpAddr,
+        DvcDomain=DvcFQDN,
+        Application=TargetAppName,
+		    Operation=EventOriginalResultDetails,
+        ActorUsernameType=ActorUserIdType,
+        User=ActorUsername

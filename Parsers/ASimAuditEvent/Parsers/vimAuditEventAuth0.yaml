@@ -23,6 +23,12 @@ ParserParams:
   - Name: disabled
     Type: bool
     Default: false
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])  
   - Name: starttime
     Type: datetime
     Default: datetime(null)
@@ -60,9 +66,9 @@ ParserQuery: |
      {
      let Auth0AuditEventLookup=datatable(EventOriginalResultDetails:string,EventType:string,EventSeverity:string,EventResult:string)
      [
-     "cls","other","Informational","Failure",
-     "cs","Other","Informational","Failure",
-     "depnote","Other","Informational","Failure",
+     "cls","other","Informational","Success",
+     "cs","Other","Informational","Success",
+     "depnote","Other","Informational","Success",
      "fc","Other","Informational","Failure",
      "fce","Other","Informational","Failure",
      "fcp","Other","Informational","Failure",
@@ -95,6 +101,7 @@ ParserQuery: |
      "gd_webauthn_challenge_failed","Other","Informational","Failure",
      "gd_webauthn_enrollment_failed","Other","Informational","Failure",
      "limit_delegation","Other","Informational","Success", 
+     "mgmt_api_read","Other","Informational","Success",
      "pla","Other","Informational","Success",
      "resource_cleanup","Other","Informational","Success",
      "sapi","Create","Informational","Success",
@@ -120,7 +127,8 @@ ParserQuery: |
         |where not(disabled)
         |where type_s in (Auth0AuditEvent)
               and (isnull(starttime) or TimeGenerated >= starttime) 
-          and (isnull(endtime) or TimeGenerated <= endtime)          
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and (array_length(newvalue_has_any) == 0) //new value not available at source          
           and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(ip_s,srcipaddr_has_any_prefix)))
         //username, Eventtype and eventresult done down in the parser
      |project TimeGenerated,
@@ -140,16 +148,15 @@ ParserQuery: |
               EventMessage=description_s,         
               EventOriginalResultDetails=type_s,
               EventProductVersion='4.3.1',
-              ActorUsername=user_name_s,
+              ActorUsername=coalesce ( details_request_auth_user_email_s, details_request_auth_user_name_s, user_name_s),
               ActorUsernameType='UPN',
-              ActorScope=tolower(user_name_s),
               ActorUserIdType='Oktaid',
               EventOriginalUid=_id_s,
               Object=client_name_s,
               ObjectType='Other',
               TargetIpAddr=details_request_ip_s,
               Src=hostname_s,
-              HttpUserAgent=user_agent_s,
+              HttpUserAgent=coalesce(details_request_userAgent_s ,user_agent_s),
               TargetAppName="Auth0",
               TargetAppType="Saas application",
               DvcIdType='Other',      
@@ -157,8 +164,7 @@ ParserQuery: |
               |lookup Auth0AuditEventLookup on EventOriginalResultDetails
               | where      ( eventresult == '*' or EventResult =~eventresult)
                    and((array_length(actorusername_has_any) == 0) or (ActorUsername  has_any (actorusername_has_any)))
-                   and ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))
-                   and (array_length(newvalue_has_any) == 0) //new value not available at source
+                   and ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))                   
                    |extend Dvc=DvcFQDN,
               DvcHostname=DvcFQDN,
               Dst=TargetIpAddr,
