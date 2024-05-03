@@ -231,10 +231,9 @@ while IFS= read -r contname; do
 		cmdparams=""
 		for variable in "${containervariables[@]}"; do
 			# Check if we set the APPID and APPSECRET, if we do, we need to update the container with the new values
-			if [[ $variable == AZURE_CLIENT_ID=* && -n $APPID ]]; then
-				variable="AZURE_CLIENT_ID=$APPID"
-			elif [[ $variable == AZURE_CLIENT_SECRET=* && -n $APPSECRET ]]; then
-				variable="AZURE_CLIENT_SECRET=$APPSECRET"
+			if [[ -n $APPID && -n $APPSECRET ]]; then
+				[[ $variable == AZURE_CLIENT_ID=* ]] && variable="AZURE_CLIENT_ID=$APPID"
+				[[ $variable == AZURE_CLIENT_SECRET=* ]] && variable="AZURE_CLIENT_SECRET=$APPSECRET"
 			fi
 
 			if [[ ! $variable == PATH=* ]] &&
