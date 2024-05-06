@@ -1,0 +1,15 @@
+//Title:WebDav Client Execution - Network connections using DavSetCookie - BY IP - Botnet detection 
+//Description:Detects suspicious netowork connections using DavSetCookie, extracting the IP reached into the first column.Generally catches all botnet connections as well as other type of malware.
+//Author:@kddx017831
+DeviceProcessEvents
+| where ((FolderPath endswith @'\rundll32.exe' or ProcessVersionInfoOriginalFileName =~ @'RUNDLL32.EXE' or InitiatingProcessVersionInfoOriginalFileName =~ @'RUNDLL32.EXE') and 
+ProcessCommandLine contains @'C:\windows\system32\davclnt.dll,DavSetCookie')
+|extend Url_extracted=extract(@"https?://[^ ]+",0,ProcessCommandLine)
+|extend IP=extract(@'((?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?\.){3}(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)))',0,Url_extracted)
+|where IP !startswith "10." and IP !startswith "192.168" and IP !startswith "127.0.0.1" and IP !startswith "172.16" //removing privateIPs
+|project-reorder ProcessCommandLine,Url_extracted,IP
+| join (DeviceNetworkEvents 
+| where Timestamp > ago(30d)
+//|where RemotePort == "445"
+| project-rename Start=Timestamp) on $left.IP == $right.RemoteIP
+|summarize make_set(DeviceName),make_set(RemoteIP), count(IP),make_set(ProcessCommandLine),make_set(Url_extracted),make_set(RemotePort),make_set(Protocol) by IP
