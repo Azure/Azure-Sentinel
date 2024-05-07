@@ -1,29 +1,28 @@
-import datetime
 import logging
 import os
+from datetime import datetime, timezone, timedelta
 
 import azure.functions as func
-
 from connections.sentinel import SentinelConnector
 from connections.zerofox import ZeroFoxClient
 
 
 def main(mytimer: func.TimerRequest) -> None:
+    now = datetime.now(timezone.utc)
     utc_timestamp = (
-        datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
+        now.isoformat()
     )
 
     if mytimer.past_due:
         logging.info("The timer is past due!")
 
-    # Update the customer ID to your Log Analytics workspace ID
     customer_id = os.environ.get("WorkspaceID")
-
-    # For the shared key, use either the primary or the secondary Connected Sources client authentication key
     shared_key = os.environ.get("WorkspaceKey")
 
-    query_from = mytimer.schedule_status["Last"]
-    query_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+    query_from = max(
+        mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
+    query_to = datetime.now(
+        timezone.utc) - timedelta(minutes=1)
 
     zf_client = get_zf_client()
 
@@ -45,8 +44,8 @@ def main(mytimer: func.TimerRequest) -> None:
 
 
 def get_zf_client():
-    user = os.environ.get("zf_username")
-    token = os.environ.get("token")
+    user = os.environ.get("ZeroFoxUsername")
+    token = os.environ.get("ZeroFoxToken")
     return ZeroFoxClient(user, token)
 
 

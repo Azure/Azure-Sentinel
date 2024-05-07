@@ -2,6 +2,7 @@ from typing import Dict
 import requests
 import json
 
+TIMEOUT = 30
 
 class ZeroFoxClient:
     def __init__(self, user, token) -> None:
@@ -13,6 +14,7 @@ class ZeroFoxClient:
         method: str,
         url_suffix: str,
         params=None,
+        timeout = TIMEOUT,
         data=None,
         error_handler=None,
     ):
@@ -37,6 +39,7 @@ class ZeroFoxClient:
             headers=headers,
             params=params,
             data=data,
+            timeout=timeout,
             empty_valid_codes=(200, 201),
             error_handler=error_handler,
         )
@@ -47,6 +50,7 @@ class ZeroFoxClient:
             response = self._http_request(
                 method="GET",
                 headers=headers,
+                timeout=timeout,
                 full_address=response["next"],
             )
             for result in response["results"]:
