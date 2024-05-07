@@ -21,9 +21,9 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let LogonEvents=dynamic([4624,4625]);
-  let LogoffEvents=dynamic([4634,4647]);
-  let LogonTypes=datatable(LogonType:int, EventSubType:string)[
+let LogonEvents=dynamic([4624,4625]);
+let LogoffEvents=dynamic([4634,4647]);
+let LogonTypes=datatable(LogonType:int, EventSubType:string)[
       2, 'Interactive',
       3, 'Network',
       4, 'Batch',
@@ -141,52 +141,5 @@ ParserQuery: |
           LogonTarget = TargetDvcHostname,
           User        = TargetUsername
   };
-  let SecEventLogon=(disabled:bool=false){
-    SecurityEvent 
-    | where not(disabled)
-    | where EventID in (LogonEvents) or 
-            EventID in (LogoffEvents)
-    | project-rename 
-        ActorSessionId    = SubjectLogonId,
-        ActorUserId       = SubjectUserSid,
-        EventMessage      = Activity,
-        EventOriginalType = EventID,
-        EventOriginalUid  = EventOriginId,
-        LogonProtocol     = AuthenticationPackageName,
-        SrcDvcHostname    = WorkstationName,
-        SrcDvcIpAddr      = IpAddress,
-        TargetDvcHostname = Computer,
-        TargetSessionId   = TargetLogonId,
-        TargetUserId      = TargetUserSid
-    | extend 
-        ActorUserIdType    = 'SID',
-        ActorUsername      = iff (SubjectDomainName in ('-',''), SubjectUserName, SubjectAccount),
-        ActorUsernameType  = iff(SubjectDomainName in ('-',''), 'Simple', 'Windows' ),
-        EventCount         = int(1),
-        EventEndTime       = TimeGenerated,
-        EventProduct       = "Security Events",
-        EventResult        = iff(EventOriginalType == 4625, 'Failure', 'Success'),
-        EventSchemaVersion = '0.1.0',
-        EventStartTime     = TimeGenerated,
-        EventStatus        = iff(SubStatus=='0x0',Status,SubStatus),
-        EventType          = iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon'),
-        EventVendor        = 'Microsoft',
-        SrcDvcOs           = 'Windows',
-        TargetUserIdType   = 'SID',
-        TargetUsername     = iff (TargetDomainName in ('-',''), trim(@'\\',TargetUserName), trim(@'\\',TargetAccount)),
-        TargetUsernameType = iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
-    | project-away TargetUserName, AccountType
-    | extend
-        ActorUserType      = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId),
-        TargetUserType     = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
-    | lookup LogonStatus on EventStatus
-    | lookup LogonTypes  on LogonType
-    /// ** Aliases 
-    | extend
-        Dvc         = SrcDvcHostname,
-        LogonTarget = TargetDvcHostname,
-        User        = TargetUsername
-    };
   union isfuzzy=true 
-    SecEventLogon(disabled=disabled), 
     WinLogon(disabled=disabled)
