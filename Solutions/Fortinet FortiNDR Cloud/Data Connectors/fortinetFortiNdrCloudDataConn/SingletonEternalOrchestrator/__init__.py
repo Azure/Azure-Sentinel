@@ -39,7 +39,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
                     history["checkpoint"] = next_checkpoint
                     event_types[event_type]["history_detections"] = history
                     retrieved_history.append(event_type)
-                    args["retrieved"] = retrieved
+                    args["retrieved_history"] = retrieved_history
                 except Exception as ex:
                     logging.error(
                         f"Error when fetching Detections history. start_date: {checkpoint}, error: {ex}"
@@ -67,7 +67,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
                     event_types[event_type]["history_events"] = next_history
                     event_type_args["attempt"] = 0
                     retrieved_history.append(event_type)
-                    args["retrieved"] = retrieved
+                    args["retrieved_history"] = retrieved_history
                 except Exception as ex:
                     logging.error(
                         f"Error when fetching events history event_type: {event_type}, start_date: {start_date}, end_date: {end_date} error: {ex}"
@@ -78,7 +78,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
                         logging.info(f"Retrying attempt {attempt}.")
                     else:
                         failing_history.append(event_type)
-                        args["failing"] = failing_history
+                        args["failing_history"] = failing_history
 
                 # Run the orchastrator new for each day to help avoid timeouts.
                 args["event_types"] = event_types
