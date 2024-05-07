@@ -1,0 +1,53 @@
+id: ed32b115-5001-43a7-a2bb-f53026db4d97
+name: Pure Failed Login
+version: 1.0.0
+kind: NRT
+description: Detect failed login attacks and delete user
+severity: High
+tactics:
+- CredentialAccess
+relevantTechniques:
+- T1212
+query: |-
+  Syslog
+  | where SyslogMessage has "purity.alert" and SyslogMessage has "invalid username or password"
+  | extend Message = SyslogMessage
+  | extend ParsedLog = extract_all(@"((?P<process>.*?)\[(?P<processid>.*?)\][\s\S]*?Array name:\s*'(?P<arrayname>\S+)'[\s\S]*?Controller:\s*'?(?P<controller>[^']+)'?[\s\S]*Interface:\s*'(?P<interface>\S+)'.*?User:\s'(?P<login>.*?)'\sLocation: '(?P<location>[^']+)'\sSublocation: '(?P<sublocation>[^']+)\s*(?P<part2log>[\s\S]*))", dynamic(['process', 'processid', 'arrayname', 'controller', 'interface','login', 'location', 'sublocation', 'part2log']), Message)
+  | mv-expand ParsedLog
+  | extend ResidueLog = tostring(ParsedLog[8])
+  | extend Rlog = extract_all(@"[\s\S]*Action:\s'(?P<action>[^']+)'[\s\S]*Method:\s'(?P<method>[^']+)'[\s\S]*Result:\s(?P<result>[^']+)[\s\S]*Description:\s'(?P<description>[^']*)'", dynamic(['action', 'method', 'result', 'description']), ResidueLog)
+  | mv-expand Rlog
+  | extend PureLogType = ParsedLog[0], PureProcessID = ParsedLog[1], PureArrayName = ParsedLog[2], PureController = ParsedLog[3], PureInterface = ParsedLog[4], PureLogin = ParsedLog [5], PureLocation = ParsedLog [6], PureSublocation = ParsedLog [7], PureAction = Rlog [0], PureMethod = Rlog [1], PureResult = Rlog [2], PureDescription = Rlog [3]
+  | project-away ResidueLog, Rlog, ParsedLog
+  | summarize count() by tostring(PureLogin), tostring(PureArrayName), HostIP
+  | where count_ >= 10
+suppressionDuration: 5h
+suppressionEnabled: false
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertDynamicProperties: []
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: HostIP
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: PureLogin
+- entityType: Host
+  fieldMappings:
+  - identifier: HostName
+    columnName: PureArrayName
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+
