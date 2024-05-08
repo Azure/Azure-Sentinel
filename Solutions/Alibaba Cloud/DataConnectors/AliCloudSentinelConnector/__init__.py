@@ -42,9 +42,9 @@ if (not match):
 
 def generate_date(state):
     current_time = datetime.utcnow().replace(second=0, microsecond=0) - timedelta(minutes=10)
-    i = state.get()
-    if i is not None:
-        past_time = datetime.strptime(state.get(), "%d.%m.%Y %H:%M:%S")
+    last_processed_saved_time = state.get()
+    if last_processed_saved_time is not None:
+        past_time = datetime.strptime(last_processed_saved_time, "%d.%m.%Y %H:%M:%S")
         if past_time is not None:
             logging.info("The last time point is: {}".format(past_time))
         else:
