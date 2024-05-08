@@ -51,19 +51,15 @@ ParserParams:
       Default: false
 ParserQuery: |
 let parser = (
-    starttime:datetime=datetime(null), 
-    endtime:datetime=datetime(null), 
-    username_has_any:dynamic = dynamic([]),
-    targetappname_has_any:dynamic = dynamic([]),
-    srcipaddr_has_any_prefix:dynamic = dynamic([]),
-    srchostname_has_any:dynamic = dynamic([]),
-    eventtype_in:dynamic = dynamic([]),
-    eventresultdetails_in:dynamic = dynamic([]),
-    eventresult:string = '*',
-    disabled:bool=false
-)
+      starttime: datetime=datetime(null),
+      endtime: datetime=datetime(null),
+      eventresult: string='*',
+      newvalue_has_any: dynamic=dynamic([]),
+      operation_has_any: dynamic=dynamic([]),
+      actorusername_has_any: dynamic=dynamic([]),
+      disabled: bool=false)
 {
-     let EventResultDetailslookup=datatable(EventOriginalType:string,EventResult:string, EventType:string, EventSeverity:string)
+    let EventDetailslookup=datatable(EventOriginalType:string,EventResult:string, EventType:string, EventSeverity:string)
      ["push","Success","Install","Informational",
       "create","Success","Create","Informational",
       "delete","Success","Delete","Informational",
@@ -75,47 +71,57 @@ let parser = (
       "installation","Success","Create","Informational",
       "team","Success","Create","Informational",
       "organization","Success","Other","Informational",
+      "label","Success","Other","Informational"
       ];
       githubscanaudit_CL
      | where not(disabled)
      | extend TimeGenerated = todatetime(tostring(split(TimeGenerated, '.', 0)[0]))
       //  -- Pre filtering
-     | where 
-          (isnull(starttime) or TimeGenerated >= starttime) 
-          and (isnull(endtime) or TimeGenerated <= endtime)
-          and ((array_length(targetappname_has_any) == 0)) // targetappname not available on source
-          and ((array_length(srcipaddr_has_any_prefix) == 0))// ip address for source not available
-          and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
-          // eventresult filtering done later in the parser
-          //  -- end pre-filtering
-     |project Timegenerated,
-     User = tostring(parse_json(sender_s).login),
+     | where (isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)
+     | where (array_length(actorusername_has_any) == 0 or sender_s  has_any (actorusername_has_any))
+     |extend Object=case(event_s == "repository","Repository",
+      event_s =="organization","Organization",
+      event_s=="create","Branch",
+      event_s=="push","Branch",
+      event_s =="installation","Application",
+      event_s == "pull_request","Repository","")
+     |project 
+     TimeGenerated,
+     ActorUsername = tostring(parse_json(sender_s).login),
      EventReportUrl = tostring(parse_json(repository_s).url),
-     Object = tostring(parse_json(repository_s).name),
-     Application = tostring(parse_json(installation_s).app_slug),   
+     TargetAppName = tostring(parse_json(installation_s).app_slug),   
      team_s = tostring(parse_json(team_s).name),
      invitation_s = tostring(parse_json(invitation_s).login),
-     organization_s = tostring(parse_json(organization_s).login),
+     organization_s = tostring(parse_json(organization_s).login),   
      EventCount=int(1),
      EventSchema='AuditEvent',
      EventProduct='GithubWebhook',
      EventVendor='Microsoft',
      EventSchemaVersion='0.1',
+     Dvc='GithubWebhook',
      EventStartTime=TimeGenerated,
      EventEndTime=TimeGenerated,
      Operation=action_s,
-     Type=Type,
-     EventOriginalType=event_s
-    |lookup EventResultDetailslookup on EventOriginalType
+     Type,
+     NewValue=tostring(parse_json(repository_s).name),
+     ObjectId = tostring(parse_json(repository_s).id),
+     EventUid=_ItemId,
+     EventOriginalType=event_s,
+     Object
+    |lookup EventDetailslookup on EventOriginalType
+    |extend User = ActorUsername,
+            Application =TargetAppName
+    |extend AdditionalFields = bag_pack("Team",team_s,
+                                  "Invitation",invitation_s,
+                                  "Organization",organization_s)
 };
-parser
-     ( starttime=starttime,
+  parser
+  ( 
+      starttime=starttime,
       endtime=endtime,
-      username_has_any=username_has_any,
-      targetappname_has_any=targetappname_has_any,
-      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
-      srchostname_has_any=srchostname_has_any,
-      eventtype_in=eventtype_in,
-      eventresultdetails_in=eventresultdetails_in,
       eventresult=eventresult,
-      disabled=disabled)
+      newvalue_has_any=newvalue_has_any,
+      operation_has_any=operation_has_any,
+      actorusername_has_any=actorusername_has_any,
+      disabled=disabled
+  )
