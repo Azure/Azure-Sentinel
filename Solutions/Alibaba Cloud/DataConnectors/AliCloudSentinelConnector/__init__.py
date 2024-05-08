@@ -29,7 +29,7 @@ chunksize = 2000
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 workers = os.environ.get('AliCloudWorkers', '10')
 iteration_length_in_seconds = int(os.environ.get('AliCloudIterationLengthInSeconds', '60'))
-max_runtime_before_stopping_in_minutes = int(os.environ.get('AliCloudMaxRunTimeInMinutes', '18'))
+max_runtime_before_stopping_in_minutes = int(os.environ.get('AliCloudMaxRunTimeInMinutes', '9'))
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -147,11 +147,13 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
     logging.getLogger().setLevel(logging.INFO)
     logging.info('Starting program')
-    stop_run_time = time.time() + datetime.timedelta(minutes=int(max_runtime_before_stopping_in_minutes))
+    stop_run_time = datetime.fromtimestamp(time.time()) + timedelta(minutes=int(max_runtime_before_stopping_in_minutes))
     
     state = StateManager(connection_string=connection_string)
     start_time, end_time = generate_date(state)
-    iteration_length = datetime.timedelta(seconds=iteration_length_in_seconds)
+    iteration_length = timedelta(seconds=iteration_length_in_seconds)
+
+    logging.info("Running on the following Ali data time range: {} until {}. This function will run until {} maximally".format(start_time,end_time,stop_run_time))
 
     if not endpoint or not accessKeyId or not accessKey:
         raise Exception("Endpoint, access_id and access_key cannot be empty")
@@ -183,15 +185,19 @@ def main(mytimer: func.TimerRequest) -> None:
                 if future.result() is not None:
                     logs_json += future.result()
 
+            logging.info("Sending {} logs to log analytics".format(len(logs_json)))
+
             # Send data via data collector API
             gen_chunks(logs_json, start_time=current_chunk_start_time, end_time=current_chunk_end_time)
+
+            logging.info("Successfully sent {} logs to log analytics".format(len(logs_json)))
 
             # Update current time for the next iteration
             current_chunk_start_time = current_chunk_end_time
 
             state.post(current_chunk_start_time.strftime("%d.%m.%Y %H:%M:%S"))
 
-            if time.time() > stop_run_time:
+            if time.time() > stop_run_time.timestamp():
                 logging.info(f"Function execution time exceeded alloted time of {max_runtime_before_stopping_in_minutes} minutes. Gracefully stopping. No data loss encountered - next execution will continue from {current_chunk_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
                 break
 
