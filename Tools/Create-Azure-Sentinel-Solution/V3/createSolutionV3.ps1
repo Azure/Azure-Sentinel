@@ -34,7 +34,7 @@ else {
     $hasDataFolder = $path -like '*/data'
     if ($hasDataFolder) {
         # DATA FOLDER PRESENT
-        $dataFolderIndex = $path.IndexOf("/data", [StringComparison]"CurrentCultureIgnoreCase")
+        $dataFolderIndex = $path.LastIndexOf("/data", [StringComparison]"CurrentCultureIgnoreCase")
 
         if ($dataFolderIndex -le 0) {
             Write-Host "Given path is not from Solutions data folders. Please provide data file path from Solution"
