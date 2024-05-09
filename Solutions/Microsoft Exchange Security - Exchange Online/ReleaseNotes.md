@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.1.4       | 30-04-2024                     | Repackaged for parser issue       |
+| 3.1.3       | 25-04-2024                     | Repackaged for parser issue with old names       |
 | 3.1.2       | 18-04-2024                     | Repackaged for parser issue while update       |
 | 3.1.1       | 19-03-2024                     | Manually updated package content       |
 | 3.0.5       | 20-02-2024                     | Correct DataConnector last Log indicator       |
