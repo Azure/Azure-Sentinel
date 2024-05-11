@@ -2,11 +2,11 @@ import logging
 import os
 from datetime import timedelta
 
-from sentinel.sentinel import post_data
-from fnc.metastream.s3_client import MetastreamContext
-from globalVariables import SUPPORTED_EVENT_TYPES, DEFAULT_BUCKET_NAME
+
 from fnc.fnc_client import FncClient
-from logger import Logger
+from fnc.metastream.s3_client import MetastreamContext
+from globalVariables import DEFAULT_BUCKET_NAME, INTEGRATION_NAME, SUPPORTED_EVENT_TYPES
+from sentinel.sentinel import post_data
 
 AWS_ACCESS_KEY = os.environ.get("AwsAccessKeyId")
 AWS_SECRET_KEY = os.environ.get("AwsSecretAccessKey")
@@ -19,7 +19,7 @@ def main(args: dict) -> str:
     validate_args(args)
 
     event_type = args.get("event_type", "")
-    history = args.get("history", None)
+    history = args.get("history", {})
 
     try:
         ctx = MetastreamContext()
@@ -31,13 +31,6 @@ def main(args: dict) -> str:
         interval = (
             timedelta(minutes=10) if event_type == "suricata" else timedelta(hours=1)
         )
-        if HISTORY_INTERVAL is not None:
-            if HISTORY_INTERVAL == "hours":
-                interval = timedelta(hours=1)
-            elif HISTORY_INTERVAL == "minutes":
-                interval = timedelta(minutes=10)
-            elif HISTORY_INTERVAL == "days":
-                interval = timedelta(days=1)
 
         fetch_and_post_events(ctx, event_type, interval)
         next_history = ctx.get_history(event_type=event_type)
@@ -56,11 +49,11 @@ def main(args: dict) -> str:
 
 
 def validate_args(args: dict):
-    logging.info(f"Validating args to retrieve events history")
+    logging.info("Validating args to retrieve events history")
     event_type = args.get("event_type", "").lower()
     history = args.get("history", None)
 
-    if not event_type or not event_type in SUPPORTED_EVENT_TYPES:
+    if not event_type or event_type not in SUPPORTED_EVENT_TYPES:
         raise AttributeError(
             "Event type was not provided or it is not supported. Event type must be one of (Observation | Suricata)."
         )
@@ -85,13 +78,12 @@ def post_events_inc(events, event_type):
 
 def fetch_and_post_events(ctx: MetastreamContext, event_type: str, interval: timedelta):
     client = FncClient.get_metastream_client(
-        name="sentinel-fetch-events-history",
+        name=INTEGRATION_NAME,
         account_code=ACCOUNT_CODE,
         access_key=AWS_ACCESS_KEY,
         secret_key=AWS_SECRET_KEY,
         bucket=BUCKET_NAME,
-        logger=Logger("sentinel-fetch-events-history"),
     )
-
+    client.get_logger().set_level(level=logging.DEBUG)
     for events in client.poll_history(ctx, event_type, interval):
         post_events_inc(events, event_type)

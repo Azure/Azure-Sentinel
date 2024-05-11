@@ -4,7 +4,7 @@ import hmac
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 
@@ -22,7 +22,7 @@ def post_data(events: list[dict], log_type_suffix: str):
     method = "POST"
     content_type = "application/json"
     resource = "/api/logs"
-    rfc1123date = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
+    rfc1123date = datetime.now(tz=timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
     content_length = len(body)
     signature = _build_signature(
         rfc1123date, content_length, method, content_type, resource

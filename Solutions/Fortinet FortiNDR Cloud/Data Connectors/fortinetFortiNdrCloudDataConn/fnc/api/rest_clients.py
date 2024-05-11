@@ -61,7 +61,8 @@ class BasicRestClient(FncRestClient):
 
     def __del__(self):
         try:
-            self.http_session.close()
+            if self.http_session:
+                self.http_session.close()
         except AttributeError:
             # we ignore exceptions raised due to session not used by the client and hence do not exist in __del__
             pass

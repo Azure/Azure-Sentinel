@@ -1,10 +1,12 @@
+import json
 import logging
 import os
-import json
 
-from fnc.fnc_client import FncClient
+
+from datetime import datetime, timezone
 from fnc.api.api_client import ApiContext
-from logger import Logger
+from fnc.fnc_client import FncClient
+from globalVariables import INTEGRATION_NAME
 from sentinel import post_data
 
 API_TOKEN = os.environ.get("FncApiToken")
@@ -14,6 +16,10 @@ INCLUDE_DHCP = os.environ.get("IncludeDhcp")
 INCLUDE_EVENTS = os.environ.get("IncludeEvents")
 POLLING_DELAY = int(os.environ.get("PollingDelay") or 10)
 DOMAIN = os.environ.get("FncApiDomain")
+DETECTION_STATUS = os.environ.get("DetectionStatus") or "all"
+PULL_MUTED = os.environ.get("PullMuted") or "all"
+INCLUDE_DESCRIPTION = os.environ.get("IncludeDescription") or True
+INCLUDE_SIGNATURE = os.environ.get("IncludeSignature") or True
 
 
 def main(args: dict) -> str:
@@ -22,9 +28,10 @@ def main(args: dict) -> str:
     event_type = args.get("event_type", "")
     history = args.get("history", {})
 
-    start_date = history.get("end_date_str")
-    end_date = history.get("end_date_str")
-    checkpoint = history.get("checkpoint")
+    now = datetime.now(tz=timezone.utc)
+    start_date = history.get("end_date_str") or now
+    end_date = history.get("end_date_str") or now
+    checkpoint = history.get("checkpoint") or now
 
     logging.info(
         f"FetchAndSendDetections: fetching for history, event type: {event_type} start_date: {checkpoint} end_date: {end_date}"
@@ -82,43 +89,29 @@ def validate_args(args: dict):
 def add_events_to_detections(detections, detection_events):
     logging.info("Start enriching detections with events")
     for detection in detections:
-        if detection_events.get(detection["uuid"]) is not None:
-            detection["events"] = json.dumps(detection_events.get(detection["uuid"]))
-        else:
-            detection["events"] = json.dumps([])
+        detection["events"] = json.dumps(detection_events.get(detection["uuid"], []))
     logging.info("Finished enriching detections with events")
 
 
 def fetch_and_send_detections(ctx: ApiContext, event_type: str, start_date: str):
-    client = (
-        FncClient.get_api_client(
-            name="sentinel-fetch-detections-history",
-            api_token=API_TOKEN,
-            logger=Logger("sentinel-fetch-detections-history"),
-        )
-        if not DOMAIN
-        else FncClient.get_api_client(
-            name="sentinel-fetch-detections-history",
-            api_token=API_TOKEN,
-            domain=DOMAIN,
-            logger=Logger("sentinel-fetch-detections-history"),
-        )
+    client = FncClient.get_api_client(
+        name=INTEGRATION_NAME, api_token=API_TOKEN, domain=DOMAIN
     )
     client.get_logger().set_level(level=logging.DEBUG)
     polling_args = {
         "account_uuid": ACCOUNT_UUID,
         "polling_delay": POLLING_DELAY,
-        "status": "ALL",
-        "pull_muted_detections": "ALL",
-        "pull_muted_rules": "ALL",
-        "pull_muted_devices": "ALL",
-        "include_description": True,
-        "include_signature": True,
+        "status": DETECTION_STATUS,
+        "pull_muted_detections": PULL_MUTED,
+        "pull_muted_rules": PULL_MUTED,
+        "pull_muted_devices": PULL_MUTED,
+        "include_description": INCLUDE_DESCRIPTION,
+        "include_signature": INCLUDE_SIGNATURE,
         "include_pdns": INCLUDE_PDNS,
         "include_dhcp": INCLUDE_DHCP,
         "include_events": INCLUDE_EVENTS,
         "filter_training_detections": True,
-        "limit": 500,
+        "limit": 300,
         "start_date": start_date,
     }
 

@@ -61,7 +61,7 @@ class FncApiClient:
         self,
         name: str = None,
         api_token: str = None,
-        domain: str = CLIENT_DEFAULT_DOMAIN,
+        domain: str = None,
         rest_client: FncRestClient = None,
         logger: FncClientLogger = None
     ):
@@ -75,7 +75,7 @@ class FncApiClient:
         self.logger.info(f"Initializing {CLIENT_NAME} version {CLIENT_VERSION}.")
 
         self.api_token = api_token
-        self.domain = domain
+        self.domain = domain or CLIENT_DEFAULT_DOMAIN
 
         self.set_default_control_args()
 

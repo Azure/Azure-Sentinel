@@ -1,13 +1,12 @@
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fnc.fnc_client import FncClient
 from fnc.metastream.s3_client import MetastreamContext
 
 from fnc.utils import str_to_utc_datetime
-from globalVariables import SUPPORTED_EVENT_TYPES, DEFAULT_BUCKET_NAME
-from logger import Logger
+from globalVariables import DEFAULT_BUCKET_NAME, INTEGRATION_NAME, SUPPORTED_EVENT_TYPES
 from sentinel import post_data
 
 
@@ -36,10 +35,12 @@ def main(args: dict) -> str:
     try:
         now = datetime.now(tz=timezone.utc).replace(microsecond=0)
         end_date = start_date + timedelta(minutes=10)
+        is_done = False
         if event_type == "suricata" and now > end_date:
             fetch_and_send_events(ctx, event_type, start_date, end_date)
         else:
             fetch_and_send_events(ctx, event_type, start_date)
+            is_done = True
 
         new_checkpoint = ctx.get_checkpoint()
 
@@ -51,7 +52,7 @@ def main(args: dict) -> str:
             f"Failure: FetchAndSendEvents: event: {event_type} error: {str(ex)}"
         )
 
-    return new_checkpoint
+    return new_checkpoint, is_done
 
 
 def validate_args(args: dict):
@@ -89,13 +90,13 @@ def fetch_and_send_events(
     end_date: datetime = None,
 ):
     client = FncClient.get_metastream_client(
-        name="sentinel-fetch-events",
+        name=INTEGRATION_NAME,
         account_code=ACCOUNT_CODE,
         access_key=AWS_ACCESS_KEY,
         secret_key=AWS_SECRET_KEY,
         bucket=BUCKET_NAME,
-        logger=Logger("sentinel-fetch-events"),
     )
+    client.get_logger().set_level(level=logging.DEBUG)
     for events in client.fetch_events(
         context=ctx, event_type=event_type, start_date=start_date, end_date=end_date
     ):

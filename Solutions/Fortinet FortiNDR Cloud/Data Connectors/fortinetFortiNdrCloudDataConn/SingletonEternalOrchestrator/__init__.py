@@ -119,13 +119,14 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         else:
             logging.info(f"Start fetching most recent data for {event_type}")
             try:
-                next_checkpoint = yield context.call_activity(
+                next_checkpoint, is_done = yield context.call_activity(
                     "FetchAndSendEvents",
                     {"checkpoint": checkpoint, "event_type": event_type},
                 )
                 event_types[event_type]["checkpoint"] = next_checkpoint
-                retrieved.append(event_type)
-                args["retrieved"] = retrieved
+                if is_done:
+                    retrieved.append(event_type)
+                    args["retrieved"] = retrieved
                 event_type_args["attempt"] = 0
             except Exception as ex:
                 logging.error(

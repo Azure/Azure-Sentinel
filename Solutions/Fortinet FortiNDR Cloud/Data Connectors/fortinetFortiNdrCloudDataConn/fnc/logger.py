@@ -12,6 +12,9 @@ class FncClientLogger:
     def set_console_logging(self, enable: bool):
         pass
 
+    def set_log_to_file(self, enable=False):
+        pass
+
     def critical(self, log: str):
         raise NotImplementedError()
 
@@ -29,26 +32,41 @@ class FncClientLogger:
 
 
 class BasicLogger(FncClientLogger):
-
     FORMATTER = logging.Formatter(LOGGER_FORMAT)
     NAME = LOGGER_NAME_PREFIX
     MAX_FILE_SIZE = LOGGER_MAX_FILE_SIZE
 
     def __init__(self, name: str = NAME, level: str = logging.INFO):
         self.name = name
+        self.file_handler = None
         self.console_handler = None
         self.level = level
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
-        self.logger.addHandler(self._get_file_handler())
 
         logging.info('Logging Initialized')
 
     def set_level(self, level):
-        self.level = level
-        self.logger.setLevel(level)
+        if self.level != level:
+            self.level = level
+            self.logger.setLevel(level)
+
+    def set_log_to_file(self, enable: bool = False):
+        if not self.logger:
+            return
+
+        if not enable and self.file_handler:
+            self.logger.removeHandler(hdlr=self.file_handler)
+            self.file_handler = None
+
+        if enable and not self.file_handler:
+            self.file_handler = self._get_file_handler()
+            self.logger.addHandler(self.file_handler)
 
     def set_console_logging(self, enable: bool = False):
+        if not self.logger:
+            return
+
         if enable and not self.console_handler:
             self.console_handler = logging.StreamHandler(sys.stdout)
             self.console_handler.setFormatter(self.FORMATTER)
