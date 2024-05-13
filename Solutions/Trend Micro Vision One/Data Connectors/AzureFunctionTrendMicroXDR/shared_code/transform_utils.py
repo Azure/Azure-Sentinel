@@ -319,13 +319,14 @@ def _convert_meta(meta_object):
     return result
 
 
-def _trim_oversized_json(field_name, field_data: Any) -> bool:
+def _trim_oversized_json(json_data: dict, field_name: str, field_data: Any) -> bool:
     """Check if the field data in (list, str) type is over the limit size.
     if field_data is list, check if the total size of the list is over the limit.
     if field_data is string, check if the size of the string is over the limit.
 
     Args:
-        field_name (_type_): field name
+        json_data (dict): json data
+        field_name (str): field name
         field_data (Any): field data
 
     Returns:
@@ -361,6 +362,13 @@ def _trim_oversized_json(field_name, field_data: Any) -> bool:
             f"field_size: {len(bytes_string)}."
         )
         field_data = bytes_string[:FIELD_BYTES_LIMIT].decode(errors="ignore")
+        inner_field_keys = field_name.split(".")
+        if len(inner_field_keys) == 1:
+            json_data[inner_field_keys[0]] = field_data
+        elif len(inner_field_keys) == 2:
+            json_data[inner_field_keys[0]][inner_field_keys[1]] = field_data
+        else:
+            logger.error(f"[process_field_over_size] {field_name} depth is not supported.")
 
     return is_oversized
 
@@ -384,7 +392,7 @@ def process_json_oversize(
 
         is_oversized = False
         if field_data:
-            is_oversized = _trim_oversized_json(".".join(inner_fields), field_data)
+            is_oversized = _trim_oversized_json(json_data, ".".join(inner_fields), field_data)
 
         if is_oversized:
             json_data[".".join(inner_fields) + "_over_size"] = is_oversized
