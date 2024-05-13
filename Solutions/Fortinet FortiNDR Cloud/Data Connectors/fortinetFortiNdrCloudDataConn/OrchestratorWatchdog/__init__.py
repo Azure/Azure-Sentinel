@@ -4,19 +4,12 @@ from datetime import datetime, timedelta, timezone
 
 import azure.durable_functions as df
 import azure.functions as func
-
 from azure.durable_functions.models import DurableOrchestrationStatus
 from errors import InputError
 from fnc.fnc_client import FncClient
-from fnc.global_variables import DEFAULT_DATE_FORMAT
 from fnc.utils import datetime_to_utc_str
-from globalVariables import (
-    DEFAULT_BUCKET_NAME,
-    INTEGRATION_NAME,
-    ORCHESTRATION_NAME,
-    SUPPORTED_EVENT_TYPES,
-)
-
+from globalVariables import (DEFAULT_BUCKET_NAME, INTEGRATION_NAME,
+                             ORCHESTRATION_NAME, SUPPORTED_EVENT_TYPES)
 
 NOT_RUNNING_FUNCTION_STATES = [
     df.OrchestrationRuntimeStatus.Completed,
@@ -25,84 +18,63 @@ NOT_RUNNING_FUNCTION_STATES = [
     None,
 ]
 
-EVENT_TYPES = (os.environ.get("FncEvents") or "observation").split(",")
+EVENT_TYPES = (os.environ.get("FncEvents", "observation")).split(",")
 EVENT_TYPES = [event.strip() for event in EVENT_TYPES if event]
 TERMINATE_APP = os.environ.get("FncTerminateApp").strip().lower() == "true"
 
 try:
-    DAYS_TO_COLLECT_EVENTS = int(os.environ.get("FncDaysToCollectEvents") or 7)
+    DAYS_TO_COLLECT_EVENTS = int(os.environ.get("FncDaysToCollectEvents", "7"))
 except ValueError:
-    DAYS_TO_COLLECT_EVENTS = None
+    DAYS_TO_COLLECT_EVENTS = 7
 
 try:
-    DAYS_TO_COLLECT_DETECTIONS = int(os.environ.get("FncDaysToCollectDetections") or 7)
+    DAYS_TO_COLLECT_DETECTIONS = int(
+        os.environ.get("FncDaysToCollectDetections", "7"))
 except ValueError:
-    DAYS_TO_COLLECT_DETECTIONS = None
+    DAYS_TO_COLLECT_DETECTIONS = 7
 
 try:
-    INTERVAL = int(os.environ.get("FncIntervalMinutes") or "5")
+    INTERVAL = int(os.environ.get("FncIntervalMinutes", "5"))
 except ValueError:
-    INTERVAL = None
+    INTERVAL = 5
 
 try:
-    POLLING_DELAY = int(os.environ.get("PollingDelay") or "10")
-except:
-    POLLING_DELAY = None
+    POLLING_DELAY = int(os.environ.get("PollingDelay", "10"))
+except ValueError:
+    POLLING_DELAY = 10
 
-try:
-    API_TOKEN = os.environ.get("FncApiToken")
-except:
-    API_TOKEN = None
-
-try:
-    AWS_ACCESS_KEY = os.environ.get("AwsAccessKeyId")
-except:
-    AWS_ACCESS_KEY = None
-
-try:
-    AWS_SECRET_KEY = os.environ.get("AwsSecretAccessKey")
-except:
-    AWS_SECRET_KEY = None
-
-try:
-    ACCOUNT_CODE = os.environ.get("FncAccountCode")
-except:
-    ACCOUNT_CODE = None
-
-try:
-    BUCKET_NAME = os.environ.get("FncBucketName") or DEFAULT_BUCKET_NAME
-except:
-    BUCKET_NAME = None
-
-try:
-    DOMAIN = os.environ.get("FncApiDomain")
-except:
-    DOMAIN = None
+API_TOKEN = os.environ.get("FncApiToken", None)
+AWS_ACCESS_KEY = os.environ.get("AwsAccessKeyId", None)
+AWS_SECRET_KEY = os.environ.get("AwsSecretAccessKey", None)
+ACCOUNT_CODE = os.environ.get("FncAccountCode", None)
+BUCKET_NAME = os.environ.get("FncBucketName", DEFAULT_BUCKET_NAME)
+DOMAIN = os.environ.get("FncApiDomain", None)
 
 
 def validate_configuration():
     if EVENT_TYPES and not SUPPORTED_EVENT_TYPES.issuperset(EVENT_TYPES):
-        raise InputError(f"FncEvents must be one or more of {SUPPORTED_EVENT_TYPES}")
+        raise InputError(
+            f"FncEvents must be one or more of {SUPPORTED_EVENT_TYPES}")
 
     sentinel_shared_key = (os.environ.get("WorkspaceKey") or "").strip()
     if not sentinel_shared_key:
-        raise InputError(f"WorkspaceKey is required.")
+        raise InputError("WorkspaceKey is required.")
 
     if INTERVAL is None or INTERVAL < 1 or INTERVAL > 60:
-        raise InputError(f"FncIntervalMinutes must be a number 1-60")
+        raise InputError("FncIntervalMinutes must be a number 1-60")
 
     if DAYS_TO_COLLECT_EVENTS and (
         DAYS_TO_COLLECT_EVENTS < 0 or DAYS_TO_COLLECT_EVENTS > 7
     ):
-        raise InputError(f"FncDaysToCollectEvents must be a number 0-7")
+        raise InputError("FncDaysToCollectEvents must be a number 0-7")
 
     if "detections" in EVENT_TYPES and API_TOKEN is None:
-        raise InputError(f"FncApiToken must be provided to fetch detections")
+        raise InputError("FncApiToken must be provided to fetch detections")
 
     if "suricata" in EVENT_TYPES or "observation" in EVENT_TYPES:
         if not AWS_ACCESS_KEY or not AWS_SECRET_KEY or not ACCOUNT_CODE:
             raise InputError(
-                "AwsAccessKeyId, AwsSecretAccessKey, and FncAccountCode are required to pull Suricata and Observation"
+                "AwsAccessKeyId, AwsSecretAccessKey, and FncAccountCode are required to pull Suricata and Observation."
             )
 
 
@@ -150,11 +122,13 @@ def get_detection_args():
         "start_date": start_date_detections,
     }
 
-    # Create detection client to get context for history and real time detections
+    # Create detection client to get context for history
+    # and real time detections
     detection_client = FncClient.get_api_client(
         name=INTEGRATION_NAME, api_token=API_TOKEN, domain=DOMAIN
     )
-    h_context, context = detection_client.get_splitted_context(args=detection_args)
+    h_context, context = detection_client.get_splitted_context(
+        args=detection_args)
     history = h_context.get_history()
 
     return {

@@ -4,11 +4,10 @@ from datetime import datetime, timedelta, timezone
 
 from fnc.fnc_client import FncClient
 from fnc.metastream.s3_client import MetastreamContext
-
 from fnc.utils import str_to_utc_datetime
-from globalVariables import DEFAULT_BUCKET_NAME, INTEGRATION_NAME, SUPPORTED_EVENT_TYPES
+from globalVariables import (DEFAULT_BUCKET_NAME, INTEGRATION_NAME,
+                             SUPPORTED_EVENT_TYPES)
 from sentinel import post_data
-
 
 AWS_ACCESS_KEY = os.environ.get("AwsAccessKeyId")
 AWS_SECRET_KEY = os.environ.get("AwsSecretAccessKey")
@@ -56,21 +55,21 @@ def main(args: dict) -> str:
 
 
 def validate_args(args: dict):
-    logging.info(f"Validating args to retrieve events")
+    logging.info("Validating args to retrieve events.")
     event_type = args.get("event_type", "")
     checkpoint = args.get("checkpoint", "")
 
-    if not event_type or not event_type in SUPPORTED_EVENT_TYPES:
+    if not event_type or event_type not in SUPPORTED_EVENT_TYPES:
         raise AttributeError(
             "Event type was not provided or it is not supported. Event type must be one of (Observation | Suricata)"
         )
 
     if not checkpoint:
         raise AttributeError(
-            "Checkpoint was not provided. Checkpoint is required to retrieve events"
+            "Checkpoint was not provided. Checkpoint is required to retrieve events."
         )
 
-    logging.info(f"Args for retrieving {event_type} validated")
+    logging.info(f"Args for retrieving {event_type} validated.")
 
 
 def post_events_inc(events, event_type):
@@ -98,6 +97,7 @@ def fetch_and_send_events(
     )
     client.get_logger().set_level(level=logging.DEBUG)
     for events in client.fetch_events(
-        context=ctx, event_type=event_type, start_date=start_date, end_date=end_date
+        context=ctx, event_type=event_type,
+        start_date=start_date, end_date=end_date
     ):
         post_events_inc(events, event_type)

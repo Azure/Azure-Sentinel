@@ -1,9 +1,8 @@
 import json
 import logging
 import os
-
-
 from datetime import datetime, timezone
+
 from fnc.api.api_client import ApiContext
 from fnc.fnc_client import FncClient
 from globalVariables import INTEGRATION_NAME
@@ -29,7 +28,7 @@ def main(args: dict) -> str:
     history = args.get("history", {})
 
     now = datetime.now(tz=timezone.utc)
-    start_date = history.get("end_date_str") or now
+    start_date = history.get("start_date_str") or now
     end_date = history.get("end_date_str") or now
     checkpoint = history.get("checkpoint") or now
 
@@ -63,7 +62,7 @@ def main(args: dict) -> str:
 
 
 def validate_args(args: dict):
-    logging.info("Validating args to retrieve detections history")
+    logging.info("Validating args to retrieve detections history.")
     event_type = args.get("event_type", "")
     history = args.get("history", {})
     checkpoint = history.get("checkpoint")
@@ -75,22 +74,24 @@ def validate_args(args: dict):
 
     if not history:
         raise AttributeError(
-            "History object was not provided or it is empty. History object is required to retrieve detection history"
+            "History object was not provided or it is empty. History object is required to retrieve detection history."
         )
 
     if not checkpoint:
         raise AttributeError(
-            "Checkpoint was not provided. Checkpoint is required to retrieve detections history"
+            "Checkpoint was not provided. Checkpoint is required to retrieve detections history."
         )
 
-    logging.info("Args for retrieving detections history validated")
+    logging.info("Args for retrieving detections history validated.")
 
 
 def add_events_to_detections(detections, detection_events):
-    logging.info("Start enriching detections with events")
+    logging.info("Start enriching detections with events.")
     for detection in detections:
-        detection["events"] = json.dumps(detection_events.get(detection["uuid"], []))
-    logging.info("Finished enriching detections with events")
+        detection["events"] = json.dumps(
+            detection_events.get(detection["uuid"], [])
+        )
+    logging.info("Finished enriching detections with events.")
 
 
 def fetch_and_send_detections(ctx: ApiContext, event_type: str, start_date: str):

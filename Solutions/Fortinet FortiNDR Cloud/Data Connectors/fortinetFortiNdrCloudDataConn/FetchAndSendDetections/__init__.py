@@ -63,18 +63,22 @@ def validate_args(args: dict):
 
     if not checkpoint:
         raise AttributeError(
-            "Checkpoint was not provided. Checkpoint is required to retrieve detections"
+            "Checkpoint was not provided. Checkpoint is required to retrieve detections."
         )
 
 
 def add_events_to_detections(detections, detection_events):
     logging.info("Start enriching detections with events")
     for detection in detections:
-        detection["events"] = json.dumps(detection_events.get(detection["uuid"], []))
+        detection["events"] = json.dumps(
+            detection_events.get(detection["uuid"], [])
+        )
     logging.info("Finished enriching detections with events")
 
 
-def fetch_and_send_detections(ctx: ApiContext, event_type: str, start_date: str):
+def fetch_and_send_detections(
+    ctx: ApiContext, event_type: str, start_date: str
+):
     client = FncClient.get_api_client(
         name=INTEGRATION_NAME, api_token=API_TOKEN, domain=DOMAIN
     )
