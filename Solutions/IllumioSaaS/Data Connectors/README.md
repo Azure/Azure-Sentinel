@@ -5,7 +5,7 @@ This might result in additional data ingestion costs. Check the [Azure Functions
 
 ## Prerequisites
 
-1. Ensure AWS SQS is configured for the s3 bucket from which flow and auditable event logs are going to be pulled. In case, Illumio provides bucket, please contact Illumio support for sqs url, s3 bucket name and aws credentials.
+1. Ensure AWS SQS is configured for the S3 bucket from which flow and auditable event logs are going to be pulled. In case, Illumio provides bucket, please contact Illumio support for sqs url, s3 bucket name and aws credentials.
 
 2. Register AAD application - For DCR (Data collection rule) to authentiate to ingest data into log analytics, you must use Entra application.
 	1. [Follow the instructions here](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-portal#create-azure-ad-application) (steps 1-5) to get **AAD Tenant Id**, **AAD Client Id** and **AAD Client Secret**. 
