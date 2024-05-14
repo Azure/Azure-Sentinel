@@ -1,15 +1,19 @@
 
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator, List
 
 from requests.exceptions import *
 
+from fnc.api.endpoints import DetectionApi, Endpoint, EndpointKey, EntityApi, FncApi, SensorApi
+from fnc.global_variables import (CLIENT_DEFAULT_DOMAIN, CLIENT_DEFAULT_USER_AGENT, CLIENT_NAME, CLIENT_PROTOCOL, CLIENT_VERSION,
+                                  DEFAULT_DATE_FORMAT, POLLING_DEFAULT_DELAY, POLLING_MAX_DETECTION_EVENTS, POLLING_MAX_DETECTIONS,
+                                  POLLING_TRAINING_ACCOUNT_ID, POLLING_TRAINING_CUSTOMER_ID, REQUEST_DEFAULT_TIMEOUT, REQUEST_DEFAULT_VERIFY,
+                                  REQUEST_MAXIMUM_RETRY_ATTEMPT)
+from fnc.utils import datetime_to_utc_str, str_to_utc_datetime
+
 from ..errors import ErrorMessages, ErrorType, FncClientError
-from ..global_variables import *
 from ..logger import BasicLogger, FncClientLogger
-from ..utils import *
-from .endpoints import *
 from .rest_clients import BasicRestClient, FncRestClient
 
 
@@ -20,8 +24,6 @@ class ApiContext:
         self._checkpoint = ''
         self._history = {}
         self._polling_args = {}
-        self._checkpoint = ''
-        self._history = {}
 
     def update_history(self, history: dict):
         self._history = history or None
@@ -198,7 +200,7 @@ class FncApiClient:
             try:
                 # Verify the EndpointKey was defined for the received endpoint
                 k = EndpointKey(endpoint)
-            except:
+            except Exception:
                 # Raise unsupported Error if the endpoint has not been defined
                 self.logger.error(f"The endpoint ({endpoint}) is not defined. Verify that the spelling correspond with the EndpointKey.")
                 raise FncClientError(
@@ -545,8 +547,6 @@ class FncApiClient:
 
         return start_date, end_date
 
-        return start_date, end_date
-
     def get_default_polling_args(self) -> dict:
         """
         This method returns a dictionary containing all the default arguments for the continuous polling.
@@ -793,7 +793,7 @@ class FncApiClient:
 
             for detection in response['detections']:
                 entity = detection['device_ip']
-                if not entities_info.get(entity, {}):
+                if entity not in entities_info:
                     # Add the PDNS and DHCP information if requested
                     entities_info[entity] = self._get_entity_information(
                         entity=entity,

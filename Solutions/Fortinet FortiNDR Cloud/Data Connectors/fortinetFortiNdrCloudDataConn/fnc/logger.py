@@ -9,10 +9,10 @@ class FncClientLogger:
     def set_level(self, level):
         raise NotImplementedError()
 
-    def set_console_logging(self, enable: bool):
+    def set_console_logging(self, enable: bool = False):
         pass
 
-    def set_log_to_file(self, enable=False):
+    def set_log_to_file(self, enable: bool = False):
         pass
 
     def critical(self, log: str):

@@ -7,7 +7,7 @@ import boto3
 import botocore.client
 import botocore.config
 
-from ..global_variables import *
+from fnc.global_variables import METASTREAM_SUPPORTED_EVENT_TYPES
 
 
 class MetastreamContext:

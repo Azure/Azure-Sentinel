@@ -2,10 +2,11 @@ import os.path
 from datetime import datetime, timedelta, timezone
 from typing import Iterator, List
 
+from fnc.global_variables import CLIENT_DEFAULT_USER_AGENT, DEFAULT_DATE_FORMAT, METASTREAM_DEFAULT_BUCKET, METASTREAM_SUPPORTED_EVENT_TYPES
+from fnc.utils import datetime_to_utc_str, str_to_utc_datetime
+
 from ..errors import ErrorMessages, ErrorType, FncClientError
-from ..global_variables import *
 from ..logger import BasicLogger, FncClientLogger
-from ..utils import *
 from .s3_client import MetastreamContext, S3Client
 
 

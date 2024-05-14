@@ -6,6 +6,14 @@ from requests.exceptions import HTTPError, JSONDecodeError
 from ..errors import ErrorMessages, ErrorType, FncClientError
 from ..logger import FncClientLogger
 
+__all__ = [
+    'EndpointKey', 'Endpoint',
+    'GetSensors', 'GetDevices', 'GetTask', 'GetTasks', 'CreateTask', 'GetTelemetryEvents', 'GetTelemetryPacketstats', 'GetTelemetryNetwork',
+    'GetEntitySummary', 'GetEntityPdns', 'GetEntityDhcp', 'GetEntityFile',
+    'GetDetections', 'ResolveDetection', 'GetDetectionEvents', 'GetRules', 'GetRule', 'CreateRule', 'GetRuleEvents',
+    'FncApi', 'SensorApi', 'DetectionApi', 'EntityApi'
+]
+
 
 class EndpointEnum(Enum):
     def _generate_next_value_(name, start, count, last_values):
@@ -1032,7 +1040,7 @@ class FncApi:
         if isinstance(endpoint, str):
             try:
                 k = EndpointKey(endpoint)
-            except:
+            except Exception:
                 return None
         else:
             k = endpoint

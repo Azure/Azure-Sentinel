@@ -1,5 +1,6 @@
+from fnc.global_variables import CLIENT_DEFAULT_DOMAIN
+
 from .api import FncApiClient, FncRestClient
-from .global_variables import *
 from .logger import FncClientLogger
 from .metastream import FncMetastreamClient
 

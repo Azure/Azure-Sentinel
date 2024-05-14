@@ -97,7 +97,7 @@ class FncClientError(Exception):
         str_object = f"{self.error_type.name} - {self.error_message}"
         try:
             str_object = str_object.format(**self.error_data)
-        except:
+        except Exception:
             pass
 
         return str_object
