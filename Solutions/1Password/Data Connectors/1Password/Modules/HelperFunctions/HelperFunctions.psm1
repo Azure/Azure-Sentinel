@@ -37,7 +37,7 @@ Function Get-AuditLogs {
         'ContentType'   = 'Application/Json'
     }
 
-    if (!($cursor)) {
+    if (!($cursor -or $cursor -eq "none")) {
         Write-Host "Processing Time Stamp"
         $payload = @{
             'start_time' = $lastRunTime
@@ -293,6 +293,8 @@ Function Set-TimeStamp {
 
     if ([string]::IsNullOrEmpty($lastRun)) {
         $lastRun = (Get-Date).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+    } else {
+        ([datetime]$lastRun).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
     }
 
     $lastRunAudit = @{
