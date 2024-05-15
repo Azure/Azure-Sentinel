@@ -1,5 +1,5 @@
 import base64
-import datetime
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
@@ -32,7 +32,8 @@ class SentinelConnector:
 
     def send(self, event):
         self._queue.append(event)
-        if len(self._queue) >= self.queue_size:
+        queue_size = len(self._queue)
+        if queue_size >= self.queue_size:
             self.flush(force=False)
 
     def flush(self, force=True):
@@ -113,7 +114,7 @@ class SentinelConnector:
         method = "POST"
         content_type = "application/json"
         resource = "/api/logs"
-        rfc1123date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
+        rfc1123date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
         content_length = len(body)
         signature = self._build_signature(
             customer_id,

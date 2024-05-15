@@ -21,13 +21,13 @@ def main(mytimer: func.TimerRequest) -> None:
 
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
-    query_to = datetime.now(
-        timezone.utc) - timedelta(minutes=1)
+    query_to = (datetime.now(
+        timezone.utc) - timedelta(minutes=1)).isoformat()
 
     zf_client = get_zf_client()
 
     results = get_cti_breaches(
-        zf_client, created_at_after=query_from, created_at_before=query_to)
+        zf_client, created_after=query_from, created_before=query_to)
 
     logging.debug("Trigger function retrieved results")
 
@@ -50,10 +50,10 @@ def get_zf_client():
     return ZeroFoxClient(user, token)
 
 
-def get_cti_breaches(client: ZeroFoxClient, created_at_after: str, created_at_before: str):
+def get_cti_breaches(client: ZeroFoxClient, created_after: str, created_before: str):
     url_suffix = "breaches/"
-    params = dict(created_at_after=created_at_after,
-                  created_at_before=created_at_before)
+    params = dict(created_after=created_after,
+                  created_before=created_before)
     return client.cti_request(
         "GET",
         url_suffix,
