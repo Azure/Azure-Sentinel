@@ -16,6 +16,29 @@ try {
     exit
 }
 $results = @()
+
+# Validate the Access Token
+$headers = @{
+    "Authorization" = "Bearer $env:APIKey"
+    "ContentType"   = "application/json"
+}
+
+$uri = "$env:apiEndpoint/api/v2/auth/introspect"
+$apiResponse = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get
+
+if (!($apiResponse)) {
+    Write-Output "Invalid API Key"
+
+    $results += @{
+        "log_source"  = "healthevents"
+        "category"    = "credentials_failed"
+        "action_type" = "API Key Invalid"
+    }
+
+    Send-Data -body ($results | ConvertTo-Json -AsArray)
+    exit
+}
+
 $lastRunTime = Get-TimeStamp @storagePayload
 
 $endpoints = @('auditevents', 'signinattempts', 'itemusages')
@@ -27,20 +50,16 @@ foreach ($api in $endpoints) {
         if ($cursor -and $cursor -ne "none") {
             $results += Get-AuditLogs -cursor $cursor -api $api
         } else {
-            $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
+            $results += Get-AuditLogs -lastRunTime $lastRunTime -api $api
         }
     } catch {
         $results += Get-AuditLogs -lastRunTime $currentStartTime -api $api
     }
 }
 
-Write-Output $results
-
 $results += @{
     "log_source" = "healthevents"
 }
-
-Write-Output $results
 
 if ($results.count -gt 0) {
     Write-Host "Sending $($results.count) new records"
