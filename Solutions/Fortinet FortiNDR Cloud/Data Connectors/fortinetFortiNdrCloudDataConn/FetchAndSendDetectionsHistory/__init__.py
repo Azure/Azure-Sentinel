@@ -19,6 +19,7 @@ DETECTION_STATUS = os.environ.get("DetectionStatus") or "all"
 PULL_MUTED = os.environ.get("PullMuted") or "all"
 INCLUDE_DESCRIPTION = os.environ.get("IncludeDescription") or True
 INCLUDE_SIGNATURE = os.environ.get("IncludeSignature") or True
+LOGGER_LEVEL = os.environ.get("LogLevel") or "INFO"
 
 
 def main(args: dict) -> str:
@@ -98,7 +99,8 @@ def fetch_and_send_detections(ctx: ApiContext, event_type: str, start_date: str)
     client = FncClient.get_api_client(
         name=INTEGRATION_NAME, api_token=API_TOKEN, domain=DOMAIN
     )
-    client.get_logger().set_level(level=logging.DEBUG)
+    loggerLever = logging.getLevelName(LOGGER_LEVEL.upper())
+    client.get_logger().set_level(level=loggerLever)
     polling_args = {
         "account_uuid": ACCOUNT_UUID,
         "polling_delay": POLLING_DELAY,

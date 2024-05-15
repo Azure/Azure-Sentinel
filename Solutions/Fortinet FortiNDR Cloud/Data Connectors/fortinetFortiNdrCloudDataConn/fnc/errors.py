@@ -98,6 +98,7 @@ class FncClientError(Exception):
         try:
             str_object = str_object.format(**self.error_data)
         except Exception:
+            # If the error message fails to be parsed we so not throw another exception but just print it without being parsed
             pass
 
         return str_object

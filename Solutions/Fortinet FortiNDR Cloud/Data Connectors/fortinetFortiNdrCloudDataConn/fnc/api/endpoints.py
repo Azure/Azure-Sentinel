@@ -16,6 +16,7 @@ __all__ = [
 
 
 class EndpointEnum(Enum):
+    @staticmethod
     def _generate_next_value_(name, start, count, last_values):
         return name.title()
 

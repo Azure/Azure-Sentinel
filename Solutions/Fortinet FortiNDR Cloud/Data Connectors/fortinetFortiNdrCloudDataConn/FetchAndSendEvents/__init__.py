@@ -14,6 +14,7 @@ AWS_SECRET_KEY = os.environ.get("AwsSecretAccessKey")
 ACCOUNT_CODE = os.environ.get("FncAccountCode")
 API_TOKEN = os.environ.get("ApiToken")
 BUCKET_NAME = os.environ.get("FncBucketName") or DEFAULT_BUCKET_NAME
+LOGGER_LEVEL = os.environ.get("LogLevel") or "INFO"
 
 
 def main(args: dict) -> str:
@@ -95,7 +96,8 @@ def fetch_and_send_events(
         secret_key=AWS_SECRET_KEY,
         bucket=BUCKET_NAME,
     )
-    client.get_logger().set_level(level=logging.DEBUG)
+    loggerLever = logging.getLevelName(LOGGER_LEVEL.upper())
+    client.get_logger().set_level(level=loggerLever)
     for events in client.fetch_events(
         context=ctx, event_type=event_type,
         start_date=start_date, end_date=end_date

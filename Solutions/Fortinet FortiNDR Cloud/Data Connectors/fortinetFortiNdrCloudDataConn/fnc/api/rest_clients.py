@@ -59,21 +59,26 @@ class BasicRestClient(FncRestClient):
     http_session = None
     default_args: dict
 
-    def __del__(self):
+    def close_http_session(self):
         try:
             if self.http_session:
                 self.http_session.close()
+                self.http_session = None
         except AttributeError:
             # we ignore exceptions raised due to session not used by the client and hence do not exist in __del__
             pass
         except Exception as e:
-            self.logger.error(f"Failed to close FncRestClient session with the following error:\n{traceback.format_exc()}")
+            self.logger.error(
+                f"Failed to close FncRestClient session with the following error:\n{traceback.format_exc()}")
             raise FncClientError(
                 error_type=ErrorType.REQUEST_CLOSING_SESSION_ERROR,
                 error_message=ErrorMessages.REQUEST_CLOSING_SESSION_ERROR,
                 error_data={'error': e},
                 exception=e
             ) from e
+
+    def __del__(self):
+        self.close_http_session()
 
     def _http_request(self, **kwargs):
         if self.http_session is None:
@@ -142,5 +147,7 @@ class BasicRestClient(FncRestClient):
                 error_data={'url': masked_url, 'error': e},
                 exception=e
             ) from e
+        finally:
+            self.close_http_session()
 
         return response

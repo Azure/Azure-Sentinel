@@ -747,8 +747,9 @@ class FncApiClient:
 
         return result
 
-    def _process_response(self, response: dict, entities_info: dict = {}, args: dict = None):
+    def _process_response(self, response: dict, entities_info: dict = None, args: dict = None) -> dict:
         # Getting instructions from the arguments
+        args = args or {}
         include_description = args.get('include_description', False)
         include_signature = args.get('include_signature', False)
         fetch_pdns = args.get('include_pdns', False)
@@ -786,8 +787,8 @@ class FncApiClient:
             "Rules' information successfully added to the detections.")
 
         # Enrich detection with additional entity's information
-
         if fetch_dhcp or fetch_pdns:
+            entities_info = entities_info or {}
             self.logger.debug(
                 " Enriching detection with additional entity's information.")
 
@@ -795,12 +796,13 @@ class FncApiClient:
                 entity = detection['device_ip']
                 if entity not in entities_info:
                     # Add the PDNS and DHCP information if requested
-                    entities_info[entity] = self._get_entity_information(
+                    entity_info = self._get_entity_information(
                         entity=entity,
                         fetch_dhcp=fetch_dhcp,
                         fetch_pdns=fetch_pdns,
                         filter_training=filter_training
                     )
+                    entities_info[entity] = entity_info
                 else:
                     self.logger.debug(f"Scaping {entity} since it was already requested.")
 
@@ -828,6 +830,7 @@ class FncApiClient:
             self.logger.info(f"Associated events for ({total - failed} out of {total}) detections were successfully added to the response.")
 
         response['events'] = detection_events
+        return entities_info
 
     def _get_detection_events(self, detection_id: str) -> list:
         detection_events = []
@@ -922,7 +925,7 @@ class FncApiClient:
 
                 if len(response['detections']) > 0:
                     # Process the response enriching it if requested
-                    self._process_response(response=response, entities_info=entities_info, args=args)
+                    entities_info = self._process_response(response=response, entities_info=entities_info, args=args)
 
                     offset = polling_args.get('offset', 0)
                     polling_args['offset'] = offset + len(response['detections'])
