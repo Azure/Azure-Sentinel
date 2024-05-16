@@ -220,79 +220,85 @@ class Auth0Connector:
     def customize_event(self, el):
         if "details" in el:
             if "body" in el["details"]:
-                if "app" in el["details"]["body"]:
-                    if "metadata" in el["details"]["body"]["app"]:
-                        el["details"]["body"]["app"]["metadata"] = json.dumps(el["details"]["body"]["app"]["metadata"])
+                myjson = str(el["details"]["body"])
+                if(myjson.startswith("{")):
+                    if "app" in el["details"]["body"]:
+                        if "metadata" in el["details"]["body"]["app"]:
+                            el["details"]["body"]["app"]["metadata"] = json.dumps(el["details"]["body"]["app"]["metadata"])
 
-                if "transaction" in el["details"]["body"]:
-                    el["details"]["body"]["transaction"] = json.dumps(el["details"]["body"]["transaction"])
+                    if "transaction" in el["details"]["body"]:
+                        el["details"]["body"]["transaction"] = json.dumps(el["details"]["body"]["transaction"])
 
-                if "user" in el["details"]["body"]:
-                    if "metadata" in el["details"]["body"]["user"]:
-                        el["details"]["body"]["user"]["metadata"] = json.dumps(el["details"]["body"]["user"]["metadata"])
+                    if "user" in el["details"]["body"]:
+                        if "metadata" in el["details"]["body"]["user"]:
+                            el["details"]["body"]["user"]["metadata"] = json.dumps(el["details"]["body"]["user"]["metadata"])
 
             if "request" in el["details"]:
                 if "auth" in el["details"]["request"]:
                     el["details"]["request"]["auth"] = json.dumps(el["details"]["request"]["auth"])
                 
                 if "body" in el["details"]["request"]:
-                    if "app" in el["details"]["request"]["body"]:
-                        if "metadata" in el["details"]["request"]["body"]["app"]:
-                            el["details"]["request"]["body"]["app"]["metadata"] = json.dumps(el["details"]["request"]["body"]["app"]["metadata"])
+                    myjson = str(el["details"]["request"]["body"])
+                    if(myjson.startswith("{")):
+                        if "app" in el["details"]["request"]["body"]:
+                            if "metadata" in el["details"]["request"]["body"]["app"]:
+                                el["details"]["request"]["body"]["app"]["metadata"] = json.dumps(el["details"]["request"]["body"]["app"]["metadata"])
 
-                    if "client" in el["details"]["request"]["body"]:
-                        el["details"]["request"]["body"]["client"] = json.dumps(el["details"]["request"]["body"]["client"])
+                        if "client" in el["details"]["request"]["body"]:
+                            el["details"]["request"]["body"]["client"] = json.dumps(el["details"]["request"]["body"]["client"])
 
-                    if "refresh" in el["details"]["request"]["body"]:
-                        if "token" in el["details"]["request"]["body"]["refresh"]:
-                            el["details"]["request"]["body"]["refresh"]["token"] = json.dumps(el["details"]["request"]["body"]["refresh"]["token"])
+                        if "refresh" in el["details"]["request"]["body"]:
+                            if "token" in el["details"]["request"]["body"]["refresh"]:
+                                el["details"]["request"]["body"]["refresh"]["token"] = json.dumps(el["details"]["request"]["body"]["refresh"]["token"])
 
-                    if "template" in el["details"]["request"]["body"]:
-                        el["details"]["request"]["body"]["template"] = json.dumps(el["details"]["request"]["body"]["template"])
-                        details_request_body_template = el["details"]["request"]["body"]["template"]
-                        if(len(json.dumps(details_request_body_template).encode()) > FIELD_SIZE_LIMIT_BYTES):
-                            queue_list = self._split_big_request(details_request_body_template)
-                            count = 1
-                            for q in queue_list:
-                                columnname = 'templatePart' + str(count)
-                                el['details']['request']['body'][columnname] = q
-                                count+=1
+                        if "template" in el["details"]["request"]["body"]:
+                            el["details"]["request"]["body"]["template"] = json.dumps(el["details"]["request"]["body"]["template"])
+                            details_request_body_template = el["details"]["request"]["body"]["template"]
+                            if(len(json.dumps(details_request_body_template).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                                queue_list = self._split_big_request(details_request_body_template)
+                                count = 1
+                                for q in queue_list:
+                                    columnname = 'templatePart' + str(count)
+                                    el['details']['request']['body'][columnname] = q
+                                    count+=1
 
-                    if "user" in el["details"]["request"]["body"]:
-                        if "metadata" in el["details"]["request"]["body"]["user"]:
-                            el["details"]["request"]["body"]["user"]["metadata"] = json.dumps(el["details"]["request"]["body"]["user"]["metadata"])
+                        if "user" in el["details"]["request"]["body"]:
+                            if "metadata" in el["details"]["request"]["body"]["user"]:
+                                el["details"]["request"]["body"]["user"]["metadata"] = json.dumps(el["details"]["request"]["body"]["user"]["metadata"])
 
             if "response" in el["details"]:	
                 if "body" in el["details"]["response"]:
-                    if "app" in el["details"]["response"]["body"]:
-                        if "metadata" in el["details"]["response"]["body"]["app"]:
-                            el["details"]["response"]["body"]["app"]["metadata"] = json.dumps(el["details"]["response"]["body"]["app"]["metadata"])
+                    myjson = str(el["details"]["response"]["body"])
+                    if(myjson.startswith("{")):
+                        if "app" in el["details"]["response"]["body"]:
+                            if "metadata" in el["details"]["response"]["body"]["app"]:
+                                el["details"]["response"]["body"]["app"]["metadata"] = json.dumps(el["details"]["response"]["body"]["app"]["metadata"])
 
-                    if "flags" in el["details"]["response"]["body"]:
-                        el["details"]["response"]["body"]["flags"] = json.dumps(el["details"]["response"]["body"]["flags"])
-                    
-                    if "refresh" in el["details"]["response"]["body"]:
-                        if "token" in el["details"]["response"]["body"]["refresh"]:
-                            el["details"]["response"]["body"]["refresh"]["token"] = json.dumps(el["details"]["response"]["body"]["refresh"]["token"])
+                        if "flags" in el["details"]["response"]["body"]:
+                            el["details"]["response"]["body"]["flags"] = json.dumps(el["details"]["response"]["body"]["flags"])
+                        
+                        if "refresh" in el["details"]["response"]["body"]:
+                            if "token" in el["details"]["response"]["body"]["refresh"]:
+                                el["details"]["response"]["body"]["refresh"]["token"] = json.dumps(el["details"]["response"]["body"]["refresh"]["token"])
 
-                    if "universal" in el["details"]["response"]["body"]:
-                        if "login" in el["details"]["response"]["body"]["universal"]:
-                            el["details"]["response"]["body"]["universal"]["login"] = json.dumps(el["details"]["response"]["body"]["universal"]["login"])
-                    
-                    if "user" in el["details"]["response"]["body"]:
-                        if "metadata" in el["details"]["response"]["body"]["user"]:
-                            el["details"]["response"]["body"]["user"]["metadata"] = json.dumps(el["details"]["response"]["body"]["user"]["metadata"])
+                        if "universal" in el["details"]["response"]["body"]:
+                            if "login" in el["details"]["response"]["body"]["universal"]:
+                                el["details"]["response"]["body"]["universal"]["login"] = json.dumps(el["details"]["response"]["body"]["universal"]["login"])
+                        
+                        if "user" in el["details"]["response"]["body"]:
+                            if "metadata" in el["details"]["response"]["body"]["user"]:
+                                el["details"]["response"]["body"]["user"]["metadata"] = json.dumps(el["details"]["response"]["body"]["user"]["metadata"])
 
-                    if "bindings" in el['details']['response']['body']:
-                        el['details']['response']['body']['bindings'] = json.dumps(el['details']['response']['body']['bindings'])
-                        details_response_body_bindings = el['details']['response']['body']['bindings']
-                        if(len(json.dumps(details_response_body_bindings).encode()) > FIELD_SIZE_LIMIT_BYTES):
-                            queue_list = self._split_big_request(details_response_body_bindings)
-                            count = 1
-                            for q in queue_list:
-                                columnname = 'bindingsPart' + str(count)
-                                el['details']['response']['body'][columnname] = q
-                                count+=1
+                        if "bindings" in el['details']['response']['body']:
+                            el['details']['response']['body']['bindings'] = json.dumps(el['details']['response']['body']['bindings'])
+                            details_response_body_bindings = el['details']['response']['body']['bindings']
+                            if(len(json.dumps(details_response_body_bindings).encode()) > FIELD_SIZE_LIMIT_BYTES):
+                                queue_list = self._split_big_request(details_response_body_bindings)
+                                count = 1
+                                for q in queue_list:
+                                    columnname = 'bindingsPart' + str(count)
+                                    el['details']['response']['body'][columnname] = q
+                                    count+=1
         self.clear_event(el)
         return el 
 
