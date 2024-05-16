@@ -17,7 +17,8 @@ Class Parser {
 
 function run {
     $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
-    $modifiedFiles = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
+    #$modifiedFiles = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
+    $modifiedFiles = getModifiedAsimSchemas
     $modifiedFiles | ForEach-Object { testSchema($_) }
 }
 
