@@ -8,6 +8,7 @@
 | 02/02/2024 | 3.0.3 | Updated and improved logic for these alert rules: <br> SAP - Execution of an Obsolete or an Insecure Function Module <br> SAP - Multiple Password Changes <br> SAP - Assignment of a sensitive role <br> SAP - Sensitive User's Password Change and Log in <br> SAP - Login from unexpected network <br> SAP - Sensitive privileged user makes a change in another user <br> Updated parsers: <br> SAPChangeDocsLog- support for blank workspaces, added SystemGuid <br> SAPJAVAFilesLogs- switch to SAPControl file-based logs <br> SAPSpoolLog, SAPSpoolOutputLog- handle different SpoolRequestNumber formats in different SAP releases <br> SAPTableDataLog- handle SidGuid, UpdatedOn fields <br> SAPUsersAssignments- inffer user master data changes in near realtime <br> SAPUsersGetPrivileged- allow SAP AS JAVA systems support |
 | 06/03/2024 | 3.1.0 | New JAVA AS alert rules <br> SAP - (Preview) AS JAVA - Sensitive Privileged User Signed In <br> SAP - (Preview) AS JAVA - Sign-In from Unexpected Network <br> SAP - (Preview) AS JAVA - User Creates and Uses New User <br> SAP - Execution of an Obsolete or an Insecure Function Module- improved logic |
 | 15/04/2024 | 3.1.4 | Bug fixes |
+| 25/04/2024 | 3.1.5 | Fixes SAPCONTROL_CL error when using cross workspace feature|
 
 # UI Changes
 
