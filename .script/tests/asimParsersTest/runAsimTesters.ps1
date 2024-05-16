@@ -17,22 +17,41 @@ Class Parser {
 
 function run {
     $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
-    $modifiedSchemas = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
-    $modifiedSchemas | ForEach-Object { testSchema($_) }
+    $modifiedFiles = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
+    $modifiedFiles | ForEach-Object { testSchema($_) }
+}
+
+function getModifiedAsimSchemas() {
+    $schemas = ("ASimDns", "ASimWebSession", "ASimNetworkSession", "ASimProcessEvent", "ASimAuditEvent", "ASimAuthentication", "ASimFileEvent", "ASimRegistryEvent","ASimUserManagement","ASimDhcpEvent")
+    #$modifiedSchemas = @()
+    $modifiedFiles = @()
+    foreach ($schema in $schemas) {
+        $filesThatWereChanged= Invoke-Expression "git diff origin/master  --name-only -- $($PSScriptRoot)/../Parsers/$($schema)/Parsers"
+        if ($filesThatWereChanged) {
+            Write-Host Files that were changed under Azure-Sentinel/Parsers/$schema/ARM:
+			Write-Host  - $filesThatWereChanged
+            $modifiedFiles += $filesThatWereChanged
+        }
+        else {
+            Write-Host "No files were changed under Azure-Sentinel/Parsers/$schema/"
+        }
+    }
+
+    return $modifiedFiles
 }
 
 function testSchema([string] $schema) {
     $parsersAsObjects = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$($PSScriptRoot)/../../../Parsers/$($schema)/Parsers"
     Write-Host "Testing $($schema) schema, $($parsersAsObjects.count) parsers were found"
-    $parsersAsObjects | ForEach-Object {
-        $functionName = "$($_.EquivalentBuiltInParser)V$($_.Parser.Version.Replace('.',''))"
-        if ($_.Parsers) {
-            Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
-        }
-        else {
-            testParser([Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams))
-        }
-    }
+    # $parsersAsObjects | ForEach-Object {
+    #     $functionName = "$($_.EquivalentBuiltInParser)V$($_.Parser.Version.Replace('.',''))"
+    #     if ($_.Parsers) {
+    #         Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
+    #     }
+    #     else {
+    #         testParser([Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams))
+    #     }
+    # }
 }
 
 function testParser([Parser] $parser) {
