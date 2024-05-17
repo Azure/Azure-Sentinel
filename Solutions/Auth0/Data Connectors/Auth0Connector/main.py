@@ -16,7 +16,7 @@ from Auth0Connector.state_manager import StateManager
 WORKSPACE_ID = os.environ['WorkspaceID']
 SHARED_KEY = os.environ['WorkspaceKey']
 
-FILE_SHARE_CONNECTION_STRING = os.environ['AzureWebJobsStorage']
+FILE_SHARE_CONNECTION_STRING = os.environ['AzureWebJobsStorage__accountName']
 LOG_TYPE = 'Auth0AM'
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
