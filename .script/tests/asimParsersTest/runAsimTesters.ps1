@@ -1,8 +1,8 @@
 $global:failed=0
 # Subscription ID which contains Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:subscriptionId="4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
+$global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId="46bec743-35fa-4608-b7e2-2aa3c38a97c2"
+$global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
 
 Class Parser {
     [string] $Name;
@@ -49,11 +49,13 @@ function testParser([Parser] $parser) {
 
     Write-Host "-- Running schema test for '$($parser.Name)'"
     $schemaTest = "$($parserAsletStatement)`r`n$($letStatementName) | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
+    Write-Host "Schema name is: $($parser.Schema)"
     invokeAsimTester $schemaTest $parser.Name "schema"
     Write-Host ""
 
     Write-Host "-- Running data test for '$($parser.Name)'"
     $dataTest = "$($parserAsletStatement)`r`n$($letStatementName) | invoke ASimDataTester('$($parser.Schema)')"
+    Write-Host "Schema name is: $($parser.Schema)"
     invokeAsimTester $dataTest  $parser.Name "data"
     Write-Host ""
     Write-Host ""
