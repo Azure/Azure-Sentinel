@@ -18,8 +18,8 @@ Class Parser {
 function run {
     $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
     #$modifiedFiles = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
-    $modifiedFiles = Invoke-Expression "git diff origin/master  --name-only -- $($PSScriptRoot)/../Parsers/"
-    Write-Host "Printing location(tobedeleted) $($PSScriptRoot)/../Parsers/"
+    $modifiedFiles = Invoke-Expression "git diff origin/master  --name-only -- $($PSScriptRoot)/../../../Parsers/"
+    Write-Host "Printing location(tobedeleted) '$($PSScriptRoot)/../../../Parsers/'"
     Write-Host "Following files have been modified: $($modifiedFiles)"
     $modifiedYamlFiles = $modifiedFiles | Where-Object { $_ -like "*.yaml" }
     $modifiedYamlFiles | ForEach-Object { testSchema($_) }
