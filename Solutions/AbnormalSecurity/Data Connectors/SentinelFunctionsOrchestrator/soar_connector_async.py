@@ -46,7 +46,7 @@ class AbnormalSoarConnectorAsync:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Soar-Integration-Origin": "AZURE SENTINEL",
-            "Azure-Sentinel-Version": "2023-11-09"
+            "Azure-Sentinel-Version": "2024-05-17"
         }
 
     def _get_filter_query(self, filter_param, gte_datetime=None, lte_datetime=None):
@@ -74,7 +74,7 @@ class AbnormalSoarConnectorAsync:
         return f"{self.BASEURL}/{resource_name}/{resource_id}"
 
     def _extract_messages(self, context, threat_resp):
-        return [message for message in threat_resp.get("messages") if message.get("receivedTime") >= context.get("gte_datetime") and message.get("receivedTime") <= context.get("lte_datetime")]
+        return [message for message in threat_resp.get("messages") if message.get("remediationTimestamp") >= context.get("gte_datetime") and message.get("remediationTimestamp") <= context.get("lte_datetime")]
 
     def _extract_message_ids(self, threats_resp):
         return [threat.get("threatId") for threat in threats_resp.get('threats', [])]
