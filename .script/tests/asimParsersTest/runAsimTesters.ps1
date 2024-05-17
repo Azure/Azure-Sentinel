@@ -1,8 +1,10 @@
 $global:failed=0
 # Subscription ID which contains Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
+#$global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
+$global:subscriptionId="4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
+#$global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
+$global:workspaceId="46bec743-35fa-4608-b7e2-2aa3c38a97c2"
 
 Class Parser {
     [string] $Name;
@@ -33,7 +35,6 @@ function testSchema([string] $ParserFile) {
     $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$ParserFile"
          $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.',''))"
         $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
-        write-host "Testing schema: $($Schema)"
         if ($_.Parsers) {
             Write-Host "The parser '$($functionName)' is a main parser, ignoring it" -ForegroundColor Yellow
         }
@@ -70,7 +71,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 if ($resultsArray.count) { 
                     $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
                     if ($Errorcount -gt 0) {
-                        $errorMessage = "`r`n$($name) $($kind)- test failed with $(Errorcount) errors:`r`n"
+                        $errorMessage = "`r`n$($name) $($kind)- test failed with $($Errorcount) errors:`r`n"
                     }
                     else {
                         $errorMessage = "`r`n$($name) $($kind)- test completed successfully with no errors:`r`n"
