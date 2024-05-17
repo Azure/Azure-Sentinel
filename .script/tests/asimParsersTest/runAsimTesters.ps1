@@ -1,6 +1,8 @@
 $global:failed=0
-$global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
-$global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
+# Subscription ID which contains Log Analytics workspace where the ASim schema and data tests will be conducted
+$global:subscriptionId="4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
+# Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
+$global:workspaceId="46bec743-35fa-4608-b7e2-2aa3c38a97c2"
 
 Class Parser {
     [string] $Name;
@@ -17,11 +19,13 @@ Class Parser {
 
 function run {
     $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
-    #$modifiedFiles = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
+    # Get modified ASIM Parser files
     $modifiedFiles = Invoke-Expression "git diff origin/master  --name-only -- $($PSScriptRoot)/../../../Parsers/"
-    Write-Host "Printing location(tobedeleted) '$($PSScriptRoot)/../../../Parsers/'"
-    Write-Host "Following files have been modified: $($modifiedFiles)"
+    # Get modified parser YAML files
     $modifiedYamlFiles = $modifiedFiles | Where-Object { $_ -like "*.yaml" }
+    Write-Host "The following ASIM parser files have been modified. Schema and data tests will be conducted for each of these parsers:"
+    $modifiedYamlFiles | ForEach-Object { Write-Host $_ -ForegroundColor Green }
+    # call testSchema function for each modified parser file
     $modifiedYamlFiles | ForEach-Object { testSchema($_) }
 }
 
@@ -30,7 +34,7 @@ function testSchema([string] $ParserFile) {
          $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.',''))"
         $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
         if ($_.Parsers) {
-            Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
+            Write-Host "The parser '$($functionName)' is a main parser, ignoring it" -ForegroundColor Yellow
         }
         else {
             testParser([Parser]::new($functionName, $parsersAsObject.ParserQuery, $schema.replace("Parsers\ASim", ""), $parsersAsObject.ParserParams))
@@ -38,7 +42,7 @@ function testSchema([string] $ParserFile) {
 }
 
 function testParser([Parser] $parser) {
-    Write-Host "Testing parser- '$($parser.Name)'"
+    Write-Host "Testing parser- '$($parser.Name)'" -ForegroundColor Green
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $($letStatementName)= ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
 
@@ -55,7 +59,7 @@ function testParser([Parser] $parser) {
 }
 
 function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
-        $query = $test + " | where Result startswith '(0) Error:'"
+        $query = $test #+ " | where Result startswith '(0) Error:'"
         try {
             $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $global:workspaceId -Query $query -ErrorAction Stop
             if ($rawResults.Results) {
