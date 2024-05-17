@@ -18,41 +18,21 @@ Class Parser {
 function run {
     $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
     #$modifiedFiles = & "$($PSScriptRoot)/../../getModifiedASimSchemas.ps1"
-    $modifiedFiles = getModifiedAsimSchemas
-    $modifiedFiles | ForEach-Object { testSchema($_) }
+    $modifiedFiles = Invoke-Expression "git diff origin/master  --name-only -- $($PSScriptRoot)/../Parsers/"
+    $modifiedYamlFiles = $modifiedFiles | Where-Object { $_ -like "*.yaml" }
+    $modifiedYamlFiles | ForEach-Object { testSchema($_) }
 }
 
-function getModifiedAsimSchemas() {
-    #$schemas = ("ASimDns", "ASimWebSession", "ASimNetworkSession", "ASimProcessEvent", "ASimAuditEvent", "ASimAuthentication", "ASimFileEvent", "ASimRegistryEvent","ASimUserManagement","ASimDhcpEvent")
-    #$modifiedSchemas = @()
-    $modifiedFiles = @()
-    #foreach ($schema in $schemas) {
-        $modifiedFiles= Invoke-Expression "git diff origin/master  --name-only -- $($PSScriptRoot)/../Parsers/"
-        # if ($filesThatWereChanged) {
-        #     Write-Host Files that were changed under Azure-Sentinel/Parsers/$schema/ARM:
-		# 	Write-Host  - $filesThatWereChanged
-        #    $modifiedFiles = $filesThatWereChanged
-        # }
-        # else {
-        #     Write-Host "No files were changed under Azure-Sentinel/Parsers/$schema/"
-        # }
-    #}
-
-    return $modifiedFiles
-}
-
-function testSchema([string] $schema) {
-    $parsersAsObjects = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$($PSScriptRoot)/../../../Parsers/$($schema)/Parsers"
-    Write-Host "Testing $($schema) schema, $($parsersAsObjects.count) parsers were found"
-    # $parsersAsObjects | ForEach-Object {
-    #     $functionName = "$($_.EquivalentBuiltInParser)V$($_.Parser.Version.Replace('.',''))"
-    #     if ($_.Parsers) {
-    #         Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
-    #     }
-    #     else {
-    #         testParser([Parser]::new($functionName, $_.ParserQuery, $schema.replace("ASim", ""), $_.ParserParams))
-    #     }
-    # }
+function testSchema([string] $ParserFile) {
+    $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$ParserFile"
+         $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.',''))"
+        $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
+        if ($_.Parsers) {
+            Write-Host "The parser '$($functionName)' is a main parser, ignoring it"
+        }
+        else {
+            testParser([Parser]::new($functionName, $parsersAsObject.ParserQuery, $schema.replace("Parsers\ASim", ""), $parsersAsObject.ParserParams))
+        }
 }
 
 function testParser([Parser] $parser) {
