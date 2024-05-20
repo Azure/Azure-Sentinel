@@ -6,12 +6,12 @@ $global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
 
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
 $global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
-#global:workspaceId="46bec743-35fa-4608-b7e2-2aa3c38a97c2"
+#$global:workspaceId="46bec743-35fa-4608-b7e2-2aa3c38a97c2"
 
 Class Parser {
-    [string] $Name;
-    [string] $OriginalQuery;
-    [string] $Schema;
+    [string] $Name
+    [string] $OriginalQuery
+    [string] $Schema
     [System.Collections.Generic.List`1[System.Object]] $Parameters
     Parser([string] $Name, [string] $OriginalQuery, [string] $Schema, [System.Collections.Generic.List`1[System.Object]] $Parameters) {
         $this.Name = $Name
@@ -40,7 +40,7 @@ function testSchema([string] $ParserFile) {
     if ($parsersAsObject.Parsers) {
         Write-Host "The parser '$($functionName)' is a main parser, ignoring it" -ForegroundColor Yellow
     } else {
-        testParser([Parser]::new($functionName, $parsersAsObject.ParserQuery, $schema.replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
+        testParser([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
     }
 }
 
@@ -87,6 +87,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
         Write-Host "  -- $_"
         Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
         $global:failed = 1
+        throw $_
     }
 }
 
@@ -105,4 +106,10 @@ function getParameters([System.Collections.Generic.List`1[System.Object]] $parse
 }
 
 run
-exit $global:failed
+if ($global:failed -ne 0) {
+    Write-Host "Script failed with errors." -ForegroundColor Red
+    exit 1
+} else {
+    Write-Host "Script completed successfully." -ForegroundColor Green
+    exit 0
+}
