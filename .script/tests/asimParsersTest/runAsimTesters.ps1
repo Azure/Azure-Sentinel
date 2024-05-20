@@ -1,10 +1,12 @@
 $global:failed=0
+
 # Subscription ID which contains Log Analytics workspace where the ASim schema and data tests will be conducted
-#$global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
-$global:subscriptionId="4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
+$global:subscriptionId="419581d6-4853-49bd-83b6-d94bb8a77887"
+#$global:subscriptionId="4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
+
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-#$global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
-$global:workspaceId="46bec743-35fa-4608-b7e2-2aa3c38a97c2"
+$global:workspaceId="059f037c-1b3b-42b1-bb90-e340e8c3142c"
+#global:workspaceId="46bec743-35fa-4608-b7e2-2aa3c38a97c2"
 
 Class Parser {
     [string] $Name;
@@ -12,10 +14,10 @@ Class Parser {
     [string] $Schema;
     [System.Collections.Generic.List`1[System.Object]] $Parameters
     Parser([string] $Name, [string] $OriginalQuery, [string] $Schema, [System.Collections.Generic.List`1[System.Object]] $Parameters) {
-        $this.Name = $Name;
-        $this.OriginalQuery = $OriginalQuery;
-        $this.Schema = $Schema;
-        $this.Parameters = $Parameters;
+        $this.Name = $Name
+        $this.OriginalQuery = $OriginalQuery
+        $this.Schema = $Schema
+        $this.Parameters = $Parameters
     }
 }
 
@@ -27,20 +29,19 @@ function run {
     $modifiedYamlFiles = $modifiedFiles | Where-Object { $_ -like "*.yaml" }
     Write-Host "The following ASIM parser files have been modified. Schema and data tests will be conducted for each of these parsers:"
     $modifiedYamlFiles | ForEach-Object { Write-Host $_ -ForegroundColor Green }
-    # call testSchema function for each modified parser file
+    # Call testSchema function for each modified parser file
     $modifiedYamlFiles | ForEach-Object { testSchema($_) }
 }
 
 function testSchema([string] $ParserFile) {
     $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1"  -Path "$ParserFile"
-         $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.',''))"
-        $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
-        if ($_.Parsers) {
-            Write-Host "The parser '$($functionName)' is a main parser, ignoring it" -ForegroundColor Yellow
-        }
-        else {
-            testParser([Parser]::new($functionName, $parsersAsObject.ParserQuery, $schema.replace("Parsers\ASim", ""), $parsersAsObject.ParserParams))
-        }
+    $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.',''))"
+    $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
+    if ($parsersAsObject.Parsers) {
+        Write-Host "The parser '$($functionName)' is a main parser, ignoring it" -ForegroundColor Yellow
+    } else {
+        testParser([Parser]::new($functionName, $parsersAsObject.ParserQuery, $schema.replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
+    }
 }
 
 function testParser([Parser] $parser) {
@@ -63,33 +64,30 @@ function testParser([Parser] $parser) {
 }
 
 function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
-        $query = $test #+ " | where Result startswith '(0) Error:'"
-        try {
-            $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $global:workspaceId -Query $query -ErrorAction Stop
-            if ($rawResults.Results) {
-                $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
-                if ($resultsArray.count) { 
-                    $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
-                    if ($Errorcount -gt 0) {
-                        $errorMessage = "`r`n$($name) $($kind)- test failed with $($Errorcount) errors:`r`n"
-                    }
-                    else {
-                        $errorMessage = "`r`n$($name) $($kind)- test completed successfully with no errors:`r`n"
-                    }
-                    $resultsArray | ForEach-Object { $errorMessage += "$($_.Result)`r`n" } 
-                    Write-Host $errorMessage
+    $query = $test
+    try {
+        $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $global:workspaceId -Query $query -ErrorAction Stop
+        if ($rawResults.Results) {
+            $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
+            if ($resultsArray.Count) {
+                $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
+                if ($Errorcount -gt 0) {
+                    $errorMessage = "`r`n$($name) $($kind)- test failed with $($Errorcount) errors:`r`n"
                     $global:failed = 1
+                } else {
+                    $errorMessage = "`r`n$($name) $($kind)- test completed successfully with no errors:`r`n"
                 }
-                else {
-                    Write-Host "  -- $($name) $($kind) test done successfully"
-                }
-            }    
+                $resultsArray | ForEach-Object { $errorMessage += "$($_.Result)`r`n" }
+                Write-Host $errorMessage
+            } else {
+                Write-Host "  -- $($name) $($kind) test done successfully"
+            }
         }
-        catch {
-            Write-Host "  -- $_"
-            Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
-            $global:failed = 1
-        }
+    } catch {
+        Write-Host "  -- $_"
+        Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
+        $global:failed = 1
+    }
 }
 
 function getParameters([System.Collections.Generic.List`1[System.Object]] $parserParams) {
@@ -101,7 +99,6 @@ function getParameters([System.Collections.Generic.List`1[System.Object]] $parse
             }
             $paramsArray += "$($_.Name):$($_.Type)= $($_.Default)"
         }
-
         return $paramsArray -join ','
     }
     return $paramsString
