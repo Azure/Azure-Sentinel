@@ -261,6 +261,8 @@ class Auth0Connector:
                                     columnname = 'templatePart' + str(count)
                                     el['details']['request']['body'][columnname] = q
                                     count+=1
+                                if 'templatePart2' in el['details']['request']['body']:
+                                    del el["details"]["request"]["body"]["template"]
 
                         if "user" in el["details"]["request"]["body"]:
                             if "metadata" in el["details"]["request"]["body"]["user"]:
@@ -299,7 +301,8 @@ class Auth0Connector:
                                     columnname = 'bindingsPart' + str(count)
                                     el['details']['response']['body'][columnname] = q
                                     count+=1
-        self.clear_event(el)
+                                if 'bindingsPart2' in el['details']['response']['body']:
+                                    del el['details']['response']['body']['bindings']
         return el 
 
     def _check_size(self, queue):
