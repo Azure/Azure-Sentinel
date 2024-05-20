@@ -70,15 +70,18 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
         if ($rawResults.Results) {
             $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
             if ($resultsArray.Count) {
+                $resultsArray | ForEach-Object { $TestResults += "$($_.Result)`r`n" }
+                Write-Host $TestResults
                 $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
                 if ($Errorcount -gt 0) {
-                    $errorMessage = "`r`n$($name) $($kind)- test failed with $($Errorcount) errors:`r`n"
+                    $FinalMessage = "`r`n$($name) $($kind)- test failed with $($Errorcount) errors:`r`n"
+                    Write-Host $FinalMessage
                     $global:failed = 1
+                    throw "Test failed with errors. Please fix the errors and try again."
                 } else {
-                    $errorMessage = "`r`n$($name) $($kind)- test completed successfully with no errors:`r`n"
+                    $FinalMessage = "`r`n$($name) $($kind)- test completed successfully with no errors:`r`n"
+                    Write-Host $FinalMessage
                 }
-                $resultsArray | ForEach-Object { $errorMessage += "$($_.Result)`r`n" }
-                Write-Host $errorMessage
             } else {
                 Write-Host "  -- $($name) $($kind) test done successfully"
             }
