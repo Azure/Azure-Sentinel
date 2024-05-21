@@ -81,7 +81,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                     $global:failed = 1
                     throw "Test failed with errors. Please fix the errors and try again."
                 } else {
-                    $FinalMessage = "`r`n$($name) $($kind)- test completed successfully with no errors.`r`n"
+                    $FinalMessage = "$($name) $($kind)- test completed successfully with no errors."
                     Write-Host $FinalMessage
                 }
             } else {
