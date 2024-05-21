@@ -28,7 +28,9 @@ function run {
     # Get modified parser YAML files
     $modifiedYamlFiles = $modifiedFiles | Where-Object { $_ -like "*.yaml" }
     Write-Host "The following ASIM parser files have been modified. Schema and data tests will be conducted for each of these parsers:"
+    Write-Host "***************************************************"
     $modifiedYamlFiles | ForEach-Object { Write-Host $_ -ForegroundColor Green }
+    Write-Host "***************************************************"
     # Call testSchema function for each modified parser file
     $modifiedYamlFiles | ForEach-Object { testSchema($_) }
 }
@@ -38,28 +40,28 @@ function testSchema([string] $ParserFile) {
     $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.',''))"
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
     if ($parsersAsObject.Parsers) {
+        Write-Host "***************************************************"
         Write-Host "The parser '$($functionName)' is a main parser, ignoring it" -ForegroundColor Yellow
+        Write-Host "***************************************************"
     } else {
-        testParser([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
+        testParser([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.replace("Parsers\ASim", ""), $parsersAsObject.ParserParams))
     }
 }
 
 function testParser([Parser] $parser) {
+    Write-Host "***************************************************"
     Write-Host "Testing parser- '$($parser.Name)'" -ForegroundColor Green
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $($letStatementName)= ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
-
     Write-Host "-- Running schema test for '$($parser.Name)'"
+    Write-Host "***************************************************"
     $schemaTest = "$($parserAsletStatement)`r`n$($letStatementName) | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
     Write-Host "Schema name is: $($parser.Schema)"
     invokeAsimTester $schemaTest $parser.Name "schema"
-    Write-Host ""
-
+    Write-Host "***************************************************"
     Write-Host "-- Running data test for '$($parser.Name)'"
     $dataTest = "$($parserAsletStatement)`r`n$($letStatementName) | invoke ASimDataTester('$($parser.Schema)')"
-    Write-Host "Schema name is: $($parser.Schema)"
     invokeAsimTester $dataTest  $parser.Name "data"
-    Write-Host ""
     Write-Host ""
 }
 
