@@ -19,18 +19,18 @@ param varonisFQDN string
 @secure()
 param varonisApiKey string
 
-@description('Number of days since retrieval started. The max value is 30. The max amout of alerts to retrieve is 1000.')
+@description('Enter the past number of days from which to start retrieving alerts. Up to 30 days and 1,000 alerts are supported.')
 @minValue(0)
 @maxValue(30)
-param alertRetrievalStart int = 7
+param alertRetrievalStartPoint int = 7
 
-@description('(Optional) Only Retrieve Specific Policies.')
+@description('To retrieve alerts related to specific threat detection policies, enter the relevant policy names. RECOMMENDED: LEAVE THIS BLANK TO RETRIEVE ALL ALERTS (DEFAULT).')
 param threatDetectionPolicies string = ''
 
 @description('Specify the Varonis alert status.')
 param alertStatus string = 'New, Under Investigation'
 
-@description('Specify the alert severity')
+@description('Specify the alert severity.')
 param alertSeverity string = 'Low, Medium, High'
 
 var functionAppName = 'VaronisSaaS-${uniqueString(resourceGroup().id)}'
@@ -142,7 +142,7 @@ resource functionApp 'Microsoft.Web/sites@2022-03-01' = {
         }
         {
           name: 'AlertRetrievalStart'
-            value: '${alertRetrievalStart}'
+            value: '${alertRetrievalStartPoint}'
         }
         {
           name: 'AlertSeverity'
