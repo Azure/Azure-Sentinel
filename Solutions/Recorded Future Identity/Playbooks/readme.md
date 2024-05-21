@@ -205,9 +205,11 @@ HTTP request parameters:
 
 #### RFI-confirm-EntraID-risky-user
 
-This playbook confirms compromise of users deemed "high risk" by Microsoft Entra ID Identity Protection.
+This playbook confirms compromise of users deemed "high risk" by Microsoft Entra ID Protection.
 
-More on Active Directory Identity Protection you can read here: [link1](https://docs.microsoft.com/azure/active-directory/identity-protection/) and [link2](https://docs.microsoft.com/azure/active-directory/identity-protection/overview-identity-protection) and [link3](https://docs.microsoft.com/azure/active-directory/identity-protection/howto-identity-protection-remediate-unblock).
+For more info on Entra ID Protection, read here: [link1](https://learn.microsoft.com/en-gb/entra/id-protection/) and [link2](https://learn.microsoft.com/en-gb/entra/id-protection/overview-identity-protection) and [link3](https://learn.microsoft.com/en-gb/entra/id-protection/howto-identity-protection-remediate-unblock).
+
+Note that this playbook only runs on already flagged risky users. If a user isn't flagged as a risky user by Entra ID Protection, this playbook won't do anything.
 
 <br/>
 
