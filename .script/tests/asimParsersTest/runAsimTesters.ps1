@@ -62,7 +62,7 @@ function testParser([Parser] $parser) {
     Write-Host "-- Running data test for '$($parser.Name)'"
     $dataTest = "$($parserAsletStatement)`r`n$($letStatementName) | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest  $parser.Name "data"
-    Write-Host ""
+    Write-Host "***************************************************"
 }
 
 function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
@@ -81,11 +81,11 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                     $global:failed = 1
                     throw "Test failed with errors. Please fix the errors and try again."
                 } else {
-                    $FinalMessage = "`r`n$($name) $($kind)- test completed successfully with no errors:`r`n"
+                    $FinalMessage = "`r`n$($name) $($kind)- test completed successfully with no errors.`r`n"
                     Write-Host $FinalMessage
                 }
             } else {
-                Write-Host "  -- $($name) $($kind) test done successfully"
+                Write-Host "  -- $($name) $($kind) test done successfully. No records found"
             }
         }
     } catch {
