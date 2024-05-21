@@ -1,12 +1,12 @@
 Parser:
   Title: Authentication ASIM filtering parser for Windows Security Events
-  Version: '0.2.1'
-  LastUpdated: Sept 18, 2023
+  Version: '0.3.0'
+  LastUpdated: Mar 12, 2024
 Product:
   Name: Windows Security Events
 Normalization:
   Schema: Authentication
-  Version: '0.1.0'
+  Version: '0.1.3'
 References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
@@ -23,16 +23,35 @@ ParserParams:
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
     Type: string
     Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |  
-  let LogonEvents=dynamic([4624,4625]);
-  let LogoffEvents=dynamic([4634,4647]);
-  let LogonTypes=datatable(LogonType:int, EventSubType:string)[
+  let LogonEvents=dynamic([4624, 4625]);
+  let LogoffEvents=dynamic([4634, 4647]);
+  let LogonTypes=datatable(LogonType: int, EventSubType: string)
+  [
       2, 'Interactive',
       3, 'Network',
       4, 'Batch',
@@ -41,175 +60,321 @@ ParserQuery: |
       8, 'NetworkCleartext',
       9, 'NewCredentials',
       10, 'RemoteInteractive',
-      11, 'CachedInteractive'];
+      11, 'CachedInteractive'
+  ];
   // https://techcommunity.microsoft.com/t5/core-infrastructure-and-security/quick-reference-troubleshooting-netlogon-error-codes/ba-p/256000
   let LogonStatus=datatable 
-      (EventStatus:string,EventOriginalResultDetails:string, EventResultDetails:string)[
-      '0x80090325', 'SEC_E_UNTRUSTED_ROOT','Other',
-      '0xc0000064', 'STATUS_NO_SUCH_USER','No such user or password',
-      '0xc000006f', 'STATUS_INVALID_LOGON_HOURS','Logon violates policy',
-      '0xc0000070', 'STATUS_INVALID_WORKSTATION','Logon violates policy',
-      '0xc0000071', 'STATUS_PASSWORD_EXPIRED','Password expired',
-      '0xc0000072', 'STATUS_ACCOUNT_DISABLED','User disabled',
-      '0xc0000133', 'STATUS_TIME_DIFFERENCE_AT_DC','Other',
-      '0xc000018d', 'STATUS_TRUSTED_RELATIONSHIP_FAILURE','Other',
-      '0xc0000193', 'STATUS_ACCOUNT_EXPIRED','Account expired',
-      '0xc0000380', 'STATUS_SMARTCARD_WRONG_PIN','Other',
-      '0xc0000381', 'STATUS_SMARTCARD_CARD_BLOCKED','Other',
-      '0xc0000382', 'STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED','Other',
-      '0xc0000383', 'STATUS_SMARTCARD_NO_CARD','Other',
-      '0xc0000384', 'STATUS_SMARTCARD_NO_KEY_CONTAINER','Other',
-      '0xc0000385', 'STATUS_SMARTCARD_NO_CERTIFICATE','Other',
-      '0xc0000386', 'STATUS_SMARTCARD_NO_KEYSET','Other',
-      '0xc0000387', 'STATUS_SMARTCARD_IO_ERROR','Other',
-      '0xc0000388', 'STATUS_DOWNGRADE_DETECTED','Other',
-      '0xc0000389', 'STATUS_SMARTCARD_CERT_REVOKED','Other',
-      '0x80090302', 'SEC_E_UNSUPPORTED_FUNCTION','Other',
-      '0x80090308', 'SEC_E_INVALID_TOKEN','Other',
-      '0x8009030e', 'SEC_E_NO_CREDENTIALS','Other',
-      '0xc0000008', 'STATUS_INVALID_HANDLE','Other',
-      '0xc0000017', 'STATUS_NO_MEMORY','Other',
-      '0xc0000022', 'STATUS_ACCESS_DENIED','Other',
-      '0xc0000034', 'STATUS_OBJECT_NAME_NOT_FOUND','Other',
-      '0xc000005e', 'STATUS_NO_LOGON_SERVERS','Other',
-      '0xc000006a', 'STATUS_WRONG_PASSWORD','Incorrect password',
-      '0xc000006d', 'STATUS_LOGON_FAILURE','Other',
-      '0xc000006e', 'STATUS_ACCOUNT_RESTRICTION','Logon violates policy',
-      '0xc0000073', 'STATUS_NONE_MAPPED','Other',
-      '0xc00000fe', 'STATUS_NO_SUCH_PACKAGE','Other',
-      '0xc000009a', 'STATUS_INSUFFICIENT_RESOURCES','Other',
-      '0xc00000dc', 'STATUS_INVALID_SERVER_STATE','Other',
-      '0xc0000106', 'STATUS_NAME_TOO_LONG','Other',
-      '0xc000010b', 'STATUS_INVALID_LOGON_TYPE','Logon violates policy',
-      '0xc000015b', 'STATUS_LOGON_TYPE_NOT_GRANTED','Logon violates policy',
-      '0xc000018b', 'STATUS_NO_TRUST_SAM_ACCOUNT','Logon violates policy',
-      '0xc0000224', 'STATUS_PASSWORD_MUST_CHANGE','Other',
-      '0xc0000234', 'STATUS_ACCOUNT_LOCKED_OUT','User locked',
-      '0xc00002ee', 'STATUS_UNFINISHED_CONTEXT_DELETED','Other'];
-      let WinLogon=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){ 
-          WindowsEvent | where not(disabled)
-          // ************************************************************************* 
-          //       <Prefilterring>
-          // *************************************************************************
-          | where 
-            (isnull(starttime)   or TimeGenerated >= starttime)
-            and (isnull(endtime)     or TimeGenerated <= endtime)
-            and (targetusername_has=='*' or EventData.TargetUserName has targetusername_has)
-          // ************************************************************************* 
-          //       </Prefilterring>
-          // ************************************************************************* 
-          | where Provider == 'Microsoft-Windows-Security-Auditing'
-          | where     EventID in (LogonEvents) or EventID in (LogoffEvents)
-          | extend    LogonProtocol = tostring(EventData.AuthenticationPackageName),
-                      SrcDvcIpAddr = tostring(EventData.IpAddress),
-                      TargetPortNumber = toint(EventData.IpPort),
-                      LogonGuid = tostring(EventData.LogonGuid),
-                      LogonType = toint(EventData.LogonType),
-                      ActingProcessCreationTime = EventData.ProcessCreationTime,
-                      ActingProcessId = tostring(toint(EventData.ProcessId)),
-                      ActingProcessName = tostring(EventData.ProcessName),
-                      Status = tostring(EventData.Status),
-                      ActorSessionId = tostring(EventData.SubjectLogonId),
-                      ActorUsername = tostring(iff (EventData.SubjectDomainName in ('-',''), EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\" , EventData.SubjectUserName))),
-                      ActorUserId = tostring(EventData.SubjectUserSid),
-                      SubStatus = tostring(EventData.SubStatus),
-                      TargetDomainName = tostring(EventData.TargetDomainName),
-                      TargetSessionId = tostring(EventData.TargetLogonId),
-                      TargetUserId = tostring(EventData.TargetUserSid),
-                      TargetUsername = tostring(iff (EventData.TargetDomainName in ('-',''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\" , EventData.TargetUserName)))
-          // ***************      <Postfilterring>  **********************************
-          | where (targetusername_has=='*' or TargetUsername has targetusername_has)
-          // ***************      <Postfilterring>  ********************************** 
-          | extend 
-            SrcDvcHostname = tostring(EventData.WorkstationName),
-            EventProduct = "Security Events"
-          | extend EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
-          // -- creating EventMessage matching EventMessage in SecurityEvent table
-          | extend EventMessage = case(EventID == 4634, "4634 - An account was logged off.", 
-                                      EventID == 4625, "4625 - An account failed to log on.",
-                                      EventID == 4624 ,"4624 - An account was successfully logged on.",
-                                      "4647 - User initiated logoff."),
-                  EventResult = iff(EventID == 4625, 'Failure', 'Success')
-          | project-rename 
-              TargetDvcHostname = Computer
-             , EventOriginalUid = EventOriginId
-             , EventOriginalType=EventID
-          | extend  EventCount=int(1)
-                  , EventSchemaVersion='0.1.0'
-                  , ActorUserIdType='SID'
-                  , TargetUserIdType='SID'
-                  , EventVendor='Microsoft'  
-                  , EventStartTime =TimeGenerated
-                  , EventEndTime=TimeGenerated
-                  , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')                  
-                  , ActorUsernameType= iff(EventData.SubjectDomainName in ('-',''),'Simple', 'Windows' )                  
-                  , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
-                  , SrcDvcOs = 'Windows'
-                  , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
-          | extend
-                  ActorUserType = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
-                  , TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
-          | lookup LogonStatus on EventStatus
-          | lookup LogonTypes on LogonType
-              /// ** Aliases 
-              | extend
-                  User=TargetUsername
-                  , LogonTarget=TargetDvcHostname
-                  , Dvc=SrcDvcHostname
-              };
-  let SecEventLogon =(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
-    SecurityEvent | where not(disabled)
-    // ************************************************************************* 
-    //       <Prefilterring>
-    // *************************************************************************
-    | where 
-      (isnull(starttime)   or TimeGenerated >= starttime)
-      and (isnull(endtime)     or TimeGenerated <= endtime)
-      and (targetusername_has=='*' or TargetUserName has targetusername_has)
-    // ************************************************************************* 
-    //       </Prefilterring>
-    // ************************************************************************* 
-    | where EventID in (LogonEvents) or 
-            EventID in (LogoffEvents)
-    | project-rename 
-         EventMessage = Activity
-       , ActorSessionId=SubjectLogonId
-       , TargetSessionId=TargetLogonId
-       , ActorUserId=SubjectUserSid
-       , TargetUserId =TargetUserSid
-       , SrcDvcHostname = WorkstationName
-       , TargetDvcHostname = Computer
-       , EventOriginalUid = EventOriginId
-       , LogonProtocol=AuthenticationPackageName
-       , SrcDvcIpAddr=IpAddress
-       , EventOriginalType=EventID
-    | extend EventResult = iff(EventOriginalType == 4625, 'Failure', 'Success')
-      , EventCount=int(1)
-      , EventSchemaVersion='0.1.0'
-      , EventProduct = "Security Events"
-      , ActorUserIdType='SID'
-      , TargetUserIdType='SID'
-      , EventVendor='Microsoft' 
-      , EventStartTime =TimeGenerated
-      , EventEndTime=TimeGenerated
-      , EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')
-      , ActorUsername = iff (SubjectDomainName in ('-',''), SubjectUserName, SubjectAccount)
-      , ActorUsernameType= iff(SubjectDomainName in ('-',''),'Simple', 'Windows' )
-      , TargetUsername = iff (TargetDomainName in ('-',''), trim(@'\\',TargetUserName), trim(@'\\',TargetAccount))
-      , TargetUsernameType=iff (TargetDomainName in ('-',''), 'Simple', 'Windows')
-      , SrcDvcOs = 'Windows'
-      , EventStatus= iff(SubStatus=='0x0',Status,SubStatus)
-    | project-away TargetUserName, AccountType
-    | extend
-        ActorUserType = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
-      , TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
-    | lookup LogonStatus on EventStatus
-    | lookup LogonTypes  on LogonType
-    /// ** Aliases 
-    | extend
-         User=TargetUsername
-        , LogonTarget=TargetDvcHostname
-        , Dvc=SrcDvcHostname
-    };
-  union isfuzzy=true SecEventLogon(starttime, endtime, targetusername_has, disabled)
-                ,    WinLogon(starttime, endtime, targetusername_has, disabled)
+  (
+      EventStatus: string,
+      EventOriginalResultDetails: string,
+      EventResultDetails: string
+  )
+  [
+      '0x80090325', 'SEC_E_UNTRUSTED_ROOT', 'Other',
+      '0xc0000064', 'STATUS_NO_SUCH_USER', 'No such user or password',
+      '0xc000006f', 'STATUS_INVALID_LOGON_HOURS', 'Logon violates policy',
+      '0xc0000070', 'STATUS_INVALID_WORKSTATION', 'Logon violates policy',
+      '0xc0000071', 'STATUS_PASSWORD_EXPIRED', 'Password expired',
+      '0xc0000072', 'STATUS_ACCOUNT_DISABLED', 'User disabled',
+      '0xc0000133', 'STATUS_TIME_DIFFERENCE_AT_DC', 'Other',
+      '0xc000018d', 'STATUS_TRUSTED_RELATIONSHIP_FAILURE', 'Other',
+      '0xc0000193', 'STATUS_ACCOUNT_EXPIRED', 'Account expired',
+      '0xc0000380', 'STATUS_SMARTCARD_WRONG_PIN', 'Other',
+      '0xc0000381', 'STATUS_SMARTCARD_CARD_BLOCKED', 'Other',
+      '0xc0000382', 'STATUS_SMARTCARD_CARD_NOT_AUTHENTICATED', 'Other',
+      '0xc0000383', 'STATUS_SMARTCARD_NO_CARD', 'Other',
+      '0xc0000384', 'STATUS_SMARTCARD_NO_KEY_CONTAINER', 'Other',
+      '0xc0000385', 'STATUS_SMARTCARD_NO_CERTIFICATE', 'Other',
+      '0xc0000386', 'STATUS_SMARTCARD_NO_KEYSET', 'Other',
+      '0xc0000387', 'STATUS_SMARTCARD_IO_ERROR', 'Other',
+      '0xc0000388', 'STATUS_DOWNGRADE_DETECTED', 'Other',
+      '0xc0000389', 'STATUS_SMARTCARD_CERT_REVOKED', 'Other',
+      '0x80090302', 'SEC_E_UNSUPPORTED_FUNCTION', 'Other',
+      '0x80090308', 'SEC_E_INVALID_TOKEN', 'Other',
+      '0x8009030e', 'SEC_E_NO_CREDENTIALS', 'Other',
+      '0xc0000008', 'STATUS_INVALID_HANDLE', 'Other',
+      '0xc0000017', 'STATUS_NO_MEMORY', 'Other',
+      '0xc0000022', 'STATUS_ACCESS_DENIED', 'Other',
+      '0xc0000034', 'STATUS_OBJECT_NAME_NOT_FOUND', 'Other',
+      '0xc000005e', 'STATUS_NO_LOGON_SERVERS', 'Other',
+      '0xc000006a', 'STATUS_WRONG_PASSWORD', 'Incorrect password',
+      '0xc000006d', 'STATUS_LOGON_FAILURE', 'Other',
+      '0xc000006e', 'STATUS_ACCOUNT_RESTRICTION', 'Logon violates policy',
+      '0xc0000073', 'STATUS_NONE_MAPPED', 'Other',
+      '0xc00000fe', 'STATUS_NO_SUCH_PACKAGE', 'Other',
+      '0xc000009a', 'STATUS_INSUFFICIENT_RESOURCES', 'Other',
+      '0xc00000dc', 'STATUS_INVALID_SERVER_STATE', 'Other',
+      '0xc0000106', 'STATUS_NAME_TOO_LONG', 'Other',
+      '0xc000010b', 'STATUS_INVALID_LOGON_TYPE', 'Logon violates policy',
+      '0xc000015b', 'STATUS_LOGON_TYPE_NOT_GRANTED', 'Logon violates policy',
+      '0xc000018b', 'STATUS_NO_TRUST_SAM_ACCOUNT', 'Logon violates policy',
+      '0xc0000224', 'STATUS_PASSWORD_MUST_CHANGE', 'Other',
+      '0xc0000234', 'STATUS_ACCOUNT_LOCKED_OUT', 'User locked',
+      '0xc00002ee', 'STATUS_UNFINISHED_CONTEXT_DELETED', 'Other'
+  ];
+  let WinLogon=(
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      username_has_any: dynamic = dynamic([]),
+      targetappname_has_any: dynamic = dynamic([]),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      srchostname_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      disabled: bool=false)
+  { 
+      WindowsEvent
+      | where not(disabled)
+      // ************************************************************************* 
+      //       <Prefilterring>
+      // *************************************************************************
+      | where 
+          (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and ((array_length(username_has_any) == 0) or (tostring(EventData.TargetUserName) has_any (username_has_any)) or (tostring(EventData.TargetDomainName) has_any (username_has_any)) or (strcat(tostring(EventData.TargetDomainName), '\\', tostring(EventData.TargetUserName)) has_any (username_has_any)) or (tostring(EventData.SubjectUserName) has_any (username_has_any)) or (tostring(EventData.SubjectDomainName) has_any (username_has_any)) or (strcat(tostring(EventData.SubjectDomainName), '\\', tostring(EventData.SubjectUserName)) has_any (username_has_any)))
+          and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+          and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(tostring(EventData.IpAddress), srcipaddr_has_any_prefix)))
+          and (array_length(srchostname_has_any) == 0 or tostring(EventData.WorkstationName) has_any (srchostname_has_any))
+      // eventtype_in filtering done later in the parser
+      // eventresultdetails_in filtering done later in the parser
+      // eventresult filtering done later in the parser
+      // ************************************************************************* 
+      //       </Prefilterring>
+      // ************************************************************************* 
+      | where Provider == 'Microsoft-Windows-Security-Auditing'
+      | where EventID in (LogonEvents) or EventID in (LogoffEvents)
+      | extend
+          LogonProtocol = tostring(EventData.AuthenticationPackageName),
+          SrcDvcIpAddr = tostring(EventData.IpAddress), // Backword Compatibility. Will be removed by July 2024
+          SrcIpAddr = tostring(EventData.IpAddress),
+          TargetPortNumber = toint(EventData.IpPort),
+          LogonGuid = tostring(EventData.LogonGuid),
+          LogonType = toint(EventData.LogonType),
+          ActingProcessCreationTime = EventData.ProcessCreationTime,
+          ActingProcessId = tostring(toint(EventData.ProcessId)),
+          ActingProcessName = tostring(EventData.ProcessName),
+          Status = tostring(EventData.Status),
+          ActorSessionId = tostring(EventData.SubjectLogonId),
+          ActorUsername = tostring(iff (EventData.SubjectDomainName in ('-', ''), EventData.SubjectUserName, strcat(EventData.SubjectDomainName, @"\", EventData.SubjectUserName))),
+          ActorUserId = tostring(EventData.SubjectUserSid),
+          SubStatus = tostring(EventData.SubStatus),
+          TargetDomainName = tostring(EventData.TargetDomainName),
+          TargetSessionId = tostring(EventData.TargetLogonId),
+          TargetUserId = tostring(EventData.TargetUserSid),
+          TargetUsername = tostring(iff (EventData.TargetDomainName in ('-', ''), EventData.TargetUserName, strcat(EventData.TargetDomainName, @"\", EventData.TargetUserName)))
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
+      | extend 
+          SrcDvcHostname = tostring(EventData.WorkstationName), // Backword Compatibility. Will be removed by July 2024
+          SrcHostname = tostring(EventData.WorkstationName),
+          EventProduct = "Security Events"
+      | extend EventStatus= iff(SubStatus == '0x0', Status, SubStatus)
+      // -- creating EventMessage matching EventMessage in SecurityEvent table
+      | extend
+          EventMessage = case
+                (
+                    EventID == 4634,
+                    "4634 - An account was logged off.", 
+                    EventID == 4625,
+                    "4625 - An account failed to log on.",
+                    EventID == 4624,
+                    "4624 - An account was successfully logged on.",
+                    "4647 - User initiated logoff."
+                ),
+          EventResult = iff(EventID == 4625, 'Failure', 'Success')
+      // Filtering on 'eventresult' and 'username_has_any'
+      | where (eventresult == "*" or (EventResult == eventresult))
+          and ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
+      | project-rename 
+          TargetDvcHostname = Computer
+          ,
+          EventOriginalUid = EventOriginId
+          ,
+          EventOriginalType=EventID
+      | extend
+          EventCount=int(1)
+          ,
+          EventSchemaVersion='0.1.3'
+          ,
+          ActorUserIdType='SID'
+          ,
+          TargetUserIdType='SID'
+          ,
+          EventVendor='Microsoft'  
+          ,
+          EventStartTime =TimeGenerated
+          ,
+          EventEndTime=TimeGenerated
+          ,
+          EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')                  
+          ,
+          ActorUsernameType= iff(EventData.SubjectDomainName in ('-', ''), 'Simple', 'Windows')                  
+          ,
+          TargetUsernameType=iff (TargetDomainName in ('-', ''), 'Simple', 'Windows')
+          ,
+          SrcDvcOs = 'Windows'
+          ,
+          EventStatus= iff(SubStatus == '0x0', Status, SubStatus)
+      // filtering on 'eventtype_in'
+      | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+      | extend
+          ActorUserType = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
+          ,
+          TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
+      | lookup LogonStatus on EventStatus
+      // filtering on 'eventresultdetails_in'
+      | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+      | lookup LogonTypes on LogonType
+      /// ** Aliases 
+      | extend
+          User=TargetUsername
+          ,
+          LogonTarget=TargetDvcHostname
+          ,
+          Dvc=SrcHostname
+  };
+  let SecEventLogon =(starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      username_has_any: dynamic = dynamic([]),
+      targetappname_has_any: dynamic = dynamic([]),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      srchostname_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      disabled: bool=false)
+  {
+      SecurityEvent
+      | where not(disabled)
+      // ************************************************************************* 
+      //       <Prefilterring>
+      // *************************************************************************
+      | where 
+          (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and ((array_length(username_has_any) == 0) or (TargetUserName has_any (username_has_any)) or (TargetDomainName has_any (username_has_any)) or (strcat(TargetDomainName, '\\', TargetUserName) has_any (username_has_any)) or (SubjectUserName has_any (username_has_any)) or (SubjectDomainName has_any (username_has_any)) or (strcat(SubjectDomainName, '\\', SubjectUserName) has_any (username_has_any)))
+          and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
+          and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(IpAddress, srcipaddr_has_any_prefix))
+          and ((array_length(srchostname_has_any) == 0) or (WorkstationName has_any (srchostname_has_any)))
+      // eventtype_in filtering done later in the parser
+      // eventresultdetails_in filtering done later in the parser
+      // eventresult filtering done later in the parser
+      // ************************************************************************* 
+      //       </Prefilterring>
+      // ************************************************************************* 
+      | where EventID in (LogonEvents) or 
+          EventID in (LogoffEvents)
+      | project-rename 
+          EventMessage = Activity
+          ,
+          ActorSessionId=SubjectLogonId
+          ,
+          TargetSessionId=TargetLogonId
+          ,
+          ActorUserId=SubjectUserSid
+          ,
+          TargetUserId =TargetUserSid
+          ,
+          SrcDvcHostname = WorkstationName // Backword Compatibility. Will be removed by July 2024
+          ,
+          TargetDvcHostname = Computer
+          ,
+          EventOriginalUid = EventOriginId
+          ,
+          LogonProtocol=AuthenticationPackageName
+          ,
+          SrcDvcIpAddr=IpAddress // Backword Compatibility. Will be removed by July 2024
+          ,
+          EventOriginalType=EventID
+      | extend
+          EventResult = iff(EventOriginalType == 4625, 'Failure', 'Success')
+          ,
+          EventCount=int(1)
+          ,
+          EventSchemaVersion='0.1.0'
+          ,
+          EventProduct = "Security Events"
+          ,
+          ActorUserIdType='SID'
+          ,
+          TargetUserIdType='SID'
+          ,
+          EventVendor='Microsoft' 
+          ,
+          EventStartTime =TimeGenerated
+          ,
+          EventEndTime=TimeGenerated
+          ,
+          EventType=iff(EventOriginalType in (LogoffEvents), 'Logoff', 'Logon')
+          ,
+          ActorUsername = iff (SubjectDomainName in ('-', ''), SubjectUserName, SubjectAccount)
+          ,
+          ActorUsernameType= iff(SubjectDomainName in ('-', ''), 'Simple', 'Windows')
+          ,
+          TargetUsername = iff (TargetDomainName in ('-', ''), trim(@'\\', TargetUserName), trim(@'\\', TargetAccount))
+          ,
+          TargetUsernameType=iff (TargetDomainName in ('-', ''), 'Simple', 'Windows')
+          ,
+          SrcDvcOs = 'Windows'
+          ,
+          EventStatus= iff(SubStatus == '0x0', Status, SubStatus)
+          ,
+          SrcHostname = SrcDvcHostname // Backword Compatibility. Will be removed by July 2024
+          ,
+          SrcIpAddr = SrcDvcIpAddr // Backword Compatibility. Will be removed by July 2024
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=ActorUsername has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
+      // filtering on 'eventtype_in', 'eventresult', 'TargetUsername' and 'ActorUsername'
+      | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
+          and (eventresult == "*" or (EventResult == eventresult))
+          and ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
+      | project-away TargetUserName, AccountType
+      | extend
+          ActorUserType = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
+          ,
+          TargetUserType = _ASIM_GetWindowsUserType (TargetUsername, TargetUserId)
+      | lookup LogonStatus on EventStatus
+      // filtering on 'eventresultdetails_in'
+      | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+      | lookup LogonTypes on LogonType
+      /// ** Aliases 
+      | extend
+          User=TargetUsername
+          ,
+          LogonTarget=TargetDvcHostname
+          ,
+          Dvc=SrcDvcHostname
+  };
+  union isfuzzy=true SecEventLogon(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)
+                ,    WinLogon(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)

@@ -22,6 +22,15 @@ Parsers are created [using functions in Azure monitor log queries](https://docs.
     - [Parser Description](#parser-description-2)
     - [Parser dependency](#parser-dependency)
     - [Parser Setup](#parser-setup-2)
+    - [Parameters simulation](#parameters-simulation-2)
+  - [Microsoft Exchange Compare Data MRA Parser](#microsoft-exchange-compare-data-mra-parser)
+    - [Parser Definition](#parser-definition-3)
+    - [Parser Description](#parser-description-3)
+    - [Parser Setup](#parser-setup-3)
+  - [Microsoft Exchange Security - Office 365 Activity logs Parser](#microsoft-exchange-security---office-365-activity-logs-parser)
+    - [Parser Definition](#parser-definition-4)
+    - [Parser Description](#parser-description-4)
+    - [Parser Setup](#parser-setup-4)
 
 ## ExchangeConfiguration Parser
 
@@ -145,3 +154,68 @@ This parser is linked to "ExchangeVIP" whatchlist
 >1 parameter to add during creation : UserToCheck, type string, default value "All"
  
  1. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+
+### Parameters simulation
+
+If you need to test the parser execution without saving it as a function, add the bellow variable to simulate parameters values at the beginning.
+
+## Microsoft Exchange Compare Data MRA Parser
+
+### Parser Definition
+
+- Title:           Microsoft Exchange Compare Data MRA Parser
+- Version:         1.0.0
+- Last Updated:    25/02/2024
+- Description:     This parser compare data from MRA and ESI Exchange Collector to find differences
+
+|**Version**  |**Details**  |
+|---------|-----------------------------------------------------------------------------------------------------------------------|
+|v1.0     | <ul><li>Function initilisation for Sentinel Solution</li></ul> |
+
+### Parser Description
+
+This parser compare data from MRA and ESI Exchange Collector to find differences
+
+### Parser Setup
+
+ 1. Open Log Analytics/Microsoft Sentinel Logs blade. Copy the query below and paste into the Logs query window.
+ 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name "MESCompareDataMRA".
+ 3. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+ 4. This parser is linked to "MRA" and "ESI Exchange Collector" tables
+
+>#### **Parameters:**
+
+>7 parameter to add during creation :
+>
+>  1. SectionCompare, type string, default value ""
+>  2. DateCompare, type string, default value "lastdate"
+>  3. CurrentDate, type string, default value "lastdate"
+>  4. EnvList, type string, default value "All"
+>  5. TypeEnv, type string, default value "Online"
+>  6. CurrentRole, type string, default value ""
+>  7. ExclusionsAcct, type dynamic, default value dynamic("")
+
+## Microsoft Exchange Security - Office 365 Activity logs Parser
+
+### Parser Definition
+
+- Title:           Microsoft Exchange Security - Office 365 Activity logs Parser
+- Version:         1.0.0
+- Last Updated:    25/02/2024
+- Description:     This parser is used to parse Office 365 Activity logs
+- Dependencies:    This parser is linked to "OfficeActivity" table
+
+|**Version**  |**Details**  |
+|---------|-----------------------------------------------------------------------------------------------------------------------|
+|v1.0     | <ul><li>Function initilisation for Sentinel Solution</li></ul> |
+
+### Parser Description
+
+This parser is used to parse Office 365 Activity logs
+
+### Parser Setup
+
+ 1. Open Log Analytics/Microsoft Sentinel Logs blade. Copy the query below and paste into the Logs query window.
+ 2. Click the Save button above the query. A pane will appear on the right, select "as Function" from the drop down. Enter the Function Name "MESOfficeActivity".
+ 3. Function App usually take 10-15 minutes to activate. You can then use Function Alias for other queries
+ 4. This parser is linked to "OfficeActivity" table
