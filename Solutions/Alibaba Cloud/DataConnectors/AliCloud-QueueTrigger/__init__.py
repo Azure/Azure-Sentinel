@@ -123,7 +123,6 @@ def get_list_logstores(client, project):
 
 def process_logstores_and_send_to_LA(client, message_id, project, start_time, end_time, retrieved_log_stores, finished_log_stores, stop_run_time_tmst, dequeue_count):
     if len(retrieved_log_stores) == 0:
-        logging.info("Retrieving logstores for project {} (message_id: {})".format(project, message_id))
         retrieved_log_stores.extend(get_list_logstores(client, project))
         logging.info("Retrieved {} logstores for project {} (message_id: {})".format(len(retrieved_log_stores), project, message_id))
     else:
@@ -141,7 +140,6 @@ def process_logstores_and_send_to_LA(client, message_id, project, start_time, en
             return False
 
         logs_to_send = []
-        logging.info("Retrieving get_log_all for store {} for project {} (message_id: {})".format(logstore, project, message_id))
         res = client.get_log_all(project, logstore, str(start_time), str(end_time), ali_topic)
         logging.info("Retrieved {} get_log_all responses for store {} for project {} (message_id: {})".format(len(res), logstore, project, message_id))
 
@@ -150,10 +148,7 @@ def process_logstores_and_send_to_LA(client, message_id, project, start_time, en
                 logging.error("Stopping processing in the middle of retrieving logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))
                 return False
         
-            logging.info("Retrieving get_logs for store {} for project {} (message_id: {})".format(logstore, project, message_id))
             internalLogs = logs.get_logs()
-            logging.info("Retrieved {} get_logs for store {} for project {} (message_id: {})".format(len(internalLogs), logstore, project, message_id))
-
             for log in internalLogs:
                 logs_to_send += [{"timestamp": log.timestamp, "source": log.source, "contents": log.contents}]
             
@@ -170,7 +165,6 @@ def process_logstores_and_send_to_LA(client, message_id, project, start_time, en
     
 def send_data_to_LA_for_stores_and_update_finished_log_stores(message_id, project, start_time, end_time, logstore, finished_log_stores, logs_to_send, stop_run_time_tmst, dequeue_count):
     if len(logs_to_send) == 0:
-        logging.info("No logs retrieved for store {} for project {} (message_id: {})".format(logstore, project, message_id))    
         finished_log_stores.append(logstore)
         return True
 
@@ -178,12 +172,8 @@ def send_data_to_LA_for_stores_and_update_finished_log_stores(message_id, projec
         logging.error("Stopping processing before sending logs to LA for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry (message_id: {})".format(logstore, project, message_id))    
         return False
     
-    logging.info("Sending {} logs to LA for store {} for project {} (message_id: {})".format(len(logs_to_send), logstore, project, message_id))
     isSuccess = send_data_to_LA_in_chunks(message_id, logs_to_send, start_time, end_time, stop_run_time_tmst, dequeue_count)
-    logging.info("After sending {} logs to LA for store {} for project {} (message_id: {})".format(len(logs_to_send), logstore, project, message_id))
-
     if isSuccess == True:
-        logging.info("Finished sending {} logs to LA for store {} for project {} (message_id: {})".format(len(logs_to_send), logstore, project, message_id))
         finished_log_stores.append(logstore)
     
     return isSuccess
@@ -239,9 +229,13 @@ def main(queueItem: func.QueueMessage):
     project = message_body.get('project')
     start_time = message_body.get('start_time')
     end_time = message_body.get('end_time')
-    dequeue_count = int(message_body.get('dequeue_count'))
+    dequeue_count_str = message_body.get('dequeue_count')
     retrieved_log_stores_str = message_body.get('retrieved_log_stores')
     finished_log_stores_str = message_body.get('finished_log_stores')
+
+    dequeue_count = 1
+    if dequeue_count is not None:
+        dequeue_count = int(dequeue_count_str)
 
     if (dequeue_count > max_queue_message_retries or queueItem.dequeue_count > max_queue_message_retries):
         logging.error("The queue messages reached its max allowed re-try attempts. Not retrying it again. message_body: {}".format(message_body))
