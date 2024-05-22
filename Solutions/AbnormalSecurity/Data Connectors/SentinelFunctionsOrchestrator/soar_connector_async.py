@@ -10,6 +10,8 @@ import azure.durable_functions as df
 
 API_HOST = os.environ.get('API_HOST', 'https://api.abnormalplatform.com/v1')
 MAX_THREATS = int(os.environ.get('MAX_NUMBER_OF_THREATS', 120))
+TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+TIME_FORMAT_WITHMS = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 class Resources(Enum):
     threats = 0
@@ -137,8 +139,8 @@ class AbnormalSoarConnectorAsync:
         """
         gte_datetime_str = context['gte_datetime']
         lte_datetime_str = context['lte_datetime']
-        gte_datetime = datetime.strptime(gte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
-        lte_datetime = datetime.strptime(lte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
+        gte_datetime = datetime.strptime(gte_datetime_str, TIME_FORMAT)
+        lte_datetime = datetime.strptime(lte_datetime_str, TIME_FORMAT)
 
         if (lte_datetime - gte_datetime) <= timedelta(minutes=1):
             logging.warning("Reached minimum date range for filter query")
@@ -157,10 +159,10 @@ class AbnormalSoarConnectorAsync:
         try:
             gte_datetime_str = threats_date_filter['gte_datetime']
             lte_datetime_str = threats_date_filter['lte_datetime']
-            gte_datetime = datetime.strptime(gte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
-            lte_datetime = datetime.strptime(lte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
+            gte_datetime = datetime.strptime(gte_datetime_str, TIME_FORMAT)
+            lte_datetime = datetime.strptime(lte_datetime_str, TIME_FORMAT)
             midpoint_datetime = gte_datetime + (lte_datetime - gte_datetime) / 2
-            midpoint_datetime_str = midpoint_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+            midpoint_datetime_str = midpoint_datetime.strftime(TIME_FORMAT)
             threats_date_filter['lte_datetime'] = midpoint_datetime_str 
             logging.warning(f"Halved date range, too many results. New date range is {gte_datetime_str} - {midpoint_datetime_str}")
         except Exception as e:
