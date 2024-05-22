@@ -76,7 +76,36 @@ class AbnormalSoarConnectorAsync:
         return f"{self.BASEURL}/{resource_name}/{resource_id}"
 
     def _extract_messages(self, context, threat_resp):
-        return [message for message in threat_resp.get("messages") if message.get("remediationTimestamp") >= context.get("gte_datetime") and message.get("remediationTimestamp") <= context.get("lte_datetime")]
+        threat_id = threat_resp.get("threatId")
+        
+        try:
+            gte_datetime_str = context['gte_datetime']
+            lte_datetime_str = context['lte_datetime']
+            gte_datetime = datetime.strptime(gte_datetime_str, TIME_FORMAT)
+            lte_datetime = datetime.strptime(lte_datetime_str, TIME_FORMAT)
+        except Exception as e:
+            logging.error(f"Failed to parse time for threat_id: {threat_id, gte_datetime_str, lte_datetime_str} with error {e}")
+            return []
+
+        filtered_messages = []
+        for message in threat_resp.get("messages"):
+            message_id = message.get("abxMessageId")
+            remediation_time_str = message.get("remediationTimestamp")
+
+            ctx = {threat_id, message_id, gte_datetime_str, lte_datetime_str, remediation_time_str}
+
+            try:
+                remediation_time = datetime.strptime(remediation_time_str, TIME_FORMAT_WITHMS)
+                if remediation_time >= gte_datetime and remediation_time <= lte_datetime:
+                    filtered_messages.append(message)
+                    logging.info(f"Successfully processed message for threat: {ctx}")
+                else:
+                    logging.warn(f"Skipped processing message for threat: {ctx}")
+            except Exception as e:
+                logging.error(f"Failed to process message for threat: {ctx} with error {e}")
+
+
+        return filtered_messages
 
     def _extract_message_ids(self, threats_resp):
         return [threat.get("threatId") for threat in threats_resp.get('threats', [])]
