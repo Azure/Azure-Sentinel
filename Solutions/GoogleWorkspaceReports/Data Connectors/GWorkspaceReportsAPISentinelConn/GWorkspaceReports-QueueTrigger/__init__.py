@@ -93,6 +93,18 @@ def get_result(activity,start_time, end_time):
             logging.info("Activity - {}, processing {} events".format(activity, len(result_activities)))
     except Exception as err:
         logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
+        if 'rateLimitExceeded' in err:
+            logging.info('API Rate Limit Exceeded, retrying after 60 seconds')
+            time.sleep(60)
+            results = service.activities().list(userKey='all', applicationName=activity,
+                                                maxResults=1000, startTime=start_time, endTime=end_time).execute()
+            next_page_token = results.get('nextPageToken', None)
+            result = results.get('items', [])
+            result_activities.extend(result)
+            if result_activities is None or len(result_activities) == 0:
+                logging.info("Logs not founded for {} activity".format(activity))
+            else:
+                logging.info("Activity - {}, processing {} events".format(activity, len(result_activities)))
         raise err
     return result_activities, next_page_token
     
@@ -111,6 +123,18 @@ def get_nextpage_results(activity,start_time, end_time, next_page_token):
             logging.info("Activity - {}, processing {} events".format(activity, len(result_activities)))
     except Exception as err:
         logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
+        if 'rateLimitExceeded' in err:
+            logging.info('API Rate Limit Exceeded, retrying after 60 seconds')
+            time.sleep(60)
+            results = service.activities().list(userKey='all', applicationName=activity,
+                                                maxResults=1000, startTime=start_time, endTime=end_time, pageToken=next_page_token).execute()
+            next_page_token = results.get('nextPageToken', None)
+            result = results.get('items', [])
+            result_activities.extend(result)
+            if result_activities is None or len(result_activities) == 0:
+                logging.info("Logs not founded for {} activity".format(activity))
+            else:
+                logging.info("Activity - {}, processing {} events".format(activity, len(result_activities)))
     return result_activities, next_page_token
 
 def build_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
