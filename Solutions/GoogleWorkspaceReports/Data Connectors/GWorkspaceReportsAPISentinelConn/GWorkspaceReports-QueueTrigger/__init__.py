@@ -1,5 +1,7 @@
 from __future__ import print_function
 import pickle
+import time
+import random
 from googleapiclient.discovery import build
 import json
 import base64
@@ -92,8 +94,12 @@ def get_result(activity,start_time, end_time):
         else:
             logging.info("Activity - {}, processing {} events".format(activity, len(result_activities)))
     except Exception as err:
-        logging.error("Something wrong while getting the results. Exception error text: {}".format(err))
-        raise err
+         if err.responce.status == 403 and 'rateLimitExceeded' in err.result:
+             delay = random.uniform(2,4)
+             time.sleep(delay)
+             return get_result (activity, start_time, end_time)
+         else:
+            raise err
     return result_activities, next_page_token
     
 def get_nextpage_results(activity,start_time, end_time, next_page_token):
