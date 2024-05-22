@@ -77,14 +77,20 @@ class AbnormalSoarConnectorAsync:
 
     def _extract_messages(self, context, threat_resp):
         threat_id = threat_resp.get("threatId")
-        
+        gte_datetime_str = context['gte_datetime']
+        lte_datetime_str = context['lte_datetime']
+
+        ctx = {
+            "threat_id": threat_id,
+            "gte_datetime_str": gte_datetime_str, 
+            "lte_datetime_str": lte_datetime_str
+        }
+
         try:
-            gte_datetime_str = context['gte_datetime']
-            lte_datetime_str = context['lte_datetime']
             gte_datetime = datetime.strptime(gte_datetime_str, TIME_FORMAT)
             lte_datetime = datetime.strptime(lte_datetime_str, TIME_FORMAT)
         except Exception as e:
-            logging.error(f"Failed to parse time for threat_id: {threat_id, gte_datetime_str, lte_datetime_str} with error {e}")
+            logging.error(f"Failed to parse time for threat_id: {ctx} with error {e}")
             return []
 
         filtered_messages = []
@@ -92,7 +98,11 @@ class AbnormalSoarConnectorAsync:
             message_id = message.get("abxMessageId")
             remediation_time_str = message.get("remediationTimestamp")
 
-            ctx = {threat_id, message_id, gte_datetime_str, lte_datetime_str, remediation_time_str}
+            ctx = {
+                **ctx,
+                "message_id": message_id, 
+                "remediation_time_str": remediation_time_str
+            }
 
             try:
                 remediation_time = datetime.strptime(remediation_time_str, TIME_FORMAT_WITHMS)
