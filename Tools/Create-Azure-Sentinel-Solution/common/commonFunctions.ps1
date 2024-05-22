@@ -1779,7 +1779,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         $ccpConnector = $false
                         $connectorData = ConvertFrom-Json $rawData
 
-                        $hasIsGenericConnectorProp = [bool]($connectorData.PSobject.Properties.name -match "isGenericConnector");
+                        $hasIsGenericConnectorProp = [bool]($connectorData.PSobject.Properties.name.tolower() -match "isgenericconnector");
                         if ($hasIsGenericConnectorProp) {
                             # has property isGenericConnector in data connector file.
                             $isGenericConnector = $connectorData.isGenericConnector
@@ -1867,7 +1867,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                             $global:baseMainTemplate.resources += $baseDataConnectorTemplateSpec
                         }
-                        if(!$contentToImport.Is1PConnector)
+                        if(!$contentToImport.Is1PConnector -or ($contentToImport.Is1PConnector -eq $true -and $isGenericConnector))
                         {
                             $existingFunctionApp = $false;
                             $instructionArray = $templateSpecConnectorData.instructionSteps
@@ -1914,9 +1914,14 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true -and !$isGenericConnector) ? $1pconnectorData : $templateSpecConnectorData
                         $templateSpecConnectorUiConfig.id = "[variables('_uiConfigId$global:connectorCounter')]"
-                        if($contentToImport.Is1PConnector -eq $false)
+                        if($contentToImport.Is1PConnector -eq $false -or ($contentToImport.Is1PConnector -eq $true -and $isGenericConnector))
                         {
-                            $templateSpecConnectorUiConfig.availability.isPreview =  ($templateSpecConnectorUiConfig.availability.isPreview -eq $true) ? $false : $templateSpecConnectorUiConfig.availability.isPreview
+                            $hasIsPreview = [bool]$templateSpecConnectorUiConfig.availability.PSObject.Properties.name -match 'isPreview'
+                            if ($hasIsPreview) {
+                                $templateSpecConnectorUiConfig.availability.isPreview =  ($templateSpecConnectorUiConfig.availability.isPreview -eq $true) ? $false : $templateSpecConnectorUiConfig.availability.isPreview
+                            } else {
+                                $templateSpecConnectorUiConfig.availability | Add-Member -NotePropertyName "isPreview" -NotePropertyValue $false;
+                            }
                         }
                         $dataConnectorContent = [PSCustomObject]@{
                             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$global:connectorCounter'))]";
@@ -2041,7 +2046,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             connectivityCriterias = $connectorData.connectivityCriterias;
                         }
 
-                        if(!$contentToImport.Is1PConnector)
+                        if(!$contentToImport.Is1PConnector -or ($contentToImport.Is1PConnector -eq $true -and $isGenericConnector))
                         {
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $connectorData.sampleQueries;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "availability" -NotePropertyValue $connectorData.availability;
