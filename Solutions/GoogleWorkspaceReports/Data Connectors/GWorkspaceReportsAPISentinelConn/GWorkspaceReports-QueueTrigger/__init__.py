@@ -105,7 +105,8 @@ def get_result(activity,start_time, end_time):
                 logging.info("Logs not founded for {} activity".format(activity))
             else:
                 logging.info("Activity - {}, processing {} events".format(activity, len(result_activities)))
-        raise err
+        else:        
+            raise err
     return result_activities, next_page_token
     
 def get_nextpage_results(activity,start_time, end_time, next_page_token):
