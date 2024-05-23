@@ -114,7 +114,7 @@ def fetch_and_send_detections(ctx: ApiContext, event_type: str, start_date: str)
         "include_dhcp": INCLUDE_DHCP,
         "include_events": INCLUDE_EVENTS,
         "filter_training_detections": True,
-        "limit": 300,
+        "limit": 50,
         "start_date": start_date,
     }
 
