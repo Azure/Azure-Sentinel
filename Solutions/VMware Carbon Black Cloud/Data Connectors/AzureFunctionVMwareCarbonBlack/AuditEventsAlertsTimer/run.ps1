@@ -228,6 +228,7 @@ function CarbonBlackAPI()
         $logType = $logType -replace """",""
         $LogTypeArr = $logType -split ','
     }
+    Write-Host ($LogTypeArr)
     
 
     if(-not([string]::IsNullOrWhiteSpace($apiId)) -and -not([string]::IsNullOrWhiteSpace($apiSecretKey)) -and -not([string]::IsNullOrWhiteSpace($hostName)))
