@@ -13,6 +13,7 @@ from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 import os
 
+requests.packages.urllib3.disable_warnings()
 app = func.FunctionApp()
 
 container_name = "sentinelcontainer"
@@ -22,6 +23,7 @@ cs = os.environ.get('ConnectionString')
  
 customer_id = os.environ.get('WorkspaceID')
 shared_key = os.environ.get('WorkspaceKey')
+verify = False
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
@@ -30,15 +32,10 @@ if (not match):
     logging.info(f"Invalid url : {logAnalyticsUri}")
     raise Exception("Lookout: Invalid Log Analytics Uri.")
 
-key_vault_name = os.environ["KeyVaultName"]
-credential = DefaultAzureCredential()
-client = SecretClient(vault_url=f"https://{key_vault_name}.vault.azure.net", credential=credential)
-secret_name = "environment-endpoint-url"
-uri = client.get_secret(secret_name).value
-url = "https://" + uri + "/commandcenter/api"
-secret_name = "access-token"
-qsdk_token = client.get_secret(secret_name).value
-
+key_vault_name = os.environ.get("KeyVaultName")
+uri = None
+url = None
+qsdk_token = None
 headers = {
     "authtoken": "QSDK " + qsdk_token,
     "Content-Type": "application/json",
@@ -105,14 +102,24 @@ job_details_body = {
 
 @app.schedule(schedule="0 */5 * * * *", arg_name="myTimer", run_on_startup=False,
               use_monitor=False)
-def demo_timer_trigger(myTimer: func.TimerRequest) -> None:
+def myTimer(myTimer: func.TimerRequest) -> None:
+    global qsdk_token,url
     if myTimer.past_due:
         logging.info('The timer is past due!')
 
 
-def main():
+    logging.info('Executing Python timer trigger function.')
+    
 
     try:
+        credential = DefaultAzureCredential()
+        client = SecretClient(vault_url=f"https://{key_vault_name}.vault.azure.net", credential=credential)
+        secret_name = "environment-endpoint-url"
+        uri = client.get_secret(secret_name).value
+        url = "https://" + uri + "/commandcenter/api"
+        secret_name = "access-token"
+        qsdk_token = client.get_secret(secret_name).value
+        
         ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=false&showAnomalous=true"
         f_url = url + ustring
         current_date = datetime.utcnow()
@@ -121,8 +128,9 @@ def main():
         if fromtime is None:
             fromtime = int((current_date - timedelta(days=2)).timestamp())
 
+        logging.info("Starts at: [{}]".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))        
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
-        response = requests.get(event_endpoint, headers=headers, verify=True)
+        response = requests.get(event_endpoint, headers=headers, verify=verify)
  
         if response.status_code == 200:
             events = response.json()
@@ -144,6 +152,8 @@ def main():
             else:
                  print("No new events found.")
 
+        else:
+            logging.error("Failed to get events with status code : "+str(response.status_code))
     except Exception as e:
         logging.info("HTTP request error: %s", str(e))
 
@@ -273,7 +283,7 @@ def get_files_list(job_id) -> list:
         "advConfig": {"browseAdvancedConfigBrowseByJob": {"jobId": int(job_id)}}
     }
     f_url = url+"/DoBrowse"
-    response = requests.post(f_url, headers=headers, json=job_details_body, verify=True)
+    response = requests.post(f_url, headers=headers, json=job_details_body, verify=verify)
     resp = response.json()
     browse_responses = resp.get("browseResponses", [])
     file_list = []
@@ -303,7 +313,7 @@ def get_subclient_content_list(subclient_id) -> dict:
     """
 
     f_url = url + "/Subclient/" + str(subclient_id)
-    resp = requests.get(f_url, headers=headers).json()
+    resp = requests.get(f_url, headers=headers, verify=verify).json()
     resp = resp.get("subClientProperties", [{}])[0].get("content")
     return resp
 
@@ -345,7 +355,7 @@ def get_job_details(job_id, url, headers):
     """
 
     f_url = f"{url}/Job/{job_id}"
-    response = requests.get(f_url, headers=headers, verify=True)
+    response = requests.get(f_url, headers=headers, verify=verify)
     data = response.json()
     if ("totalRecordsWithoutPaging" in data) and (
             int(data["totalRecordsWithoutPaging"]) > 0
@@ -633,9 +643,11 @@ def read_blob(connection_string, container_name, blob_name):
     try:
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-        blob_data = blob_client.download_blob()
+        blob_data = blob_client.download_blob(encoding='UTF-8')
         content = blob_data.readall()
-        timestamp = int(content)
+        timestamp = None
+        if content:
+            timestamp = int(content)
         logging.info(f"Timestamp read from blob {blob_name}: {timestamp}")
         return timestamp
     
