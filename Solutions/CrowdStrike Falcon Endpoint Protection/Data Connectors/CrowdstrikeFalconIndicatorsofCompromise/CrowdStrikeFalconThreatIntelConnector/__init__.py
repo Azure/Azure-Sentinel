@@ -1,11 +1,9 @@
 import requests
-import hashlib
 import json
 from datetime import datetime, timezone, timedelta
 import uuid
 import os
 import logging
-import uuid
 import hashlib
 import azure.functions as func
 
@@ -87,7 +85,7 @@ def get_query_filter():
 
     indicator_type_filter = parse_indicator_type_filter()
     marker_filter = CrowdStrike_State.get()
-    if marker_filter == None:
+    if marker_filter is None:
         look_back_date = get_look_back_date()
         query_filter = f"({indicator_type_filter})+(last_updated:>'{look_back_date}')"
     else:
@@ -232,6 +230,8 @@ def send_to_threat_intel(stix_batch):
         logging.error(f"Error Code: {response.status_code}")
         logging.error(f"Error Response: {response.text}")
         raise UnauthorizedTokenException(response.text)
+
+    return response
 
 
 def main(mytimer: func.TimerRequest):

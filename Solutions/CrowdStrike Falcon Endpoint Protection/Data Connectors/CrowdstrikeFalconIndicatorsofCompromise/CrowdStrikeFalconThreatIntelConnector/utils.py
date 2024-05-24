@@ -68,12 +68,7 @@ class StateManager:
             return None
 
 
-class TokenRetriever:
-    def __init__(self): ...
-    def get_token(self): ...
-
-
-class CrowdStrikeTokenRetriever(TokenRetriever):
+class CrowdStrikeTokenRetriever:
     def __init__(
         self, crowdstrike_base_url, crowdstrike_client_id, crowdstrike_client_secret
     ):
@@ -107,7 +102,7 @@ class CrowdStrikeTokenRetriever(TokenRetriever):
         return self.token
 
 
-class AADTokenRetriever(TokenRetriever):
+class AADTokenRetriever:
     def __init__(self, aad_client_id, aad_client_secret, tenant_id):
         self.aad_client_id = aad_client_id
         self.aad_client_secret = aad_client_secret
