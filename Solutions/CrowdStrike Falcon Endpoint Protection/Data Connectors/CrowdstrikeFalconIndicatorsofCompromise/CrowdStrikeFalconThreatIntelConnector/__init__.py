@@ -17,8 +17,6 @@ from .utils import (
     APIError,
 )
 
-from datetime import datetime, timedelta
-
 
 CROWDSTRIKE_CLIENT_ID = os.environ.get("CROWDSTRIKE_CLIENT_ID")
 CROWDSTRIKE_CLIENT_SECRET = os.environ.get("CROWDSTRIKE_CLIENT_SECRET")
