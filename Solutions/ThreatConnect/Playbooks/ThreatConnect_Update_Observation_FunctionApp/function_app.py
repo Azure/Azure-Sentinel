@@ -1,6 +1,4 @@
-import json
 import logging
-import os
 
 import azure.functions as func
 from azure.functions.decorators.core import AuthLevel
@@ -95,7 +93,7 @@ def get_indicators(summary: str, session: TcSession):
     return indicators
 
 
-def update_observation(indicators: dict, session: TcSession) -> Response:
+def update_observation(indicators: dict, session: TcSession) -> Response | None:
     # get the api branch for the indicator type (use the first result since they'll all be the same type)
     api_branch = get_api_branch_for_indicator_type(indicators[0].get("type"), session)
 
@@ -116,6 +114,7 @@ def update_observation(indicators: dict, session: TcSession) -> Response:
             continue  # we don't have write access to this owner, so try the next one
         else:
             return response  # we were able to write an observation, so we're done
+    return None
 
 
 def create_indicator(indicator: dict, session: TcSession) -> dict:
