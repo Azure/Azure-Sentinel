@@ -141,7 +141,7 @@ def process_logstores_and_send_to_LA(client, message_id, project, start_time, en
 
         logs_to_send = []
         res = client.get_log_all(project, logstore, str(start_time), str(end_time), ali_topic)
-        logging.info("Retrieved {} get_log_all responses for store {} for project {} (message_id: {})".format(len(res), logstore, project, message_id))
+        logging.info("Retrieved get_log_all responses for store {} for project {} (message_id: {})".format(logstore, project, message_id))
 
         for logs in res:
             if time.time() > stop_run_time_tmst:
