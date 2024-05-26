@@ -165,7 +165,7 @@ try {
         Write-Host "isCCPConnector $isCCPConnector"
         $ccpConnectorCodeExecutionCounter = 1;
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
-            if ($objectProperties.Value -is [System.Array]) {
+            if ($objectProperties.Value -is [System.Array] -and $objectProperties.Name.ToLower() -ne 'genericdataconnectorids') {
                 foreach ($file in $objectProperties.Value) {
                     $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
                     $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")
