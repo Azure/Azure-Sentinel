@@ -1,9 +1,12 @@
-trigger:
-  branches:
-    include:
+jobs:
+- job: "ASIMSchemaDataTester"
+  displayName: 'Run ASIM testers on "eco-connector-test" workspace'
+  trigger:
+    branches:
+      include:
       - '*'  # This includes all branches
-  paths:
-    include:
+    paths:
+      include:
       - 'Parsers/ASimDns/Parsers/**'
       - 'Parsers/ASimNetworkSession/Parsers/**'
       - 'Parsers/ASimWebSession/Parsers/**'
@@ -14,14 +17,42 @@ trigger:
       - 'Parsers/ASimRegistryEvent/Parsers/**'
       - 'Parsers/ASimUserManagement/Parsers/**'
       - 'Parsers/ASimDhcpEvent/Parsers/**'
-
-jobs:
-- job: ASIMSchemaDataTester
-  displayName: 'Run ASIM testers on "eco-connector-test" workspace'
   pool:
     vmImage: 'ubuntu-latest'
   steps:
-    - checkout: self
-      persistCredentials: false
-      fetchDepth: 0  # Fetch full repository history
-    # Add more steps here...
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 0  # Fetch full repository history
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'  # name of your Azure service connection
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        set -e  # Exit on error
+        echo "Running Azure CLI commands..."
+        # Example command to list resource groups
+        az group list
+      addSpnToEnvironment: true  # Add SPN credentials to environment variables for use in subsequent steps
+  - script: |
+      git config --local user.name "azure-pipelines[bot]"
+      git config --local user.email "<>"
+    displayName: 'Setup git config'
+  - script: |
+      git merge origin/master
+      Conflicts=$(git ls-files -u | wc -l)
+      if [ "$Conflicts" -gt 0 ] ; then
+        echo "There is a merge conflict. Aborting"
+        git merge --abort
+        exit 1
+      fi
+    displayName: 'Merge master into pull request branch'
+  - task: AzurePowerShell@5
+    inputs:
+      azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'
+      ScriptType: 'InlineScript'
+      Inline: |
+        & ".script/tests/asimParsersTest/runAsimTesters.ps1"
+      FailOnStandardError: false
+      ErrorActionPreference: 'continue'
+      azurePowerShellVersion: 'latest'
