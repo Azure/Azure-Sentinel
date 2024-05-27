@@ -5,6 +5,6 @@
     'Az' = '4.*'
     'AzTable' = '2.*'
     'Az.OperationalInsights' = '2.*'
-    'Az.Accounts' = '2.*'
-    'Az.Storage' = '2.*'
+    'Az.Accounts' = '2.2.3'
+    'Az.Storage' = '4.3.0'
 }
