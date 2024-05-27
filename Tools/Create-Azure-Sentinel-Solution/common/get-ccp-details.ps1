@@ -14,7 +14,12 @@ function Get-CCP-Dict($dataFileMetadata, $baseFolderPath, $solutionName, $DCFold
         foreach ($file in $items) {
             $file = $file.Replace("$baseFolderPath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
 
-            $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $file).Replace("//", "/")
+            if ($file -match $DCFolderName) {
+                $currentFileDCPath = ($baseFolderPath + $solutionName + "/"+ $file).Replace("//", "/")
+            } else {
+                $currentFileDCPath = ($baseFolderPath + $solutionName + "/" + $DCFolderName + "/" + $file).Replace("//", "/")
+            }
+            #$currentFileDCPath = ($baseFolderPath + $solutionName + "/"+ $file).Replace("//", "/")
             Write-Host "currentFileDCPath $currentFileDCPath"
             #$fileContent = Get-Content -Raw $currentFileDCPath | Out-String | ConvertFrom-Json
 

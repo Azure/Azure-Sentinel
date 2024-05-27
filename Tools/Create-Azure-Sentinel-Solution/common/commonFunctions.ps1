@@ -1904,17 +1904,22 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
 
                         #========Start: Validate if we need to create GenericUI connector===========
-                        $numberOfDataConnectors = $dataFileMetadata.'Data Connectors'.Count
+                        if ($isPipelineRun) {
+                            $dataConnectors = $contentToImport."Data Connectors" | ConvertFrom-Json
+                            $numberOfDataConnectors = $dataConnectors.Count
+                        } else {
+                            $numberOfDataConnectors = $contentToImport."Data Connectors".Count
+                        }
+
                         if ($is1PConnector -eq $true -and $numberOfDataConnectors -gt 1) {
                             # execute only when we have more then 1 data connectors.
                             $hasGenericDataConnectorProp = [bool]($dataFileMetadata.PSObject.Properties.Name.tolower() -match 'genericdataconnectorids')
 
                             if ($hasGenericDataConnectorProp) {
-                                $countGenericDataConnector = $dataFileMetadata.GenericDataConnectorIds.Count
-
+                                $countGenericDataConnector = $contentToImport.GenericDataConnectorIds.Count
                                 if ($countGenericDataConnector -gt 0) {
                                     $dataConnectorId = $connectorData.id
-                                    $hasDataConnectorId = [bool]($dataFileMetadata.GenericDataConnectorIds | Where-Object { $_ -eq "$dataConnectorId"} )
+                                    $hasDataConnectorId = [bool]($contentToImport.GenericDataConnectorIds | Where-Object { $_ -eq "$dataConnectorId"} )
                                     if ($hasDataConnectorId) {
                                         # data connector id is specified in GenericDataConnectorIds array so we have to make this as generic connector
                                         $is1PConnector = $false
