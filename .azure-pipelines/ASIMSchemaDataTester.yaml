@@ -6,9 +6,6 @@ jobs:
     vmImage: 'ubuntu-latest'
 
   steps:
-  - checkout: self
-    persistCredentials: false
-
   - script: |
       echo "Checking for changed files in the pull request..."
 
@@ -16,18 +13,21 @@ jobs:
       sudo apt-get update
       sudo apt-get install -y jq
 
-      # Get the current PR ID
-      PR_ID=$(System.PullRequest.PullRequestId)
-
-      # Get the repository ID
-      REPO_ID=$(Build.Repository.ID)
-
-      # Get the organization name
+      # Get the organization name and project name from environment variables
       ORG_NAME=$(System.CollectionUri)
       PROJECT_NAME=$(System.TeamProject)
 
-      # Get the list of changed files in the PR
-      changed_files=$(az rest --method get --uri "$ORG_NAME$PROJECT_NAME/_apis/git/repositories/$REPO_ID/pullRequests/$PR_ID/iterations/1/changes?api-version=6.0" | jq -r '.changes[].item.path')
+      # Get the repository ID and pull request ID from environment variables
+      REPO_ID=$(Build.Repository.ID)
+      PR_ID=$(System.PullRequest.PullRequestId)
+
+      echo "Organization: $ORG_NAME"
+      echo "Project: $PROJECT_NAME"
+      echo "Repository: $REPO_ID"
+      echo "Pull Request ID: $PR_ID"
+
+      # Fetch the list of changed files in the PR
+      changed_files=$(az repos pr list --id $PR_ID --repository-id $REPO_ID --org $ORG_NAME --project $PROJECT_NAME --query 'changes[].item.path' -o tsv)
 
       echo "Changed files: $changed_files"
 
@@ -46,31 +46,3 @@ jobs:
            [[ $file == Parsers/ASimRegistryEvent/Parsers/* ]] || \
            [[ $file == Parsers/ASimUserManagement/Parsers/* ]] || \
            [[ $file == Parsers/ASimDhcpEvent/Parsers/* ]]; then
-          echo "Found changed file $file in specified locations."
-          files_changed=true
-          break
-        fi
-      done
-
-      # Set the pipeline variable
-      echo "##vso[task.setvariable variable=filesChanged;isOutput=true]$files_changed"
-    displayName: 'Check for Changed Files in Specified Locations'
-
-  - script: |
-      echo "No relevant files changed."
-      exit 0
-    displayName: 'Skip job if no relevant files changed'
-    condition: and(succeeded(), eq(variables['filesChanged'], 'false'))
-
-  - checkout: self
-    persistCredentials: false
-    fetchDepth: 0  # Fetch full repository history
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
-
-  - task: AzureCLI@2
-    inputs:
-      azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'  # name of your Azure service connection
-      scriptType: 'bash'
-      scriptLocation: 'inlineScript'
-      inlineScript: |
-        set -e
