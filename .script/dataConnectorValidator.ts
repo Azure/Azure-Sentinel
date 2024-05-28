@@ -144,7 +144,7 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.CybleThreatIntel;
   }
-  else if (dataTypes[0].name.includes("ThreatIntelligenceIndicator"))
+  else if (dataTypes[0].name.includes("Indicators of Compromise"))
   {
     return ConnectorCategory.CrowdStrikeFalconIOC;
   }
