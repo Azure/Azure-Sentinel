@@ -21,7 +21,7 @@ ali_accessKey = os.environ.get('AliCloudAccessKey', '')
 ali_topic = os.environ.get('Topic', '')
 connection_string = os.environ['AzureWebJobsStorage']
 customer_id = os.environ['WorkspaceID']
-max_queue_message_retries = int(os.environ.get('MaxQueueMessageRetries', '15'))
+max_queue_message_retries = int(os.environ.get('MaxQueueMessageRetries', '100'))
 shared_key = os.environ['WorkspaceKey']
 user_projects = os.environ.get("AliCloudProjects", '').replace(" ", "").split(',')
 
