@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimWebSessionVectraAI",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM filtering parser for Vectra AI streams",
+            "category": "ASIM",
+            "FunctionAlias": "vimWebSessionVectraAI",
+            "query": "let parser = (starttime: datetime = datetime(null),\n              endtime: datetime = datetime(null),\n              srcipaddr_has_any_prefix: dynamic = dynamic([]),\n              ipaddr_has_any_prefix: dynamic = dynamic([]),\n              url_has_any: dynamic = dynamic([]),\n              httpuseragent_has_any: dynamic = dynamic([]),\n              eventresultdetails_in: dynamic = dynamic([]),\n              eventresult: string = '*',\n              disabled: bool = false,\n              pack:bool = false)\n{\n  let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)\n  [\n      false, true, 'Inbound',\n      true, false, 'Outbound',\n      true, true, 'Local',\n      false, false, 'Local'\n  ];\n  let NetworkProtocolVersionLookup = datatable(id_ip_ver_s:string, NetworkApplicationProtocol:string)\n  [\n      'ipv4', 'IPv4',\n      'ipv6', 'IPv6'\n  ];\n  let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';\n  let remove_protocol_from_urls =  \n      materialize (\n          print url_has_any \n          | mv-apply l = print_0 to typeof(string) on ( \n            extend l = extract(@'^(?i:.*?://)?(.*)$', 1, l)\n          ) \n          | project l\n      );\n  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); \n  VectraStream_CL\n  | where not(disabled)\n  | where (isnull(starttime) or TimeGenerated >= starttime)\n      and (isnull(endtime) or TimeGenerated <= endtime)\n  | where metadata_type_s == 'metadata_httpsessioninfo'\n  | where \n      (array_length(url_has_any) == 0 \n      or host_s has_any(remove_protocol_from_urls) \n      or uri_s has_any (remove_protocol_from_urls) \n      or strcat(host_s, uri_s) has_any (remove_protocol_from_urls))\n  | where (array_length(httpuseragent_has_any) == 0 or user_agent_s has_any(httpuseragent_has_any))\n  | where (array_length(eventresultdetails_in) == 0 or tostring(status_code_d) has_any(eventresultdetails_in))\n  | extend temp_SrcMatch=has_any_ipv4_prefix(id_orig_h_s,src_or_any)\n         , temp_DstMatch=has_any_ipv4_prefix(id_resp_h_s,ipaddr_has_any_prefix)\n  | extend ASimMatchingIpAddr=case(\n                                array_length(src_or_any) == 0 ,\"-\",\n                                temp_SrcMatch and temp_DstMatch, \"Both\",\n                                temp_SrcMatch, \"SrcIpAddr\",\n                                temp_DstMatch, \"DstIpAddr\",\n                                \"No match\"\n                            )\n  | where ASimMatchingIpAddr != \"No match\" \n  | project-away temp_*\n  | extend EventResult = iff(tolong(status_code_d) >= 400, \"Failure\", \"Success\")\n  | where (eventresult == '*' or EventResult =~ eventresult)\n  | project-rename\n      DvcDescription = hostname_s,\n      DstDescription = resp_hostname_s,\n      SrcDescription = orig_hostname_s,\n      DstIpAddr = id_resp_h_s,\n      EventOriginalUid = uid_s,\n      HttpContentType = resp_mime_types_s,\n      HttpReferrer = referrer_s,\n      HttpRequestMethod = method_s,\n      HttpUserAgent = user_agent_s,\n      DvcId = sensor_uid_s,\n      // -- community id is just a hash of addresses and ports, and not unique for the session\n      // NetworkSessionId = community_id_s,\n      SrcIpAddr = id_orig_h_s,\n      SrcSessionId = orig_sluid_s,\n      DstSessionId = resp_sluid_s,\n      HttpResponseCacheControl = response_cache_control_s,\n      HttpRequestCacheControl = request_cache_control_s,\n      HttpCookie = cookie_s,\n      HttpResponseExpires = response_expires_s,\n      HttpIsProxied = is_proxied_b,\n      EventOriginalStatusDetails = status_msg_s\n  | extend\n      DstHostname = iff (DstDescription startswith \"IP-\" or not(DstDescription matches regex HostnameRegex), \"\", DstDescription),\n      SrcHostname = iff (SrcDescription startswith \"IP-\" or not(SrcDescription matches regex HostnameRegex), \"\", SrcDescription),\n      DvcHostname = iff (DvcDescription startswith \"IP-\" or not(DvcDescription matches regex HostnameRegex), \"\", DvcDescription),\n      DstBytes = tolong(resp_ip_bytes_d),\n      DstPackets = tolong(resp_pkts_d),\n      DstPortNumber = toint(id_resp_p_d),\n      EventCount = toint(1),\n      EventStartTime = unixtime_milliseconds_todatetime(ts_d),\n      EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),\n      EventProduct = 'Vectra Stream',\n      EventResultDetails = tostring(toint(status_code_d)),\n      HttpRequestBodyBytes = tolong(request_body_len_d),\n      HttpResponseBodyBytes = tolong(response_body_len_d),\n      HttpRequestHeaderCount = toint(request_header_count_d),\n      HttpResponseHeaderCount = toint(response_header_count_d),\n      EventSchema = 'WebSession',\n      EventSchemaVersion='0.2.3',\n      DvcIdType = 'VectraId',\n      EventSeverity = iff (EventResult == 'Success', 'Informational', 'Low'),\n      EventType = 'HTTPsession',\n      EventVendor = 'Vectra AI',\n      SrcBytes = tolong(orig_ip_bytes_d),\n      SrcPackets = tolong(orig_pkts_d),\n      SrcPortNumber = toint(id_orig_p_d),\n      Url = strcat('http://', host_s, uri_s)\n  | lookup NetworkDirectionLookup on local_orig_b, local_resp_b\n  | lookup NetworkProtocolVersionLookup on id_ip_ver_s\n  // -- preserving non-normalized important fields\n  | extend AdditionalFields = iff (\n      pack, \n      bag_pack (\n        \"first_orig_resp_data_pkt\", first_orig_resp_data_pkt_s,\n        \"first_resp_orig_data_pkt\", first_resp_orig_data_pkt_s,\n        \"orig_huid\", orig_huid_s,\n        \"resp_huid\", resp_huid_s,\n        \"community_id\", community_id_s,\n        \"resp_multihome\", resp_multihomed_b,\n        \"host_multihomed\", host_multihomed_b,\n        \"first_orig_resp_data_pkt_time\", unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),\n        \"first_orig_resp_pkt_time\", unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),\n        \"first_resp_orig_data_pkt_time\", unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),\n        \"first_resp_orig_pkt_time\", unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)\n      ),\n      dynamic([])\n    )\n  | project-away\n      *_d, *_s, *_b, *_g, Computer, MG, ManagementGroupName, RawData, SourceSystem, TenantId\n  | extend\n      Dst = DstIpAddr,\n      Dvc = DvcId,\n      EventEndTime = EventStartTime,\n      Hostname = DstHostname,\n      HttpStatusCode = EventResultDetails,\n      IpAddr = SrcIpAddr,\n      NetworkBytes = SrcBytes + DstBytes,\n      NetworkPackets = SrcPackets + DstPackets,\n      //SessionId = NetworkSessionId,\n      Src = SrcIpAddr,\n      UserAgent = HttpUserAgent \n};\nparser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled, pack=pack)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),ipaddr_has_any_prefix:dynamic=dynamic([]),url_has_any:dynamic=dynamic([]),httpuseragent_has_any:dynamic=dynamic([]),eventresultdetails_in:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False,pack:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
