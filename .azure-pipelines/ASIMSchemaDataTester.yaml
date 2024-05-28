@@ -15,7 +15,7 @@ jobs:
 
       echo "Repository: $REPO"
       echo "Pull Request ID: $PR_ID"
-      echo "GitHub Token: $GITHUB_TOKEN"
+      echo "GitHub Token: ${GITHUB_TOKEN:0:4}...${GITHUB_TOKEN: -4}"  # Print the first and last 4 characters of the token for debugging
 
       # Fetch the list of changed files using GitHub REST API
       changed_files_json=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
@@ -55,55 +55,4 @@ jobs:
       echo "files_changed: $files_changed"
     displayName: 'Check for Changed Files in Specified Locations'
     env:
-      SYSTEM_ACCESSTOKEN: $(System.AccessToken)  # Ensure the access token is available in the script
-
-  - script: |
-      echo "No relevant files changed."
-    displayName: 'Skip job if no relevant files changed'
-    condition: and(succeeded(), eq(variables['files_changed'], 'false'))
-
-  - checkout: self
-    persistCredentials: false
-    fetchDepth: 0  # Fetch full repository history
-    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
-
-  - task: AzureCLI@2
-    inputs:
-      azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'  # name of your Azure service connection
-      scriptType: 'bash'
-      scriptLocation: 'inlineScript'
-      inlineScript: |
-        set -e  # Exit on error
-        echo "Running Azure CLI commands..."
-        # Example command to list resource groups
-        az group list
-      addSpnToEnvironment: true  # Add SPN credentials to environment variables for use in subsequent steps
-    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
-
-  - script: |
-      git config --local user.name "azure-pipelines[bot]"
-      git config --local user.email "<>"
-    displayName: 'Setup git config'
-    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
-
-  - script: |
-      git merge origin/master
-      Conflicts=$(git ls-files -u | wc -l)
-      if [ "$Conflicts" -gt 0 ] ; then
-        echo "There is a merge conflict. Aborting"
-        git merge --abort
-        exit 1
-      fi
-    displayName: 'Merge master into pull request branch'
-    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
-
-  - task: AzurePowerShell@5
-    inputs:
-      azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'
-      ScriptType: 'InlineScript'
-      Inline: |
-        & ".script/tests/asimParsersTest/runAsimTesters.ps1"
-      FailOnStandardError: false
-      ErrorActionPreference: 'continue'
-      azurePowerShellVersion: 'latest'
-    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)  # Ensure the access token is available in the 
