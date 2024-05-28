@@ -192,6 +192,7 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType) {
         "time-generated-field" = $TimeStampField;
     };
     $response = Invoke-WebRequest -Body $body -Uri $logAnalyticsUri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
+    Write-Host "Getting response- $response"
     return $response.StatusCode
 }
 <#
@@ -269,6 +270,7 @@ function CarbonBlackAlertsAPI() {
     $v7uri = ([System.Uri]::new("$($hostName)/api/alerts/v7/orgs/$($OrgKey)/alerts/_search"))
             
     $notifications = Invoke-WebRequest -Body $body -Uri $v7uri -Method $method -ContentType $contentType -Headers $headers -UseBasicParsing
+    Write-Host "response $notifications"
     if($notifications.RawContentLength -ge 10)
     {
      $notificationsresults = $notifications | ConvertFrom-Json
