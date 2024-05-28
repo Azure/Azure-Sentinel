@@ -4,59 +4,79 @@ jobs:
   pool:
     vmImage: 'ubuntu-latest'
 
-  variables:
-    system.prefergit: true  # Allow scripts to access OAuth token
-
   steps:
   - script: |
-        echo "Checking for changed files in the pull request..."
-      
-        # Set variables
-        REPO=$(Build.Repository.Name)
-        SOURCE_BRANCH=$(Build.SourceBranch)
-        TARGET_BRANCH=$(Build.TargetBranch)
-      
-        echo "Repository: $REPO"
-        echo "Source branch: $SOURCE_BRANCH"
-        echo "Target branch: $TARGET_BRANCH"
-      
-        # Fetch the target branch
-        git fetch origin $TARGET_BRANCH
-      
-        # Get the list of changed files between the source and target branches
-        changed_files=$(git diff --name-only $TARGET_BRANCH...$SOURCE_BRANCH)
-      
-        echo "Changed files: $changed_files"
-      
-        # Initialize the variable indicating if relevant files are found
-        filesChanged=false
-      
-        # Check each changed file against the specified paths
-        for file in $changed_files; do
-          if [[ $file == Parsers/ASimDns/Parsers/* ]] || \
-            [[ $file == Parsers/ASimNetworkSession/Parsers/* ]] || \
-            [[ $file == Parsers/ASimWebSession/Parsers/* ]] || \
-            [[ $file == Parsers/ASimProcessEvent/Parsers/* ]]; then
+      echo "Checking for changed files in the pull request..."
+
+      # Set variables
+      REPO="Azure/Azure-Sentinel"
+      PR_ID=$(System.PullRequest.PullRequestId)
+      GITHUB_TOKEN=$(System.AccessToken)  # Use the system access token
+
+      echo "Repository: $REPO"
+      echo "Pull Request ID: $PR_ID"
+
+      # Print the first and last 4 characters of the token for debugging
+      echo "GitHub Token: ${GITHUB_TOKEN:0:4}...${GITHUB_TOKEN: -4}"
+
+      # Fetch the list of changed files using GitHub REST API
+      changed_files_json=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+        "https://api.github.com/repos/$REPO/pulls/$PR_ID/files")
+
+      # Check if the request was successful
+      if echo $changed_files_json | jq -e . >/dev/null 2>&1; then
+        echo "Successfully fetched changed files."
+      else
+        echo "Failed to fetch changed files. Response:"
+        echo $changed_files_json
+        exit 1
+      fi
+
+      # Print the raw JSON response for debugging
+      echo "Raw JSON response: $changed_files_json"
+
+      # Extract the list of filenames using jq
+      changed_files=$(echo $changed_files_json | jq -r '.[].filename')
+
+      echo "Changed files: $changed_files"
+
+      # Initialize the variable indicating if relevant files are found
+      files_changed=false
+
+      # Check each changed file against the specified paths
+      for file in $changed_files; do
+        if [[ $file == Parsers/ASimDns/Parsers/* ]] || \
+          [[ $file == Parsers/ASimNetworkSession/Parsers/* ]] || \
+          [[ $file == Parsers/ASimWebSession/Parsers/* ]] || \
+          [[ $file == Parsers/ASimProcessEvent/Parsers/* ]] || \
+          [[ $file == Parsers/ASimAuditEvent/Parsers/* ]] || \
+          [[ $file == Parsers/ASimAuthentication/Parsers/* ]] || \
+          [[ $file == Parsers/ASimFileEvent/Parsers/* ]] || \
+          [[ $file == Parsers/ASimRegistryEvent/Parsers/* ]] || \
+          [[ $file == Parsers/ASimUserManagement/Parsers/* ]] || \
+          [[ $file == Parsers/ASimDhcpEvent/Parsers/* ]]; then
           echo "Found changed file $file in specified locations."
-          filesChanged=true
+          files_changed=true
           break
         fi
-          done
-      
-          # Set the pipeline variable
-          echo "##vso[task.setvariable variable=filesChanged;isOutput=true]$filesChanged"
+      done
+
+      # Output the result
+      echo "##vso[task.setvariable variable=files_changed;isOutput=true]$files_changed"
+      echo "files_changed: $files_changed"
     displayName: 'Check for Changed Files in Specified Locations'
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)  # Ensure the access token is available in the script
 
   - script: |
       echo "No relevant files changed."
-      exit 0
     displayName: 'Skip job if no relevant files changed'
-    condition: and(succeeded(), eq(variables['filesChanged'], 'false'))
+    condition: and(succeeded(), eq(variables['files_changed'], 'false'))
 
   - checkout: self
     persistCredentials: false
     fetchDepth: 0  # Fetch full repository history
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
 
   - task: AzureCLI@2
     inputs:
@@ -69,13 +89,13 @@ jobs:
         # Example command to list resource groups
         az group list
       addSpnToEnvironment: true  # Add SPN credentials to environment variables for use in subsequent steps
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
 
   - script: |
       git config --local user.name "azure-pipelines[bot]"
       git config --local user.email "<>"
     displayName: 'Setup git config'
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
 
   - script: |
       git merge origin/master
@@ -86,7 +106,7 @@ jobs:
         exit 1
       fi
     displayName: 'Merge master into pull request branch'
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
 
   - task: AzurePowerShell@5
     inputs:
@@ -97,4 +117,4 @@ jobs:
       FailOnStandardError: false
       ErrorActionPreference: 'continue'
       azurePowerShellVersion: 'latest'
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
