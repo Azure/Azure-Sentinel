@@ -144,6 +144,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.CybleThreatIntel;
   }
+  else if (dataTypes[0].name.includes("SecurityIncident"))
+  {
+    return ConnectorCategory.CrowdStrikeFalconIOC;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];
