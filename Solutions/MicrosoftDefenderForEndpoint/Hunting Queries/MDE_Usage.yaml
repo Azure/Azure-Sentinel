@@ -7,16 +7,11 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
-queryFrequency: 1h
-queryPeriod: 1h
-triggerOperator: gt
-triggerThreshold: 0
 tactics:
   - Discovery
 relevantTechniques:
   - T1018
 query: |
-
  let args = dynamic(["objectcategory","domainlist","dcmodes","adinfo","trustdmp","computers_pwdnotreqd","Domain Admins", "objectcategory=person", "objectcategory=computer", "objectcategory=*","dclist"]);
  let parentProcesses = dynamic(["pwsh.exe","powershell.exe","cmd.exe"]);
  DeviceProcessEvents
@@ -26,17 +21,28 @@ query: |
  | where FileName =~ "AdFind.exe" or SHA256 == "c92c158d7c37fea795114fa6491fe5f145ad2f8c08776b18ae79db811e8e36a3"
     // AdFind common Flags to check for from various threat actor TTPs
      or ProcessCommandLine has_any (args)
- | extend AccountCustomEntity = AccountName, HostCustomEntity = DeviceName, ProcessCustomEntity = InitiatingProcessFileName, CommandLineCustomEntity = ProcessCommandLine, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = SHA256
-
+ | extend ProcessCustomEntity = InitiatingProcessFileName, CommandLineCustomEntity = ProcessCommandLine, AlgorithmCustomEntity = "SHA256", FileHashCustomEntity = SHA256,Name = tostring(split(AccountName, '@', 0)[0]), UPNSuffix = tostring(split(AccountName, '@', 1)[0]),HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+  | extend Process_0_ProcessId = ProcessCustomEntity
+  | extend Process_0_CommandLine = CommandLineCustomEntity
+  | extend FileHash_0_Algorithm = AlgorithmCustomEntity
+  | extend FileHash_0_Value = FileHashCustomEntity
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: HostName
-        columnName: HostCustomEntity
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
@@ -49,5 +55,4 @@ entityMappings:
         columnName: AlgorithmCustomEntity
       - identifier: Value
         columnName: FileHashCustomEntity
-version: 1.0.1
-kind: Scheduled
+version: 1.0.2

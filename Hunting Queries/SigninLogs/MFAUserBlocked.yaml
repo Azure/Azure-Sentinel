@@ -1,7 +1,7 @@
 id: 75fd68a2-9ed4-4a1c-8bd7-18efe4c99081
 name: Login attempt by Blocked MFA user
 description: |
-  'An account could be blocked if there are too many failed authentication attempts in a row. This hunting query identifies if a MFA user account that is set to blocked tries to login to Azure AD.
+  'An account could be blocked if there are too many failed authentication attempts in a row. This hunting query identifies if a MFA user account that is set to blocked tries to login to Microsoft Entra ID.
    This query has also been updated to include UEBA logs IdentityInfo and BehaviorAnalytics for contextual information around the results.'
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -10,7 +10,7 @@ requiredDataConnectors:
   - connectorId: BehaviorAnalytics
     dataTypes:
       - BehaviorAnalytics
-  - connectorId: IdentityInfo
+  - connectorId: BehaviorAnalytics
     dataTypes:
       - IdentityInfo
 tactics:
@@ -56,13 +56,11 @@ query: |
   | join kind=leftouter (
       IdentityInfo
       | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
-      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
-      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled
       | summarize
           Tags = make_set(Tags, 1000),
           GroupMembership = make_set(GroupMembership, 1000),
           AssignedRoles = make_set(AssignedRoles, 1000),
-          BlastRadiusInt = sum(BlastRadiusInt),
           UserType = make_set(UserType, 1000),
           UserAccountControl = make_set(UserType, 1000)
       by AccountUPN
@@ -80,7 +78,7 @@ query: |
           IPInvestigationPriority = sum(InvestigationPriority)
       by IPAddress
   ) on IPAddress
-  | extend UEBARiskScore = BlastRadiusInt + IPInvestigationPriority
+  | extend UEBARiskScore = IPInvestigationPriority
   | where UEBARiskScore > riskScoreCutoff
   | sort by UEBARiskScore desc
 
@@ -93,7 +91,7 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: IPAddress
-version: 2.0.0
+version: 2.0.2
 metadata:
     source:
         kind: Community

@@ -1,4 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.0       |     12-10-2023                 | Fixed the DataminrPulseAsset watchlist fields related issue. |
-| 3.0.0       |     14-07-2023                 | Initial Version Release                     |
+| 3.0.3       |     03-05-2024                 | Repackaged for parser issue fix on reinstall |
+| 3.0.2       |     14-12-2023                 | Updated **Data Connector** code                      |
+| 3.0.1       |     06-12-2023                 | Updated steps in **DataConnector** UI and **README.md** file.                     |
+| 3.0.0       |     14-07-2023                 | Initial Solution Release                     |

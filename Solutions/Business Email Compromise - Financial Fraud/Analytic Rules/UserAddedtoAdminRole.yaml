@@ -33,18 +33,42 @@ query: |
         | extend RoleName = trim('"',tostring(Property.newValue))
     )
     | where RoleName contains "admin"
-    | extend InitiatingApp = tostring(InitiatedBy.app.displayName)
-    | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName))
-    | extend AddedUser = iff(OperationName=="Add member to role",tostring(TargetResources[0].userPrincipalName),tostring(TargetResources[2].userPrincipalName))
-    | project-reorder TimeGenerated, AddedUser, RoleName, Initiator
+    | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+    | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+    | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+    | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+    | extend InitiatingIPAddress = tostring(InitiatedBy.user.ipAddress)
+    | extend InitiatedBy = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
+    | extend TargetUserPrincipalName = iff(OperationName=="Add member to role",tostring(TargetResources[0].userPrincipalName),tostring(TargetResources[2].userPrincipalName))
+    | extend TargetAadUserId = iff(OperationName=="Add member to role", tostring(TargetResources[0].id), tostring(TargetResources[2].id))
+    | extend AddedUser = TargetUserPrincipalName
+    | extend TargetAccountName = tostring(split(TargetUserPrincipalName, "@")[0]), TargetAccountUPNSuffix = tostring(split(TargetUserPrincipalName, "@")[1])
+    | extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+    | project-reorder TimeGenerated, AddedUser, RoleName, InitiatedBy
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: Initiator
+        columnName: TargetUserPrincipalName
+      - identifier: Name
+        columnName: TargetAccountName
+      - identifier: UPNSuffix
+        columnName: TargetAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: TargetAadUserId
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AddedUser
-version: 1.0.2
+        columnName: InitiatingUserPrincipalName   
+      - identifier: Name
+        columnName: InitiatingAccountName
+      - identifier: UPNSuffix
+        columnName: InitiatingAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+version: 1.0.4
 kind: Scheduled

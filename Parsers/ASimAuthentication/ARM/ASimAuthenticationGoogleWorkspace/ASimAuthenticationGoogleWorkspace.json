@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimAuthenticationGoogleWorkspace",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "ASIM Authentication parser for Google Workspace",
+            "category": "ASIM",
+            "FunctionAlias": "ASimAuthenticationGoogleWorkspace",
+            "query": "let parser = (\n  disabled: bool = false\n  ) {\n  let GoogleWorkspaceSchema = datatable (\n  event_name_s: string,\n  event_type_s: string,\n  id_uniqueQualifier_s: string,\n  actor_email_s: string,\n  actor_profileId_s: string,\n  IPAddress: string,\n  login_challenge_method_s: string,\n  id_applicationName_s: string,\n  affected_email_address_s: string,\n  is_suspicious_b: bool,\n  is_second_factor_b: bool,\n  login_type_s: string,\n  sensitive_action_name_s: string,\n  login_challenge_status_s: string,\n  TimeGenerated: datetime,\n  _ItemId: string,\n  _ResourceId: string,\n  Computer: string,\n  MG: string,\n  ManagementGroupName: string,\n  RawData: string,\n  SourceSystem: string,\n  TenantId: string\n)[];\n    let EventFieldsLookup = datatable (\n    EventOriginalSubType: string,\n    EventType: string,\n    EventResult: string,\n    DvcAction: string\n)\n        [\n    \"login_success\", \"Logon\", \"Success\", \"Allowed\",\n    \"login_failure\", \"Logon\", \"Failure\", \"Blocked\",\n    \"login_challenge\", \"Logon\", \"\", \"\",\n    \"login_verification\", \"Logon\", \"\", \"\",\n    \"risky_sensitive_action_blocked\", \"Logon\", \"Failure\", \"Blocked\",\n    \"riskay_sensitive_action_allowed\", \"Logon\", \"Success\", \"Allowed\",\n    \"logout\", \"Logoff\", \"Success\", \"Allowed\",\n    \"suspicious_login\", \"Logon\", \"Failure\", \"Blocked\",\n    \"suspicious_login_less_secure_app\", \"Logon\", \"Failure\", \"Blocked\",\n    \"suspicious_programmatic_login\", \"Logon\", \"Failure\", \"Blocked\",\n    \"user_signed_out_due_to_suspicious_session_cookie\", \"Logoff\", \"Success\", \"Allowed\"\n];\n    let ThreatEventTypes = dynamic(['suspicious_login', 'suspicious_login_less_secure_app', 'suspicious_programmatic_login', 'user_signed_out_due_to_suspicious_session_cookie']);\n    let SupportedEventNames = EventFieldsLookup\n        | project EventOriginalSubType;\n    union isfuzzy=true  GoogleWorkspaceSchema, GWorkspace_ReportsAPI_login_CL\n    | where not(disabled)\n    | where event_name_s in (SupportedEventNames)\n    | lookup EventFieldsLookup on $left.event_name_s == $right.EventOriginalSubType\n    | project-rename\n        TargetUsername = actor_email_s,\n        TargetUserId = actor_profileId_s,\n        SrcIpAddr = IPAddress,\n        LogonMethod = login_challenge_method_s,\n        EventOriginalType = event_type_s,\n        EventOriginalUid = id_uniqueQualifier_s\n    | extend\n        TargetUsername = iif(event_name_s in (ThreatEventTypes), affected_email_address_s, TargetUsername),\n        TargetUsernameType = _ASIM_GetUsernameType(TargetUsername),\n        TargetUserIdType = iif(isnotempty(TargetUserId), \"GWorkspaceProfileID\", \"\"),\n        EventSeverity = iif(event_name_s in (ThreatEventTypes), \"High\", \"Informational\")\n    | extend \n        AdditionalFields = bag_pack(\n                      \"Is_Suspicious\",\n                      is_suspicious_b,\n                      \"Is_Second_Factor_b\",\n                      is_second_factor_b,\n                      \"Logon_Type\",\n                      login_type_s,\n                      \"Sensitive_Action_Name\",\n                      sensitive_action_name_s\n                  ),\n        EventResult = case(\n                  event_name_s in ('login_challenge', 'login_verification') and login_challenge_status_s == \"passed\",\n                  \"Success\",\n                  event_name_s in ('login_challenge', 'login_verification') and login_challenge_status_s == \"incorrect_answer_entered\",\n                  \"Failure\",\n                  EventResult\n              ),\n        EventResultDetails = iif(event_name_s in ('login_challenge', 'login_verification') and login_challenge_status_s == \"incorrect_answer_entered\", \"MFA not satisfied\", \"\"),\n        RuleName = case(\n              event_name_s == 'suspicious_login',\n              \"Google has detected a suspicious login for TargetUSerName\",\n              event_name_s == 'suspicious_login_less_secure_app',\n              \"Google has detected a suspicious login for TargetUSerName from a less secure app\",\n              event_name_s == 'suspicious_programmatic_login',\n              \"Google has detected a suspicious programmatic login for TargetUserName\",\n              event_name_s == 'user_signed_out_due_to_suspicious_session_cookie',\n              \"Suspicious session cookie detected for user TargetUserName\",\n              \"\"\n          ),\n        ThreatField = iif(event_name_s in (ThreatEventTypes), \"TargetUserName\", \"\"),\n        ThreatFirstReportedTime = iif(event_name_s in (ThreatEventTypes), TimeGenerated, datetime(null)),\n        ThreatLastReportedTime = iif(event_name_s in (ThreatEventTypes), TimeGenerated, datetime(null))\n    | extend\n        EventOriginalSubType = event_name_s,\n        TargetAppName = \"Google Workspace - login\",\n        Dst = \"Google Workspace\",\n        Application = \"Google Workspace\",\n        TargetAppType = \"SaaS application\",\n        IpAddr = SrcIpAddr,\n        User = TargetUsername,\n        EventCount = int(1),\n        EventStartTime = TimeGenerated,\n        EventEndTime = TimeGenerated,\n        EventProduct = \"Workspace\",\n        EventVendor = \"Google\",\n        Dvc=\"Workspace\",\n        EventSchema = 'Authentication',\n        EventSchemaVersion = '0.1.3',\n        EventUid = _ItemId\n    | project-away \n        *_s,\n        *_b,\n        _ResourceId,\n        Computer,\n        MG,\n        ManagementGroupName,\n        RawData,\n        SourceSystem,\n        TenantId\n};\nparser (disabled = disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

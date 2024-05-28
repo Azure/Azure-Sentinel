@@ -1,0 +1,85 @@
+Parser:
+  Title: File Activity ASIM parser for Azure Blob Storage
+  Version: "0.1.1"
+  LastUpdated: Nov 03, 2023
+Product:
+  Name: Microsoft Azure Blob Storage
+Normalization:
+  Schema: FileEvent
+  Version: "0.1.0"
+References:
+  - Title: ASIM File Schema
+    Link: https://aka.ms/ASimFileEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+  - Title: Storage Analytics log format
+    Link: https://docs.microsoft.comrest/api/storageservices/storage-analytics-log-format
+Description: This ASIM parser supports normalizing Azure Blob Storage events, stored in the StorageBlobLogs table, to the ASIM file activity schema.
+ParserName: ASimFileEventAzureBlobStorage
+EquivalentBuiltInParser: _ASim_FileEvent_AzureBlobStorage
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  // https://docs.microsoft.comrest/api/storageservices/storage-analytics-logged-operations-and-status-messages
+  let parser=(disabled: bool=false)
+  {
+      let bloboperations=datatable(OperationName: string, EventType: string)
+  [
+      "PutBlock", "FileCreated",
+      "PutBlob", "FileCreated",
+      "PutPage", "FileCreated",
+      "CreateContainer", "FolderCreated",
+      "CopyBlob", "FileCopied",
+      "QueryBlobContents", "FileAccessed",
+      "GetBlob", "FileAccessed",
+      "AppendBlock", "FileModified",
+      "ClearPage", "FileModified",
+      "PutBlockFromURL", "FileModified",
+      "DeleteBlob", "FileDeleted",
+      "DeleteContainer", "FolderDeleted"
+  ];
+      StorageBlobLogs
+      | where not(disabled)
+      // **** relevant data filtering;
+      | where OperationName in (bloboperations)
+      //
+      | lookup bloboperations on OperationName
+      | project-rename 
+          EventOriginalUid = CorrelationId
+          ,
+          EventOriginalType=OperationName
+          ,
+          HttpUserAgent=UserAgentHeader
+          ,
+          TargetUrl=Uri
+      | extend 
+          EventCount=int(1)
+          ,
+          EventStartTime=TimeGenerated
+          ,
+          EventEndTime=TimeGenerated
+          //	, EventType :string  ---> see lookup below
+          ,
+          EventResult=iff(StatusText == 'Success', 'Success', 'Failure') 
+          ,
+          EventProduct='Azure File Storage' 
+          ,
+          EventVendor='Microsoft'
+          ,
+          EventSchemaVersion='0.1.0'
+          ,
+          TargetFilePath=tostring(split(TargetUrl, '?')[0]) 
+          ,
+          TargetFilePathType='URL'
+          ,
+          SrcIpAddr=tostring(split(CallerIpAddress, ':')[0])
+          ,
+          SrcPortNumber=tostring(split(CallerIpAddress, ':')[1])
+      | extend TargetFileName=tostring(split(TargetFilePath, '/')[-1])
+      // Aliases
+      | extend 
+          FilePath=TargetFilePath
+  };
+  parser (disabled = disabled)

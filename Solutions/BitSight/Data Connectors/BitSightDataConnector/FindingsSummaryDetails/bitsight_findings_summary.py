@@ -1,349 +1,281 @@
-"""This file contains implementation of findings summary endpoint."""
-import requests
-import base64
-import os
-import json
+"""Module with BitSightFindingsSummary for fetching findings summary data and posting to Sentinel."""
 import hashlib
-from ..SharedCode.logger import applogger
+import json
+import time
+
+from ..SharedCode import consts
+from ..SharedCode.bitsight_client import BitSight
 from ..SharedCode.bitsight_exception import BitSightException
-from ..SharedCode.azure_sentinel import AzureSentinel
-from ..SharedCode.state_manager import StateManager
-
-# fetch data from os environment
-api_token = os.environ.get("API_token")
-findings_summary_table_name = os.environ.get("Findings_Summary_Table_Name")
-connection_string = os.environ["AzureWebJobsStorage"]
-
-# in companies variable user need to pass slash separated names of companies
-# for example: "Actors Films/Goliath Investments LLC/HCL Group/Saperix, Inc."
-companies_str = os.environ.get("Companies")
+from ..SharedCode.get_logs_data import get_logs_data
+from ..SharedCode.logger import applogger
+from ..SharedCode.utils import CheckpointManager
 
 
-class BitSight:
-    """Implementation of data ingestion."""
+class BitSightFindingsSummary(BitSight):
+    """Class for fetching BitSight findings summary data and posting it to Sentinel."""
 
-    def __init__(self) -> None:
-        """Contains class variable."""
-        self.headers = None
-        self.last_data = None
-        self.state = None
-        self.check_environment_var_exist()
+    def __init__(self, start_time) -> None:
+        """Initialize BitSightFindingsSummary object.
+
+        Args:
+            start_time (float): The start time for data fetching.
+        """
+        super().__init__()
+        self.start_time = start_time
+        self.check_env_var = self.check_environment_var_exist(
+            [
+                {"api_token": consts.API_TOKEN},
+                {"Portfolio_Companies_table_name": consts.COMPANY_DETAIL_TABLE_NAME},
+                {"Findings_Summary_Table_Name": consts.FINDINGS_SUMMARY_TABLE_NAME},
+                {"companies_list": consts.COMPANIES},
+            ]
+        )
+        self.checkpoint_obj = CheckpointManager()
+        self.findings_summary_company_state = self.checkpoint_obj.get_state(
+            "findings_summary_company"
+        )
+        self.findings_summary_details_state = self.checkpoint_obj.get_state(
+            "findings_summary_details"
+        )
         self.generate_auth_token()
-        self.get_last_data()
-        self.check_env_var = True
-        self.azuresentinel = AzureSentinel()
-        self.base_url = "https://api.bitsighttech.com"
-        self.findings_summary_endpoint_path = (
-            "/ratings/v1/companies/{}/findings/summary"
+
+    def get_findings_summary_data_into_sentinel(self):
+        """Fetch findings summary data and post it to Sentinel."""
+        if not self.check_env_var:
+            raise BitSightException(
+                "{} {} Some Environment variables are not set hence exiting the app.".format(
+                    self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
+                )
+            )
+        applogger.info(
+            "{} {} Fetching companies from companies table.".format(
+                self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
+            )
         )
-        self.vulnerabilities_url = (
-            "https://service.bitsighttech.com/customer-api/v1/defaults/vulnerabilities"
+        logs_data, flag = get_logs_data()
+        if not flag:
+            applogger.info(
+                "{} {} Companies are not available yet.".format(
+                    self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
+                )
+            )
+            return
+
+        applogger.info(
+            "{} {} Fetched companies from companies table.".format(
+                self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
+            )
+        )
+        logs_data = sorted(logs_data, key=lambda x: x["name_s"])
+        company_names = [data["name_s"] for data in logs_data]
+
+        if consts.COMPANIES.strip().lower() == "all":
+            self.get_all_companies_findings_summary_details(company_names, logs_data)
+        else:
+            self.get_specific_company_findings_summary_details(company_names, logs_data)
+
+    def get_all_companies_findings_summary_details(self, company_names, logs_data):
+        """Fetch findings summary details for all companies and post them to Sentinel.
+
+        Args:
+            company_names (list): List of company names.
+            logs_data (list): List of log data.
+        """
+        count_companies = 0
+        fetching_index = self.get_last_data_index(
+            company_names, self.checkpoint_obj, self.findings_summary_company_state
+        )
+        for company_index in range(fetching_index + 1, len(logs_data)):
+            company_name = logs_data[company_index].get("name_s")
+            if int(time.time()) >= self.start_time + 540:
+                applogger.info(
+                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching from {}.".format(
+                        self.logs_starts_with,
+                        consts.FINDINGS_SUMMARY_FUNC_NAME,
+                        company_name,
+                    )
+                )
+                break
+            company_guid = logs_data[company_index].get("guid_g")
+            self.get_findings_summary_data(company_name, company_guid)
+            count_companies += 1
+            self.checkpoint_obj.save_checkpoint(
+                self.findings_summary_company_state,
+                company_name,
+                "findings_summary",
+                company_name_flag=True,
+            )
+        applogger.info(
+            "{} {} Posted {} companies data.".format(
+                self.logs_starts_with,
+                consts.FINDINGS_SUMMARY_FUNC_NAME,
+                count_companies,
+            )
         )
 
-    def check_environment_var_exist(self):
-        """Stop execution if os environment is not set.
+    def get_specific_company_findings_summary_details(self, company_names, logs_data):
+        """Fetch findings summary details for specified companies and post them to Sentinel.
+
+        Args:
+            company_names (list): List of company names.
+            logs_data (list): List of log data.
+        """
+        applogger.debug(
+            "{} {} Fetching data for specified company names.".format(
+                self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
+            )
+        )
+        count_companies = 0
+        companies_to_get = self.get_specified_companies_list(
+            company_names, consts.COMPANIES
+        )
+        company_names = list(map(str.lower, company_names))
+
+        for company in companies_to_get:
+            if int(time.time()) >= self.start_time + 540:
+                applogger.info(
+                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching after {}".format(
+                        self.logs_starts_with,
+                        consts.FINDINGS_SUMMARY_FUNC_NAME,
+                        company,
+                    )
+                )
+                break
+            index = company_names.index(company)
+            company_name = logs_data[index].get("name_s")
+            company_guid = logs_data[index].get("guid_g")
+            self.get_findings_summary_data(company_name, company_guid)
+            count_companies += 1
+        applogger.info(
+            "{} {} Posted {} companies data.".format(
+                self.logs_starts_with,
+                consts.FINDINGS_SUMMARY_FUNC_NAME,
+                count_companies,
+            )
+        )
+
+    def get_findings_summary_data(self, company_name, company_guid):
+        """Fetch findings summary data for a specific company and post it to Sentinel.
+
+        Args:
+            company_name (str): Name of the company.
+            company_guid (str): GUID of the company.
 
         Raises:
-            BitSightException: will raise if there is any unset variable which is used in this function.
+            BitSightException: Raised when invalid findings summary data is received.
         """
-        env_var = [
-            {"api_token": api_token},
-            {"findings_summary_table_name": findings_summary_table_name},
-            {"companies_list": companies_str},
-        ]
         try:
-            applogger.debug("BitSight: check_environment_var_exist: started checking existence of all custom environment variable")
-            for i in env_var:
-                key, val = next(iter(i.items()))
-                if val is None:
-                    self.check_env_var = False
-                    raise BitSightException(
-                        "BitSight: ENVIRONMENT VARIABLE: {} is not set in the environment.".format(
-                            key
-                        )
+            findings_summary_endpoint = consts.ENDPOINTS[
+                "findings_summary_endpoint_path"
+            ].format(company_guid)
+            findings_summary_url = self.base_url + findings_summary_endpoint
+            findings_summary_results = self.get_bitsight_data(findings_summary_url)
+            if not (findings_summary_results and findings_summary_results[-1]):
+                applogger.info(
+                    "{} {} No new data found.".format(
+                        self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
                     )
-            applogger.debug("BitSight: check_environment_var_exist: All custom environment variable is exist.")
-        except BitSightException as error:
-            applogger.error(error)
-            raise BitSightException()
-        except Exception as error:
-            applogger.exception("BitSight: ENVIRONMENT VARIABLE {}".format(error))
-            raise BitSightException()
+                )
+                return
 
-    def generate_auth_token(self):
-        """Initialize Authentication parameter."""
-        try:
-            applogger.info(
-                "BitSight: Started generating auth header to authenticate BitSight APIs."
+            req_params = {}
+            req_params["fields"] = "name,display_name,description,severity"
+            vulnerabilities_response = self.get_bitsight_data(
+                consts.VULNERABILITIES_URL, query_parameter=req_params
             )
-            api = [api_token, api_token]
-            connector = ":"
-            api = connector.join(api)
-            user_and_pass = base64.b64encode(api.encode()).decode("ascii")
-            headers = {
-                "Accept": "application/json",
-                "X-BITSIGHT-CONNECTOR-NAME-VERSION": "BitSight Security Performance Management for Microsoft Sentinel Data Connector 1.0.0",
-                "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
-            }
-            headers["Authorization"] = "Basic %s" % user_and_pass
-            self.headers = headers
-            applogger.info(
-                "BitSight: Successfully generated the authentication header."
+
+            if not vulnerabilities_response:
+                applogger.info(
+                    "{} {} No vulnerabilities data found.".format(
+                        self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
+                    )
+                )
+                return
+
+            self.create_findings_summary_data(
+                findings_summary_results[-1],
+                vulnerabilities_response,
+                company_name,
+                company_guid,
             )
-        except Exception as error:
-            applogger.exception("BitSight: GENERATE AUTH TOKEN: {}".format(error))
+
+            # delete rating field after post.
+            del findings_summary_results
+        except BitSightException:
+            applogger.error(
+                "{} {} Exception occurred in get_findings_summary_data method.".format(
+                    self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME
+                )
+            )
             raise BitSightException()
-
-    def get_last_data(self):
-        """Fetch last data from checkpoint file.
-
-        Returns:
-            None/json: last_data
-        """
-        try:
-            self.state = StateManager(
-                connection_string=connection_string, file_path="findings_summary"
-            )
-            self.last_data = self.state.get()
-            if self.last_data is not None:
-                self.last_data = json.loads(self.last_data)
-            applogger.debug("BitSight: last checkpoint : {}".format(self.last_data))
         except Exception as err:
-            applogger.exception("BitSight: GET LAST DATA: {}".format(err))
+            applogger.exception(
+                "{} {} Error: {}".format(
+                    self.logs_starts_with, consts.FINDINGS_SUMMARY_FUNC_NAME, err
+                )
+            )
             raise BitSightException()
 
-    def save_checkpoint(self, endpoint, checkpoint_key, value):
-        """Post checkpoint into sentinel.
+    def create_findings_summary_data(
+        self,
+        findings_summary_data,
+        vulnerabilities_response,
+        company_name,
+        company_guid,
+    ):
+        """Create findings summary data and post it to Sentinel.
 
         Args:
-            endpoint (str): endpoint for which user want to save checkpoint
-            checkpoint_key (str): checkpoint key
-            value (str): value to be set in checkpoint key
+            findings_summary_data (dict): Findings summary data.
+            vulnerabilities_response (list): Vulnerabilities response data.
+            company_name (str): Name of the company.
+            company_guid (str): GUID of the company.
         """
-        try:
-            if self.last_data is None:
-                self.last_data = {}
-                self.last_data[endpoint] = {}
-            elif endpoint not in self.last_data:
-                self.last_data[endpoint] = {}
-            self.last_data[endpoint][checkpoint_key] = value
-            self.state.post(json.dumps(self.last_data))
-            applogger.info(
-                "BitSight: save_checkpoint: {} -> {} successfully posted data.".format(
-                    endpoint, checkpoint_key
-                    )
-                )
-            applogger.debug(
-                "BitSight: save_checkpoint: {}: {}: Posted Data: {}".format(
-                    endpoint, checkpoint_key, self.last_data[endpoint][checkpoint_key]
-                    )
-                )
-        except Exception as err:
-            applogger.exception("BitSight: SAVE CHECKPOINT: {}".format(err))
-            raise BitSightException()
+        last_data = self.checkpoint_obj.get_last_data(
+            self.findings_summary_details_state
+        )
+        last_checkpoint_company = self.checkpoint_obj.get_endpoint_last_data(
+            last_data, "findings_summary", company_guid
+        )
+        last_checkpoint_company = (
+            last_checkpoint_company if last_checkpoint_company else []
+        )
+        findings_summary_endpoint = consts.ENDPOINTS[
+            "findings_summary_endpoint_path"
+        ].format(company_guid)
+        checkpoint_key = "{}".format(company_guid)
+        end_date = findings_summary_data.get("end_date")
+        start_date = findings_summary_data.get("start_date")
+        stats = findings_summary_data.get("stats", [])
 
-    def findings_summary_data(
-        self, result, end_date, start_date, company_name, j, data_to_post, company_guid, flag, post_data_status_code, data_is_exist
-    ):
-        """Create data to post into microsoft sentinel."""
-        try:
-            break_flag = False
-            for k in result:
-                if j.get("name") == k.get("display_name"):
-                    j["description"] = k.get("description")
-                    j["severity"] = k.get("severity")
-                    j["end_date"] = end_date
-                    j["start_date"] = start_date
-                    j["Company"] = company_name
-                    body = json.dumps(j, sort_keys=True)
+        for stat in stats:
+            for vulnerability in vulnerabilities_response:
+                if stat.get("name") == vulnerability.get("display_name"):
+                    stat["description"] = vulnerability.get("description")
+                    stat["severity"] = vulnerability.get("severity")
+                    stat["end_date"] = end_date
+                    stat["start_date"] = start_date
+                    stat["Company"] = company_name
+
+                    body = json.dumps(stat, sort_keys=True)
                     data_hash = hashlib.sha512(body.encode())
                     result_hash = data_hash.hexdigest()
-                    data_to_post.append(result_hash)
                     if (
-                        self.last_data
-                        and self.last_data.get("findings_summary", {}).get(company_guid)
-                        and result_hash in self.last_data["findings_summary"][company_guid]
-                    ):
-                        break_flag = True
-                        data_is_exist = True
-                        break
-                    post_data_status_code = self.azuresentinel.post_data(
-                        body, findings_summary_table_name
-                    )
-                    if post_data_status_code != 200:
-                        flag = True
-                        break
-            return break_flag, flag, post_data_status_code, data_is_exist
-        except BitSightException:
-            raise BitSightException()
-        except Exception as error:
-            applogger.exception("BitSight: FINDINGS SUMMARY DATA {}".format(error))
-            raise BitSightException()
+                        last_checkpoint_company
+                        and result_hash not in last_checkpoint_company
+                    ) or not last_checkpoint_company:
+                        last_checkpoint_company.append(result_hash)
+                        self.send_data_to_sentinel(
+                            stat,
+                            consts.FINDINGS_SUMMARY_TABLE_NAME,
+                            company_name,
+                            findings_summary_endpoint,
+                        )
 
-    def get_findings_summary_details(self, company_name, company_guid):
-        """Post the data of findings details.
-
-        Args:
-            company_name (str): Name of the company for which we are fetching data.
-            company_guid (str): Company guid to pass it in url.
-        """
-        try:
-            findings_summary_exception = "BitSight: GET FINDINGS SUMMARY: {}"
-            url = self.base_url + self.findings_summary_endpoint_path.format(
-                company_guid
-            )
-            res_list = requests.get(url=url, headers=self.headers)
-            status_code = None
-            exception_string = "BITSIGHT API( {} ):  Response code: {}"
-            if res_list.json() and res_list.status_code == 200:
-                res_list = res_list.json()
-                stats = res_list[2].get("stats")
-                req_params = {}
-                req_params["fields"] = "name,display_name,description,severity"
-                result = requests.get(
-                    url=self.vulnerabilities_url,
-                    headers=self.headers,
-                    params=req_params,
-                )
-                status_code = result.status_code
-            if status_code == 200 and stats:
-                result = result.json()
-                post_data_status_code = None
-                data_to_post = []
-                flag = False
-                end_date = res_list[2].get("end_date")
-                start_date = res_list[2].get("start_date")
-                data_is_exist = False
-                for j in stats:
-                    break_flag, flag, post_data_status_code, data_is_exist = self.findings_summary_data(
-                        result,
-                        end_date,
-                        start_date,
-                        company_name,
-                        j,
-                        data_to_post,
-                        company_guid,
-                        flag,
-                        post_data_status_code,
-                        data_is_exist,
-                    )
-                    if break_flag:
-                        continue
-                    if flag:
-                        break
-                if post_data_status_code == 200:
-                    applogger.info(
-                        "BitSight: [status code {}] Successfully posted the findings summary details of {} company.".format(
-                            post_data_status_code, company_name
-                        )
-                    )
-                    self.save_checkpoint("findings_summary", company_guid, data_to_post)
-                elif data_is_exist:
-                    applogger.info("BitSight: No new data found.")
-                else:
-                    applogger.error(
-                        "BitSight: [status code {}] Findings summary details of {} company is not posted".format(
-                            post_data_status_code, company_name
-                        )
-                    )
-                    raise BitSightException()
-            elif status_code != 200 and status_code is not None:
-                raise BitSightException(
-                    exception_string.format(
-                        self.vulnerabilities_url, status_code
-                    )
-                )
-            elif res_list.status_code != 200:
-                raise BitSightException(
-                    exception_string.format(
-                        url, res_list.status_code
-                    )
-                )
-        except BitSightException as error:
-            applogger.error(error)
-            raise BitSightException()
-        except requests.exceptions.Timeout as err:
-            # Maybe set up for a retry, or continue in a retry loop
-            applogger.exception(findings_summary_exception.format(err))
-            raise BitSightException()
-        except requests.exceptions.RequestException as err:
-            applogger.exception(findings_summary_exception.format(err))
-            raise BitSightException()
-        except Exception as err:
-            applogger.exception(findings_summary_exception.format(err))
-            raise BitSightException()
-
-    def get_data_of_companies(self, companies, company_list, all_companies):
-        """Get data of companies."""
-        try:
-            count_companies = 0
-            for company in companies:
-                if (
-                    (company["name"].lower()).strip() in company_list
-                ) or all_companies is True:
-                    applogger.info(
-                        "BitSight: Started fetching data for {} company.".format(
-                            company["name"]
-                        )
-                    )
-                    self.get_findings_summary_details(
-                        company["name"], company["guid"]
-                    )
-                    count_companies += 1
-                    applogger.info(
-                        "BitSight: Completed fetching of data for {} company.".format(
-                            company["name"]
-                        )
-                    )
-            if count_companies == 0:
-                applogger.info("BitSight: No valid company name provided.")
-                applogger.info(
-                    "BitSight: Please provide valid company names or pass all to fetch data of all the companies."
-                )
-        except BitSightException:
-            raise BitSightException()
-        except Exception as error:
-            applogger.exception("BitSight: GET DATA OF COMPANIES {}".format(error))
-            raise BitSightException()
-
-    def get_bitsight_data_into_sentinel(self):
-        """Implement API of portfolio, fetch guid of companies."""
-        try:
-            findings_summary_exception = "BitSight: GET FINDINGS SUMMARY: {}"
-            applogger.info(
-                "BitSight: Started fetching companies from portfolio endpoint."
-            )
-            if self.check_env_var:
-                if (companies_str.strip()).lower() == "all":
-                    all_companies = True
-                    company_list = []
-                else:
-                    all_companies = False
-                    company_list = companies_str.split("/")
-                    company_list = [
-                        company_name.lower() for company_name in company_list
-                    ]
-                url = "{}/ratings/v2/portfolio".format(self.base_url)
-                resp = requests.get(url=url, headers=self.headers)
-                if resp.status_code == 200:
-                    response = resp.json()
-                    companies = response["results"]
-                    self.get_data_of_companies(companies, company_list, all_companies)
-                else:
-                    raise BitSightException(
-                        "BITSIGHT API( {} ):  Response code: {} \nError: {}".format(
-                            url, resp.status_code, resp.text
-                        )
-                    )
-        except BitSightException as error:
-            applogger.error(error)
-            raise BitSightException()
-        except requests.exceptions.Timeout as err:
-            applogger.exception(findings_summary_exception.format(err))
-            raise BitSightException()
-        except requests.exceptions.RequestException as err:
-            applogger.exception(findings_summary_exception.format(err))
-            raise BitSightException()
-        except Exception as err:
-            applogger.exception(findings_summary_exception.format(err))
-            raise BitSightException()
+        self.checkpoint_obj.save_checkpoint(
+            self.findings_summary_details_state,
+            last_data,
+            "findings_summary",
+            checkpoint_key,
+            last_checkpoint_company,
+        )

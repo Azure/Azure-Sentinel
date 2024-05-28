@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimFileEventMicrosoftSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "File event ASIM parser for Windows Sysmon",
+            "category": "ASIM",
+            "FunctionAlias": "ASimFileEventMicrosoftSysmon",
+            "query": "let parser = (disabled:bool=false) {\n   // -- Event parser\n   let EventParser = () {\n       Event\n       | where not(disabled)\n       | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId \n       | where Source == \"Microsoft-Windows-Sysmon\" and EventID in (11,23,26)\n       | project-away Source\n       | parse-kv EventData as (\n             RuleName:string,\n             UtcTime:datetime, \n             ProcessGuid:string,\n             ProcessId:string,\n             Image:string,\n             User:string,\n             TargetFilename:string,\n             Hashes:string,\n             CreationUtcTime:datetime\n         )\n         with (regex=@'<Data Name=\"(\\w+)\">{?([^<]*?)}?</Data>')\n       | project-rename \n             ActingProcessGuid = ProcessGuid,\n             ActingProcessId = ProcessId,\n             ActorUsername = User,\n             ActingProcessName = Image,\n             TargetFileCreationTime=CreationUtcTime,\n             TargetFilePath=TargetFilename,\n             EventStartTime=UtcTime\n       | project-away EventData\n    };\n    //\n    // -- WindowsEvent parser\n    let WindowsEventParser=(){\n      WindowsEvent \n      | where not(disabled)\n      | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Provider, Type // , _ItemId \n      | where Provider == \"Microsoft-Windows-Sysmon\" and EventID in (11,23,26)\n      | project-away Provider\n      | extend \n          TargetFileCreationTime=todatetime(EventData.CreationUtcTime),\n          TargetFilePath=tostring(EventData.TargetFilename),\n          ActingProcessName = tostring(EventData.Image),\n          ActingProcessId = tostring(EventData.ProcessId),\n          ActingProcessGuid = tostring(EventData.ProcessGuid),\n          ActorUsername = tostring(EventData.User),\n          EventStartTime = todatetime(EventData.UtcTime),\n          RuleName = tostring(EventData.RuleName),\n          Hashes = tostring(EventData.Hashes)\n       | parse ActingProcessGuid with \"{\" ActingProcessGuid \"}\"\n       | project-away EventData\n    };\n    union isfuzzy=true \n        WindowsEventParser,\n        EventParser \n    | project-rename\n        DvcHostname = Computer,\n        //EventUid = _ItemId,\n        DvcScopeId = _SubscriptionId,\n        DvcId = _ResourceId\n    | extend\n        EventType=iff (EventID == 11, 'FileCreated', 'FileDeleted'),\n        EventProduct = 'Sysmon',\n        EventVendor = 'Microsoft',\n        EventSchema = 'FileEvent',\n        EventSchemaVersion = '0.2.1',\n        EventResult = 'Success',\n        EventSeverity = 'Informational',\n        DvcOs='Windows',\n        TargetFilePathType = 'Windows',\n        DvcIdType = iff (DvcId != \"\", \"AzureResourceId\", \"\"),\n        EventCount = int(1),\n        EventEndTime = EventStartTime,\n        EventOriginalType = tostring(EventID),\n        TargetFileName = tostring(split(TargetFilePath,'\\\\')[-1]),\n        ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),\n        RuleName = iff (RuleName == \"-\", \"\", RuleName)\n     | parse-kv Hashes as (\n         MD5:string,\n         SHA1:string,\n         IMPHASH:string,\n         SHA256:string\n     )\n     | project-rename\n         TargetFileMD5 = MD5,\n         TargetFileSHA1 = SHA1,\n         TargetFileIMPHASH = IMPHASH,\n         TargetFileSHA256 = SHA256\n     | extend\n        Hash=coalesce(TargetFileSHA256, TargetFileSHA1, TargetFileMD5, TargetFileIMPHASH)\n     | extend\n        HashType = tostring(dynamic([\"SHA256\", \"SHA1\", \"MD5\", \"IMPHASH\"])[array_index_of(pack_array(TargetFileSHA256, TargetFileSHA1, TargetFileMD5,TargetFileIMPHASH),Hash)])\n     // -- Typed entity identifiers\n     | extend\n        ActorWindowsUsername = ActorUsername\n     // -- Aliases\n     | extend\n        Process = ActingProcessName,\n        Dvc = DvcHostname,\n        FilePath = TargetFilePath,\n        FileName = TargetFileName,\n        User = ActorUsername\n     | project-away EventID, Hashes\n };\n parser(disabled=disabled) ",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

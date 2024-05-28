@@ -33,9 +33,9 @@ To implement this solution, a few different steps need to be done:
 
 ## 1. Create Service Principal
 The tool requires a service principals for authentication to different services:
-* Authentication to AAD to retrieve user ID's (for assigning incidents in Sentinel)
+* Authentication to Microsoft Entra ID to retrieve user ID's (for assigning incidents in Sentinel)
   
-### AAD Service Principal
+### Microsoft Entra ID Service Principal
 This Service Principal needs to have User.Read.All application permissions.
 This Service Principal is used in the Logic app 'Sync-AssignedUser.
 
@@ -106,7 +106,7 @@ Provide the POST URL of the Sync Comment Function in the 'Send Web Request' Step
 
 ## 3. Deploy Key Vault
 The Key Vault is used to store three secrets:
-* One for the AAD Service Principal
+* One for the Microsoft Entra ID Service Principal
 * One for the Microsoft Sentinel Service Principal
 * One for the JIRA Secret
 
@@ -174,11 +174,11 @@ It uses one connections:
 When a incident is assigned in JIRA, this will assign the correct user inside of Microsoft Sentinel.
 It uses an HTTP trigger which is triggered from a JIRA Automation Rule when the assigned user of an incident is changed.
 
-It will retrieve the client secret for the service principal with permissions to retrieve users in your Azure Active Directory. With this, it will query the user and retrieve the AAD Object ID from that user. Wit this information, we will update the incident in Microsoft Sentinel.
+It will retrieve the client secret for the service principal with permissions to retrieve users in your Microsoft Entra ID. With this, it will query the user and retrieve the Microsoft Entra ID Object ID from that user. Wit this information, we will update the incident in Microsoft Sentinel.
 
 There is a check built-in to make sure that JIRA provides the assigned user. Sometimes it does not and then we don't need to update the incident in Sentinel.
 * One connection to Sentinel through a Managed Identity
-* One connection to a Key Vault to retrieve the Secret for the Service Principal with AAD permissions (also configured when deploying the Logic App)
+* One connection to a Key Vault to retrieve the Secret for the Service Principal with Microsoft Entra ID permissions (also configured when deploying the Logic App)
 
 ### Add a link to the JIRA incident to the Sentinel incident
 
@@ -224,7 +224,7 @@ Provide a name for the rule and for conditions choose 'Analytics Rule Name conta
 If you only want to sync certain incidents, choose the right condition.
 
 For actions, choose 'Run Playbook' and select the 'Sync-Incidents' Playbook.
-![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Playbooks/Sync-IncidentsWithJIRA/Images/Sentinel%20-%20Automation%20Rule.png)
+![Automation Rule](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Sentinel%20-%20Automation%20Rule.png)
 
 ## Conclusion
 After this solution, you are able to work on Microsoft Sentinel incidents while staying in your trusted ITSM tool.

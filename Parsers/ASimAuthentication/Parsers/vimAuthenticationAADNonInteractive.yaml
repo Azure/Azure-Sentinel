@@ -1,9 +1,9 @@
 Parser:
-  Title: Authentication ASIM filtering parser for AAD non-interactive sign-in logs
-  Version: '0.2.1'
-  LastUpdated: Sept 18, 2023
+  Title: Authentication ASIM filtering parser for Microsoft Entra ID non-interactive sign-in logs
+  Version: '0.2.2'
+  LastUpdated: Mar 19, 2024
 Product:
-  Name: AAD
+  Name: Microsoft Entra ID
 Normalization:
   Schema: Authentication
   Version: '0.1.0'
@@ -13,7 +13,7 @@ References:
 - Title: Authentication schema documentation
   Link: https://aka.ms/ASimAuthenticationDoc
 Description: |
-    This ASIM parser supports filtering and normalizing Azure Active Directory Non Interactive sign in logs, stored in the AADNonInteractiveUserSignInLogs table, to the ASIM Authentication schema.
+    This ASIM parser supports filtering and normalizing Microsoft Entra ID Non Interactive sign in logs, stored in the AADNonInteractiveUserSignInLogs table, to the ASIM Authentication schema.
 ParserName: vimAuthenticationAADNonInteractiveUserSignInLogs
 EquivalentBuiltInParser: _Im_Authentication_AADNonInteractiveUserSignInLogs
 ParserParams:
@@ -23,14 +23,32 @@ ParserParams:
   - Name: endtime
     Type: datetime
     Default: datetime(null)
-  - Name: targetusername_has
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
     Type: string
     Default: '*'
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  let FailedReason=datatable(ResultType:string, EventResultDetails:string)[
+  let FailedReason=datatable(ResultType: string, EventResultDetails: string)[
     '0', 'Success',
     '53003', 'Logon violates policy',
     '50034', 'No such user or password',
@@ -57,60 +75,120 @@ ParserQuery: |
     '50020', 'Logon violates policy',
     '50074', 'Logon violates policy', 
     '70008', 'Password expired',
-    '700016',  'No such user or password', 
+    '700016', 'No such user or password', 
     '500011', 'No such user or password' 
-    ];
-  let AADNIAuthentication=(starttime:datetime=datetime(null), endtime:datetime=datetime(null), targetusername_has:string="*", disabled:bool=false){
-    AADNonInteractiveUserSignInLogs | where not(disabled)
-    // ************************************************************************* 
-    //       <Prefilterring>
-    // *************************************************************************
-    | where 
-      (isnull(starttime)   or TimeGenerated >= starttime) 
-      and (isnull(endtime)     or TimeGenerated <= endtime)
-      and (targetusername_has=='*' or (UserPrincipalName  has targetusername_has ))
-    // ************************************************************************* 
-    //       </Prefilterring>
-    // ************************************************************************* 
-    | extend
-        EventVendor = 'Microsoft'
-        , EventProduct = 'AAD'
-        , EventSchemaVersion='0.1.0'
-        , EventCount=int(1)
-        , EventResult = iff (ResultType ==0, 'Success', 'Failure')
-        , EventOriginalResultDetails = coalesce(ResultDescription, ResultType)
-        , EventStartTime = TimeGenerated
-        , EventEndTime= TimeGenerated
-        , EventType= 'Logon'
-        , SrcDvcId=tostring(todynamic(DeviceDetail).deviceId)
-        , SrcDvcHostname =tostring(todynamic(DeviceDetail).displayName)
-        , SrcDvcOs=tostring(todynamic(DeviceDetail).operatingSystem)
-        , Location = todynamic(LocationDetails)
-        , TargetAppId = ResourceIdentity 
-        , EventSubType = 'NonInteractive'
-        , TargetUsernameType='UPN'
-        , TargetUserIdType='AADID'
-        , TargetAppName=ResourceDisplayName
-    | extend
-        SrcGeoCity=tostring(Location.city)
-        , SrcGeoCountry=tostring(Location.countryOrRegion)
-        , SrcGeoLatitude=toreal(Location.geoCoordinates.latitude)
-        , SrcGeoLongitude=toreal(Location.geoCoordinates.longitude)
-    | project-rename
-        EventOriginalUid =Id
-        , LogonMethod = AuthenticationRequirement
-        , HttpUserAgent=UserAgent
-        , TargetSessionId=CorrelationId
-        , TargetUserId = UserId
-        , TargetUsername=UserPrincipalName
-        , SrcDvcIpAddr=IPAddress
-        | lookup FailedReason on ResultType
-    | extend
+  ];
+  let AADNIAuthentication=(starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      username_has_any: dynamic = dynamic([]),
+      targetappname_has_any: dynamic = dynamic([]),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      srchostname_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      disabled: bool=false) {
+      AADNonInteractiveUserSignInLogs
+      | where not(disabled)
+      // ************************************************************************* 
+      //       <Prefilterring>
+      // *************************************************************************
+      | where 
+          (isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and ((array_length(username_has_any) == 0) or UserPrincipalName has_any (username_has_any))
+          and ((array_length(targetappname_has_any) == 0) or ResourceDisplayName has_any (targetappname_has_any))
+          and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(IPAddress, srcipaddr_has_any_prefix)))
+          and (array_length(srchostname_has_any) == 0 or tostring(todynamic(DeviceDetail).displayName) has_any (srchostname_has_any))
+          and ((array_length(eventtype_in) == 0) or "Logon" in~ (eventtype_in))
+      // eventresultdetails_in filtering done later in the parser
+      // eventresult filtering done later in the parser
+      // ************************************************************************* 
+      //       </Prefilterring>
+      // ************************************************************************* 
+      | extend
+          EventVendor = 'Microsoft'
+          ,
+          EventProduct = 'Entra ID'
+          ,
+          EventSchemaVersion='0.1.0'
+          ,
+          EventCount=int(1)
+          ,
+          EventResult = iff (ResultType == 0, 'Success', 'Failure')
+          ,
+          EventOriginalResultDetails = coalesce(ResultDescription, ResultType)
+          ,
+          EventStartTime = TimeGenerated
+          ,
+          EventEndTime= TimeGenerated
+          ,
+          EventType= 'Logon'
+          ,
+          SrcDvcId=tostring(todynamic(DeviceDetail).deviceId)
+          ,
+          SrcHostname =tostring(todynamic(DeviceDetail).displayName)
+          ,
+          SrcDvcOs=tostring(todynamic(DeviceDetail).operatingSystem)
+          ,
+          Location = todynamic(LocationDetails)
+          ,
+          TargetAppId = ResourceIdentity 
+          ,
+          EventSubType = 'NonInteractive'
+          ,
+          TargetUsernameType='UPN'
+          ,
+          TargetUserIdType='EntraID'
+          ,
+          TargetAppName=ResourceDisplayName
+      // Filtering on 'eventresult'
+      | where (eventresult == "*" or (EventResult == eventresult))
+      | extend
+          SrcGeoCity=tostring(Location.city)
+          ,
+          SrcGeoCountry=tostring(Location.countryOrRegion)
+          ,
+          SrcGeoLatitude=toreal(Location.geoCoordinates.latitude)
+          ,
+          SrcGeoLongitude=toreal(Location.geoCoordinates.longitude)
+      | project-rename
+          EventOriginalUid =Id
+          ,
+          LogonMethod = AuthenticationRequirement
+          ,
+          HttpUserAgent=UserAgent
+          ,
+          TargetSessionId=CorrelationId
+          ,
+          TargetUserId = UserId
+          ,
+          TargetUsername=UserPrincipalName
+          ,
+          SrcIpAddr = IPAddress
+      // mapping ASimMatchingUsername
+      | extend temp_isMatchTargetUsername=TargetUsername has_any(username_has_any)
+      // ActorUsername not coming from source. Hence, not mapped.
+      | extend ASimMatchingUsername = case(
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      "No match"
+                                  )
+      | lookup FailedReason on ResultType
+      // filtering on 'eventresultdetails_in'
+      | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+      | extend
           User=TargetUsername
-        , LogonTarget=ResourceIdentity
-        , Dvc=EventVendor
-        // -- Entity identifier explicit aliases
-        , TargetUserUpn = TargetUsername
-        , TargetUserAadId = TargetUserId
+          ,
+          LogonTarget=ResourceIdentity
+          ,
+          Dvc=EventVendor
+          // -- Entity identifier explicit aliases
+          ,
+          TargetUserUpn = TargetUsername
+          ,
+          TargetUserAadId = TargetUserId
   };
-  AADNIAuthentication(starttime, endtime, targetusername_has, disabled)
+  AADNIAuthentication(starttime=starttime, endtime=endtime, username_has_any=username_has_any, targetappname_has_any=targetappname_has_any, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, eventtype_in=eventtype_in, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)

@@ -1,8 +1,8 @@
 id: f2ae482d-999c-452e-b108-31880aa99620
 Function:
   Title: Parser for ExchangeConfiguration
-  Version: '1.0.1'
-  LastUpdated: '2023-09-13'
+  Version: '1.6.2'
+  LastUpdated: '2024-04-12'
 Category: Microsoft Sentinel Parser
 FunctionName: ExchangeConfiguration
 FunctionAlias: ExchangeConfiguration
@@ -10,20 +10,33 @@ FunctionParams:
     - Name: SpecificSectionList
       Type: string
       Description: The list of section to query. Default is all.
-      DefaultValue: ''
+      Default: ''
     - Name: SpecificConfigurationDate
       Type: string
       Description: The date to query. Default is last 7 days.
-      DefaultValue: 'lastdate'
+      Default: 'lastdate'
     - Name: SpecificConfigurationEnv
       Type: string
       Description: The environment to query. Default is all.
-      DefaultValue: 'All'
+      Default: 'All'
     - Name: Target
       Type: string
       Description: The target environment to query. Valid values are "On-Premises" or "Online". Default is "On-Premises".
-      DefaultValue: 'On-Premises'
+      Default: 'On-Premises'
 FunctionQuery: |
+    // Version:         1.6.2
+    // Last Updated:    12/04/2024
+    //  
+    // DESCRIPTION:
+    // This parser takes raw ESI Exchange Configuration Collector to pivot raw information and retrieve a specific date configuration. This is the same parser for Exchange On-Premises version and Exchange online version of the solution.
+    //
+    // USAGE:
+    // Parameters : 4 parameters to add during creation. 
+    //    1. SpecificSectionList, type string, default value ""
+    //    2. SpecificConfigurationDate, type string, default value "lastdate"
+    //    3. Target, type string, default value "On-Premises"
+    //    4. SpecificConfigurationEnv, type string, default value "All"
+    //
     // Parameters simulation
     // If you need to test the parser execution without saving it as a function, uncomment the bellow variable to simulate parameters values.
     //
@@ -33,37 +46,285 @@ FunctionQuery: |
     // let Target = 'On-Premises';
     //
     // Parameters definition
-    let _SpecificSectionList = split(SpecificSectionList,',');
-    let _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate),"lastdate",tostring(SpecificConfigurationDate));
-    let _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == "all","All",tostring(SpecificConfigurationEnv)),',');
-    let _target = iff(isnull(Target) or isempty(Target),"On-Premises",Target);
+    let _SpecificSectionList = split(SpecificSectionList, ',');
+    let _configurationDate = iff(isnull(SpecificConfigurationDate) or isempty(SpecificConfigurationDate), "lastdate", tostring(SpecificConfigurationDate));
+    let _configurationEnv = split(iff(isnull(SpecificConfigurationEnv) or isempty(SpecificConfigurationEnv) or tolower(SpecificConfigurationEnv) == "all", "All", tostring(SpecificConfigurationEnv)), ',');
+    let _target = iff(isnull(Target) or isempty(Target), "On-Premises", Target);
     // Building Base Request
-    let _targetDate = iff(_configurationDate == "lastdate", ago(7d), iif(_configurationDate == "alllife",ago(1080d),todatetime(_configurationDate)));
-    let baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*,ESIExchange* 
+    let _targetDate = iff(_configurationDate == "lastdate", ago(7d), iif(_configurationDate == "alllife", ago(1080d), todatetime(_configurationDate)));
+    let baseRequest = materialize (union isfuzzy=true withsource=TableName ESIAPIExchange*, ESIExchange*
         | where TimeGenerated > _targetDate
         | extend Source = iff (TableName contains "Online", "Online", "On-Premises")
         | where _target == 'All' or Source == _target
-        | extend ScopedEnvironment = iff(_configurationEnv contains "All", "All",ESIEnvironment_s) 
+        | extend ScopedEnvironment = iff(_configurationEnv contains "All", "All", ESIEnvironment_s)
         | where ScopedEnvironment in (_configurationEnv)
         | extend EntryDate = todatetime(EntryDate_s)
         | project-away EntryDate_s);
-    // Find Config Id (can be multiple id in all)
+         // Find Config Id (can be multiple id in all)
     let findConfigDate = baseRequest
-        | extend Env =strcat(Source, "_",ESIEnvironment_s)
-        | summarize count() by GenerationInstanceID_g,Env,EntryDate
-        | extend distance = iff(_configurationDate == "lastdate" or _configurationDate == "alllife", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))
-        | top-nested of Env by Ignore0=max(1), 
-            top-nested 1 of distance by Ignore1 = min(distance) asc nulls last, 
-            top-nested of GenerationInstanceID_g by Ignore2=max(2) 
-        | project GenerationInstanceID_g;
+     | extend Env =strcat(Source, "_", ESIEnvironment_s)
+     | summarize count() by GenerationInstanceID_g, Env, EntryDate
+     | extend distance = iff(_configurationDate == "lastdate" or _configurationDate == "alllife", now() - EntryDate, (EntryDate - todatetime(_configurationDate)))
+     | top-nested of Env by Ignore0=max(1),
+         top-nested 1 of distance by Ignore1 = min(distance) asc nulls last,
+         top-nested of GenerationInstanceID_g by Ignore2=max(2)
+     | project GenerationInstanceID_g;
     // Parse Result
-    let ParseExchangeConfig = () { baseRequest 
+    let ParseExchangeConfig = () { baseRequest
      | join kind=leftsemi (findConfigDate) on $left.GenerationInstanceID_g == $right.GenerationInstanceID_g
      | where isempty(_SpecificSectionList[0]) or Section_s in (_SpecificSectionList)
      | extend TimeGenerated = EntryDate
      | extend Identity = IdentityString_s
      | extend CmdletResultValue = parse_json(rawData_s)
-     | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s
-     | project-away TenantId,SourceSystem,Type,EntryDate
+     | extend Errr=CmdletResultValue.Error
+     | extend RawName=tostring(CmdletResultValue.Name)
+     | extend DomainNetBi=tostring(CmdletResultValue.DomainNetBios)
+     | extend DCFQD=CmdletResultValue.DCFQDN
+     | extend DomainFQD=CmdletResultValue.DomainFQDN
+     | extend Site=CmdletResultValue.Sites
+     | extend Domain=CmdletResultValue.Domains
+     | extend GlobalCatalog=CmdletResultValue.GlobalCatalogs
+     | extend Identt=CmdletResultValue.Identity
+     | extend JournalRecipien=CmdletResultValue.JournalRecipient
+     | extend WhenCreat=tostring(CmdletResultValue.WhenCreated)
+     | extend Outcome = replace_strings(
+        WhenCreat,
+        dynamic(['/Date(', ')/']), // Lookup strings
+        dynamic(['', '']) // Replacements
+        )
+     | extend WhenCreateds= unixtime_milliseconds_todatetime(tolong(Outcome))  
+     | extend WhenChange=tostring(CmdletResultValue.WhenChanged)
+     | extend OutcomeChange = replace_strings(
+        WhenChange,
+        dynamic(['/Date(', ')/']), // Lookup strings
+        dynamic(['', '']) // Replacements
+        )
+     | extend WhenChanges= unixtime_milliseconds_todatetime(tolong(OutcomeChange))
+     | extend Usr= CmdletResultValue.User
+    | extend Den=CmdletResultValue.Deny
+    | extend IsInheritd=CmdletResultValue.IsInherited
+    | extend UserStr=CmdletResultValue.UserString
+    | extend NetworkEncryp=CmdletResultValue.NetworkEncryption
+    | extend AutoDagBitlockerEnable=CmdletResultValue.AutoDagBitlockerEnabled
+    | extend Servrs=CmdletResultValue.Servers
+    | extend DatacenterActivMode=CmdletResultValue.DatacenterActivationMode
+    | extend WitnessServe=CmdletResultValue.WitnessServer
+    | extend WitnessDirect=CmdletResultValue.WitnessDirectory
+    | extend AlternateWitnessSer=CmdletResultValue.AlternateWitnessServer
+    | extend AlternateWitnessDirect=CmdletResultValue.AlternateWitnessDirectory
+    | extend ThirdPartyReplic=CmdletResultValue.ThirdPartyReplication
+    | extend ReplicaPort=CmdletResultValue.ReplicationPort
+    | extend AdminAuditLogEnable=CmdletResultValue.AdminAuditLogEnabled
+    | extend AdminAuditLogCmdls=CmdletResultValue.AdminAuditLogCmdlets
+    | extend AdminAuditLogExclCmdlets=CmdletResultValue.AdminAuditLogExcludedCmdlets
+    | extend AutoForwardEnable=CmdletResultValue.AutoForwardEnabled
+    | extend AccessRight=CmdletResultValue.AccessRights
+    | extend ExtendedRight=CmdletResultValue.ExtendedRights
+    | extend AccessRightsStr=CmdletResultValue.AccessRightsString
+    | extend ExtendedRightsStr= CmdletResultValue.ExtendedRightsString
+    | extend PG= tostring(CmdletResultValue.Parentgroup)
+    | extend lvl= tostring(CmdletResultValue.Level)
+    | extend objclss=tostring(CmdletResultValue.ObjectClass)
+    | extend MemPath=tostring(CmdletResultValue.MemberPath)
+    | extend ObjGu=CmdletResultValue.ObjectGuid
+    | extend LstLogon=CmdletResultValue.LastLogon
+    | extend LstPwd=CmdletResultValue.LastPwdSet
+    | extend Enbld= CmdletResultValue.Enabled
+    | extend Hasmx=CmdletResultValue.HasMbx
+    | extend CanName=CmdletResultValue.CanonicalName
+    | extend UPN=CmdletResultValue.UserPrincipalName
+    | extend DNValue=CmdletResultValue.DN
+    | extend lstpwds=CmdletResultValue.LastLogonString
+    | extend lspwdsets=CmdletResultValue.LastPwdSetString
+    | extend domns=CmdletResultValue.domains
+    | extend sentt=CmdletResultValue.SentTo
+    | extend blindcpyt=CmdletResultValue.BlindCopyTo
+    | extend cpyt=CmdletResultValue.CopyTo
+    | extend RedirectMsgT=CmdletResultValue.RedirectMessageTo
+    | extend stat=CmdletResultValue.State
+    | extend Mod=CmdletResultValue.Mode
+    | extend Prior=CmdletResultValue.Priority
+    | extend SentToS=CmdletResultValue.SentToString
+    | extend BlindCpyTS=CmdletResultValue.BlindCopyToString
+    | extend CopyTS=CmdletResultValue.CopyToString
+    | extend RedirectMSGTS=CmdletResultValue.RedirectMessageToString
+    | extend err=CmdletResultValue.Error
+    | extend ConnType=CmdletResultValue.ConnectorType
+    | extend ConnSour=CmdletResultValue.ConnectorSource
+    | extend Cmnt=CmdletResultValue.Comment
+    | extend SenderIpAdr=CmdletResultValue.SenderIPAddresses
+    | extend SenderDomain=CmdletResultValue.SenderDomains
+    | extend trustedOrgs=CmdletResultValue.TrustedOrganizations
+    | extend AssociatedAcceptedDomains=CmdletResultValue.AssociatedAcceptedDomainsRequireTls
+    | extend RestrictDomainsToIPAddress=CmdletResultValue.RestrictDomainsToIPAddresses
+    | extend RestrictDomainsToCert=CmdletResultValue.RestrictDomainsToCertificate
+    | extend CloudServicesMailEnabl=CmdletResultValue.CloudServicesMailEnabled
+    | extend TreatMessagesAsIntern=CmdletResultValue.TreatMessagesAsInternal
+    | extend TlsSenderCertificateNam=CmdletResultValue.TlsSenderCertificateName
+    | extend EFTestMod=CmdletResultValue.EFTestMode
+    | extend ScanAndDropRecipien=CmdletResultValue.ScanAndDropRecipients
+    | extend EFSkipLstIP=CmdletResultValue.EFSkipLastIP
+    | extend EFSkipIP=CmdletResultValue.EFSkipIPs
+    | extend EFSkipGateway=CmdletResultValue.EFSkipMailGateway
+    | extend EFUser=CmdletResultValue.EFUsers
+    | extend NameHashGu=CmdletResultValue.NameHashGuid
+    | extend OrganizationalUnitRoot=CmdletResultValue.OrganizationalUnitRootInternal
+    | extend AdminDisplay= CmdletResultValue.AdminDisplayName
+    | extend ExchangeVersn=CmdletResultValue.ExchangeVersion
+    | extend DataObj= CmdletResultValue.DataObject
+    | extend Ap=CmdletResultValue.App
+    | extend RoleAssign= CmdletResultValue.RoleAssignee
+    | extend RoleAssigneeNam=CmdletResultValue.RoleAssigneeName
+    | extend OriginatingServe=CmdletResultValue.OriginatingServer
+    | extend OrganizationI=CmdletResultValue.OrganizationId
+    | extend AutoForwardEnabl=CmdletResultValue.AutoForwardEnabled
+    | extend PSComputerNam=CmdletResultValue.PSComputerName
+    | extend RunspaceI=CmdletResultValue.RunspaceId
+    | extend PSShowComputerNam=CmdletResultValue.PSShowComputerName
+    | extend AssignmentMet=CmdletResultValue.AssignmentMethod
+    | extend DistinguishedNam=CmdletResultValue.DistinguishedName
+    | extend MapiHttpEnable=CmdletResultValue.MapiHttpEnabled
+    | extend MailTipsAllTipsEnable=CmdletResultValue.MailTipsAllTipsEnabled
+    | extend MailTipsExternalRecipientsTipsEnable=CmdletResultValue.MailTipsExternalRecipientsTipsEnabled
+    | extend MailTipsGroupMetricsEnable=CmdletResultValue.MailTipsGroupMetricsEnabled
+    | extend MailTipsLargeAudienceThresho=CmdletResultValue.MailTipsLargeAudienceThreshold
+    | extend MailTipsMailboxSourcedTipsEnable=CmdletResultValue.MailTipsMailboxSourcedTipsEnabled
+    | extend DomainNam=CmdletResultValue.DomainName
+    | extend  DomainTyp=CmdletResultValue.DomainType
+    | extend MatchSubDomain=CmdletResultValue.MatchSubDomains
+    | extend EffectiveUserNam=CmdletResultValue.EffectiveUserName
+    | extend  AssignmentChan=CmdletResultValue.AssignmentChain
+    | extend  RoleAssigneeTyp=CmdletResultValue.RoleAssigneeType
+    | extend  RoleAssignmentDelegationTyp=CmdletResultValue.RoleAssignmentDelegationType
+    | extend CustomRecipientWriteScop=CmdletResultValue.CustomRecipientWriteScope
+    | extend CustomResourceScop=CmdletResultValue.CustomResourceScope
+    | extend CustomConfigWriteScop=CmdletResultValue.CustomConfigWriteScope
+    | extend  RecipientReadScop=CmdletResultValue.RecipientReadScope
+    | extend  ConfigReadScop=CmdletResultValue.ConfigReadScope
+    | extend  RecipientWriteScop=CmdletResultValue.RecipientWriteScope
+    | extend ConfigWriteScop=CmdletResultValue.ConfigWriteScope
+    | extend IsVali=CmdletResultValue.IsValid
+    | extend ExchangeObjectI=CmdletResultValue.ExchangeObjectId
+    | extend Gui=CmdletResultValue.Guid
+    | extend ObjectCategor=CmdletResultValue.ObjectCategory
+    | extend  ObjectStat=CmdletResultValue.ObjectState
+    | project-rename ConfigurationInstanceID = GenerationInstanceID_g, ESIEnvironment = ESIEnvironment_s, Section = Section_s, PSCmdlet = PSCmdL_s, CmdletResultType = ExecutionResult_s, WhenChanged = WhenChanged_t, WhenCreated = WhenCreated_t, Name = Name_s,Error=Errr,
+      RawDataName=RawName,
+      DomainNetBios=DomainNetBi,
+      DCFQDN=DCFQD,
+      DomainFQDN=DomainFQD,
+      Sites=Site,
+      Domains=Domain,
+      GlobalCatalogs=GlobalCatalog,
+      RAWIdentity=Identt,
+      JournalRecipient=JournalRecipien,
+      Changed=WhenChanges,
+      Created= WhenCreateds,
+      User=Usr,
+      Deny=Den,
+      IsInherited=IsInheritd,
+      UserString=UserStr,
+      NetworkEncryption=NetworkEncryp,
+      AutoDagBitlockerEnabled=AutoDagBitlockerEnable,
+      Servers=Servrs,
+      DatacenterActivationMode=DatacenterActivMode,
+      WitnessServer=WitnessServe,
+      WitnessDirectory=WitnessDirect,
+      AlternateWitnessServer=AlternateWitnessSer,
+      AlternateWitnessDirectory=AlternateWitnessDirect,
+      ThirdPartyReplication=ThirdPartyReplic,
+      ReplicationPort=ReplicaPort,
+      AdminAuditLogEnabled=AdminAuditLogEnable,
+      AdminAuditLogCmdlets=AdminAuditLogCmdls,
+      AdminAuditLogExcludedCmdlets=AdminAuditLogExclCmdlets,
+      AutoForwardEnabled=AutoForwardEnable,
+      AccessRights=AccessRight,
+      ExtendedRights=ExtendedRight,
+      AccessRightsString=AccessRightsStr,
+      ExtendedRightsString=ExtendedRightsStr,
+      ParentGroup=PG,
+        Level=lvl,
+        ObjectClass=objclss,
+        MemberPath=MemPath,
+        ObjectGuid=ObjGu,
+        LastLogon=LstLogon,
+        LastPwdSet=LstPwd,
+        Enabled=Enbld,
+        HasMbx=Hasmx,
+        CanonicalName=CanName,
+        UserPrincipalName=UPN,
+        DN=DNValue,
+        LastLogonString=lstpwds,
+        LastPwdSetString=lspwdsets,
+        domains=domns,
+        SentTo=sentt,
+        BlindCopyTo=blindcpyt,
+        CopyTo=cpyt,
+        RedirectMessageTo=RedirectMsgT,
+        State=stat,
+        Mode=Mod,
+        Priority=Prior,
+        SentToString=SentToS,
+        BlindCopyToString=BlindCpyTS,
+        CopyToString=CopyTS,
+        RedirectMessageToString=RedirectMSGTS,
+        ConnectorType=ConnType,
+        ConnectorSource=ConnSour,
+        Comment=Cmnt,
+        SenderIPAddresses=SenderIpAdr,
+        SenderDomains=SenderDomain,
+        TrustedOrganizations=trustedOrgs,
+        AssociatedAcceptedDomainsRequireTls=AssociatedAcceptedDomains,
+        RestrictDomainsToIPAddresses=RestrictDomainsToIPAddress,
+        RestrictDomainsToCertificate=RestrictDomainsToCert,
+        CloudServicesMailEnabled=CloudServicesMailEnabl,
+        TreatMessagesAsInternal=TreatMessagesAsIntern,
+        TlsSenderCertificateName=TlsSenderCertificateNam,
+        EFTestMode=EFTestMod,
+        ScanAndDropRecipients=ScanAndDropRecipien,
+        EFSkipLastIP=EFSkipLstIP,
+        EFSkipIPs=EFSkipIP,
+        EFSkipMailGateway=EFSkipGateway,
+        EFUsers=EFUser,
+        NameHashGuid=NameHashGu,
+        OrganizationalUnitRootInternal=OrganizationalUnitRoot,
+        AdminDisplayName=AdminDisplay,
+        ExchangeVersion=ExchangeVersn,
+        App=Ap,
+        AssignmentMethod=AssignmentMet,
+        RoleAssignee=RoleAssign,
+        RoleAssigneeName=RoleAssigneeNam,
+        OriginatingServer=OriginatingServe,
+        OrganizationId=OrganizationI,
+        PSComputerName=PSComputerNam,
+        RunspaceId=RunspaceI,
+        PSShowComputerName=PSShowComputerNam,
+        DataObject=DataObj,
+        DistinguishedName=DistinguishedNam,
+         MapiHttpEnabled=MapiHttpEnable,
+        MailTipsAllTipsEnabled=MailTipsAllTipsEnable,
+        MailTipsExternalRecipientsTipsEnabled= MailTipsExternalRecipientsTipsEnable,
+        MailTipsGroupMetricsEnabled=MailTipsGroupMetricsEnable,
+        MailTipsLargeAudienceThreshold=MailTipsLargeAudienceThresho,
+        MailTipsMailboxSourcedTipsEnabled=MailTipsMailboxSourcedTipsEnable,
+        DomainName=DomainNam,
+        DomainType=DomainTyp,
+        MatchSubDomains=MatchSubDomain,
+        EffectiveUserName=EffectiveUserNam,
+        AssignmentChain=AssignmentChan,
+        RoleAssigneeType=RoleAssigneeTyp,
+        RoleAssignmentDelegationType=RoleAssignmentDelegationTyp,
+        CustomRecipientWriteScope=CustomRecipientWriteScop,
+        CustomResourceScope=CustomResourceScop,
+        CustomConfigWriteScope=CustomConfigWriteScop,
+        RecipientReadScope=RecipientReadScop,
+        ConfigReadScope=ConfigReadScop,
+        RecipientWriteScope=RecipientWriteScop,
+        ConfigWriteScope=ConfigWriteScop,
+        IsValid=IsVali,
+        Guid=Gui,
+        ObjectCategory=ObjectCategor,
+       ObjectState=ObjectStat
+    | project-away TenantId,SourceSystem,Type,EntryDate
     };
     ParseExchangeConfig

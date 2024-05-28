@@ -10,6 +10,9 @@
         ],
         "lastUpdateTime": "2022-10-19T00:00:00.000Z",
         "tags": [ "Attacks" ],
+        "postDeployment": [
+            "After deployment, open the playbook to configure all connections and press save."
+        ],
         "support": {
             "tier": "community"
         },
@@ -21,14 +24,15 @@
                 "version": "1.0.0",
                 "title": "Enrich Dynatrace Application Security Attack with related Microsoft Sentinel Security Alerts",
                 "notes": [
-                    "Initial version"
+                    "Initial version",
+                    "Updated user-agent strings used when calling Dynatrace REST API's"
                 ]
             }
         ]
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "EnrichDynatraceAppSecAttackWithSecurityAlerts",
+            "defaultValue": "EnrichDynatraceAppSecAttackWithSecAlerts",
             "type": "string",
             "metadata": {
                 "description": "Incident trigger"
@@ -75,12 +79,14 @@
             "name": "[variables('AzureMonitorLogsConnectionName')]",
             "location": "[resourceGroup().location]",
             "properties": {
-                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
-                "customParameterValues": {
-                },
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
-                }
+                },
+                "parameterValueSet": {
+                    "name": "managedIdentityAuth",
+                    "values": {}
+                },
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]"
             }
         },
         {
@@ -94,15 +100,15 @@
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
                     "type": "Microsoft.Web/locations/managedApis"
                 },
-                "parameterValueType": "Alternative",
-                "alternativeParameterValues": {
-                    "vaultName": "[parameters('KeyvaultName')]"
+                "parameterValueSet": {
+                    "name": "oauthMI",
+                    "values": {
+                        "vaultName": {
+                            "value": "[parameters('KeyvaultName')]"
+                        }
+                    }
                 },
-                "displayName": "[variables('KeyvaultConnectionName')]",
-                "nonSecretParameterValues": {
-                    "vaultName": "[parameters('KeyvaultName')]"
-                }
-
+                "displayName": "[variables('KeyvaultConnectionName')]"
             }
         },
         {
@@ -112,7 +118,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "hidden-SentinelTemplateName": "EnrichDynatraceAppSecAttackMSDefender365-Incident",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelTemplateVersion": "1.0.0"
             },
             "identity": {
                 "type": "SystemAssigned"
@@ -362,7 +368,8 @@
                             "type": "Http",
                             "inputs": {
                                 "headers": {
-                                    "Authorization": "Api-Token @{body('Get_Dynatrace_Access_Token')?['value']}"
+                                    "Authorization": "Api-Token @{body('Get_Dynatrace_Access_Token')?['value']}",
+                                    "User-Agent" : "dynatrace-microsoft-sentinel/3.x/playbooks/enrichdynatraceappsecattackwithsecurityalerts"
                                 },
                                 "method": "GET",
                                 "queries": {
@@ -405,7 +412,8 @@
                                         "body": "@variables('logentries')",
                                         "headers": {
                                             "Authorization": "Api-Token @{body('Get_Dynatrace_Access_Token')?['value']}",
-                                            "Content-Type": "application/json; charset=utf-8"
+                                            "Content-Type": "application/json; charset=utf-8",
+                                            "User-Agent" : "dynatrace-microsoft-sentinel/3.x/playbooks/enrichdynatraceappsecattackwithsecurityalerts"
                                         },
                                         "method": "POST",
                                         "uri": "https://@{parameters('Tenant')}/api/v2/logs/ingest"
@@ -949,7 +957,12 @@
                             "azuremonitorlogs": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
                                 "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
-                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
                             },
                             "keyvault": {
                                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",

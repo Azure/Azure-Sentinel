@@ -33,15 +33,28 @@ query: |
   | where isnotempty(core)
   // Calculate the total compute based on core and thread counts
   | extend totalCorecompute = core * corThread
+  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "")
   // Summarize relevant information for analysis
   | summarize Start= min(TimeGenerated),
     end=   max(TimeGenerated),
     totalgpu= sum(totalCorecompute)
-    by SourceIpAddress, UserIdentityArn, UserAgent
+    by SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, UserIdentityArn, UserAgent
   // Filter results based on total GPU compute and time duration
   | where totalgpu > 800
   | where datetime_diff('hour', end, Start) < 8
 entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -51,4 +64,4 @@ customDetails:
     AWSUser: UserIdentityArn
     SourceIpAddress: SourceIpAddress
 kind: Scheduled
-version: 1.0.0
+version: 1.0.1

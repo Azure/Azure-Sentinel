@@ -60,17 +60,33 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
+  else if (dataTypes[0].name.includes("SecurityAlert(ASC)"))
+  {
+    return ConnectorCategory.SecurityAlertASC;
+  }
   else if (dataTypes[0].name.includes("ThreatIntelligenceIndicator"))
   {
     return ConnectorCategory.ThreatIntelligenceIndicator;
+  }
+  else if (dataTypes[0].name.includes("PowerBIActivity"))
+  {
+    return ConnectorCategory.PowerBIActivity;
   }
   else if (dataTypes[0].name.includes("MicrosoftPurviewInformationProtection"))
   {
     return ConnectorCategory.MicrosoftPurviewInformationProtection;
   }
+  else if (dataTypes[0].name.includes("AzureActivity"))
+  {
+    return ConnectorCategory.AzureActivity;
+  }
   else if (dataTypes[0].name.includes("Event"))
   {
     return ConnectorCategory.Event;
+  }
+  else if (dataTypes[0].name.includes("SecurityAlert(OATP)"))
+  {
+    return ConnectorCategory.SecurityAlertOATP;
   }
   else if (dataTypes[0].name.includes("AzureDevOpsAuditing"))
   {
@@ -123,6 +139,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   else if (dataTypes[0].name.includes("corelight_bacnet"))
   {
     return ConnectorCategory.CorelightConnectorExporter;
+  }
+  else if (dataTypes[0].name.includes("SecurityIncident"))
+  {
+    return ConnectorCategory.CybleThreatIntel;
   }
   return "";
 } 

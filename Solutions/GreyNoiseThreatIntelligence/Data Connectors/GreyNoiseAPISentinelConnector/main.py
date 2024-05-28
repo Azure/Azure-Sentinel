@@ -216,12 +216,14 @@ class GreuNoiseSentinelUpdater(object):
                         query=self.greynoise_query,
                         size=self.greynoise_size,
                         scroll=scroll,
+                        exclude_raw=True,
                     )
                 else:
                     payload = self.session.query(
                         query=self.greynoise_query, 
                         scroll=scroll,
-                        size=2000
+                        size=2000,
+                        exclude_raw=True,
                     )
 
                 # this protects from bad / invalid queries

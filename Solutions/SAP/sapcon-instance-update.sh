@@ -51,10 +51,23 @@ while [[ $# -gt 0 ]]; do
 		CONTAINERNAMES+=("$2")
 		shift 2
 		;;
+	--appid)
+		APPID="$2"
+		shift 2
+		;;
+	--appsecret)
+		APPSECRET="$2"
+		shift 2
+		;;
 	--devmode)
 		DEVMODE=1
 		shift 1
 		;;
+	--tag-version)
+		TAG_VERSION="$2"
+		FORCE=1
+		shift 2
+		;;	
 	--dev-acr)
 		DEVURL="$2"
 		shift 2
@@ -161,6 +174,14 @@ while IFS= read -r contname; do
 		else
 			tagver=$tag
 		fi
+		# in case the TAG_VERSION is defined we are updating the tag specific version
+		if [ $TAG_VERSION ]; then
+			if [ $PREVIEW ]; then
+				tagver=${tagver/latest/$TAG_VERSION}
+			else
+				tagver=${tagver/latest/$TAG_VERSION-latest}
+			fi
+		fi
 	fi
 
 	sysfileloc=$(docker inspect "$contname" --format '{{ .Mounts }}'| awk 'NR==1 {print $2}')
@@ -209,6 +230,12 @@ while IFS= read -r contname; do
 		envstring=""
 		cmdparams=""
 		for variable in "${containervariables[@]}"; do
+			# Check if we set the APPID and APPSECRET, if we do, we need to update the container with the new values
+			if [[ -n $APPID && -n $APPSECRET ]]; then
+				[[ $variable == AZURE_CLIENT_ID=* ]] && variable="AZURE_CLIENT_ID=$APPID"
+				[[ $variable == AZURE_CLIENT_SECRET=* ]] && variable="AZURE_CLIENT_SECRET=$APPSECRET"
+			fi
+
 			if [[ ! $variable == PATH=* ]] &&
 				[[ ! $variable == LANG=* ]] &&
 				[[ ! $variable == GPG_KEY=* ]] &&
