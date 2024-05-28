@@ -4,14 +4,24 @@ jobs:
   
   pool:
     vmImage: 'ubuntu-latest'
+  
   steps:
   - checkout: self
     persistCredentials: false
-    fetchDepth: 0  # Fetch full repository history
-
+    fetchDepth: 1  # Fetch only the latest commit to optimize performance
+    
   - script: |
       echo "Checking for changed files in specified locations..."
-      changed_files=$(git diff --name-only origin/master)
+
+      # Get the list of changed files in the pull request
+      changed_files=$(git diff --name-only HEAD~1)
+
+      echo "Changed files: $changed_files"
+
+      # Initialize the variable indicating if relevant files are found
+      files_changed=false
+
+      # Check each changed file against the specified paths
       for file in $changed_files; do
         if [[ $file == Parsers/ASimDns/Parsers/* ]] || \
            [[ $file == Parsers/ASimNetworkSession/Parsers/* ]] || \
@@ -24,10 +34,13 @@ jobs:
            [[ $file == Parsers/ASimUserManagement/Parsers/* ]] || \
            [[ $file == Parsers/ASimDhcpEvent/Parsers/* ]]; then
           echo "Found changed file $file in specified locations."
-          echo "##vso[task.setvariable variable=filesChanged]true"
+          files_changed=true
           break
         fi
       done
+
+      # Set the pipeline variable
+      echo "##vso[task.setvariable variable=filesChanged]$files_changed"
     displayName: 'Check for Changed Files in Specified Locations'
 
   - script: |
@@ -35,6 +48,11 @@ jobs:
       exit 0
     displayName: 'Skip job if no relevant files changed'
     condition: and(succeeded(), eq(variables['filesChanged'], 'false'))
+
+  - checkout: self
+    persistCredentials: false
+    fetchDepth: 0  # Fetch full repository history
+    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
 
   - task: AzureCLI@2
     inputs:
