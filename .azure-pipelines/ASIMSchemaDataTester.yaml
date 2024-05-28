@@ -5,35 +5,20 @@ jobs:
     vmImage: 'ubuntu-latest'
 
   steps:
-  - checkout: self  # This line checks out your code repository to the runner
-    persistCredentials: false
-    fetchDepth: 0  # Fetch all history for all branches
-
   - script: |
       echo "Checking for changed files in the pull request..."
       
       # Set variables
       REPO=$(Build.Repository.Name)
-      SOURCE_BRANCH=$(System.PullRequest.SourceBranch)
-      TARGET_BRANCH=$(System.PullRequest.TargetBranch)
+      PR_ID=$(System.PullRequest.PullRequestId)
+      GITHUB_TOKEN=$(System.AccessToken)  # GitHub token stored as a secret in the pipeline
       
       echo "Repository: $REPO"
-      echo "Source branch: $SOURCE_BRANCH"
-      echo "Target branch: $TARGET_BRANCH"
+      echo "Pull Request ID: $PR_ID"
       
-      # Fetch the target branch
-      git fetch origin $TARGET_BRANCH
-      
-      # Ensure we have the latest changes for the target branch
-      git checkout $TARGET_BRANCH
-      git pull origin $TARGET_BRANCH
-      
-      # Checkout the source branch
-      git checkout $SOURCE_BRANCH
-      git pull origin $SOURCE_BRANCH
-
-      # Get the list of changed files between the source and target branches
-      changed_files=$(git diff --name-only $TARGET_BRANCH $SOURCE_BRANCH)
+      # Use the GitHub REST API to get the list of changed files in the PR
+      changed_files=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+        "https://api.github.com/repos/$REPO/pulls/$PR_ID/files" | jq -r '.[].filename')
       
       echo "Changed files: $changed_files"
       
