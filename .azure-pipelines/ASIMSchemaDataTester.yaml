@@ -1,28 +1,41 @@
 jobs:
 - job: "ASIMSchemaDataTester"
   displayName: 'Run ASIM testers on "eco-connector-test" workspace'
-  trigger:
-    branches:
-      include:
-      - '*'  # This includes all branches
-    paths:
-      include:
-      - 'Parsers/ASimDns/Parsers/**'
-      - 'Parsers/ASimNetworkSession/Parsers/**'
-      - 'Parsers/ASimWebSession/Parsers/**'
-      - 'Parsers/ASimProcessEvent/Parsers/**'
-      - 'Parsers/ASimAuditEvent/Parsers/**'
-      - 'Parsers/ASimAuthentication/Parsers/**'
-      - 'Parsers/ASimFileEvent/Parsers/**'
-      - 'Parsers/ASimRegistryEvent/Parsers/**'
-      - 'Parsers/ASimUserManagement/Parsers/**'
-      - 'Parsers/ASimDhcpEvent/Parsers/**'
+  
   pool:
     vmImage: 'ubuntu-latest'
   steps:
   - checkout: self
     persistCredentials: false
     fetchDepth: 0  # Fetch full repository history
+
+  - script: |
+      echo "Checking for changed files in specified locations..."
+      changed_files=$(git diff --name-only origin/master)
+      for file in $changed_files; do
+        if [[ $file == Parsers/ASimDns/Parsers/* ]] || \
+           [[ $file == Parsers/ASimNetworkSession/Parsers/* ]] || \
+           [[ $file == Parsers/ASimWebSession/Parsers/* ]] || \
+           [[ $file == Parsers/ASimProcessEvent/Parsers/* ]] || \
+           [[ $file == Parsers/ASimAuditEvent/Parsers/* ]] || \
+           [[ $file == Parsers/ASimAuthentication/Parsers/* ]] || \
+           [[ $file == Parsers/ASimFileEvent/Parsers/* ]] || \
+           [[ $file == Parsers/ASimRegistryEvent/Parsers/* ]] || \
+           [[ $file == Parsers/ASimUserManagement/Parsers/* ]] || \
+           [[ $file == Parsers/ASimDhcpEvent/Parsers/* ]]; then
+          echo "Found changed file $file in specified locations."
+          echo "##vso[task.setvariable variable=filesChanged]true"
+          break
+        fi
+      done
+    displayName: 'Check for Changed Files in Specified Locations'
+
+  - script: |
+      echo "No relevant files changed."
+      exit 0
+    displayName: 'Skip job if no relevant files changed'
+    condition: and(succeeded(), eq(variables['filesChanged'], 'false'))
+
   - task: AzureCLI@2
     inputs:
       azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'  # name of your Azure service connection
@@ -34,10 +47,14 @@ jobs:
         # Example command to list resource groups
         az group list
       addSpnToEnvironment: true  # Add SPN credentials to environment variables for use in subsequent steps
+    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+
   - script: |
       git config --local user.name "azure-pipelines[bot]"
       git config --local user.email "<>"
     displayName: 'Setup git config'
+    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+
   - script: |
       git merge origin/master
       Conflicts=$(git ls-files -u | wc -l)
@@ -47,6 +64,8 @@ jobs:
         exit 1
       fi
     displayName: 'Merge master into pull request branch'
+    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+
   - task: AzurePowerShell@5
     inputs:
       azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'
@@ -56,3 +75,4 @@ jobs:
       FailOnStandardError: false
       ErrorActionPreference: 'continue'
       azurePowerShellVersion: 'latest'
+    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
