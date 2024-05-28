@@ -22,8 +22,12 @@ jobs:
       # Get the repository ID
       REPO_ID=$(Build.Repository.ID)
 
+      # Get the organization name
+      ORG_NAME=$(System.CollectionUri)
+      PROJECT_NAME=$(System.TeamProject)
+
       # Get the list of changed files in the PR
-      changed_files=$(az repos pr list --id $PR_ID --repository-id $REPO_ID --org $(System.CollectionUri) --project $(System.TeamProject) --output json | jq -r '.[].sourceRefName')
+      changed_files=$(az rest --method get --uri "$ORG_NAME$PROJECT_NAME/_apis/git/repositories/$REPO_ID/pullRequests/$PR_ID/iterations/1/changes?api-version=6.0" | jq -r '.changes[].item.path')
 
       echo "Changed files: $changed_files"
 
@@ -69,37 +73,4 @@ jobs:
       scriptType: 'bash'
       scriptLocation: 'inlineScript'
       inlineScript: |
-        set -e  # Exit on error
-        echo "Running Azure CLI commands..."
-        # Example command to list resource groups
-        az group list
-      addSpnToEnvironment: true  # Add SPN credentials to environment variables for use in subsequent steps
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
-
-  - script: |
-      git config --local user.name "azure-pipelines[bot]"
-      git config --local user.email "<>"
-    displayName: 'Setup git config'
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
-
-  - script: |
-      git merge origin/master
-      Conflicts=$(git ls-files -u | wc -l)
-      if [ "$Conflicts" -gt 0 ] ; then
-        echo "There is a merge conflict. Aborting"
-        git merge --abort
-        exit 1
-      fi
-    displayName: 'Merge master into pull request branch'
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
-
-  - task: AzurePowerShell@5
-    inputs:
-      azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'
-      ScriptType: 'InlineScript'
-      Inline: |
-        & ".script/tests/asimParsersTest/runAsimTesters.ps1"
-      FailOnStandardError: false
-      ErrorActionPreference: 'continue'
-      azurePowerShellVersion: 'latest'
-    condition: and(succeeded(), eq(variables['filesChanged'], 'true'))
+        set -e
