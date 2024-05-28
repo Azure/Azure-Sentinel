@@ -69,7 +69,10 @@
                   },
                   "defaultValue": "value::all",
                   "queryType": 1,
-                  "resourceType": "microsoft.resourcegraph/resources"
+                  "resourceType": "microsoft.resourcegraph/resources",
+                  "value": [
+                    "value::all"
+                  ]
                 },
                 {
                   "id": "e94aafa3-c5d9-4523-89f0-4e87aa754511",
@@ -248,12 +251,12 @@
                   "type": 10,
                   "isRequired": true,
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "jsonData": "[\r\n { \"value\": \"Yes\", \"label\": \"Yes\"},\r\n { \"value\": \"No\", \"label\": \"No\", \"selected\":true },\r\n { \"value\": \"Change Log\", \"label\": \"Change Log\"}\r\n]",
                   "timeContextFromParameter": "TimeRange",
-                  "label": "📖 Help"
+                  "label": "📖 Help",
+                  "value": "Change Log"
                 }
               ],
               "style": "above",
@@ -265,7 +268,7 @@
           {
             "type": 1,
             "content": {
-              "json": "## Sentinel Central\r\n### Change Log\r\nUse this report to view Incident and Alert data across many workspaces (works with Azure Lighthouse)\r\n\r\n\r\n|Version|Description|\r\n|---|---|\r\n|v1.2| View Alerts from multiple workspaces (Azure Lighhouse compatiable)|\r\n|v1.3| MSSP release |\r\n|v1.4| Add Workspace info |\r\n|v1.5| Add Workspace info |\r\n|v2.0| Multi workspace hunting. per Region selection from main drop down. |\r\n|v2.1| Addition of Workspace and Table specific retention. |\r\n|v2.2| Improve Hunting Tab and lookup the Workspace id automatically. Also add Table filtering in the **Retention** Tab, using the method from Sean Stark from Archive and Basic logs workbook|\r\n|v2.2.1| Directory and Azure Lighthouse info added. |\r\n|v2.3.0| SKU info added in [Ingestion] tab, and Content Hub info added from within the [Tables] tab. |"
+              "json": "## Sentinel Central\r\n### Change Log\r\nUse this report to view Incident and Alert data across many workspaces (works with Azure Lighthouse)\r\n\r\n\r\n|Version|Description|\r\n|---|---|\r\n|v1.2| View Alerts from multiple workspaces (Azure Lighhouse compatiable)|\r\n|v1.3| MSSP release |\r\n|v1.4| Add Workspace info |\r\n|v1.5| Add Workspace info |\r\n|v2.0| Multi workspace hunting. per Region selection from main drop down. |\r\n|v2.1| Addition of Workspace and Table specific retention. |\r\n|v2.2| Improve Hunting Tab and lookup the Workspace id automatically. Also add Table filtering in the **Retention** Tab, using the method from Sean Stark from Archive and Basic logs workbook|\r\n|v2.2.1| Directory and Azure Lighthouse info added. |\r\n|v2.3.0| SKU info added in [Ingestion] tab, and Content Hub info added from within the [Tables] tab. |\r\n|v2.3.1| Fixed issue #10465 where incidents were not being counted correctly.|"
             },
             "customWidth": "50",
             "conditionalVisibility": {
@@ -378,7 +381,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| summarize count(IncidentName) by   [\"Workspace\"] = workSpacename\r\n\r\n\r\n\r\n",
+              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n//Filter out duplicate incidents\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n// end of get workspace name section\r\n| summarize count(IncidentName) by   [\"Workspace\"] = workSpacename\r\n\r\n\r\n\r\n",
               "size": 4,
               "title": "Count of Security Incidents for selected {$rowCount} Workspaces",
               "timeContextFromParameter": "TimeRange",
@@ -434,7 +437,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| summarize High=  countif(Severity==\"High\"),\r\n            Medium=countif(Severity==\"Medium\"),\r\n            Low   =countif(Severity==\"Low\"), \r\n            Informational=countif(Severity==\"Informational\"),\r\n            Last_record =  datetime_diff(\"second\", now(), max(TimeGenerated)),\r\n            Total  = count()\r\n            by workSpacename\r\n| join\r\n(\r\nSecurityIncident\r\n// mean time to triage Section\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n//| where FirstModifiedTime  >= {TimeRange:start} and FirstModifiedTime  <= {TimeRange:end}\r\n| extend Owner = todynamic(Owner.assignedTo) \r\n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\r\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \r\n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\r\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \r\n| extend TimeToTriage =  (FirstModifiedTime - CreatedTime)/1h\r\n| summarize 50th_PercentileMeanTime=percentile(TimeToTriage, 50) by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1\r\n| join\r\n(\r\nSecurityIncident\r\n// mean time to close Section\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| extend iD = TenantId\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n//| where ClosedTime >= {TimeRange:start} and ClosedTime <= {TimeRange:end}\r\n| extend Owner = todynamic(Owner.assignedTo) \r\n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\r\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \r\n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\r\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \r\n| extend TimeToClosure =  (ClosedTime - CreatedTime)/1h\r\n| summarize 50th_PercentileCloseTime=percentile(TimeToClosure, 50) by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1\r\n| join\r\n(\r\nSecurityIncident\r\n    // Incident Trend by Workspace\r\n    // Get the Workspace Name(s) from a parameter\r\n    | extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n    | mv-expand stringtoSplit\r\n    | where stringtoSplit has TenantId\r\n    | extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n    | make-series IncidentTrend=count() on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1, TimeGenerated\r\n| order by Total desc\r\n\r\n",
+              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n//Filter out duplicate incidents\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n// end of get workspace name section\r\n| summarize High=  countif(Severity==\"High\"),\r\n            Medium=countif(Severity==\"Medium\"),\r\n            Low   =countif(Severity==\"Low\"), \r\n            Informational=countif(Severity==\"Informational\"),\r\n            Last_record =  datetime_diff(\"second\", now(), max(TimeGenerated)),\r\n            Total  = count()\r\n            by workSpacename\r\n| join\r\n(\r\nSecurityIncident\r\n// mean time to triage Section\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n//| where FirstModifiedTime  >= {TimeRange:start} and FirstModifiedTime  <= {TimeRange:end}\r\n| extend Owner = todynamic(Owner.assignedTo) \r\n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\r\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \r\n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\r\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \r\n| extend TimeToTriage =  (FirstModifiedTime - CreatedTime)/1h\r\n| summarize 50th_PercentileMeanTime=percentile(TimeToTriage, 50) by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1\r\n| join\r\n(\r\nSecurityIncident\r\n// mean time to close Section\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| extend iD = TenantId\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n//| where ClosedTime >= {TimeRange:start} and ClosedTime <= {TimeRange:end}\r\n| extend Owner = todynamic(Owner.assignedTo) \r\n| where Owner in ({Owner}) or '{Owner:label}' ==  \"All\"\r\n| extend Product = todynamic((parse_json(tostring(AdditionalData.alertProductNames))[0])) \r\n| where Product in ({Product}) or '{Product:label}' ==  \"All\"\r\n| summarize arg_max(LastModifiedTime,*) by IncidentNumber \r\n| extend TimeToClosure =  (ClosedTime - CreatedTime)/1h\r\n| summarize 50th_PercentileCloseTime=percentile(TimeToClosure, 50) by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1\r\n| join\r\n(\r\nSecurityIncident\r\n    // Incident Trend by Workspace\r\n    // Get the Workspace Name(s) from a parameter\r\n    | extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n    | mv-expand stringtoSplit\r\n    | where stringtoSplit has TenantId\r\n    | extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n    | make-series IncidentTrend=count() on TimeGenerated from {TimeRange:start} to {TimeRange:end} step {TimeRange:grain} by workSpacename\r\n) on workSpacename\r\n|project-away workSpacename1, TimeGenerated\r\n| order by Total desc\r\n\r\n",
               "size": 2,
               "title": "Security Incident summary for {$rowCount} Workspaces:  QueryTime {$queryTime}",
               "timeContextFromParameter": "TimeRange",
@@ -597,7 +600,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": "{0}{1}"
                         }
@@ -1203,7 +1205,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| summarize Total  = count()\r\n            by workSpacename\r\n\r\n\r\n\r\n\r\n",
+              "query": "SecurityIncident\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mvexpand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n//Filter out duplicate incidents\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n// end of get workspace name section\r\n| summarize Total  = count()\r\n            by workSpacename\r\n\r\n\r\n\r\n\r\n",
               "size": 1,
               "title": "Count of Security Incidents for selected Workspaces and Severity",
               "timeContextFromParameter": "TimeRange",
@@ -1250,8 +1252,7 @@
                     "label": "Workspace Name"
                   }
                 ]
-              },
-              "sortBy": []
+              }
             },
             "customWidth": "40",
             "conditionalVisibility": {
@@ -1544,8 +1545,7 @@
                     "label": "count"
                   }
                 ]
-              },
-              "sortBy": []
+              }
             },
             "customWidth": "50",
             "conditionalVisibility": {
@@ -1584,7 +1584,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "SecurityIncident\r\n| where TimeGenerated > startofday(ago(0d))\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n// end of get workspace name section\r\n| extend productName_ = tostring(parse_json(tostring(AdditionalData.alertProductNames))[0])\r\n| where productName_ in ({Product}) or '{Product:label}' ==\"All\"\r\n| summarize count() by IncidentNumber, Title, productName_, Severity, [\"Workspace\"] = workSpacename, IncidentUrl\r\n| order by Workspace asc , IncidentNumber desc\r\n//| top 50 by [\"Workspace\"]",
+              "query": "SecurityIncident\r\n| where TimeGenerated > startofday(ago(0d))\r\n// Get the Workspace Name(s) from a parameter\r\n| extend stringtoSplit = split(\"{WorkspaceIDguid}\",\",\")\r\n| mv-expand stringtoSplit\r\n| where stringtoSplit has TenantId\r\n| extend workSpacename = trim(@\"[^\\w]+\",tostring(split(stringtoSplit,\":\").[1]))\r\n//Filter out duplicate incidents\r\n| summarize arg_max(TimeGenerated, *) by IncidentName\r\n// end of get workspace name section\r\n| extend productName_ = tostring(parse_json(tostring(AdditionalData.alertProductNames))[0])\r\n| where productName_ in ({Product}) or '{Product:label}' ==\"All\"\r\n| summarize count() by IncidentNumber, Title, productName_, Severity, [\"Workspace\"] = workSpacename, IncidentUrl\r\n| order by Workspace asc , IncidentNumber desc\r\n//| top 50 by [\"Workspace\"]",
               "size": 1,
               "title": "{$rowCount} Incidents in Workspaces today",
               "timeContextFromParameter": "TimeRange",
@@ -1640,7 +1640,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "lightBlue",
                           "text": "{0}{1}"
                         }
@@ -1770,13 +1769,12 @@
                   "crossComponentResources": [
                     "{Subscription}"
                   ],
-                  "value": null,
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "queryType": 1,
-                  "resourceType": "microsoft.resourcegraph/resources"
+                  "resourceType": "microsoft.resourcegraph/resources",
+                  "value": null
                 },
                 {
                   "id": "c2494755-05cc-4b93-b253-e8a0d4b7c899",
@@ -1844,7 +1842,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "lightBlue",
                           "text": "{0}{1}"
                         }
@@ -1865,7 +1862,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "blue",
                           "text": "{0}{1}"
                         }
@@ -1979,8 +1975,7 @@
                     }
                   }
                 ]
-              },
-              "sortBy": []
+              }
             },
             "conditionalVisibility": {
               "parameterName": "hide",
@@ -2096,7 +2091,6 @@
                     "columnMatch": "SubscriptionId",
                     "formatter": 15,
                     "formatOptions": {
-                      "linkTarget": null,
                       "showIcon": true
                     }
                   },
@@ -2104,7 +2098,6 @@
                     "columnMatch": "Resource",
                     "formatter": 13,
                     "formatOptions": {
-                      "linkTarget": null,
                       "showIcon": true
                     }
                   },
@@ -2233,13 +2226,11 @@
                     "columnMatch": "subscriptionId",
                     "formatter": 15,
                     "formatOptions": {
-                      "linkTarget": null,
                       "showIcon": true
                     }
                   }
                 ]
-              },
-              "sortBy": []
+              }
             },
             "name": "query - 4"
           },
@@ -2359,7 +2350,6 @@
                     "{Subscription}"
                   ],
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "timeContext": {
@@ -2471,8 +2461,7 @@
                     "resourceType": "microsoft.operationalinsights/workspaces",
                     "crossComponentResources": [
                       "{Workspace}"
-                    ],
-                    "sortBy": []
+                    ]
                   },
                   "name": "query - 3"
                 }
@@ -2523,7 +2512,6 @@
                     "{Subscription}"
                   ],
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "timeContext": {
@@ -2568,7 +2556,6 @@
                   "isRequired": true,
                   "isGlobal": true,
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "jsonData": "[\r\n    { \"value\":\"(@.properties.plan=='Basic') || (@.properties.plan=='Analytics')\", \"label\":\"All\", \"selected\":true},\r\n    { \"value\":\"(@.properties.plan=='Basic')\", \"label\":\"Basic Logs\"},\r\n    { \"value\":\"(@.properties.plan=='Analytics')\", \"label\":\"Analytic Logs\"},\r\n    { \"value\":\"(@.properties.archiveRetentionInDays > 0)\", \"label\":\"Archived Tables\"},\r\n    { \"value\":\"(@.properties.archiveRetentionInDays == 0)\", \"label\":\"Default Retention Tables\"}\r\n]",
@@ -2801,7 +2788,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "success",
                           "text": "Yes"
                         }
@@ -2823,7 +2809,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": "{0}{1}"
                         }
@@ -2945,8 +2930,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
-                          "representation": null,
                           "text": "{0}{1}"
                         }
                       ],
@@ -3133,7 +3116,6 @@
                   }
                 ]
               },
-              "sortBy": [],
               "chartSettings": {
                 "yAxis": [
                   "higherCT",
@@ -3487,8 +3469,7 @@
                   }
                 ],
                 "filter": true
-              },
-              "sortBy": []
+              }
             },
             "name": "query - tables by ws"
           },
@@ -3509,7 +3490,6 @@
                   "isRequired": true,
                   "isGlobal": true,
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "jsonData": "[\r\n    { \"value\":\"(@.properties.firstPublishDate.includes('-'))\", \"label\":\"All\"},\r\n    { \"value\":\"(@.properties.installedVersion.includes('.'))\", \"label\":\"Installed\", \"selected\":true}\r\n]",
@@ -3529,7 +3509,6 @@
                   ],
                   "isHiddenWhenLocked": true,
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "queryType": 1,
@@ -3579,7 +3558,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": ""
                         }
@@ -3606,7 +3584,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": ""
                         }
@@ -3633,7 +3610,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": "{0}{1}"
                         }
@@ -3706,7 +3682,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": ""
                         }
@@ -3727,7 +3702,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": ""
                         }
@@ -3748,7 +3722,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": ""
                         }
@@ -3769,7 +3742,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": ""
                         }
@@ -3789,7 +3761,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": "{0}{1}"
                         }
@@ -3809,7 +3780,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": "{0}{1}"
                         }
@@ -3827,8 +3797,7 @@
                 ],
                 "rowLimit": 500,
                 "filter": true
-              },
-              "sortBy": []
+              }
             },
             "conditionalVisibility": {
               "parameterName": "workSpacename",
@@ -3886,7 +3855,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "success",
                           "text": "Yes"
                         }
@@ -3982,7 +3950,6 @@
                     "{Workspace}"
                   ],
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "timeContext": {
@@ -4012,7 +3979,6 @@
                   "type": 10,
                   "isRequired": true,
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "jsonData": "[\r\n    { \"value\": \"@.properties.enabled==true\", \"label\": \"Enabled\", \"selected\":true  },        \r\n    { \"value\": \"@.properties.enabled==false\", \"label\": \"Disabled\"}\r\n]\r\n\r\n",
@@ -4039,7 +4005,6 @@
                   "type": 10,
                   "isRequired": true,
                   "typeSettings": {
-                    "additionalResourceOptions": [],
                     "showDefault": false
                   },
                   "jsonData": "[\r\n    { \"value\": \"@.kind=='MicrosoftSecurityIncidentCreation'\", \"label\": \"Microsoft Incident Creation\" },    \r\n    { \"value\": \"@.kind=='Fusion'\", \"label\": \"Microsoft Fusion\" }, \r\n    { \"value\": \"@.kind=='NRT'\", \"label\": \"NRT\" },\r\n    { \"value\": \"@.kind=='MLBehaviorAnalytics'\", \"label\": \"MLBehaviorAnalytics\" },\r\n    { \"value\": \"@.kind=='ThreatIntelligence'\", \"label\": \"ThreatIntelligence\" },        \r\n    { \"value\": \"@.kind=='Scheduled'\", \"label\": \"Scheduled\", \"selected\":true }\r\n]\r\n\r\n",
@@ -4128,7 +4093,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": ""
                         }
@@ -4165,7 +4129,6 @@
                         },
                         {
                           "operator": "Default",
-                          "thresholdValue": null,
                           "representation": "Blank",
                           "text": "{0}{1}"
                         }
