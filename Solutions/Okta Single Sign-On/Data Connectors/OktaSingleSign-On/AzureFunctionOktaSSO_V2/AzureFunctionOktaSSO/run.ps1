@@ -75,7 +75,7 @@ $resource = "/api/logs"
 $logAnalyticsUri = $logAnalyticsUri + $resource + "?api-version=2016-04-01"
 # Retrieve Timestamp from last records received from Okta 
 # Check if Tabale has already been created and if not create it to maintain state between executions of Function
-$storage =  New-AzStorageContext -ConnectionString $AzureWebJobsStorage
+$storage =  New-AzureStorageContext -ConnectionString $AzureWebJobsStorage
 $StorageTable = Get-AzStorageTable -Name $Tablename -Context $Storage -ErrorAction Ignore
 if($null -eq $StorageTable.Name){  
     $result = New-AzStorageTable -Name $Tablename -Context $storage
