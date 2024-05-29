@@ -55,14 +55,14 @@ function testParser([Parser] $parser) {
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $letStatementName = ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
     
-    Write-Host "-- Running schema test for '$($parser.Name)'"
+    Write-Host "-- Running ASIM 'Schema' tests for '$($parser.Name)' parser"
     Write-Host "***************************************************"
     $schemaTest = "$parserAsletStatement`r`n$letStatementName | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
     Write-Host "Schema name is: $($parser.Schema)"
     invokeAsimTester $schemaTest $parser.Name "schema"
     
     Write-Host "***************************************************"
-    Write-Host "-- Running data test for '$($parser.Name)'"
+    Write-Host "-- Running ASIM 'Data' tests for '$($parser.Name)' parser"
     $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
@@ -80,12 +80,12 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 Write-Host $TestResults
                 $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
                 if ($Errorcount -gt 0) {
-                    $FinalMessage = "`r`n$name $kind - test failed with $Errorcount errors:`r`n"
+                    $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount errors:`r`n"
                     Write-Host $FinalMessage -ForegroundColor Red
                     $global:failed = 1
                     throw "Test failed with errors. Please fix the errors and try again."
                 } else {
-                    $FinalMessage = "$name $kind - test completed successfully with no errors."
+                    $FinalMessage = "'$name' '$kind' - test completed successfully with no errors."
                     Write-Host $FinalMessage -ForegroundColor Green
                 }
             } else {
