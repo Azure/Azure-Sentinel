@@ -150,6 +150,9 @@ def process_logstores_and_send_to_LA(client, message_id, project, start_time, en
         
             internalLogs = logs.get_logs()
             for log in internalLogs:
+                if time.time() > stop_run_time_tmst:
+                    logging.error("Stopping processing in the middle of iterating through logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))
+                    return False
                 logs_to_send += [{"timestamp": log.timestamp, "source": log.source, "contents": log.contents}]
             
         logging.info("Finished retrieving all {} logs from {} logstore for {} project (message_id: {})".format(len(logs_to_send), logstore, project, message_id))
