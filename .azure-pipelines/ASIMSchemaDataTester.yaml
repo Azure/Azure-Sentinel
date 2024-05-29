@@ -13,11 +13,8 @@ jobs:
       PR_ID=$(System.PullRequest.PullRequestNumber)
       GITHUB_TOKEN=$(Github_PAT_ASIM_Schema_Data_Tester)
 
-      echo "Repository: $REPO"
-      echo "Pull Request ID: $PR_ID"
-
-      # Print the first and last 4 characters of the token for debugging
-      # echo "GitHub Token: ${GITHUB_TOKEN:0:4}...${GITHUB_TOKEN: -4}"
+      #echo "Repository: $REPO"
+      #echo "Pull Request ID: $PR_ID"
 
       # Debugging: Print full API URL to verify correctness
       api_url="https://api.github.com/repos/$REPO/pulls/$PR_ID/files"
@@ -58,7 +55,7 @@ jobs:
           [[ $file == Parsers/ASimRegistryEvent/Parsers/* ]] || \
           [[ $file == Parsers/ASimUserManagement/Parsers/* ]] || \
           [[ $file == Parsers/ASimDhcpEvent/Parsers/* ]]; then
-          echo "Found changed file $file in specified locations."
+          echo "Found changes to ASIM parser file: $file in the pull request."
           files_changed=true
           break
         fi
@@ -71,51 +68,10 @@ jobs:
     env:
       Github_PAT_ASIM_Schema_Data_Tester: $(Github_PAT_ASIM_Schema_Data_Tester)
 
-  - script: |
-      echo "No relevant files changed."
-    displayName: 'Skip job if no relevant files changed'
-    condition: eq(variables['files_changed'], false)
-
   - checkout: self
     persistCredentials: false
     fetchDepth: 0  # Fetch full repository history
     condition: eq(variables['files_changed'], true)
-
-  - script: |
-      echo "files_changed: $(files_changed)"
-      echo "Variable files_changed is set to true, proceeding with Azure CLI commands."
-    displayName: 'Debugging files_changed variable'
-    condition: always()
-
-  - task: AzureCLI@2
-    inputs:
-      azureSubscription: 'ASIM-SchemaDataTester-ServiceConnection'  # name of your Azure service connection
-      scriptType: 'bash'
-      scriptLocation: 'inlineScript'
-      inlineScript: |
-        set -e  # Exit on error
-        echo "Running Azure CLI commands..."
-        # Example command to list resource groups
-        az group list
-      addSpnToEnvironment: true  # Add SPN credentials to environment variables for use in subsequent steps
-    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
-
-  - script: |
-      git config --local user.name "azure-pipelines[bot]"
-      git config --local user.email "<>"
-    displayName: 'Setup git config'
-    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
-
-  - script: |
-      git merge origin/master
-      Conflicts=$(git ls-files -u | wc -l)
-      if [ "$Conflicts" -gt 0 ] ; then
-        echo "There is a merge conflict. Aborting"
-        git merge --abort
-        exit 1
-      fi
-    displayName: 'Merge master into pull request branch'
-    condition: and(succeeded(), eq(variables['files_changed'], 'true'))
 
   - task: AzurePowerShell@5
     inputs:
