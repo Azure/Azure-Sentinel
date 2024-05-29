@@ -5,5 +5,4 @@
     'Az' = '4.*'
     'AzTable' = '2.*'
     'Az.OperationalInsights' = '2.*'
-    'Az.Storage' = '3.*'
 }
