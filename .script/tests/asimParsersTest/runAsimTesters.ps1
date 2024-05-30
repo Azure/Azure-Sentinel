@@ -47,8 +47,7 @@ function run {
         }
     }
     # Print the file names and their status
-    Write-Host "The following ASIM parser files have been updated. Schema and data tests will be performed for each of these parsers:"
-    Write-Host "***************************************************"
+    Write-Host "The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:"
     foreach ($file in $modifiedFiles) {
         Write-Host ("{0} ({1})" -f $file.Name, $file.Status) -ForegroundColor Green
     }
@@ -75,7 +74,7 @@ function testSchema([string] $ParserFile) {
         Write-Host "The parser '$functionName' is a main parser, ignoring it" -ForegroundColor Yellow
         Write-Host "***************************************************"
     } else {
-        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers\ASim", ""), $parsersAsObject.ParserParams))
+        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
     }
 }
 
