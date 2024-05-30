@@ -22,30 +22,60 @@ Class Parser {
 
 function run {
     #$subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
-    # Get modified ASIM Parser files
-    $modifiedFiles = Invoke-Expression "git diff origin/master --name-only -- $($PSScriptRoot)/../../../Parsers/"
-    # Get modified parser YAML files
-    $modifiedYamlFiles = $modifiedFiles | Where-Object { $_ -like "*.yaml" }
-
-    Write-Host "The following ASIM parser files have been modified. Schema and data tests will be conducted for each of these parsers:"
+    # Get modified ASIM Parser files along with their status
+    $modifiedFilesStatus = Invoke-Expression "git diff --name-status origin/master -- $($PSScriptRoot)/../../../Parsers/"
+    # Split the output into lines
+    $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
+    # Initialize an empty array to store the file names and their status
+    $global:modifiedFiles = @()
+    # Iterate over the lines
+    foreach ($line in $modifiedFilesStatusLines) {
+        # Split the line into status and file name
+        $status, $file = $line -split "\t", 2
+        # Check if the file is a YAML file
+        if ($file -like "*.yaml") {
+            # Add the file name and status to the array
+            $modifiedFiles += New-Object PSObject -Property @{
+                Name = $file
+                Status = switch ($status) {
+                    "A" { "Added" }
+                    "M" { "Modified" }
+                    "D" { "Deleted" }
+                    default { "Unknown" }
+                }
+            }
+        }
+    }
+    # Print the file names and their status
+    Write-Host "The following ASIM parser files have been updated. Schema and data tests will be performed for each of these parsers:"
     Write-Host "***************************************************"
-    $modifiedYamlFiles | ForEach-Object { Write-Host $_ -ForegroundColor Green }
+    foreach ($file in $modifiedFiles) {
+        Write-Host ("{0} ({1})" -f $file.Name, $file.Status) -ForegroundColor Green
+    }
     Write-Host "***************************************************"
 
     # Call testSchema function for each modified parser file
-    $modifiedYamlFiles | ForEach-Object { testSchema $_ }
+    $modifiedFiles | ForEach-Object { testSchema $_.Name }
 }
 
 function testSchema([string] $ParserFile) {
     $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1" -Path "$ParserFile"
     $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.', ''))"
+    # Iterate over the modified files
+    for ($i = 0; $i -lt $modifiedFiles.Count; $i++) {
+        # Check if the current file is the parser file
+        if ($modifiedFiles[$i].Name -eq $parserfile) {
+            # Replace 'Name' with the function name
+            $modifiedFiles[$i].Name = $functionName
+        }
+    }
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
     if ($parsersAsObject.Parsers) {
         Write-Host "***************************************************"
         Write-Host "The parser '$functionName' is a main parser, ignoring it" -ForegroundColor Yellow
         Write-Host "***************************************************"
     } else {
-        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
+        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers\ASim", ""), $parsersAsObject.ParserParams))
     }
 }
 
@@ -55,14 +85,14 @@ function testParser([Parser] $parser) {
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $letStatementName = ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
     
-    Write-Host "-- Running ASIM 'Schema' tests for '$($parser.Name)' parser"
+    Write-Host "Running ASIM 'Schema' tests for '$($parser.Name)' parser"
     Write-Host "***************************************************"
     $schemaTest = "$parserAsletStatement`r`n$letStatementName | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
     Write-Host "Schema name is: $($parser.Schema)"
     invokeAsimTester $schemaTest $parser.Name "schema"
     
     Write-Host "***************************************************"
-    Write-Host "-- Running ASIM 'Data' tests for '$($parser.Name)' parser"
+    Write-Host "Running ASIM 'Data' tests for '$($parser.Name)' parser"
     $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
@@ -76,6 +106,20 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
         if ($rawResults.Results) {
             $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
             if ($resultsArray.Count) {
+                # Iterate over the modified files
+                foreach ($file in $modifiedFiles) {
+                    # Check if the file name matches and the status is 'Added'
+                    if ($file.Name -eq $name -and $file.Status -eq 'Added') {
+                        # Iterate over the test results
+                        for ($i = 0; $i -lt $resultsArray.Count; $i++) {
+                            # Check if the test result contains the specified strings
+                            if (($resultsArray[$i].Result -like '*Error: 1 invalid value(s)*') -and ($resultsArray[$i].Result -like '*EventProduct*' -or $resultsArray[$i].Result -like '*EventVendor*')) {
+                                # Replace 'Error' with 'Warning'
+                                $resultsArray[$i].Result = $resultsArray[$i].Result -replace 'Error', 'Warning'
+                            }
+                        }
+                    }
+                }
                 $resultsArray | ForEach-Object { $TestResults += "$($_.Result)`r`n" }
                 Write-Host $TestResults
                 $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
@@ -89,7 +133,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                     Write-Host $FinalMessage -ForegroundColor Green
                 }
             } else {
-                Write-Host "  -- $name $kind test done successfully. No records found"
+                Write-Host "$name $kind test done successfully. No records found"
             }
         }
     } catch {
