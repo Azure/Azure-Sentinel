@@ -15,9 +15,9 @@ References:
     - Title: Reference for access rights
       Link: https://learn.microsoft.com/en-us/windows/win32/sysinfo/registry-key-security-and-access-rights
 Description: |
-    This ASIM parser supports normalizing Microsoft Windows events (event numbers 4657 and 4663), logs ingested in 'WindowsEvent' table to the ASIM Registry Event normalized schema.
-ParserName: vimRegistryEventMicrosoftWindowsEvent
-EquivalentBuiltInParser: _Im_RegistryEvent_MicrosoftWindowsEvent
+    This ASIM parser supports normalizing Microsoft Windows events (event numbers 4657 and 4663), logs ingested in 'SecurityEvent' table to the ASIM Registry Event normalized schema.
+ParserName: vimRegistryEventMicrosoftSecurityEvent
+EquivalentBuiltInParser: _Im_RegistryEvent_MicrosoftSecurityEvent
 ParserParams:
     - Name: starttime
       Type: datetime
@@ -66,26 +66,28 @@ ParserQuery: |
     "Windows"
     )
     };
-        let ASIM_ParseWindowsEvents = (WindowsEvent: (EventData: dynamic)) {
-        WindowsEvent
+        let ASIM_ParseSecurityEvents = (SecurityEvent: (SubjectDomainName: string, SubjectUserName: string, ProcessId: string, ObjectName: string, SubjectUserSid: string, SubjectLogonId: string, ProcessName: string)) {
+        SecurityEvent
+            | project-rename
+                ActorUsername = SubjectUserName
+                ,
+                ActorUserId = SubjectUserSid
+                ,
+                ActorSessionId = SubjectLogonId
+                ,
+                ActingProcessName = ProcessName
+                ,
+                ActorDomainName = SubjectDomainName
             | extend
-                ActorUsername = iif(isnotempty(EventData.SubjectDomainName), strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), EventData.SubjectUserName)
+                ActorUsername = iif(isnotempty(ActorDomainName), strcat(ActorDomainName, @'\', ActorUsername), ActorUsername)
                 ,
-                ActorDomainName = tostring(EventData.SubjectDomainName)
-                ,
-                ActorUserId = tostring(EventData.SubjectUserSid)
-                ,
-                ActorSessionId = tostring(EventData.SubjectLogonId)
-                ,
-                ActingProcessName = tostring(EventData.ProcessName)
-                ,
-                ActingProcessId = tostring(toint(tolong(EventData.ProcessId)))
+                ActingProcessId = tostring(toint(tolong(ProcessId)))
                 ,
                 RegistryKey = iif(
-                    EventData.ObjectName startswith @"\REGISTRY\MACHINE",
-                    replace_string(tostring(EventData.ObjectName), @"\REGISTRY\MACHINE", "HKEY_LOCAL_MACHINE")
+                    ObjectName startswith @"\REGISTRY\MACHINE",
+                    replace_string(ObjectName, @"\REGISTRY\MACHINE", "HKEY_LOCAL_MACHINE")
                 ,
-                    replace_string(tostring(EventData.ObjectName), @"\REGISTRY\USER", "HKEY_USERS")
+                    replace_string(ObjectName, @"\REGISTRY\USER", "HKEY_USERS")
                 )
     };
         let Event4663TypeLookup = datatable (AccessMask: string, EventType: string)
@@ -132,23 +134,19 @@ ParserQuery: |
     ];
         union isfuzzy=false
             (
-            WindowsEvent
+            SecurityEvent
             | where not(disabled)
             | where (isnull(starttime) or TimeGenerated >= starttime) 
                 and (isnull(endtime) or TimeGenerated <= endtime)
-            | where EventID == 4663 and EventData.ObjectType == "Key"
-            | where (array_length(actorusername_has_any) == 0 or (EventData.SubjectDomainName has_any (actorusername_has_any)) or (EventData.SubjectUserName has_any (actorusername_has_any)) or (strcat(EventData.SubjectDomainName, '\\', EventData.SubjectUserName) has_any (actorusername_has_any))) and
+            | where EventID == 4663 and ObjectType == "Key"
+            | where (array_length(actorusername_has_any) == 0 or (SubjectDomainName has_any (actorusername_has_any)) or (SubjectUserName has_any (actorusername_has_any)) or (strcat(SubjectDomainName, '\\', SubjectUserName) has_any (actorusername_has_any))) and
                 (array_length(registryvalue_has_any) == 0) and 
                 (array_length(registrydata_has_any) == 0) and
                 (array_length(dvchostname_has_any) == 0 or Computer has_any (dvchostname_has_any))
-            | extend
-                AccessMask = tostring(EventData.AccessMask)
-                ,
-                Type = "WindowsEvent"
             | lookup Event4663TypeLookup on AccessMask
             | extend EventType = iif(isempty(EventType), "Other", EventType)
             | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
-            | invoke ASIM_ParseWindowsEvents()
+            | invoke ASIM_ParseSecurityEvents()
             | where (array_length(registrykey_has_any) == 0 or RegistryKey has_any (registrykey_has_any))
             | project
                 TimeGenerated,
@@ -164,33 +162,23 @@ ParserQuery: |
                 RegistryKey,
                 _ResourceId,
                 Type
-            )
-            (
-            union isfuzzy=false
+            ),
                 (
-                WindowsEvent
+                SecurityEvent
                 | where not(disabled)
                 | where (isnull(starttime) or TimeGenerated >= starttime) 
                     and (isnull(endtime) or TimeGenerated <= endtime)
                 | where EventID == 4657
-                | where (array_length(actorusername_has_any) == 0 or (EventData.SubjectDomainName has_any (actorusername_has_any)) or (EventData.SubjectUserName has_any (actorusername_has_any)) or (strcat(EventData.SubjectDomainName, '\\', EventData.SubjectUserName) has_any (actorusername_has_any))) and
-                    (array_length(registryvalue_has_any) == 0 or (EventData.ObjectValueName) has_any (registryvalue_has_any)) and 
-                    (array_length(registrydata_has_any) == 0 or (EventData.NewValue) has_any (registrydata_has_any)) and
+                | where (array_length(actorusername_has_any) == 0 or (SubjectDomainName has_any (actorusername_has_any)) or (SubjectUserName has_any (actorusername_has_any)) or (strcat(SubjectDomainName, '\\', SubjectUserName) has_any (actorusername_has_any))) and
+                    (array_length(registryvalue_has_any) == 0 or (ObjectValueName) has_any (registrydata_has_any)) and
+                    (array_length(registrydata_has_any) == 0 or (NewValue) has_any (registrydata_has_any)) and
                     (array_length(dvchostname_has_any) == 0 or Computer has_any (dvchostname_has_any))
-                | invoke ASIM_ParseWindowsEvents()
+                | invoke ASIM_ParseSecurityEvents()
                 | where (array_length(registrykey_has_any) == 0 or RegistryKey has_any (registrykey_has_any))
                 | extend
-                    EventOriginalSubType = tostring(EventData.OperationType)
+                    EventOriginalSubType = OperationType
                     ,
-                    OldValue = tostring(EventData.OldValue)
-                    ,
-                    NewValue = tostring(EventData.NewValue)
-                    ,
-                    RegistryValue = tostring(EventData.ObjectValueName)
-                    ,
-                    NewValueType = tostring(EventData.NewValueType)
-                    ,
-                    OldValueType = tostring(EventData.OldValueType)
+                    RegistryValue = ObjectValueName
                 | lookup Event4567TypeLookup on EventOriginalSubType
                 | extend EventType = iif(isempty(EventType), "Other", EventType)
                 | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
@@ -207,13 +195,13 @@ ParserQuery: |
                     ActingProcessId,
                     RegistryKey,
                     _ResourceId,
-                    RegistryValue,
                     Type,
                     NewValueType,
                     OldValueType,
                     EventOriginalSubType,
                     OldValue,
-                    NewValue
+                    NewValue,
+                    RegistryValue
                 )
             | lookup RegistryType on $left.NewValueType == $right.TypeCode
             | project-rename RegistryValueType = TypeName
@@ -233,7 +221,6 @@ ParserQuery: |
                 EventOriginalSubType,
                 OldValue,
                 NewValue
-            )
         | invoke _ASIM_ResolveFQDN ("Computer")
         | extend
             ActorUserIdType = iff (ActorUserId <> "S-1-0-0", "SID", ""),
@@ -282,7 +269,7 @@ ParserQuery: |
             EventProduct = "Security Events" 
             ,
             DvcOs = "Windows"
-        | project-away ActorDomainName,ActorUserSid,ActorUserType,Computer,Domain,DvcDomainType,DvcDomain,DvcFQDN,EventID,FQDN,UserId,_ResourceId
+            | project-away ActorDomainName,ActorUserSid,ActorUserType,Computer,Domain,DvcDomainType,DvcDomain,DvcFQDN,EventID,FQDN,UserId,_ResourceId
     };
     parser (
         starttime                = starttime,
