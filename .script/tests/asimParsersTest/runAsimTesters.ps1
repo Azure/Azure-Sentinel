@@ -35,7 +35,7 @@ function run {
         # Check if the file is a YAML file
         if ($file -like "*.yaml") {
             # Add the file name and status to the array
-            $modifiedFiles += New-Object PSObject -Property @{
+            $global:modifiedFiles += New-Object PSObject -Property @{
                 Name = $file
                 Status = switch ($status) {
                     "A" { "Added" }
