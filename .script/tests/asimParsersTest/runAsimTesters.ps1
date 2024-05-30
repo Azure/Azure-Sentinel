@@ -74,7 +74,7 @@ function testSchema([string] $ParserFile) {
         Write-Host "The parser '$functionName' is a main parser, ignoring it" -ForegroundColor Yellow
         Write-Host "***************************************************"
     } else {
-        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers\ASim", ""), $parsersAsObject.ParserParams))
+        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
     }
 }
 
