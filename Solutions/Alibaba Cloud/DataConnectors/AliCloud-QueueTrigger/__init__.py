@@ -10,7 +10,7 @@ import re
 import azure.functions as func
 import json
 import time
-from .state_manager import AzureStorageQueueHelper
+from .state_manager import AzureStorageQueueHelper, ProcessingStatus
 #from .ali_mock import LogClient, ListLogstoresRequest
 from aliyun.log import *
 
@@ -29,11 +29,13 @@ user_projects = os.environ.get("AliCloudProjects", '').replace(" ", "").split(',
 ali_token = ""
 la_chunk_size = 2000
 log_type = "AliCloud"
-max_runtime_before_stopping_in_minutes = 8
+max_runtime_before_stopping_retrieval_in_minutes = 8
+max_runtime_before_stopping_LA_send_in_minutes = 9
 max_LA_post_retries_after_transient = 3
 retry_invisibility_timeout_in_seconds = 60
+min_split_time_range_seconds_after_timeout = 15
+max_split_time_range_chunks_after_timeout = 4
 queue_source_name = "alibabacloud-queue-items"
-queue_poison_name = queue_source_name + '-poison'
 
 
 def build_LA_post_signature(customer_id, shared_key, date, content_length, method, content_type, resource):
@@ -46,7 +48,7 @@ def build_LA_post_signature(customer_id, shared_key, date, content_length, metho
     return authorization
 
 
-def post_data_to_LA(message_id, chunk, dequeue_count):
+def post_data_to_LA(message_id, chunk):
     body = json.dumps(chunk)
     method = 'POST'
     content_type = 'application/json'
@@ -97,95 +99,67 @@ def get_data_in_chunks(data, chunk_size):
     yield chunk
 
 
-def send_data_to_LA_in_chunks(message_id, data, start_time, end_time, stop_run_time_tmst, dequeue_count):
+def send_data_to_LA_in_chunks(message_id, data, stop_run_time_LA_send_tmst):
     events_sent = 0
 
     for chunk in get_data_in_chunks(data, chunk_size=la_chunk_size):
-        if time.time() > stop_run_time_tmst:
-            logging.error("Stopping processing in the middle of sending logs to LA since execution time exceeded its allotted time. Will continue in next retry. Period(UTC): {} - {} (message_id: {})".format(start_time, end_time, message_id))
-            return False
+        if time.time() > stop_run_time_LA_send_tmst:
+            logging.error("Stopping processing in the middle of sending logs to LA since execution time exceeded its allotted time. Will continue in next retry (message_id: {})".format(message_id))
+            return ProcessingStatus(is_failure=False, is_timeout=True)
         
-        isSuccess = post_data_to_LA(message_id, chunk, dequeue_count)
+        isSuccess = post_data_to_LA(message_id, chunk)
         if isSuccess == False:
-            return isSuccess
+            return ProcessingStatus(is_failure=True, is_timeout=False)
         
         events_sent += len(chunk)
     
-    logging.info("Successfully sent {} events to LA. Period(UTC): {} - {} (message_id: {})".format(events_sent, start_time, end_time, message_id))
-    return True
+    logging.info("Successfully sent {} events to LA (message_id: {})".format(events_sent, message_id))
+    return ProcessingStatus(is_failure=False, is_timeout=False)
 
 
-def get_list_logstores(client, project):
-    request = ListLogstoresRequest(project)
-    response = client.list_logstores(request)
-    return response.get_logstores()
+def process_logstore_and_send_to_LA(client, message_id, project, logstore, start_time, end_time, stop_run_time_retrieval_tmst, stop_run_time_LA_send_tmst):
+    if time.time() > stop_run_time_retrieval_tmst:
+        logging.error("Stopping processing before retrieving logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))    
+        return ProcessingStatus(is_failure=False, is_timeout=True)
 
+    logs_to_send = []
+    res = client.get_log_all(project, logstore, str(start_time), str(end_time), ali_topic)
 
-def process_logstores_and_send_to_LA(client, message_id, project, start_time, end_time, retrieved_log_stores, finished_log_stores, stop_run_time_tmst, dequeue_count):
-    if len(retrieved_log_stores) == 0:
-        retrieved_log_stores.extend(get_list_logstores(client, project))
-        logging.info("Retrieved {} logstores for project {} (message_id: {})".format(len(retrieved_log_stores), project, message_id))
-    else:
-        logging.info("Continuing from previously retrieved {} logstores for project {} (message_id: {})".format(len(retrieved_log_stores), project, message_id))
-
-    for logstore in retrieved_log_stores:
-        logging.info("Starting to handle store {} for project {} (message_id: {})".format(logstore, project, message_id))    
-
-        if logstore in finished_log_stores:
-            logging.info("Not retrieving get_log_all for store {} for project {} since it was already processed and sent to LA in previous runs (message_id: {})".format(logstore, project, message_id))    
-            continue
-
-        if time.time() > stop_run_time_tmst:
-            logging.error("Stopping processing before retrieving logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))    
-            return False
-
-        logs_to_send = []
-        res = client.get_log_all(project, logstore, str(start_time), str(end_time), ali_topic)
-        logging.info("Retrieved get_log_all responses for store {} for project {} (message_id: {})".format(logstore, project, message_id))
-
-        for logs in res:
-            if time.time() > stop_run_time_tmst:
-                logging.error("Stopping processing in the middle of retrieving logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))
-                return False
+    for logs in res:
+        if time.time() > stop_run_time_retrieval_tmst:
+            logging.error("Stopping processing in the middle of retrieving logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))
+            return ProcessingStatus(is_failure=False, is_timeout=True)
+    
+        internalLogs = logs.get_logs()
+        if time.time() > stop_run_time_retrieval_tmst:
+            logging.error("Stopping processing in the middle of retrieving logs after get_logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))
+            return ProcessingStatus(is_failure=False, is_timeout=True)
         
-            internalLogs = logs.get_logs()
-            for log in internalLogs:
-                if time.time() > stop_run_time_tmst:
-                    logging.error("Stopping processing in the middle of iterating through logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))
-                    return False
-                logs_to_send += [{"timestamp": log.timestamp, "source": log.source, "contents": log.contents}]
+        for log in internalLogs:
+            if time.time() > stop_run_time_retrieval_tmst:
+                logging.error("Stopping processing in the middle of iterating through logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(logstore, project, message_id))
+                return ProcessingStatus(is_failure=False, is_timeout=True)
             
-        logging.info("Finished retrieving all {} logs from {} logstore for {} project (message_id: {})".format(len(logs_to_send), logstore, project, message_id))
+            logs_to_send += [{"timestamp": log.timestamp, "source": log.source, "contents": log.contents}]
+        
+    logging.info("Finished retrieving all {} logs from {} logstore for {} project - sending to LA (message_id: {})".format(len(logs_to_send), logstore, project, message_id))
 
-        isSuccess = send_data_to_LA_for_stores_and_update_finished_log_stores(message_id, project, start_time, end_time, logstore, finished_log_stores, logs_to_send, stop_run_time_tmst, dequeue_count)
-        logging.info("After sending {} logs to LA for store {} for project {} with success: {} (message_id: {})".format(len(logs_to_send), logstore, project, isSuccess, message_id))
-
-        if isSuccess == False:
-            return isSuccess
-    
-    return True
+    return send_data_to_LA_for_store(message_id, project, logstore, logs_to_send, stop_run_time_LA_send_tmst)
 
     
-def send_data_to_LA_for_stores_and_update_finished_log_stores(message_id, project, start_time, end_time, logstore, finished_log_stores, logs_to_send, stop_run_time_tmst, dequeue_count):
+def send_data_to_LA_for_store(message_id, project, logstore, logs_to_send, stop_run_time_LA_send_tmst):
     if len(logs_to_send) == 0:
-        finished_log_stores.append(logstore)
-        return True
+        return ProcessingStatus(is_failure=False, is_timeout=False)
 
-    if time.time() > stop_run_time_tmst:
+    if time.time() > stop_run_time_LA_send_tmst:
         logging.error("Stopping processing before sending logs to LA for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry (message_id: {})".format(logstore, project, message_id))    
-        return False
+        return ProcessingStatus(is_failure=False, is_timeout=True)
     
-    isSuccess = send_data_to_LA_in_chunks(message_id, logs_to_send, start_time, end_time, stop_run_time_tmst, dequeue_count)
-    if isSuccess == True:
-        finished_log_stores.append(logstore)
-    
-    return isSuccess
+    return send_data_to_LA_in_chunks(message_id, logs_to_send, stop_run_time_LA_send_tmst)
 
 
-def update_storage_queue_after_failure(queueItem, message_body, message_id, dequeue_count, retrieved_log_stores, finished_log_stores):
+def update_storage_queue_after_failure(queueItem, message_body, dequeue_count, start_time, end_time, processing_status):
     message_body["dequeue_count"] = dequeue_count+1
-    message_body["retrieved_log_stores"] = ','.join(retrieved_log_stores)
-    message_body["finished_log_stores"] = ','.join(finished_log_stores)
     isDataLoss = queueItem.dequeue_count >= max_queue_message_retries or dequeue_count >= max_queue_message_retries
 
     sourceQueueHelper = AzureStorageQueueHelper(connection_string, queue_source_name)
@@ -193,28 +167,78 @@ def update_storage_queue_after_failure(queueItem, message_body, message_id, dequ
     # If we reached the max allowed re-tries, it means we have data-loss.
     # Delete message from the source queue (why? because we don't want it to be re-tried automatically), and send that message to the poison-queue.
     if isDataLoss == True:
-        poisonQueueHelper = AzureStorageQueueHelper(connection_string, queue_poison_name)
-        poisonQueueHelper.send_to_queue(message_body,encoded=True)
-
-        try:
-            sourceQueueHelper.delete_queue_message(queueItem.id, queueItem.pop_receipt)
-        except Exception as err:
-            logging.error("Error while deleting queue message from source queue (already sent to poison queue). message_id: {}, exception error text: {}".format(message_id, err))
-        
-        logging.error("Data loss! Processing of queue message reached max re-tries. Message moved to poison queue and will not be re-tried. Message body: {}".format(message_body))
-        raise Exception("Data loss! Processing of queue message reached max re-tries. Message moved to poison queue and will not be re-tried. Message body: {}".format(message_body))
+        logging.error("Processing of queue message reached max re-tries. Message moved to poison queue and will not be re-tried. Message body: {}".format(message_body))
+        raise Exception("Processing of queue message reached max re-tries. Message moved to poison queue and will not be re-tried. Message body: {}".format(message_body))
     
     # If we haven't reached the max allowed re-tries, it means we don't have a data-loss;
-    # we create a new similar message in the queue that will become visbile in 60 seconds for next retry (we take into account that the current message will be completed automatically by the function in the queue).
+    # For failures, we create a new similar message in the queue that will become visbile in 60 seconds for next retry (we take into account that the current message will be completed automatically by the function in the queue).
+    # For timeout, we split the given message into multiple similar messages and send them to the queue (minimal time range is 15s)
     else:
-        sourceQueueHelper.send_to_queue(message_body,encoded=True,visibility_timeout=retry_invisibility_timeout_in_seconds)    
+        if processing_status.is_timeout == True:
+            time_pairs = split_time_into_pairs(start_time, end_time)
+            if len(time_pairs) > 1:
+                logging.error('Queue message processing failed but did not reach max-retries. Due to timeout, splitting message into {} parts. Scheduling for retry in {} seconds'.format(len(time_pairs), retry_invisibility_timeout_in_seconds))
+
+                for pair in time_pairs:
+                    message_body["start_time"] = pair[0].strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                    message_body["end_time"] = pair[1].strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                    logging.error('Split meesage: new message body: {}'.format(message_body))    
+                    sourceQueueHelper.send_to_queue(message_body,encoded=True,visibility_timeout=0)
+                return
+
+        sourceQueueHelper.send_to_queue(message_body,encoded=True,visibility_timeout=retry_invisibility_timeout_in_seconds)
         logging.error('Queue message processing failed but did not reach max-retries. Scheduling for retry in {} seconds. New message body: {}'.format(retry_invisibility_timeout_in_seconds,message_body))
+
+
+def split_time_into_pairs(start_time, end_time):
+    # Calculate the total difference in seconds
+    total_difference = int((end_time - start_time).total_seconds())
+
+    # Ensure minimum difference of 15 seconds
+    if total_difference < min_split_time_range_seconds_after_timeout:
+        return [(start_time, end_time)]  # Single pair for differences less than 15 seconds
+
+    # Calculate minimum possible pair duration (ensuring at least 15 seconds)
+    min_pair_duration = max(min_split_time_range_seconds_after_timeout, total_difference // max_split_time_range_chunks_after_timeout) 
+
+    # Check if 4 pairs fit with minimum difference
+    if min_pair_duration * max_split_time_range_chunks_after_timeout <= total_difference:
+        # Create pairs with minimum duration
+        time_pairs = []
+        current_time = start_time
+        for i in range(max_split_time_range_chunks_after_timeout):
+            if i == max_split_time_range_chunks_after_timeout-1:
+                # Last pair: adjust duration to cover remaining difference
+                next_time = end_time
+            else:
+                next_time = current_time + timedelta(seconds=min_pair_duration)
+            time_pairs.append((current_time, next_time))
+            current_time = next_time
+        return time_pairs
+
+    # Calculate maximum possible pairs (considering remaining difference)
+    max_pairs = min(max_split_time_range_chunks_after_timeout, total_difference // min_pair_duration)
+
+    # Create pairs with adjustments for remaining difference
+    time_pairs = []
+    current_time = start_time
+    for i in range(max_pairs):
+        if i == max_pairs - 1:
+            # Last pair: adjust duration to cover remaining difference
+            next_time = end_time
+        else:
+            next_time = current_time + timedelta(seconds=min_pair_duration)
+        time_pairs.append((current_time, next_time))
+        current_time = next_time
+
+    return time_pairs  
 
 
 def main(queueItem: func.QueueMessage):
     logging.getLogger().setLevel(logging.INFO)
-    stop_run_time = datetime.fromtimestamp(time.time()) + timedelta(minutes=float(max_runtime_before_stopping_in_minutes))
-    logging.info('Starting AlibabaCloud-QueueTrigger program at {} stop_run_time is {}'.format(time.ctime(int(time.time())),stop_run_time) )
+    stop_run_time_retrieval = datetime.fromtimestamp(time.time()) + timedelta(minutes=float(max_runtime_before_stopping_retrieval_in_minutes))
+    stop_run_time_LA_send = datetime.fromtimestamp(time.time()) + timedelta(minutes=float(max_runtime_before_stopping_LA_send_in_minutes))
+    logging.info('Starting AlibabaCloud-QueueTrigger program at {} stop_run_time_retrieval is {}, stop_run_time_LA_send is {}'.format(time.ctime(int(time.time())),stop_run_time_retrieval, stop_run_time_LA_send) )
 
     if not ali_endpoint or not ali_accessKeyId or not ali_accessKey:
         raise Exception("Endpoint, AliCloudAccessKeyId and AliCloudAccessKey cannot be empty")
@@ -230,46 +254,39 @@ def main(queueItem: func.QueueMessage):
 
     message_id = message_body.get('message_id')
     project = message_body.get('project')
+    log_store = message_body.get('log_store')
     start_time = message_body.get('start_time')
     end_time = message_body.get('end_time')
     dequeue_count_str = message_body.get('dequeue_count')
-    retrieved_log_stores_str = message_body.get('retrieved_log_stores')
-    finished_log_stores_str = message_body.get('finished_log_stores')
 
     dequeue_count = 1
-    if dequeue_count is not None:
+    if dequeue_count_str is not None:
         dequeue_count = int(dequeue_count_str)
 
-    if (dequeue_count > max_queue_message_retries or queueItem.dequeue_count > max_queue_message_retries):
+    if (dequeue_count >= max_queue_message_retries or queueItem.dequeue_count >= max_queue_message_retries):
         logging.error("The queue messages reached its max allowed re-try attempts. Not retrying it again. message_body: {}".format(message_body))
-        return
+        raise Exception("The queue messages reached its max allowed re-try attempts. Not retrying it again. message_body: {}".format(message_body))
 
-    if (project == "" or start_time == "" or end_time == ""):
-        raise Exception("One of the storage queue message was missing or empty, could not perform operation. message_body: {}".format(message_body))
+    if (project == "" or log_store == "" or start_time == "" or end_time == ""):
+        logging.error("One of the storage queue message properties was missing or empty, could not perform operation. message_body: {}".format(message_body))
+        raise Exception("One of the storage queue message properties was missing or empty, could not perform operation. message_body: {}".format(message_body))
     
     start_time_dt = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%S.%fZ")
     end_time_dt = datetime.strptime(end_time, "%Y-%m-%dT%H:%M:%S.%fZ")
     if (start_time_dt == datetime.min or end_time_dt == datetime.min or start_time_dt >= end_time_dt or end_time_dt > datetime.utcnow()):
+        logging.error("The time range included in the storage queue message was incorrect, could not perform operation. message_body: {}".format(message_body))
         raise Exception("The time range included in the storage queue message was incorrect, could not perform operation. message_body: {}".format(message_body))
     
-    retrieved_log_stores = []
-    if retrieved_log_stores_str is not None and retrieved_log_stores_str != "":
-        retrieved_log_stores = retrieved_log_stores_str.split(",")
-
-    finished_log_stores = []    
-    if finished_log_stores_str is not None and finished_log_stores_str != "":
-        finished_log_stores = finished_log_stores_str.split(",")
-
-    isSuccess = False
+    processing_status = ProcessingStatus(is_failure=False, is_timeout=False)
     
     try:
         client = LogClient(ali_endpoint, ali_accessKeyId, ali_accessKey, ali_token)
-        isSuccess = process_logstores_and_send_to_LA(client, message_id, project, start_time_dt, end_time_dt, retrieved_log_stores, finished_log_stores, stop_run_time.timestamp(), dequeue_count)
+        processing_status = process_logstore_and_send_to_LA(client, message_id, project, log_store, start_time_dt, end_time_dt, stop_run_time_retrieval.timestamp(), stop_run_time_LA_send.timestamp())
     except Exception as err:
         logging.error("Error: AlibabaCloud data connector queue trigger execution failed with an internal server error. message_body: {}, Exception error text: {}".format(message_body, err))
-        isSuccess = False
+        processing_status.is_failure = True
 
-    if isSuccess == False:
-        update_storage_queue_after_failure(queueItem, message_body, message_id, dequeue_count, retrieved_log_stores, finished_log_stores)
-    else:
+    if processing_status.is_failure == False and processing_status.is_timeout == False:
         logging.info("Finish processing queue message successfully. message_body: {}".format(message_body))
+    else:
+        update_storage_queue_after_failure(queueItem, message_body, dequeue_count, start_time_dt, end_time_dt, processing_status)

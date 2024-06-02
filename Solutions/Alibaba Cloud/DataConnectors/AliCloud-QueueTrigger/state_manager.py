@@ -84,3 +84,8 @@ class AzureStorageQueueHelper:
         properties = self.__queue.get_queue_properties()
         logging.getLogger().setLevel(logging.INFO)
         return properties.approximate_message_count
+
+class ProcessingStatus:
+    def __init__(self, is_failure: bool, is_timeout: bool):
+        self.is_failure = is_failure
+        self.is_timeout = is_timeout
