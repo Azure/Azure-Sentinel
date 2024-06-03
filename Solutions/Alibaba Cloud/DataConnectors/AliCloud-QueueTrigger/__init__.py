@@ -267,7 +267,7 @@ def main(queueItem: func.QueueMessage):
         logging.error("The queue messages reached its max allowed re-try attempts. Not retrying it again. message_body: {}".format(message_body))
         raise Exception("The queue messages reached its max allowed re-try attempts. Not retrying it again. message_body: {}".format(message_body))
 
-    if (project == "" or log_store == "" or start_time == "" or end_time == ""):
+    if (project == "" or project is None or log_store == "" or log_store is None or start_time == "" or start_time is None or end_time == "" or end_time is None):
         logging.error("One of the storage queue message properties was missing or empty, could not perform operation. message_body: {}".format(message_body))
         raise Exception("One of the storage queue message properties was missing or empty, could not perform operation. message_body: {}".format(message_body))
     

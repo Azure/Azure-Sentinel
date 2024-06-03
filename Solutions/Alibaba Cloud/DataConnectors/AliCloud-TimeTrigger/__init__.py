@@ -16,7 +16,7 @@ shared_key = os.environ['WorkspaceKey']
 connection_string = os.environ['AzureWebJobsStorage']
 window_size_in_seconds = int(os.getenv('MaxWindowSizePerApiCallInSeconds',60))
 aliEndpoint = os.environ.get('Endpoint', 'cn-hangzhou.log.aliyuncs.com')
-aliAccessKeyId = os.environ.get('AliCloudAccessKeyId', '').
+aliAccessKeyId = os.environ.get('AliCloudAccessKeyId', '')
 aliAccessKey = os.environ.get('AliCloudAccessKey', '')
 token = ""
 user_projects = os.environ.get("AliCloudProjects", '').replace(" ", "").split(',')
@@ -171,7 +171,7 @@ def process_poison_queue_single_message(queueItem, message_body, mainQueueHelper
         logging.error('Data loss - Poison queue message reached its max retry count. Moving to dead letter queue. id: {}, message_body: {}, dequeue_count message: {}'.format(queueItem.id, message_body, queueItem.dequeue_count))
         return False
 
-    if (project == "" or log_store == "" or start_time == "" or end_time == ""):
+    if (project == "" or project is None or log_store == "" or log_store is None or start_time == "" or start_time is None or end_time == "" or end_time is None):
         logging.error("Data loss - One of the poison queue message properties was missing or empty. Moving to dead letter queue. message_body: {}".format(message_body))
         return False
     
