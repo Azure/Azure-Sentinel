@@ -2,7 +2,7 @@
 
 ARM template for ASIM RegistryEvent schema parser for Microsoft Sysmon.
 
-This ASIM parser supports normalizing Microsoft Sysmon events (event number 12, 13, 14) from "Event" and "WindowsEvent" tables, to the ASIM Registry Event normalized schema.
+This ASIM parser supports normalizing Microsoft Sysmon events (event number 12, 13, 14) logs ingested in 'Event' table to the ASIM Registry Event normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
