@@ -20,6 +20,8 @@ At a high level, these scripts do the following:
 2. Create a workload identity provider with Sentinel's application settings.
 3. Create a service account with permissions to read from pub/sub subscription.
 
+For Microsoft Azure Government, please use GCPInitialAuthenticationSetupGov.tf script.
+
 ### `Script that configures data to subscription` (for example GCPAuditLogsSetup.tf script):
 
 1. Create a topic.

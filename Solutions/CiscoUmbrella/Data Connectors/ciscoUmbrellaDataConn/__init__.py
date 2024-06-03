@@ -55,8 +55,14 @@ def main(mytimer: func.TimerRequest) -> None:
     state_manager_cu = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
     
     ts_from = state_manager_cu.get()
-    ts_from = parse_date_from(ts_from)
     ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+    if ts_from is not None:
+        if (datetime.datetime.utcnow() - datetime.timedelta(days=3)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
+            ts_from = parse_date_from(ts_from)
+            ts_to = ts_from +  datetime.timedelta(days=1)
+        else:
+            ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+    ts_from = parse_date_from(ts_from)
     ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
         
     cli = UmbrellaClient(aws_access_key_id, aws_secret_acces_key, aws_s3_bucket)
@@ -77,7 +83,8 @@ def main(mytimer: func.TimerRequest) -> None:
         'dns': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10),
         'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
         'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
-        'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
+        'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10),
+        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -90,6 +97,8 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel = sentinel_dict['ip']
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 sentinel = sentinel_dict['cloudfirewall']
+            elif 'firewalllogs' in key.lower():
+                sentinel = sentinel_dict['firewall']    
             else:
                 # skip files of unknown types
                 continue
@@ -101,6 +110,16 @@ def main(mytimer: func.TimerRequest) -> None:
                     if check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         break
+                else:
+                    state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        break
+        if last_ts:
+            state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+        else:
+            state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+
         failed_sent_events_number = sum([sentinel.failed_sent_events_number for sentinel in sentinel_dict.values()])
         successfull_sent_events_number = sum([sentinel.successfull_sent_events_number for sentinel in sentinel_dict.values()])
 
@@ -116,9 +135,16 @@ def main(mytimer: func.TimerRequest) -> None:
                     if check_if_script_runs_too_long(script_start_time):
                         logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         return
+                else:
+                    state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        return
             
             if last_ts:
                 state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+            else:
+                state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))   
                 
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
@@ -212,7 +238,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -226,7 +252,7 @@ class UmbrellaClient:
                     if ts_to > file_obj['LastModified'] >= ts_from:
                         files.append(file_obj)
 
-                if response['IsTruncated'] is True:
+                if response['IsTruncated'] is True and ts_to > file_obj['LastModified']:
                     marker = response['Contents'][-1]['Key']
                 else:
                     break
@@ -445,6 +471,31 @@ class UmbrellaClient:
                 event['EventType'] = 'cloudfirewalllogs'
                 yield event
 
+    def parse_csv_fw(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 14:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'originId': row[1],
+                        'Identity': row[2],
+                        'Identity Type': row[3],
+                        'Direction': row[4],
+                        'ipProtocol': row[5],
+                        'packetSize': row[6],
+                        'sourceIp': row[7],
+                        'sourcePort': row[8],
+                        'destinationIp': row[9],
+                        'destinationPort': row[10],
+                        'dataCenter': row[11],
+                        'ruleId': row[12],
+                        'verdict': row[13]
+                    }
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'firewalllogs'
+                yield event
 
     def process_file(self, obj, dest):
         t0 = time.time()
@@ -463,6 +514,8 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_ip
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
+            elif 'firewalllogs' in key.lower():
+                parser_func =  self.parse_csv_fw
 
             if parser_func:
                 file_events = 0

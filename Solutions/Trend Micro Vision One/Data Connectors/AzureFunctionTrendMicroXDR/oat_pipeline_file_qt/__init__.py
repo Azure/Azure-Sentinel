@@ -30,6 +30,10 @@ def main(oatFileMsg: func.QueueMessage) -> None:
                 f'Account token not found, clp: {message.clp_id}, stop current job.'
             )
             return
+        
+        if utils.check_token_is_expired(account_token):
+            logger.error(f"token is expired, clp: {message.clp_id}")
+            return
 
         oat_file = download_oat_file(
             account_token, message.package_id, message.pipeline_id
