@@ -144,10 +144,14 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.CybleThreatIntel;
   }
+  else if (dataTypes[0].name.includes("IndicatorsOfCompromise"))
+  {
+    return ConnectorCategory.CrowdStrikeFalconIOC;
+  }
   else if (dataTypes[0].name.includes("vectra_isession"))
-    {
-      return ConnectorCategory.VectraStreamAma;
-    }
+  {
+    return ConnectorCategory.VectraStreamAma;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];

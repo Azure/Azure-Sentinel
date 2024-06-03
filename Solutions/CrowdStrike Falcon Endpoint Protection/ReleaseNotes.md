@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.0.5       | 30-05-2024                     | Added new Function App **Data Connector** CrowdStrike Falcon Indicators of Compromise                   |
 | 3.0.4       | 03-05-2024                     | Fixed **Parser** issue for Parser name and ParentID mismatch                   |
 | 3.0.3       | 10-04-2024                     | Added Azure Deploy button for government portal deployments                    |
 | 3.0.2       | 14-02-2024                     | Addition of new CrowdStrike Falcon Endpoint Protection AMA **Data Connector**  |
