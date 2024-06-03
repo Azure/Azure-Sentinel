@@ -68,7 +68,7 @@ def validate_args(args: dict):
 
 
 def post_events_inc(events, event_type):
-    limit = 5000
+    limit = 3000
     count = len(events)
     start = 0
     while start < count:
