@@ -11,8 +11,8 @@ import azure.functions as func
 import json
 import time
 from .state_manager import AzureStorageQueueHelper, ProcessingStatus
-#from .ali_mock import LogClient, ListLogstoresRequest
-from aliyun.log import *
+from .ali_mock import LogClient, ListLogstoresRequest
+#from aliyun.log import *
 
 # Configuration - get from env variables
 ali_endpoint = os.environ.get('Endpoint', 'cn-hangzhou.log.aliyuncs.com')
