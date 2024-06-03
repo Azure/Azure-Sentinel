@@ -1,7 +1,7 @@
 Parser:
   Title: Process Terminate Event ASIM parser for Microsoft Windows Security Events
   Version: '0.4.1'
-  LastUpdated:  June 3, 2024
+  LastUpdated: June 3, 2024
 Product:
   Name: Microsoft Windows Events Sysmon
 Normalization:
@@ -13,9 +13,9 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Microsoft Windows Sysmon process terminate events (event 5) collected using the Event or WEF (WindowsEvent table) connectors logs ingested in 'Event' table to the ASIM Process Event normalized schema. 
-ParserName: vimProcessTerminateMicrosoftSysmon
-EquivalentBuiltInParser: _Im_ProcessTerminate_MicrosoftSysmon
+  This ASIM parser supports normalizing Microsoft Windows Sysmon process terminate events (event 5) collected using the Event or WEF (WindowsEvent table) connectors logs ingested in 'WindowsEvent' table to the ASIM Process Event normalized schema. 
+ParserName: vimProcessTerminateMicrosoftSysmonWindowsEvent
+EquivalentBuiltInParser: _Im_ProcessTerminate_MicrosoftSysmonWindowsEvent
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -72,8 +72,7 @@ ParserQuery: |
       eventtype:string='*',
       disabled:bool=false
     ) {
-        // this is the parser for sysmon from Event table
-        let parser_Event = (
+        let parser_WindowsEvent=(
             starttime:datetime=datetime(null),
             endtime:datetime=datetime(null),
             commandline_has_any:dynamic=dynamic([]),
@@ -87,44 +86,38 @@ ParserQuery: |
             dvchostname_has_any:dynamic=dynamic([]),
             eventtype:string='*',
             disabled:bool=false
-        ) {
-            Event
+        ){
+            WindowsEvent
             | where // pre-filtering
-                (isnull(starttime) or TimeGenerated >= starttime )
+                (isnull(starttime)   or TimeGenerated >= starttime )
                 and (isnull(endtime) or TimeGenerated <= endtime )
                 and not(disabled)
-                and Source == "Microsoft-Windows-Sysmon" and EventID == 5
+                and Provider == "Microsoft-Windows-Sysmon" and EventID == 5
                 and (eventtype=='*' or eventtype=='ProcessTerminated')
-                and (array_length(commandline_has_all)==0) 
-                and (array_length(commandline_has_any)==0) 
-                and (array_length(commandline_has_any_ip_prefix)==0) 
-                and (array_length(actingprocess_has_any)==0) 
-                and (array_length(parentprocess_has_any)==0) 
+                and (array_length(commandline_has_all)==0 ) 
+                and (array_length(commandline_has_any)==0 ) 
+                and (array_length(commandline_has_any_ip_prefix)==0 ) 
+                and (array_length(actingprocess_has_any)==0 ) 
+                and (array_length(parentprocess_has_any)==0 ) 
                 and (array_length(targetprocess_has_any)==0 or EventData has_any (targetprocess_has_any)) 
                 and (actorusername_has=='*' or EventData has actorusername_has)  
-               and (array_length(dvcipaddr_has_any_prefix)==0)
+                and (array_length(dvcipaddr_has_any_prefix)==0)
                 and (array_length(dvchostname_has_any)==0 or Computer has_any (dvchostname_has_any))
-            | parse-kv EventData as (
-                ProcessId:string,
-                ProcessGuid:string,
-                Image:string,
-                User:string
-              ) 
-              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-            | project-rename
-                ActorUsername = User,
-                DvcHostname = Computer,
-                TargetProcessName = Image,
-                TargetProcessGuid = ProcessGuid,
-                TargetProcessId = ProcessId
+            | extend
+                EventProduct = "Security Events",
+                ActorUsername = tostring(EventData.User),
+                TargetProcessName = tostring(EventData.Image),
+                TargetProcessId = tostring(EventData.ProcessId),
+                TargetProcessGuid = extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string))
             | where // post-filtering
                 (actorusername_has=='*' or ActorUsername has actorusername_has) 
                 and (array_length(targetprocess_has_any)==0  or TargetProcessName has_any (targetprocess_has_any)) 
-            | extend 
-                EventProduct = "Sysmon"
-            | project-away EventData, ParameterXml, RenderedDescription, MG, ManagementGroupName, Message, AzureDeploymentID, SourceSystem, EventCategory, EventLevelName, EventLevel, EventLog, Role, TenantId, UserName, Source
+            | project-rename
+                DvcHostname = Computer,
+                EventOriginalUid = EventOriginId
+            | project-away Channel, Data, EventData, EventLevelName, EventLevel, ManagementGroupName, Provider, RawEventData, SourceSystem, Task, TenantId
         };
-            parser_Event (starttime=starttime, endtime=endtime, commandline_has_any=commandline_has_any, commandline_has_all=commandline_has_all, commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,actingprocess_has_any=actingprocess_has_any, targetprocess_has_any=targetprocess_has_any, parentprocess_has_any=parentprocess_has_any, actorusername_has=actorusername_has, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, dvchostname_has_any=dvchostname_has_any, eventtype=eventtype, disabled=disabled)
+            parser_WindowsEvent(starttime=starttime, endtime=endtime, commandline_has_any=commandline_has_any, commandline_has_all=commandline_has_all, commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,actingprocess_has_any=actingprocess_has_any, targetprocess_has_any=targetprocess_has_any, parentprocess_has_any=parentprocess_has_any, actorusername_has=actorusername_has, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, dvchostname_has_any=dvchostname_has_any, eventtype=eventtype, disabled=disabled)
         | extend  
             EventType = "ProcessTerminated",
             EventStartTime = todatetime(TimeGenerated),
@@ -141,7 +134,7 @@ ParserQuery: |
             User = ActorUsername,
             Process = TargetProcessName,
             Dvc = DvcHostname
-        | project-away EventID,_ResourceId
+        | project-away EventID,Correlation,EventRecordId,Keywords,Opcode,SystemProcessId,SystemThreadId,SystemUserId,TimeCreated,Version,_ResourceId
     };
     parser (
       starttime=starttime, 
