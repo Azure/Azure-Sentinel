@@ -12,8 +12,7 @@ def generate_url(resource_type, **kwargs):
     template = url_templates.get(resource_type)
     if template:
         return template.format(**kwargs)
-    else:
-        return "Invalid resource type"
+    return "Invalid resource type"
 
 def download_with_retry(url, file_path, retries=3):
     for attempt in range(retries):
@@ -116,11 +115,9 @@ def get_data_collection_rule(access_token, data_collection_rule_name):
         immutableId = data["properties"]["immutableId"]
         streamDeclarations = list(data["properties"]["streamDeclarations"].keys())[0]
         return immutableId, streamDeclarations
-    else:
-        logging.info(
-            f"{data_collection_rule_name} Data Rule endpoint not exist. Status code:{response.status_code}"
-        )
-        return None, None
+    
+    logging.info(f"{data_collection_rule_name} Data Rule endpoint not exist. Status code:{response.status_code}")
+    return None, None
     
 def create_data_collection_rule(access_token, data_collection_rule_name, stream_declaration, columns, endpoint):
     headers = {"Authorization": "Bearer " + access_token, "Content-Type": "application/json"}
