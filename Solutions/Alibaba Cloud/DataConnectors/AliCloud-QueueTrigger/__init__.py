@@ -11,8 +11,8 @@ import azure.functions as func
 import json
 import time
 from .state_manager import AzureStorageQueueHelper, ProcessingStatus
-#from .ali_mock import LogClient, ListLogstoresRequest
-from aliyun.log import *
+from .ali_mock import LogClient, ListLogstoresRequest
+#from aliyun.log import *
 
 # Configuration - get from env variables
 ali_endpoint = os.environ.get('Endpoint', 'cn-hangzhou.log.aliyuncs.com')
@@ -70,7 +70,7 @@ def post_data_to_LA(message_id, chunk):
             response = requests.post(uri, data=body, headers=headers)
 
             if 200 <= response.status_code <= 299:
-                logging.info("{} events were sent to LA".format(len(chunk)))
+                logging.info("{} events were sent to LA (message_id: {})".format(len(chunk), message_id))
                 return True
             elif response.status_code == 401:
                 logging.error("LA post authentication failure. The authentication credentials are incorrect or missing. Error code: {} (message_id: {})".format(response.status_code, message_id))

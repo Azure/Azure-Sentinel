@@ -1,5 +1,5 @@
-#from .ali_mock import LogClient, ListLogstoresRequest
-from aliyun.log import *
+from .ali_mock import LogClient, ListLogstoresRequest
+#from aliyun.log import *
 import json
 import azure.functions as func
 import logging
@@ -20,6 +20,7 @@ aliAccessKeyId = os.environ.get('AliCloudAccessKeyId', '')
 aliAccessKey = os.environ.get('AliCloudAccessKey', '')
 token = ""
 user_projects = os.environ.get("AliCloudProjects", '').replace(" ", "").split(',')
+allowed_log_stores = os.environ.get("AliCloudLogStores", '').replace(" ", "").split(',')
 max_queue_message_retries = int(os.environ.get('MaxQueueMessageRetries', '100'))
 
 main_queue_name = "alibabacloud-queue-items"
@@ -184,7 +185,7 @@ def process_poison_queue_single_message(queueItem, message_body, mainQueueHelper
     message_body["dequeue_count"] = dequeue_count+1
 
     time_pairs = split_time_into_pairs(start_time_dt, end_time_dt)
-    logging.info('Poison queue message did not reach max-retries so sending back to main queue. Assuming error was due to timeout, splitting message into {} parts. Scheduling for retry immediately'.format(len(time_pairs)))
+    logging.info('Poison queue message did not reach max-retries so sending back to main queue. Assuming error was due to timeout, splitting message into {} parts (message_id: {}). Scheduling for retry immediately'.format(len(time_pairs),message_id))
 
     for pair in time_pairs:
         message_body["start_time"] = pair[0].strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -239,18 +240,28 @@ def split_time_into_pairs(start_time, end_time):
     return time_pairs  
 
 
-def format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper):
+def format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper, allowed_log_stores):
     queue_body = {}
     queue_body["start_time"] = start_time
     queue_body["end_time"] = end_time
     queue_body["project"] = project
     queue_body["dequeue_count"] = 1
+    filtered_stores = []
 
     for log_store in log_stores:
+        # Filter out unsupported log stores, if an allow-list was configured
+        if allowed_log_stores != [] and allowed_log_stores != ['']:
+            if log_store.lower() not in allowed_log_stores:
+                filtered_stores.append(log_store)
+                continue
+
         queue_body["log_store"] = log_store
         queue_body["message_id"] = str(uuid.uuid4())
         mainQueueHelper.send_to_queue(queue_body,encoded=True)
         logging.info("Added to queue: {}".format(queue_body))
+    
+    if len(filtered_stores) > 0:
+        logging.info("Stores filtered for project {}: {}".format(project, ','.join(filtered_stores)))
 
 
 def main(mytimer: func.TimerRequest):
@@ -282,6 +293,7 @@ def main(mytimer: func.TimerRequest):
         stateManager = StateManager(connection_string=connection_string)
         latestTimestamp = ""
         allProjectsDates = GetAllProjectsDates(allProjects, stateManager)
+        allowed_log_stores = [log_store.lower() for log_store in allowed_log_stores]
 
         for project in allProjects:
             logging.info("Started processing project: {} ".format(project))
@@ -322,7 +334,7 @@ def main(mytimer: func.TimerRequest):
                 if not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
                     end_time = (convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") + timedelta(seconds=window_size_in_seconds)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                     end_time = end_time[:-4] + 'Z' 
-                    format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper)
+                    format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper, allowed_log_stores)
                     #update state file
                     latestTimestamp = end_time
                     allProjectsDates[project] = latestTimestamp
@@ -333,7 +345,7 @@ def main(mytimer: func.TimerRequest):
                     scheduled_operations += 1
 
             if (convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ") - convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ")).total_seconds() <= window_size_in_seconds and not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
-                format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper)
+                format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper, allowed_log_stores)
                 #update state file
                 latestTimestamp = end_time
                 allProjectsDates[project] = latestTimestamp

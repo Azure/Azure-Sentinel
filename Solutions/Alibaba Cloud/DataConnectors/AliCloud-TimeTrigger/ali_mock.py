@@ -27,7 +27,7 @@ class Projects:
 
 class ListProjectsResponse:
     def get_logstores(self):
-        return ['logstore_a', 'logstore_b']
+        return ['logstore_a', 'logstore_b', 'logstore_c', 'logstore_d']
 
 class ListLogstoresRequest:
     def __init__(self,project):
@@ -35,7 +35,7 @@ class ListLogstoresRequest:
 
 class ListLogstoresResponse:
     def get_logstores(self):
-        return ['logstore_a', 'logstore_b']
+        return ['logstore_a', 'logstore_b', 'logstore_c', 'logstore_d']
 
 class ListLogsResponse:
     def __init__(self,project, logstore):
