@@ -1,5 +1,5 @@
-from .ali_mock import LogClient, ListLogstoresRequest
-#from aliyun.log import *
+#from .ali_mock import LogClient, ListLogstoresRequest
+from aliyun.log import *
 import json
 import azure.functions as func
 import logging
@@ -293,7 +293,7 @@ def main(mytimer: func.TimerRequest):
         stateManager = StateManager(connection_string=connection_string)
         latestTimestamp = ""
         allProjectsDates = GetAllProjectsDates(allProjects, stateManager)
-        allowed_log_stores = [log_store.lower() for log_store in allowed_log_stores]
+        allowed_log_stores_lower = [log_store.lower() for log_store in allowed_log_stores]
 
         for project in allProjects:
             logging.info("Started processing project: {} ".format(project))
@@ -334,7 +334,7 @@ def main(mytimer: func.TimerRequest):
                 if not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
                     end_time = (convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") + timedelta(seconds=window_size_in_seconds)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                     end_time = end_time[:-4] + 'Z' 
-                    format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper, allowed_log_stores)
+                    format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper, allowed_log_stores_lower)
                     #update state file
                     latestTimestamp = end_time
                     allProjectsDates[project] = latestTimestamp
@@ -345,7 +345,7 @@ def main(mytimer: func.TimerRequest):
                     scheduled_operations += 1
 
             if (convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ") - convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ")).total_seconds() <= window_size_in_seconds and not(convertToDatetime(start_time,"%Y-%m-%dT%H:%M:%S.%fZ") >= convertToDatetime(end_time,"%Y-%m-%dT%H:%M:%S.%fZ")):
-                format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper, allowed_log_stores)
+                format_messages_for_queue_and_add(start_time, end_time, project, log_stores, mainQueueHelper, allowed_log_stores_lower)
                 #update state file
                 latestTimestamp = end_time
                 allProjectsDates[project] = latestTimestamp
@@ -356,6 +356,6 @@ def main(mytimer: func.TimerRequest):
         process_poison_queue_messages(mainQueueHelper, script_start_time)
 
     except Exception as err:
-        logging.error("Error: AliBabaCloud timer trigger execution failed with an internal server error. Project: {}, Exception error text: {}".format(project,err))
+        logging.error("Error: AliBabaCloud timer trigger execution failed with an internal server error. Exception error text: {}".format(err))
         raise
     logging.info('Ending AliBabaCloud-TimeTrigger program at {}'.format(time.ctime(int(time.time()))) )

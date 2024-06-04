@@ -11,8 +11,8 @@ import azure.functions as func
 import json
 import time
 from .state_manager import AzureStorageQueueHelper, ProcessingStatus
-from .ali_mock import LogClient, ListLogstoresRequest
-#from aliyun.log import *
+#from .ali_mock import LogClient, ListLogstoresRequest
+from aliyun.log import *
 
 # Configuration - get from env variables
 ali_endpoint = os.environ.get('Endpoint', 'cn-hangzhou.log.aliyuncs.com')
@@ -24,6 +24,14 @@ customer_id = os.environ['WorkspaceID']
 max_queue_message_retries = int(os.environ.get('MaxQueueMessageRetries', '100'))
 shared_key = os.environ['WorkspaceKey']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
+
+if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
+    logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
+pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+match = re.match(pattern, str(logAnalyticsUri))
+if (not match):
+    raise Exception("Ali Cloud: Invalid Log Analytics Uri")
 
 # Constants
 ali_token = ""
@@ -56,7 +64,7 @@ def post_data_to_LA(message_id, chunk):
     current_date = datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
     content_length = len(body)
     signature = build_LA_post_signature(customer_id, shared_key, current_date, content_length, method, content_type, resource)
-    uri = 'https://' + customer_id + '.ods.opinsights.azure.com' + resource + '?api-version=2016-04-01'
+    uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
 
     headers = {
         'content-type': content_type,
@@ -242,14 +250,6 @@ def main(queueItem: func.QueueMessage):
 
     if not ali_endpoint or not ali_accessKeyId or not ali_accessKey:
         raise Exception("Endpoint, AliCloudAccessKeyId and AliCloudAccessKey cannot be empty")
-    
-    if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
-        logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
-
-    pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-    match = re.match(pattern, str(logAnalyticsUri))
-    if (not match):
-        raise Exception("Ali Cloud: Invalid Log Analytics Uri")
     
     message_body = json.loads(queueItem.get_body().decode('ascii').replace("'",'"'))
     queueItemId = queueItem.id
