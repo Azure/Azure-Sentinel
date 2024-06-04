@@ -18,7 +18,7 @@ MessageEndpoint = os.environ['MessageEndpoint']
 StreamOcid = os.environ['StreamOcid']
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
-LOG_TYPE = 'OCI_Logs'
+LOG_TYPE = 'OCI_Log'
 CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition', "0")
@@ -166,6 +166,8 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                             if event["data"]["EventData"] is not None:
                                 event["data"]["EventData"] = json.dumps(
                                     event["data"]["EventData"])
+                print(event)
+                logging.info('event details after processing {}'.format(event))
                 sentinel.send(event)
 
         sentinel.flush()
