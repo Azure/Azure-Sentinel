@@ -15,7 +15,7 @@ ACCOUNT_CODE = os.environ.get("FncAccountCode")
 API_TOKEN = os.environ.get("ApiToken")
 BUCKET_NAME = os.environ.get("FncBucketName") or DEFAULT_BUCKET_NAME
 LOGGER_LEVEL = os.environ.get("LogLevel") or "INFO"
-POSTING_LIMIT = os.environ.get("PostingLimit") or 3000
+POSTING_LIMIT = int(os.environ.get("PostingLimit", "3000"))
 
 
 def main(args: dict) -> str:
