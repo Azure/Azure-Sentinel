@@ -23,7 +23,7 @@ connection_string = os.environ['AzureWebJobsStorage']
 customer_id = os.environ['WorkspaceID']
 max_queue_message_retries = int(os.environ.get('MaxQueueMessageRetries', '100'))
 shared_key = os.environ['WorkspaceKey']
-user_projects = os.environ.get("AliCloudProjects", '').replace(" ", "").split(',')
+logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
 # Constants
 ali_token = ""
@@ -243,8 +243,11 @@ def main(queueItem: func.QueueMessage):
     if not ali_endpoint or not ali_accessKeyId or not ali_accessKey:
         raise Exception("Endpoint, AliCloudAccessKeyId and AliCloudAccessKey cannot be empty")
     
+    if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
+        logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
+
     pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-    match = re.match(pattern, str('https://' + customer_id + '.ods.opinsights.azure.com'))
+    match = re.match(pattern, str(logAnalyticsUri))
     if (not match):
         raise Exception("Ali Cloud: Invalid Log Analytics Uri")
     
