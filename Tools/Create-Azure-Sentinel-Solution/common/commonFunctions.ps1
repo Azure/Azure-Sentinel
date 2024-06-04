@@ -2999,7 +2999,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         if ($contentToImport.Description) {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", $contentToImport.Description
             
-            $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionName}}", [URI]::EscapeUriString($solutionName)
+            $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionName}}", [URI]::EscapeDataString($solutionName)
         }
         else {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", ""
