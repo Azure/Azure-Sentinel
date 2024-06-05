@@ -1,5 +1,5 @@
-#from .ali_mock import LogClient, ListLogstoresRequest
-from aliyun.log import *
+from .ali_mock import LogClient, ListLogstoresRequest
+#from aliyun.log import *
 import json
 import azure.functions as func
 import logging
