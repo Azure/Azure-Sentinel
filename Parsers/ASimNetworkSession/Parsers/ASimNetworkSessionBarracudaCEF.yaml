@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for Barracuda WAF
   Version: '0.2.1'
-  LastUpdated: JunE 5 2024
+  LastUpdated: June 5 2024
 Product:
   Name: Barracuda WAF
 Normalization:
@@ -15,9 +15,9 @@ References:
 - Title: Logs type Description in Barracuda WAF
   Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
 Description: |
-  This ASIM parser supports normalizing Barracuda WAF logs ingested in 'barracuda_CL' tablet o the ASIM Web Session normalized schema.
-ParserName: ASimNetworkSessionBarracudaWAF
-EquivalentBuiltInParser: _ASim_NetworkSession_BarracudaWAF
+  This ASIM parser supports normalizing Barracuda WAF logs ingested in 'CommonSecurityLog' table to the ASIM Web Session normalized schema.
+ParserName: ASimNetworkSessionBarracudaCEF
+EquivalentBuiltInParser: _ASim_NetworkSession_BarracudaCEF
 ParserParams:
   - Name: disabled
     Type: bool
@@ -81,16 +81,15 @@ ParserQuery: |
   ];
   let parser = (disabled: bool=false)
   {
-  let BarracudaCustom = 
-      union isfuzzy=true
-          barracudaSchema,
-          barracuda_CL
-      | where not(disabled) and LogType_s == "NF"
+  let BarracudaCEF = 
+      CommonSecurityLog
+      | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
+      | where DeviceEventCategory == "NF"
       | extend
-          severity = toint(Severity_s)
-      | lookup EventResultLookup on ActionID_s
+          severity = toint(LogSeverity)
+      | lookup EventResultLookup on $left.DeviceAction == $right.ActionID_s
       | lookup SeverityLookup on severity
-      | lookup ProtocolLookup on Protocol_s
+      | lookup ProtocolLookup on $left.Protocol == $right.Protocol_s
       | extend
           EventCount = toint(1),
           EventProduct = "WAF",
@@ -99,33 +98,62 @@ ParserQuery: |
           EventType = "NetworkSession",
           EventVendor = "Barracuda"
       | extend
-          Dvc =  UnitName_s,
-          EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s)-tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))),
-          DstIpAddr = DestinationIP_s,
+          Dvc =  DeviceName,
+          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
+          DstIpAddr = DestinationIP,
           SrcIpAddr = SourceIP,
-          DvcHostname = host_s,
-          DvcIpAddr = HostIP_s,
-          DstPortNumber = toint(DestinationPort_d),
-          SrcPortNumber = toint(SourcePort_d),
-          EventProductVersion = DeviceVersion_s
+          DvcHostname = DeviceName,
+          DvcIpAddr = DestinationIP,
+          DstPortNumber = toint(DestinationPort),
+          SrcPortNumber = toint(SourcePort),
+          EventProductVersion = DeviceVersion
       | extend
           IpAddr = SrcIpAddr,
           Src = SrcIpAddr,
           Dst = DstIpAddr,
           EventEndTime = EventStartTime
       | project-away
-          *_d,
-          *_s,
-          _ResourceId,
-          severity,
-          RawData,
-          SourceIP,
+          ThreatConfidence,
+          CommunicationDirection,
+          AdditionalExtensions,
+          Device*,
+          Source*,
+          Destination*,
+          Activity,
+          LogSeverity,
+          ApplicationProtocol,
+          ProcessID,
+          ExtID,
+          Protocol,
+          Reason,
+          ReceiptTime,
+          SimplifiedDeviceAction,
+          OriginalLogSeverity,
+          ProcessName,
+          EndTime,
+          ExternalID,
+          File*,
+          ReceivedBytes,
           Message,
+          Old*,
+          EventOutcome,
+          Request*,
+          StartTime,
+          Field*,
+          Flex*,
+          Remote*,
+          Malicious*,
+          severity,
+          ThreatSeverity,
+          IndicatorThreatType,
+          ThreatDescription,
+          _ResourceId,
+          SentBytes,
+          ReportReferenceLink,
           Computer,
-          MG,
-          ManagementGroupName,
-          TenantId,
-          SourceSystem;
-  BarracudaCustom
-   };
+          TenantId,CollectorHostName;
+  union isfuzzy = true 
+      BarracudaCustom,
+      BarracudaCEF
+  };
   parser(disabled=disabled)
