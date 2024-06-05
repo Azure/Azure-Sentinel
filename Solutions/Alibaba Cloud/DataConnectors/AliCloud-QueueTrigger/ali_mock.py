@@ -1,7 +1,7 @@
 import logging
 
 class LogClient:
-    def __init__(self, aliEndpoint, aliAccessKeyId, aliAccessKey, token):
+    def __init__(self, ali_endpoint, ali_access_key_id, ali_access_key, token):
         logging.getLogger().setLevel(logging.INFO)
 
     def list_project(self, size):

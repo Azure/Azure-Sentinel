@@ -36,16 +36,25 @@ class StateManager:
             
 
 class AzureStorageQueueHelper:
-    def __init__(self,connectionString,queueName):
+    def __init__(self,connectionString,queueName,createIfNotExists=True):
         logging.getLogger().setLevel(logging.WARNING)
         self.__service_client = QueueServiceClient.from_connection_string(conn_str=connectionString)
         self.__queue = self.__service_client.get_queue_client(queueName)
         try:
-            self.__queue.create_queue()
+            if createIfNotExists:
+                self.__queue.create_queue()
         except ResourceExistsError:
             # Resource exists
             pass
         logging.getLogger().setLevel(logging.INFO)
+    
+    def doesQueueExist(self):
+        try:
+            # Attempt to retrieve queue properties
+            self.__queue.get_queue_properties()
+            return True
+        except ResourceNotFoundError:
+            return False
     
     # Helper function to encode message in base64
     def base64Encoded(self,message):
@@ -84,8 +93,3 @@ class AzureStorageQueueHelper:
         properties = self.__queue.get_queue_properties()
         logging.getLogger().setLevel(logging.INFO)
         return properties.approximate_message_count
-
-class ProcessingStatus:
-    def __init__(self, is_failure: bool, is_timeout: bool):
-        self.is_failure = is_failure
-        self.is_timeout = is_timeout

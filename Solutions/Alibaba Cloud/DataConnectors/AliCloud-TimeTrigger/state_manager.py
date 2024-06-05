@@ -73,12 +73,12 @@ class AzureStorageQueueHelper:
         return message
 
     # This method send data into the queue
-    def send_to_queue(self, message, encoded):
+    def send_to_queue(self, message, encoded, visibility_timeout=0):
         logging.getLogger().setLevel(logging.WARNING)
         if encoded:
-            self.__queue.send_message(self.base64Encoded(message))
+            self.__queue.send_message(self.base64Encoded(message),visibility_timeout=visibility_timeout)
         else:
-            self.__queue.send_message(message)
+            self.__queue.send_message(message,visibility_timeout=visibility_timeout)
         logging.getLogger().setLevel(logging.INFO)
     
     # This method deletes the message based on messageId
