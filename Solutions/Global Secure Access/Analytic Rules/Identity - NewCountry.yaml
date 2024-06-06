@@ -1,0 +1,43 @@
+id: e3b6a9e7-4c3a-45e6-8baf-1d3bfa8e0c2b
+name: Detect Connections from New Countries
+description: This query identifies connections that originate from countries not seen in the past 14 days for each user. It helps in monitoring and flagging any unusual geographic activity that may indicate potential security concerns.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+  - T1133
+query: |
+  let listCountries = 
+    NetworkAccessTraffic
+    | where TimeGenerated > ago(14d)
+    | where Action == 'Allowed'
+    | summarize ListofCountries = make_set(ProcessingRegion) by UserPrincipalName
+    | project UserPrincipalName, ListofCountries;
+  NetworkAccessTraffic
+    | where isnotempty(ProcessingRegion)
+    | join kind=leftanti (listCountries) on UserPrincipalName
+    | where ProcessingRegion !in (ListofCountries)
+    | summarize EventCount = count() by UserPrincipalName, ProcessingRegion
+    | project-away EventCount
+    | extend IPCustomEntity = tostring(array_first(SourceIps)), PreviousIPCustomEntity = tostring(array_first(PreviousSourceIps)), AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled
