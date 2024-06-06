@@ -101,13 +101,11 @@ class Auth0Connector:
         while error:
             try:
                 error = False
-                resp = requests.get(
-                    self.uri, headers=self.header, params=params)
+                resp = requests.get(self.uri, headers=self.header, params=params)
             except Exception as err:
                 error = True
                 count += 1
-                logging.error(
-                    "Something wrong. Exception error text: {}".format(err))
+                logging.error("Something wrong. Exception error text: {}".format(err))
                 if count > self.retry:
                     logging.error("Exceeded maximum Retries")
                     break
@@ -161,8 +159,7 @@ class Auth0Connector:
                     except Exception as err:
                         error = True
                         count += 1
-                        logging.error(
-                            "Something wrong. Exception error text: {}".format(err))
+                        logging.error("Something wrong. Exception error text: {}".format(err))
                         if count > self.retry:
                             logging.error("Exceeded maximum Retries")
                             break
@@ -190,12 +187,10 @@ class Auth0Connector:
                             config, last_log_id, events)
 
                     if self.check_if_script_runs_too_long(script_start_time):
-                        logging.info(
-                            f'Script is running too long. Stop processing new events. Finish script.')
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
                         break
                 except Exception as err:
-                    logging.error(
-                        "Something wrong. Exception error text: {}".format(err))
+                    logging.error("Something wrong. Exception error text: {}".format(err))
                     break
         # logging.info(f'\t New last log id: {last_log_id}\n at date {events[0]["date"]}. Events extracted.')
         return last_log_id, events
