@@ -139,7 +139,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
             if message:
                 event = b64decode(message.value.encode()).decode()
                 logging.info('event details {}'.format(event))
-                if event != 'Test': 
+                if event != 'ok' and event != 'Test': 
                     event = json.loads(event)
                     if "data" in event:
                         if "request" in event["data"] and event["type"] != "com.oraclecloud.loadbalancer.access":
@@ -158,6 +158,14 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                             if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
                                 event["data"]["stateChange"]["current"] = json.dumps(
                                     event["data"]["stateChange"]["current"])
+                        if "response" in event["data"] and event["type"] == "com.oraclecloud.loadbalancer.waf":
+                            if event["data"]["response"] is not None:
+                                event["data"]["response"] = json.dumps(
+                                    event["data"]["response"])
+                        if "EventData" in event["data"] and event["type"] == "com.oraclecloud.logging.custom.Windowseventlog":
+                            if event["data"]["EventData"] is not None:
+                                event["data"]["EventData"] = json.dumps(
+                                    event["data"]["EventData"])
                     sentinel.send(event)
 
         sentinel.flush()
