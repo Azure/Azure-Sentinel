@@ -1,6 +1,6 @@
 Parser:
   Title: File event ASIM parser for Windows Sysmon
-  Version: '0.5.1'
+  Version: '0.4.1'
   LastUpdated: June 6 2024
 Product:
   Name: Windows Sysmon
@@ -13,45 +13,39 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: 
-  This ASIM parser supports normalizing Sysmon event 11, 23, and 26, stored in either the Event or WindowsEvent tables, logs ingested in 'Event' table to the ASIM file event schema.
-ParserName: ASimFileEventMicrosoftSysmon
-EquivalentBuiltInParser: _ASim_FileEvent_MicrosoftSysmon
+  This ASIM parser supports normalizing Sysmon event 11, 23, and 26, stored in either the Event or WindowsEvent tables, logs ingested in 'WindowsEvent' table to the ASIM file event schema.
+ParserName: ASimFileEventMicrosoftSysmonWindowsEvent
+EquivalentBuiltInParser: _ASim_FileEvent_MicrosoftSysmonWindowsEvent
 ParserParams:
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
    let parser = (disabled:bool=false) {
-      // -- Event parser
-      let EventParser = () {
-          Event
-          | where not(disabled)
-          | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
-          | where Source == "Microsoft-Windows-Sysmon" and EventID in (11,23,26)
-          | project-away Source
-          | parse-kv EventData as (
-                RuleName:string,
-                UtcTime:datetime, 
-                ProcessGuid:string,
-                ProcessId:string,
-                Image:string,
-                User:string,
-                TargetFilename:string,
-                Hashes:string,
-                CreationUtcTime:datetime
-            )
-            with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-          | project-rename 
-                ActingProcessGuid = ProcessGuid,
-                ActingProcessId = ProcessId,
-                ActorUsername = User,
-                ActingProcessName = Image,
-                TargetFileCreationTime=CreationUtcTime,
-                TargetFilePath=TargetFilename,
-                EventStartTime=UtcTime
+       //
+       // -- WindowsEvent parser
+       let WindowsEventParser=(){
+         WindowsEvent 
+         | where not(disabled)
+         | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Provider, Type // , _ItemId 
+         | where Provider == "Microsoft-Windows-Sysmon" and EventID in (11,23,26)
+         | project-away Provider
+         | extend 
+             TargetFileCreationTime=todatetime(EventData.CreationUtcTime),
+             TargetFilePath=tostring(EventData.TargetFilename),
+             ActingProcessName = tostring(EventData.Image),
+             ActingProcessId = tostring(EventData.ProcessId),
+             ActingProcessGuid = tostring(EventData.ProcessGuid),
+             ActorUsername = tostring(EventData.User),
+             EventStartTime = todatetime(EventData.UtcTime),
+             RuleName = tostring(EventData.RuleName),
+             Hashes = tostring(EventData.Hashes)
+          | parse ActingProcessGuid with "{" ActingProcessGuid "}"
           | project-away EventData
        };
-       EventParser 
+       union isfuzzy=true 
+           WindowsEventParser,
+           EventParser 
        | project-rename
            DvcHostname = Computer,
            //EventUid = _ItemId,
@@ -100,5 +94,5 @@ ParserQuery: |
            FileName = TargetFileName,
            User = ActorUsername
         | project-away EventID, Hashes,ActorWindowsUsername,TargetFileIMPHASH
-    };
-    parser(disabled=disabled) 
+    }; 
+    parser(disabled=disabled)
