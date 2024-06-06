@@ -1,7 +1,7 @@
 id: bff093b2-500e-4ae5-bb49-a5b1423cbd5b
-name: External user added and removed in short timeframe
+name: External User Added and Removed in Short Timeframe
 description: |
-  'This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.'
+  This detection flags the occurrences of external user accounts that are added to a Team and then removed within one hour.
 severity: Low
 status: Available 
 requiredDataConnectors:
@@ -17,7 +17,6 @@ tactics:
 relevantTechniques:
   - T1136
 query: |
-  query: |
   let TeamsAddDel = (Op:string) {
     EnrichedMicrosoft365AuditLogs
     | where Workload == "MicrosoftTeams"
@@ -26,7 +25,7 @@ query: |
     | mv-expand Members
     | extend UPN = tostring(Members.UPN)
     | where UPN has "#EXT#"
-    | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIp
+    | project TimeGenerated, Operation, UPN, UserId, TeamName, ClientIp;
   };
   let TeamsAdd = TeamsAddDel("MemberAdded")
   | project TimeAdded = TimeGenerated, Operation, MemberAdded = UPN, UserWhoAdded = UserId, TeamName, ClientIp;
@@ -34,8 +33,8 @@ query: |
   | project TimeDeleted = TimeGenerated, Operation, MemberRemoved = UPN, UserWhoDeleted = UserId, TeamName, ClientIp;
   TeamsAdd
   | join kind=inner (TeamsDel) on $left.MemberAdded == $right.MemberRemoved
-  | where TimeDeleted > TimeAdded
-  | project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName
+  | where TimeDeleted > TimeAdded and TimeDeleted - TimeAdded <= 1h
+  | project TimeAdded, TimeDeleted, MemberAdded_Removed = MemberAdded, UserWhoAdded, UserWhoDeleted, TeamName, ClientIp
   | extend MemberAdded_RemovedAccountName = tostring(split(MemberAdded_Removed, "@")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded_Removed, "@")[1])
   | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, "@")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, "@")[1])
   | extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, "@")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, "@")[1])
@@ -67,6 +66,6 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ClientIP
+        columnName: ClientIp
 version: 2.1.2
 kind: Scheduled

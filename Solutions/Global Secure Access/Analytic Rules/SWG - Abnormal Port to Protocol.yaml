@@ -3,7 +3,7 @@ name: Detect Protocol Changes for Destination Ports
 description: |
   Identifies changes in the protocol used for specific destination ports, comparing the current runtime with a learned baseline. This can indicate potential protocol misuse or configuration changes.
 
-Configurable Parameters: |
+Configurable Parameters:
   - Learning period - the time range to establish the baseline. Default is set to 7 days.
   - Run time - the time range for current analysis. Default is set to 1 day.
 severity: Medium
@@ -22,23 +22,22 @@ tactics:
   - CommandAndControl
 relevantTechniques: []
 query: |
-  query: |
   let LearningPeriod = 7d;
   let RunTime = 1d;
-  let StartLearningPeriod = LearningPeriod + RunTime;
-  let EndRunTime = RunTime - 1d;
+  let StartLearningPeriod = ago(LearningPeriod + RunTime);
+  let EndRunTime = ago(RunTime);
   let LearningPortToProtocol = 
     NetworkAccessTraffic
-    | where TimeGenerated between (ago(StartLearningPeriod) .. ago(RunTime))
+    | where TimeGenerated between (StartLearningPeriod .. EndRunTime)
     | where isnotempty(DestinationPort)
     | summarize LearningTimeCount = count() by LearningTimeDstPort = DestinationPort, LearningTimeProtocol = TransportProtocol, SourceIp, DestinationFqdn;
   let AlertTimePortToProtocol = 
     NetworkAccessTraffic
-    | where TimeGenerated between (ago(RunTime) .. ago(EndRunTime))
+    | where TimeGenerated between (EndRunTime .. now())
     | where isnotempty(DestinationPort)
     | summarize AlertTimeCount = count() by AlertTimeDstPort = DestinationPort, AlertTimeProtocol = TransportProtocol;
   AlertTimePortToProtocol
-    | join kind=leftouter (LearningPortToProtocol) on $left.AlertTimeDstPort == $right.LearningTimeDstPort
+    | join kind=leftouter (LearningPortToProtocol) on AlertTimeDstPort
     | where LearningTimeProtocol != AlertTimeProtocol
     | project AlertTimeDstPort, AlertTimeProtocol, LearningTimeProtocol, SourceIp, DestinationFqdn
     | extend IPCustomEntity = SourceIp, FqdnCustomEntity = DestinationFqdn
@@ -46,10 +45,10 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: SourceIp
+        columnName: IPCustomEntity
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: Fqdn
+        columnName: FqdnCustomEntity
 version: 1.0.0
 kind: Scheduled
