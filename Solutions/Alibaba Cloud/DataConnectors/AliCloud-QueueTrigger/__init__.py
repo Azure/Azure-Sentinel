@@ -195,11 +195,11 @@ def main(queueItem: func.QueueMessage):
     ali_accessKey = os.environ.get('AliCloudAccessKey')
     storage_connection_string = os.environ['AzureWebJobsStorage']
     customer_id = os.environ['WorkspaceID']
-    max_queue_message_retries = int(os.environ.get('MaxQueueMessageRetries', '100'))
+    max_queue_message_retries = int(os.environ.get('MaxQueueMessageRetries', '15'))
     workspace_shared_key = os.environ['WorkspaceKey']
     logAnalyticsUri = os.environ.get('logAnalyticsUri')
 
-    allowed_topics = os.environ.get("AliCloudLogTopics", '').replace(" ", "").split(',')
+    allowed_topics = os.environ.get("AliCloudTopics", '').replace(" ", "").split(',')
     topic_query = None
     if allowed_topics != [] and allowed_topics != ['']:
         topic_query = ' or '.join([f'__topic__:{item}' for item in allowed_topics])
@@ -216,7 +216,7 @@ def main(queueItem: func.QueueMessage):
         raise Exception("Endpoint, AliCloudAccessKeyId and AliCloudAccessKey cannot be empty")
     
     message_body = json.loads(queueItem.get_body().decode('ascii').replace("'",'"'))
-    logging.info('Queue message received with queue id: {}, message_body: {}, dequeue_count message: {}'.format(queueItem.id,message_body,queueItem.dequeue_count))
+    logging.info('Queue message received with queue id: {}, message_body: {}, dequeue_count message: {} (allowed topics: {})'.format(queueItem.id,message_body,queueItem.dequeue_count, allowed_topics))
 
     queue_dequeue_count = queueItem.dequeue_count
     queue_message = QueueMessage(message_body, queue_dequeue_count, max_queue_message_retries)

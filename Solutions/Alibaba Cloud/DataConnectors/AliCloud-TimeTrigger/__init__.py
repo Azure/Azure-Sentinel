@@ -236,7 +236,7 @@ def main(mytimer: func.TimerRequest):
         allowed_log_stores_lower = [log_store.lower() for log_store in allowed_log_stores]
 
         for project in allProjects:
-            logging.info("Started processing project: {} ".format(project))
+            logging.info("Started processing project: {}  (allowed log-stores: {})".format(project, allowed_log_stores))
             scheduled_operations = 0
 
             log_stores = GetProjectLogStores(client, project)
