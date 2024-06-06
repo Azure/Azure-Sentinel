@@ -62,22 +62,33 @@ def gen_chunks(data, chunksize=100):
 
 
 class AzureSentinel:
-    def __init__(self, log_analytics_uri, shared_key, customer_id, table_name='TransmitSecurity'):
+    def __init__(self, log_analytics_uri, shared_key, customer_id):
         self.log_analytics_uri = log_analytics_uri
         self.shared_key = shared_key
         self.customer_id = customer_id
-        self.success_processed = 0
-        self.fail_processed = 0
-        self.table_name = table_name
+        self.success_user_events = 0
+        self.success_admin_events= 0
+        self.failed_user_events = 0
+        self.failed_admin_events = 0
         self.chunksize = 10000
 
-    def post_results(self, data):
+    def post_results(self, data, table):
         for chunk in gen_chunks(data, chunksize=self.chunksize):
             body = json.dumps(chunk)
-            self.post_data(body, len(chunk))
+            self.post_data(body, len(chunk), table)
         data.clear()
 
-    def post_data(self, body, chunk_count):
+    def increase_counters(self, chunk_count, table, status):
+        if table == "TransmitSecurityUserActivity" and status == "success":
+            self.success_user_events += chunk_count
+        elif table == "TransmitSecurityAdminActivity" and status == "success":
+            self.success_admin_events += chunk_count
+        elif table == "TransmitSecurityUserActivity" and status == "fail":
+            self.failed_user_events += chunk_count
+        elif table == "TransmitSecurityAdminActivity" and status == "fail":
+            self.failed_admin_events += chunk_count
+
+    def post_data(self, body, chunk_count, table):
         method = 'POST'
         content_type = 'application/json'
         resource = '/api/logs'
@@ -88,16 +99,16 @@ class AzureSentinel:
         headers = {
             'content-type': content_type,
             'Authorization': signature,
-            'Log-Type': self.table_name,
+            'Log-Type': table,
             'x-ms-date': rfc1123date
         }
         response = requests.post(uri, data=body, headers=headers)
         if 200 <= response.status_code <= 299:
             logging.info(f"Chunk processed ({chunk_count} events)")
-            self.success_processed += chunk_count
+            self.increase_counters(chunk_count, table, "success")
         else:
             logging.error(f"Error sending events to Azure Sentinel. Response code: {response.status_code}")
-            self.fail_processed += chunk_count
+            self.increase_counters(chunk_count, table, "fail")
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -113,7 +124,8 @@ def main(mytimer: func.TimerRequest) -> None:
         token_endpoint = os.environ['TransmitSecurityTokenEndpoint']
         client_id = os.environ['TransmitSecurityClientID']
         client_secret = os.environ['TransmitSecurityClientSecret']
-        table_name = "TransmitSecurity"
+        user_activity_tbl_name = "TransmitSecurityUserActivity"
+        admin_activity_tbl_name = "TransmitSecurityAdminActivity"
         customer_id = os.environ['WorkspaceID']
         shared_key = os.environ['WorkspaceKey']
         log_analytics_uri = os.getenv('logAnalyticsUri', f'https://{customer_id}.ods.opinsights.azure.com')
@@ -122,17 +134,21 @@ def main(mytimer: func.TimerRequest) -> None:
             raise KeyError("One of the endpoints is required to be set.")
     
         connector = TransmitSecurityConnector(token_endpoint, client_id, client_secret)
-        azure_sentinel = AzureSentinel(log_analytics_uri, shared_key, customer_id, table_name)
+        azure_sentinel = AzureSentinel(log_analytics_uri, shared_key, customer_id)
         
         token = connector.get_access_token()
-        for endpoint in [user_activity_endpoint, admin_activity_endpoint]:
+        config = zip([user_activity_endpoint, admin_activity_endpoint], [user_activity_tbl_name, admin_activity_tbl_name])
+        for endpoint, table in config:
             if endpoint:
                 connector.fetch_events(token, endpoint)
-                azure_sentinel.post_results(connector.results_array)
+                azure_sentinel.post_results(connector.results_array, table)
 
     except KeyError:
         logging.error("Environment variables not set")
+        raise
     except Exception as e:
         logging.error(f"Error: {e}")
+        raise
 
-    logging.info(f"Total events processed successfully: {azure_sentinel.success_processed}, failed: {azure_sentinel.fail_processed}")
+    logging.info(f"Events processed successfully",extra={"Admin": azure_sentinel.success_admin_events, "User": azure_sentinel.success_user_events})
+    logging.info(f"Events failed",extra={"Admin": azure_sentinel.failed_admin_events, "User": azure_sentinel.failed_user_events})
