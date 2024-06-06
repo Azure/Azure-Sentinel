@@ -8,18 +8,22 @@ import requests
 import os
 import azure.functions as func
 
-# Environment variables
-customer_id = os.getenv('WorkspaceID')
-shared_key = os.getenv('WorkspaceKey')
-log_analytics_uri = os.getenv('logAnalyticsUri', f'https://{customer_id}.ods.opinsights.azure.com')
+
+def build_signature(date, content_length, method, content_type, resource, shared_key, customer_id):
+    x_headers = f'x-ms-date:{date}'
+    string_to_hash = f"{method}\n{content_length}\n{content_type}\n{x_headers}\n{resource}"
+    bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
+    decoded_key = base64.b64decode(shared_key)
+    encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
+    authorization = f"SharedKey {customer_id}:{encoded_hash}"
+    return authorization
 
 
 class TransmitSecurityConnector:
-    def __init__(self):
-        self.token_endpoint = os.getenv('TransmitSecurityTokenEndpoint')
-        self.events_endpoint = os.getenv('TransmitSecurityEventsEndpoint')
-        self.client_id = os.getenv('TransmitSecurityClientID')
-        self.client_secret = os.getenv('TransmitSecurityClientSecret')
+    def __init__(self, token_endpoint, client_id, client_secret):
+        self.token_endpoint = token_endpoint
+        self.client_id = client_id
+        self.client_secret = client_secret
         self.results_array = []
 
     def get_access_token(self):
@@ -37,13 +41,12 @@ class TransmitSecurityConnector:
         response.raise_for_status()
         return response.json()["access_token"]
 
-    def fetch_events(self):
-        token = self.get_access_token()
+    def fetch_events(self, token, endpoint):
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        response = requests.get(self.events_endpoint, headers=headers)
+        response = requests.get(endpoint, headers=headers)
         response.raise_for_status()
         self.results_array.extend(response.json())
 
@@ -58,28 +61,21 @@ def gen_chunks(data, chunksize=100):
     yield chunk
 
 
-def build_signature(date, content_length, method, content_type, resource):
-    x_headers = 'x-ms-date:' + date
-    string_to_hash = f"{method}\n{content_length}\n{content_type}\n{x_headers}\n{resource}"
-    bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-    decoded_key = base64.b64decode(shared_key)
-    encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
-    authorization = f"SharedKey {customer_id}:{encoded_hash}"
-    return authorization
-
-
 class AzureSentinel:
-    def __init__(self):
+    def __init__(self, log_analytics_uri, shared_key, customer_id, table_name='TransmitSecurity'):
         self.log_analytics_uri = log_analytics_uri
+        self.shared_key = shared_key
+        self.customer_id = customer_id
         self.success_processed = 0
         self.fail_processed = 0
-        self.table_name = "TransmitSecurity"
+        self.table_name = table_name
         self.chunksize = 10000
 
     def post_results(self, data):
         for chunk in gen_chunks(data, chunksize=self.chunksize):
             body = json.dumps(chunk)
             self.post_data(body, len(chunk))
+        data.clear()
 
     def post_data(self, body, chunk_count):
         method = 'POST'
@@ -87,7 +83,7 @@ class AzureSentinel:
         resource = '/api/logs'
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
-        signature = build_signature(rfc1123date, content_length, method, content_type, resource)
+        signature = build_signature(rfc1123date, content_length, method, content_type, resource, self.shared_key, self.customer_id)
         uri = f"{self.log_analytics_uri}{resource}?api-version=2016-04-01"
         headers = {
             'content-type': content_type,
@@ -110,12 +106,33 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.warning("The timer is past due!")
 
     logging.info(f"Python timer trigger function ran at {utc_timestamp}")
-    logging.info("Starting program")
+    
+    try:
+        user_activity_endpoint = os.getenv('TransmitSecurityUserActivityEndpoint', None)
+        admin_activity_endpoint = os.getenv('TransmitSecurityAdminActivityEndpoint', None)
+        token_endpoint = os.environ['TransmitSecurityTokenEndpoint']
+        client_id = os.environ['TransmitSecurityClientID']
+        client_secret = os.environ['TransmitSecurityClientSecret']
+        table_name = "TransmitSecurity"
+        customer_id = os.environ['WorkspaceID']
+        shared_key = os.environ['WorkspaceKey']
+        log_analytics_uri = os.getenv('logAnalyticsUri', f'https://{customer_id}.ods.opinsights.azure.com')
 
-    connector = TransmitSecurityConnector()
-    azure_sentinel = AzureSentinel()
+        if not user_activity_endpoint and not admin_activity_endpoint:
+            raise KeyError("One of the endpoints is required to be set.")
+    
+        connector = TransmitSecurityConnector(token_endpoint, client_id, client_secret)
+        azure_sentinel = AzureSentinel(log_analytics_uri, shared_key, customer_id, table_name)
+        
+        token = connector.get_access_token()
+        for endpoint in [user_activity_endpoint, admin_activity_endpoint]:
+            if endpoint:
+                connector.fetch_events(token, endpoint)
+                azure_sentinel.post_results(connector.results_array)
 
-    connector.fetch_events()
-    azure_sentinel.post_results(connector.results_array)
+    except KeyError:
+        logging.error("Environment variables not set")
+    except Exception as e:
+        logging.error(f"Error: {e}")
 
     logging.info(f"Total events processed successfully: {azure_sentinel.success_processed}, failed: {azure_sentinel.fail_processed}")
