@@ -108,13 +108,13 @@ def send_data_to_LA_in_chunks(logAnalyticsUri, customer_id, workspace_shared_key
     logging.info("Successfully sent {} events to LA (message_id: {})".format(events_sent, message_id))
     return ProcessingStatus(is_failure=False, is_timeout=False)
 
-def process_logstore_and_send_to_LA(client, queue_message, ali_topic, stop_run_time_retrieval_tmst, stop_run_time_LA_send_tmst, logAnalyticsUri, customer_id, workspace_shared_key):
+def process_logstore_and_send_to_LA(client, queue_message, topic_query, stop_run_time_retrieval_tmst, stop_run_time_LA_send_tmst, logAnalyticsUri, customer_id, workspace_shared_key):
     if time.time() > stop_run_time_retrieval_tmst:
         logging.error("Stopping processing before retrieving logs for store {} for project {} since execution time exceeded its allotted time. Will continue in next retry  (message_id: {})".format(queue_message.log_store, queue_message.project, queue_message.message_id))    
         return ProcessingStatus(is_failure=False, is_timeout=True)
 
     logs_to_send = []
-    res = client.get_log_all(queue_message.project, queue_message.log_store, str(queue_message.start_time_dt), str(queue_message.end_time_dt), ali_topic)
+    res = client.get_log_all(project=queue_message.project, logstore=queue_message.log_store, from_time=str(queue_message.start_time_dt), to_time=str(queue_message.end_time_dt), topic=None, query=topic_query)
 
     for logs in res:
         if time.time() > stop_run_time_retrieval_tmst:
@@ -193,12 +193,16 @@ def main(queueItem: func.QueueMessage):
     ali_endpoint = os.environ.get('Endpoint', 'cn-hangzhou.log.aliyuncs.com')
     ali_accessKeyId = os.environ.get('AliCloudAccessKeyId')
     ali_accessKey = os.environ.get('AliCloudAccessKey')
-    ali_topic = os.environ.get('Topic', '')
     storage_connection_string = os.environ['AzureWebJobsStorage']
     customer_id = os.environ['WorkspaceID']
     max_queue_message_retries = int(os.environ.get('MaxQueueMessageRetries', '100'))
     workspace_shared_key = os.environ['WorkspaceKey']
     logAnalyticsUri = os.environ.get('logAnalyticsUri')
+
+    allowed_topics = os.environ.get("AliCloudLogTopics", '').replace(" ", "").split(',')
+    topic_query = None
+    if allowed_topics != [] and allowed_topics != ['']:
+        topic_query = ' or '.join([f'__topic__:{item}' for item in allowed_topics])
 
     if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
         logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
@@ -227,7 +231,7 @@ def main(queueItem: func.QueueMessage):
 
     try:
         client = LogClient(ali_endpoint, ali_accessKeyId, ali_accessKey, ALI_TOKEN)
-        processing_status = process_logstore_and_send_to_LA(client, queue_message, ali_topic, stop_run_time_retrieval.timestamp(), stop_run_time_LA_send.timestamp(), logAnalyticsUri, customer_id, workspace_shared_key)
+        processing_status = process_logstore_and_send_to_LA(client, queue_message, topic_query, stop_run_time_retrieval.timestamp(), stop_run_time_LA_send.timestamp(), logAnalyticsUri, customer_id, workspace_shared_key)
     except Exception as err:
         logging.error("Error: AlibabaCloud data connector queue trigger execution failed with an internal server error. message_body: {}, Exception error text: {}".format(message_body, err))
         processing_status.is_failure = True

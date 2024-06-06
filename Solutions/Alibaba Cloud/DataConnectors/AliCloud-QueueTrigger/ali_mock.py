@@ -15,7 +15,7 @@ class LogClient:
     def list_logstores(self, request):
         return ListLogstoresResponse()
 
-    def get_log_all(self, project, logstore, start_time, end_time, topic):
+    def get_log_all(self, project, logstore, start_time, end_time, topic, query):
         return [ListLogsResponse(project, logstore),ListLogsResponse(project, logstore)]
 
 class Projects:
