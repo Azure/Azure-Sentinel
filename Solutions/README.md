@@ -108,7 +108,6 @@ The following steps reference the Partner Center's more detailed documentation.
 
 8.	After the validation passes, [publish the offer live](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish#publish-your-offer-live). This will trigger the certification process, which can take up to 3 business days. 
 
-**Note:** The Microsoft Sentinel team will need to modify your files so that your solution appears in the Microsoft Sentinel content hub. Therefore, before going live, email the  [Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with your solutions offer ID and your **Publisher ID** so that we can make the required changes.
 
 **Note:** You must make the offer public in order for it to show up in the Microsoft Sentinel content hub so that customers can find it.
 
