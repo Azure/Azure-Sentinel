@@ -2,7 +2,7 @@
 
 ARM template for ASIM Dns schema parser for Microsoft Windows Events Sysmon.
 
-This ASIM parser supports filtering and normalizing Sysmon for Windows DNS logs (event number 22),collected using the Log Analytics agent, to the ASIM Dns normalized schema.<br>The parser supports events collected to both the Event and WindowsEvent tables.The parser supports events collected to both the Event and WindowsEvent tables.
+This ASIM parser supports filtering and normalizing Sysmon for Windows DNS logs (event number 22) logs ingested in 'Event' table to the ASIM Dns normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
