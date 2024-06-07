@@ -13,9 +13,9 @@ References:
 - Title: ASIM
   Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Sysmon for Windows DNS logs (event number 22) logs ingested in 'Event' table  to the ASIM Dns normalized schema.
-ParserName: ASimDnsMicrosoftSysmon
-EquivalentBuiltInParser: _ASim_Dns_MicrosoftSysmon
+  This ASIM parser supports normalizing Sysmon for Windows DNS logs (event number 22) logs ingested in 'Event' table to the ASIM Dns normalized schema.
+ParserName: ASimDnsMicrosoftSysmonWindowsEvent
+EquivalentBuiltInParser: _ASim_Dns_MicrosoftSysmonWindowsEvent
 ParserParams:
   - Name: disabled
     Type: bool
@@ -47,35 +47,26 @@ ParserQuery: |
       , 9023,'BADCOOKIE'
       , 1460, 'TIMEOUT'
       ];
-    let ParsedDnsEvent_Event =(disabled:bool=false) {
-        Event | where not(disabled)
-        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
-        | where Source == "Microsoft-Windows-Sysmon" and EventID==22
-        | project-away Source, EventID
-        | parse-kv EventData as (
-            RuleName:string,
-            UtcTime:datetime, 
-            ProcessGuid:string,
-            ProcessId:string,
-            QueryName:string,
-            QueryStatus:int,
-            QueryResults:string,
-            Image:string,
-            User:string
-          )
-          with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-        | project-rename 
-            EventEndTime = UtcTime,
-            SrcProcessId = ProcessId,
-            SrcProcessGuid = ProcessGuid,
-            DnsQuery = QueryName,
-            DnsResponseCode = QueryStatus,
-            DnsResponseName = QueryResults,
-            SrcProcessName = Image,
-            SrcUsername = User
+    let ParsedDnsEvent_WindowsEvent =(disabled:bool=false) {
+        WindowsEvent | where not(disabled)
+        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId,  Provider, Type // , _ItemId 
+        | where Provider == "Microsoft-Windows-Sysmon" and EventID == 22
+        | project-away Provider, EventID      
+        | extend 
+            RuleName = tostring(EventData.RuleName),
+            EventEndTime = todatetime(EventData.UtcTime),
+            SrcProcessGuid = tostring(EventData.ProcessGuid),
+            // extract ('^{(.*)}$', 1, tostring(EventData.ProcessGuid), typeof(string)),
+            SrcProcessId = tostring(EventData.ProcessId),  
+            DnsQuery = tostring(EventData.QueryName),
+            DnsResponseCode = toint(EventData.QueryStatus),
+            DnsResponseName = tostring(EventData.QueryResults),
+            SrcProcessName = tostring(EventData.Image),
+            SrcUsername = tostring(EventData.User)
         | project-away EventData
+        | parse SrcProcessGuid with '{' SrcProcessGuid '}'
     };
-    ParsedDnsEvent_Event(disabled)
+    ParsedDnsEvent_WindowsEvent(disabled)
       | lookup RCodeTable on DnsResponseCode
       | project-rename 
           DvcHostname = Computer,
