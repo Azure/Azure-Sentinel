@@ -1,0 +1,60 @@
+id: c483c74c-9259-40b3-8d34-dda3715daedf
+name: Enterprise applications enumerated via Graph API
+version: 1.0.0
+kind: Scheduled
+description: |-
+  This rule aims to detect anyone enumerating the Enterprise Applications using the Graph API as part of reconnaissance.
+
+  Investigation
+  -------------------------
+  1. Scrutinize the user. Are they an IT profile?
+  2. Scrutinize the IP address this is happening from
+  3. Scrutinize the UserAgent.
+severity: Medium
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+relevantTechniques:
+- T1526
+- T1580
+query: |-
+  let GetAllSPNs = MicrosoftGraphActivityLogs
+  | where TimeGenerated > ago(1h)
+  | where RequestUri == "https://graph.microsoft.com/v1.0/servicePrincipals";
+  let UsersGettingMultipleSPNDetails = MicrosoftGraphActivityLogs
+  | where TimeGenerated > ago(1h)
+  | where RequestUri == "https://graph.microsoft.com/v1.0/applications";
+  GetAllSPNs
+  | join kind=inner UsersGettingMultipleSPNDetails on UserId
+  | extend diff = datetime_diff('minute', TimeGenerated, TimeGenerated1) 
+  | where datetime_diff('minute', TimeGenerated, TimeGenerated1) between (0..60)
+  | join kind=inner (IdentityInfo| where TimeGenerated > ago(14d)| distinct AccountUPN, AccountObjectId) on $left.UserId == $right.AccountObjectId
+  | project-reorder TimeGenerated, TimeGenerated1
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+    - Account
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: AccountUPN
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPAddress
+suppressionDuration: 5h
+

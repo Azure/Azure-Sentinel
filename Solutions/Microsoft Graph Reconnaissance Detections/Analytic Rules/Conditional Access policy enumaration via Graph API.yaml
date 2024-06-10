@@ -1,0 +1,52 @@
+id: 48b97b75-fbf6-4b76-9be3-c0b630819096
+name: Conditional Access policy enumeration via Graph API
+version: 1.0.0
+kind: Scheduled
+description: |-
+  This rule aims to detect anyone enumerating the conditional access policies using the Graph API.
+
+  Investigation
+  -------------------
+  1. Scrutinize the user. Are they an IT profile?
+  2. Scrutinize the IP this happens from. An unknown IP may be more suspicious
+severity: Medium
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+relevantTechniques:
+- T1580
+- T1526
+query: |-
+  MicrosoftGraphActivityLogs
+  | where TimeGenerated> ago(1h)
+  | where RequestUri contains "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/"
+  | where RequestMethod == "GET"
+  | join kind=inner (IdentityInfo| where TimeGenerated > ago(14d)| distinct AccountUPN, AccountObjectId) on $left.UserId == $right.AccountObjectId
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+    - Account
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: AccountUPN
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPAddress
+suppressionDuration: 5h
+

@@ -1,0 +1,50 @@
+id: dc7c9df8-bcf0-4223-a9d5-8adb68fff8fa
+name: Security groups enumerated via Graph API
+version: 1.0.0
+kind: Scheduled
+description: |-
+  This rule aims to detect the enumeration of security groups via the Graph API by looking for requests on the Groups endpoint with a specific filter on "securityEnabled eq true".
+
+  Investigation steps
+  -----------------------
+  1. Scrutinize the user. Are they an IT profile?
+  2. Look at the User Agent. If it is powershell, it is suspicious as this may be GraphRunner.
+severity: Medium
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+relevantTechniques:
+- T1069
+query: |-
+  MicrosoftGraphActivityLogs
+  | where TimeGenerated> ago(1h)
+  | where RequestUri == "https://graph.microsoft.com/v1.0/groups?=securityEnabled%20eq%20true"
+  | join kind=inner (IdentityInfo| distinct AccountUPN, AccountObjectId) on $left.UserId == $right.AccountObjectId
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+    - Account
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: AccountUPN
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: IPAddress
+suppressionDuration: 5h
+
