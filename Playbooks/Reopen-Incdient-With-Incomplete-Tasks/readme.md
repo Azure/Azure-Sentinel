@@ -1,7 +1,7 @@
 # Reopen Incident with Incomplete Tasks
 author: Brian Delaney
 
-Incident tasks are a useful way to convey critical steps that should be taken to a SOC analyst.  However, there is no built in way to see these tasks have even been seen or acknowledged by an analyst.  This playbook, in combination with an automation rule can reopen closed incidents if there are any attached tasks that are not in a completed state.  By default it will reopen the incident as Active as well as add a tag and comment to the incident to note the incomplete tasks.
+Incident tasks are a useful way to convey critical steps that should be taken to a SOC analyst.  However, there is no built in way to ensure these tasks have even been seen or acknowledged by an analyst.  This playbook, in combination with an automation rule can reopen closed incidents if there are any attached tasks that are not in a completed state.  By default it will reopen the incident as Active as well as add a tag and comment to the incident to note the incomplete tasks.
 
 ## Quick Deployment
 **Deploy with incident trigger** (recommended)
