@@ -14,8 +14,11 @@ After deployment, attach this playbook to an **automation rule** so it runs when
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FReopen-Incdient-With-Incomplete-Tasks%2Fincident-trigger%2Fazuredeploy.json)
 
 ## Post Deployment
-After deploying the playbook, grant the managed identity of the Playbook 'Microsoft Sentinel Responder' on the Microsoft Sentinel resource group.  Additionally, create an analytics rule to involve the playbook on incident update under the condition that status of the incident was changed to closed
+After deploying the playbook, grant the managed identity of the Playbook 'Microsoft Sentinel Responder' on the Microsoft Sentinel resource group.  Additionally, create an analytics rule to invoke the playbook on incident update under the condition that status of the incident was changed to closed
 
 ## Screenshots
 **Incident Trigger**<br>
 ![Incident Trigger](./incident-trigger/images/playbookworkflow.png)
+
+**Automation Rule**<br>
+![Incident Trigger](./incident-trigger/images/automationrule.png)
