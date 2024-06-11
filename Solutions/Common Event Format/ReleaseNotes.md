@@ -1,0 +1,3 @@
+| **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
+|-------------|--------------------------------|------------------------------------------------------------------------------|
+| 3.0.0       | 22-05-2024                     | Updated connectivity criteria for **Data Connector**   					  |
