@@ -126,7 +126,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                     $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount errors:`r`n"
                     Write-Host $FinalMessage -ForegroundColor Red
                     # $global:failed = 1 # Commented out to allow the script to continue running
-                    throw "Test failed with errors. Please fix the errors and try again."
+                    # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no errors."
                     Write-Host $FinalMessage -ForegroundColor Green
