@@ -211,5 +211,6 @@ export enum ConnectorCategory {
   PowerBIActivity="PowerBIActivity",
   SecurityAlertOATP="SecurityAlert(OATP)",
   SecurityAlertASC="SecurityAlert(ASC)",
-  CybleThreatIntel="CybleThreatIntel"
+  CybleThreatIntel="CybleThreatIntel",
+  CrowdStrikeFalconIOC="CrowdStrikeFalconIOC"
 }
