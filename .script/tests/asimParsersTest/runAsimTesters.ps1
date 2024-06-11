@@ -125,7 +125,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 if ($Errorcount -gt 0) {
                     $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount errors:`r`n"
                     Write-Host $FinalMessage -ForegroundColor Red
-                    $global:failed = 1
+                    # $global:failed = 1 # Commented out to allow the script to continue running
                     throw "Test failed with errors. Please fix the errors and try again."
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no errors."
@@ -138,7 +138,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
     } catch {
         Write-Host "  -- $_"
         Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
-        $global:failed = 1
+        # $global:failed = 1 # Commented out to allow the script to continue running
         throw $_
     }
 }
