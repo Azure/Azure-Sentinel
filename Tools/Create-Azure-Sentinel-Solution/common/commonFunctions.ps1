@@ -1800,7 +1800,22 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         break;
                     }
 
-                    $is1PConnector = [bool]($contentToImport.PSObject.Properties.Name.tolower() -match 'is1pconnector') ? $contentToImport.Is1PConnector : $false
+                    $hasStaticDataConnectorIdsProperty = [bool]($contentToImport.PSObject.Properties.Name.tolower() -match 'staticdataconnectorids') ? $true : $false
+
+                    $is1PConnector = $false
+                    if ($hasStaticDataConnectorIdsProperty) {
+                        $staticDataConnectorIdsArray = $contentToImport.StaticDataConnectorIds
+
+                        if ($null -ne $staticDataConnectorIdsArray -and $staticDataConnectorIdsArray.count -gt 0) {
+                            $dataConnectorId = $connectorData.id
+                            $hasDataConnectorId = [bool]($contentToImport.StaticDataConnectorIds | Where-Object { $_ -eq "$dataConnectorId"} )
+    
+                            if ($hasDataConnectorId) {
+                                # data connector id is specified in GenericDataConnectorIds array so we have to make this as generic connector
+                                $is1PConnector = $true
+                            }
+                        }
+                    }
 
                     $global:DependencyCriteria += [PSCustomObject]@{
                         kind      = "DataConnector";
@@ -1902,32 +1917,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
                             }
                         }
-
-                        #========Start: Validate if we need to create GenericUI connector===========
-                        if ($isPipelineRun) {
-                            $dataConnectors = $contentToImport."Data Connectors" | ConvertFrom-Json
-                            $numberOfDataConnectors = $dataConnectors.Count
-                        } else {
-                            $numberOfDataConnectors = $contentToImport."Data Connectors".Count
-                        }
-
-                        if ($is1PConnector -eq $true -and $numberOfDataConnectors -gt 1) {
-                            # execute only when we have more then 1 data connectors.
-                            $hasGenericDataConnectorProp = [bool]($dataFileMetadata.PSObject.Properties.Name.tolower() -match 'genericdataconnectorids')
-
-                            if ($hasGenericDataConnectorProp) {
-                                $countGenericDataConnector = $contentToImport.GenericDataConnectorIds.Count
-                                if ($countGenericDataConnector -gt 0) {
-                                    $dataConnectorId = $connectorData.id
-                                    $hasDataConnectorId = [bool]($contentToImport.GenericDataConnectorIds | Where-Object { $_ -eq "$dataConnectorId"} )
-                                    if ($hasDataConnectorId) {
-                                        # data connector id is specified in GenericDataConnectorIds array so we have to make this as generic connector
-                                        $is1PConnector = $false
-                                    }
-                                }
-                            }
-                        }
-                        #========End: Validate if we need to create GenericUI connector===========
 
                         # Data Connector Content -- *Assumes GenericUI
                         if($is1PConnector)
