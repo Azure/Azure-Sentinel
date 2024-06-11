@@ -2,8 +2,8 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
        "metadata": {
-        "title": "RecordedFutureIdentity-search-external-user", 
-        "description": "This playbook searches the Recorded Future Identity Intelligence Module for compromised external (customer) users.\n\nThis playbook depends on:\n- RecordedFutureIdentity-add-EntraID-security-group-user\n- RecordedFutureIdentity-confirm-EntraID-risky-user\n- RecordedFutureIdentity-lookup-and-save-user\n\n Those playbooks need to be installed **manually** before installing current playbook.",
+        "title": "RFI-search-workforce-user", 
+        "description": "This playbook searches the Recorded Future Identity Intelligence Module for compromised workforce users.\n\nThis playbook depends on:\n- RFI-add-EntraID-security-group-user\n- RFI-confirm-EntraID-risky-user\n- RFI-lookup-and-save-user\n\n Those playbooks need to be installed **manually** before installing current playbook.",
         "lastUpdateTime": "2024-04-16T00:00:00.000Z", 
         "entities": [], 
         "tags": ["Identity protection"], 
@@ -28,7 +28,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "RFI-search-external-user",
+            "defaultValue": "RFI-search-workforce-user",
             "type": "string"
         },
         "Playbook-Name-add-EntraID-security-group-user": {
@@ -78,6 +78,10 @@
                             "defaultValue": -14,
                             "type": "Int"
                         },
+                        "credential_dumps_log_analytics_custom_log_name": {
+                            "defaultValue": "RecordedFutureIdentity_LeakedCredentials_CredentialDumps_CL",
+                            "type": "String"
+                        },
                         "malware_logs_log_analytics_custom_log_name": {
                             "defaultValue": "RecordedFutureIdentity_LeakedCredentials_MalwareLogs_CL",
                             "type": "String"
@@ -113,6 +117,18 @@
                         }
                     },
                     "actions": {
+                        "Add_Log_Analytics_Credential_dump_exposures_to_the_corresponding_array": {
+                            "runAfter": {
+                                "Query_Log_Analytics_for_Credential_dump_exposures": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "known_credential_dump_creds",
+                                "value": "@body('Query_Log_Analytics_for_Credential_dump_exposures')?['value']"
+                            }
+                        },
                         "Add_Log_Analytics_Malware_log_exposures_to_the_corresponding_array": {
                             "runAfter": {
                                 "Query_Log_Analytics_for_Malware_log_exposures": [
@@ -130,7 +146,7 @@
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                    "domain_type": "Customer (external use case)",
+                                    "domain_type": "My Organization (workforce use case)",
                                     "domains": [
                                         "@parameters('organization_domain')"
                                     ],
@@ -148,6 +164,46 @@
                                 "path": "/credentials/search"
                             }
                         },
+                        "For_Each_-_Make_new_and_known_Credential_dumps_be_comparable": {
+                            "foreach": "@body('Credential_Search_-_Search_credential_data_for_one_or_more_domains')?['credential_dumps']",
+                            "actions": {
+                                "Append_transformed_exposures_to_array": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "transformed_rf_api_credential_dump_creds",
+                                        "value": {
+                                            "email": "@items('For_Each_-_Make_new_and_known_Credential_dumps_be_comparable')"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_-_Array_of_transformed_new_Credential_dump_exposures": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_Each_-_extend_new_exposures_array_with_new_Credential_dump_exposures": {
+                            "foreach": "@variables('unknown_credential_dump_creds')",
+                            "actions": {
+                                "Add_new_Credential_dump_exposure_email_to_the_array_of_all_new_exposures": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "newly_leaked_emails",
+                                        "value": "@items('For_Each_-_extend_new_exposures_array_with_new_Credential_dump_exposures')?['email']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_-_extend_new_exposures_array_with_new_Malware_log_exposures": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
                         "For_Each_-_extend_new_exposures_array_with_new_Malware_log_exposures": {
                             "foreach": "@variables('unknown_malware_log_creds')",
                             "actions": {
@@ -162,6 +218,44 @@
                             },
                             "runAfter": {
                                 "Initialize_-_Array_of_all_new_exposures_(emails)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_Each_new_Credential_dump_exposures": {
+                            "foreach": "@variables('transformed_rf_api_credential_dump_creds')",
+                            "actions": {
+                                "If_Credential_dump_exposure_is_new": {
+                                    "actions": {
+                                        "Add_new_exposure_to_the_new_Credential_dump_exposures_array": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "unknown_credential_dump_creds",
+                                                "value": "@items('For_Each_new_Credential_dump_exposures')"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "contains": [
+                                                        "@variables('known_credential_dump_creds')",
+                                                        "@items('For_Each_new_Credential_dump_exposures')"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "\"New\" - means it have not been previously seen by the Logic App."
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_-_Array_of_new_Credential_dump_exposures": [
                                     "Succeeded"
                                 ]
                             },
@@ -215,7 +309,7 @@
                                     "inputs": {},
                                     "description": "This block is needed only to create 3 branches in this For each loop."
                                 },
-                                "RecordedFutureIdentity-add-EntraID-security-group-user": {
+                                "RFI-add-EntraID-security-group-user": {
                                     "runAfter": {
                                         "Current_time": [
                                             "Succeeded"
@@ -239,30 +333,7 @@
                                         }
                                     }
                                 },
-                                "RecordedFutureIdentity-confirm-EntraID-risky-user": {
-                                    "runAfter": {
-                                        "Current_time": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "type": "Workflow",
-                                    "inputs": {
-                                        "body": {
-                                            "active_directory_domain": "@parameters('active_directory_domain')",
-                                            "risky_user_email": "@{items('For_each_new_exposures_-_do_protective_actions')}"
-                                        },
-                                        "headers": {
-                                            "Content-Type": "application/json"
-                                        },
-                                        "host": {
-                                            "triggerName": "manual",
-                                            "workflow": {
-                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Playbook-Name-confirm-EntraID-risky-user'))]"
-                                            }
-                                        }
-                                    }
-                                },
-                                "RecordedFutureIdentity-lookup-and-save-user": {
+                                "RFI-lookup-and-save-user": {
                                     "runAfter": {
                                         "Current_time": [
                                             "Succeeded"
@@ -285,10 +356,33 @@
                                             }
                                         }
                                     }
+                                },
+                                "RFI-confirm-EntraID-risky-user": {
+                                    "runAfter": {
+                                        "Current_time": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Workflow",
+                                    "inputs": {
+                                        "body": {
+                                            "active_directory_domain": "@parameters('active_directory_domain')",
+                                            "risky_user_email": "@{items('For_each_new_exposures_-_do_protective_actions')}"
+                                        },
+                                        "headers": {
+                                            "Content-Type": "application/json"
+                                        },
+                                        "host": {
+                                            "triggerName": "manual",
+                                            "workflow": {
+                                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Playbook-Name-confirm-EntraID-risky-user'))]"
+                                            }
+                                        }
+                                    }
                                 }
                             },
                             "runAfter": {
-                                "For_Each_-_extend_new_exposures_array_with_new_Malware_log_exposures": [
+                                "For_Each_-_extend_new_exposures_array_with_new_Credential_dump_exposures": [
                                     "Succeeded"
                                 ]
                             },
@@ -301,6 +395,12 @@
                         },
                         "Initialize_-_Array_of_all_new_exposures_(emails)": {
                             "runAfter": {
+                                "Send_Data_-_Save_new_Credential_dump_exposures_into_Log_Analytics_Custom_Log": [
+                                    "Succeeded",
+                                    "Skipped",
+                                    "TimedOut",
+                                    "Failed"
+                                ],
                                 "Send_Data_-_Save_new_Malware_log_exposures_into_Log_Analytics_Custom_Log": [
                                     "Succeeded",
                                     "Skipped",
@@ -317,6 +417,23 @@
                                     }
                                 ]
                             }
+                        },
+                        "Initialize_-_Array_of_known_Credential_dump_exposures": {
+                            "runAfter": {
+                                "Credential_Search_-_Search_credential_data_for_one_or_more_domains": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "known_credential_dump_creds",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "Existing Credential dumps (collected during prior Logic App runs)"
                         },
                         "Initialize_-_Array_of_known_Malware_log_exposures": {
                             "runAfter": {
@@ -335,6 +452,23 @@
                             },
                             "description": "Existing Malware logs (collected during prior Logic App runs)"
                         },
+                        "Initialize_-_Array_of_new_Credential_dump_exposures": {
+                            "runAfter": {
+                                "For_Each_-_Make_new_and_known_Credential_dumps_be_comparable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "unknown_credential_dump_creds",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "\"New\" - means that this are new leaks, which weren't seen on previous runs of the logic app."
+                        },
                         "Initialize_-_Array_of_new_Malware_log_exposures": {
                             "runAfter": {
                                 "Add_Log_Analytics_Malware_log_exposures_to_the_corresponding_array": [
@@ -352,6 +486,49 @@
                                 ]
                             },
                             "description": "Exposures that wasn't previously seen by the Logic App."
+                        },
+                        "Initialize_-_Array_of_transformed_new_Credential_dump_exposures": {
+                            "runAfter": {
+                                "Add_Log_Analytics_Credential_dump_exposures_to_the_corresponding_array": [
+                                    "Succeeded",
+                                    "Skipped"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "transformed_rf_api_credential_dump_creds",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "New Credential dumps are formatted to enable storing and comparing them with existing Credential dumps in Log Analytics."
+                        },
+                        "Query_Log_Analytics_for_Credential_dump_exposures": {
+                            "runAfter": {
+                                "Initialize_-_Array_of_known_Credential_dump_exposures": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{parameters('credential_dumps_log_analytics_custom_log_name')}\n| project email=email_s",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/queryData",
+                                "queries": {
+                                    "resourcegroups": "RF",
+                                    "resourcename": "RF-log-analyitics",
+                                    "resourcetype": "Log Analytics Workspace",
+                                    "subscriptions": "@subscription().subscriptionId",
+                                    "timerange": "@{formatDateTime(addDays(utcNow(), parameters('search_lookback_days')), 'yyyy-MM-dd')}"
+                                }
+                            }
                         },
                         "Query_Log_Analytics_for_Malware_log_exposures": {
                             "runAfter": {
@@ -378,6 +555,28 @@
                                 }
                             }
                         },
+                        "Send_Data_-_Save_new_Credential_dump_exposures_into_Log_Analytics_Custom_Log": {
+                            "runAfter": {
+                                "Transform_new_Credential_dump_exposures_array_into_a_JSON_object": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{outputs('Transform_new_Credential_dump_exposures_array_into_a_JSON_object')}",
+                                "headers": {
+                                    "Log-Type": "@parameters('credential_dumps_log_analytics_custom_log_name')",
+                                    "time-generated-field": "@{utcNow()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        },
                         "Send_Data_-_Save_new_Malware_log_exposures_into_Log_Analytics_Custom_Log": {
                             "runAfter": {
                                 "Transform_new_Malware_log_exposures_array_into_a_JSON_object": [
@@ -399,6 +598,15 @@
                                 "method": "post",
                                 "path": "/api/logs"
                             }
+                        },
+                        "Transform_new_Credential_dump_exposures_array_into_a_JSON_object": {
+                            "runAfter": {
+                                "For_Each_new_Credential_dump_exposures": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@variables('unknown_credential_dump_creds')"
                         },
                         "Transform_new_Malware_log_exposures_array_into_a_JSON_object": {
                             "runAfter": {
