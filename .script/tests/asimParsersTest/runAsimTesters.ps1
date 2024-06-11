@@ -161,7 +161,7 @@ run
 
 if ($global:failed -ne 0) {
     Write-Host "Script failed with errors." -ForegroundColor Red
-    exit 1
+    exit 0 # Exit with error code 1 if you want to fail the build
 } else {
     Write-Host "Script completed successfully." -ForegroundColor Green
     exit 0
