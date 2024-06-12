@@ -6,6 +6,18 @@ on:
     types: [opened, edited, reopened, synchronize, labeled]
     branches:
       - master
+    paths:
+    - 'Parsers/ASimDns/Parsers/**'
+    - 'Parsers/ASimNetworkSession/Parsers/**'
+    - 'Parsers/ASimWebSession/Parsers/**'
+    - 'Parsers/ASimProcessEvent/Parsers/**'
+    - 'Parsers/ASimAuditEvent/Parsers/**'
+    - 'Parsers/ASimAuthentication/Parsers/**'
+    - 'Parsers/ASimFileEvent/Parsers/**'
+    - 'Parsers/ASimRegistryEvent/Parsers/**'
+    - 'Parsers/ASimUserManagement/Parsers/**'
+    - 'Parsers/ASimDhcpEvent/Parsers/**'
+    
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -17,71 +29,7 @@ jobs:
   run-asim-testers:
     runs-on: ubuntu-latest
     steps:
-      - name: Check for modified files using GitHub API
-        id: check_files
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Checking for ASIM files in the pull request..."
-          # Set variables
-          REPO="Azure/Azure-Sentinel"
-          PR_ID=${{ github.event.pull_request.number }}
-          GITHUB_TOKEN=$GITHUB_TOKEN
-          # Debugging: Print full API URL to verify correctness
-          api_url="https://api.github.com/repos/$REPO/pulls/$PR_ID/files"
-          echo "API URL: $api_url"
-          # Fetch the list of changed files using GitHub REST API
-          changed_files_json=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$api_url")
-          # Print raw JSON response for debugging
-          # echo "Raw JSON response: $changed_files_json"
-          # Check if the request was successful
-          if echo $changed_files_json | jq -e . >/dev/null 2>&1; then
-            echo "Successfully fetched changed files."
-          else
-            echo "Failed to fetch changed files. Response:"
-            echo "$changed_files_json"
-            exit 1
-          fi
-          # Extract the list of filenames using jq
-          changed_files=$(echo "$changed_files_json" | jq -r '.[].filename')
-          # echo "Changed files: $changed_files"
-          # Initialize the variable indicating if relevant files are found
-          files_changed=false
-          # Initialize the array to store the names of the matching files
-          matching_files=()
-          # Check each changed file against the specified paths
-          for file in $changed_files; do
-            if [[ $file == Parsers/ASimDns/Parsers/* ]] || \
-              [[ $file == Parsers/ASimNetworkSession/Parsers/* ]] || \
-              [[ $file == Parsers/ASimWebSession/Parsers/* ]] || \
-              [[ $file == Parsers/ASimProcessEvent/Parsers/* ]] || \
-              [[ $file == Parsers/ASimAuditEvent/Parsers/* ]] || \
-              [[ $file == Parsers/ASimAuthentication/Parsers/* ]] || \
-              [[ $file == Parsers/ASimFileEvent/Parsers/* ]] || \
-              [[ $file == Parsers/ASimRegistryEvent/Parsers/* ]] || \
-              [[ $file == Parsers/ASimUserManagement/Parsers/* ]] || \
-              [[ $file == Parsers/ASimDhcpEvent/Parsers/* ]]; then
-              # Add the file to the array
-              matching_files+=("$file")
-            fi
-          done
-          # Set the pipeline variable
-          if [ ${#matching_files[@]} -gt 0 ]; then
-            echo "ASIM parser changes detected."
-            files_changed=true
-          else
-            echo "No ASIM parser changes detected."
-            files_changed=false
-          fi
-          # Print the names of the matching files
-          for file in "${matching_files[@]}"; do
-            echo "$file"
-          done
-          # Output the result
-          echo "files_changed=$files_changed" >> $GITHUB_OUTPUT
-          echo "ASIM parser changes detected: $files_changed"
       - name: Checkout pull request branch
-        if: steps.check_files.outputs.files_changed == 'true'
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.ref }}
@@ -90,13 +38,11 @@ jobs:
           fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
 
       - name: Setup git config
-        if: steps.check_files.outputs.files_changed == 'true'
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "<>"
 
       - name: Merge master into pull request branch
-        if: steps.check_files.outputs.files_changed == 'true'
         run: |
           git merge origin/master
           Conflicts=$(git ls-files -u | wc -l)
@@ -105,9 +51,8 @@ jobs:
             git merge --abort
             exit 1
           fi
-          
+
       - name: Login to Azure Public Cloud with AzPowershell
-        if: steps.check_files.outputs.files_changed == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -116,7 +61,6 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Run ASIM testers
-        if: steps.check_files.outputs.files_changed == 'true'
         uses: azure/powershell@v2
         with:
           inlineScript: |
