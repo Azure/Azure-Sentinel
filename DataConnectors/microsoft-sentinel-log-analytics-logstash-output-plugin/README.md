@@ -23,7 +23,7 @@ Microsoft Sentinel provides Logstash output plugin to Log analytics workspace us
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - 7.0 - 7.17.13
 - 8.0 - 8.9
-- 8.11
+- 8.11 - 8.13
 
 ```
 wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/elastic.gpg >/dev/null
