@@ -15,9 +15,9 @@ References:
 - Title: Logs type Description in Barracuda WAF
   Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
 Description: |
-  This ASIM parser supports normalizing Barracuda WAF logs ingested in 'barracuda_CL' table to the ASIM Audit Event schema.
-ParserName: ASimAuditEventBarracudaCEF
-EquivalentBuiltInParser: _ASim_AuditEvent_BarracudaCEF
+  This ASIM parser supports normalizing Barracuda WAF logs ingested in 'CommonSecurityLog' table to the ASIM Audit Event schema.
+ParserName: ASimAuditEventBarracudaWAF
+EquivalentBuiltInParser: _ASim_AuditEvent_BarracudaWAF
 ParserParams:
   - Name: disabled
     Type: bool
@@ -93,23 +93,22 @@ ParserQuery: |
       "aps_content_protection", "Other"
   ];
   let parser = (disabled: bool=false) {
-      let BarracudaCustom = 
-          (union isfuzzy=true
-              barracudaSchema,
-              barracuda_CL
-          | where not(disabled) 
-              and LogType_s == "AUDIT" 
-              and EventName_s !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN")
-          | parse trim(@'[^\w(")]+', EventMessage_s) with * "Reason=" Reason: string
+      let BarracudaCEF = 
+          CommonSecurityLog
+          | where not(disabled)
+              and DeviceVendor startswith "Barracuda"
+              and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
+          | where DeviceEventCategory == "AUDIT" 
+              and (toupper(ProcessName) !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
+          | parse trim(@'[^\w(")]+', Message) with * "Reason=" Reason: string 
           | extend Reason = trim('"', Reason)
-          | extend
+          | extend 
               EventResultDetails = Reason,
-              severity = toint(Severity_s)
+              severity = toint(LogSeverity)
           | lookup SeverityLookup on severity
-          | lookup EventTypeLookup on ChangeType_s
-          | lookup ObjectTypeLookup on ObjectType_s
+          | lookup EventTypeLookup on $left.EventOutcome == $right.ChangeType_s
+          | lookup ObjectTypeLookup on $left.FileType == $right.ObjectType_s
           | extend
-              EventType = EventType_lookup,
               EventResult = "Success", 
               EventSchema = "AuditEvent",
               EventSchemaVersion = "0.1.0",
@@ -117,43 +116,71 @@ ParserQuery: |
               EventProduct = "WAF",
               EventCount = toint(1)
           | extend
-              Dvc = UnitName_s, 
-              EventStartTime = iff(isnotempty(TimeTaken_d), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s) - tolong(TimeTaken_d)), unixtime_milliseconds_todatetime(tolong(DeviceReceiptTime_s))),
-              Operation = CommandName_s,
-              DvcIpAddr = HostIP_s,
-              NewValue = NewValue_s,
-              SrcIpAddr = LoginIP_s,
-              EventMessage = EventMessage_s,
-              OldValue = OldValue_s,
-              DvcHostname = host_s,
-              ActorUsername = AdminName_s,
-              Object = ObjectName_s        
+              EventType = EventType_lookup,
+              Dvc = DeviceName, 
+              EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime) - tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
+              Operation = ProcessName,
+              DvcIpAddr = DeviceAddress,
+              NewValue = DeviceCustomString1,
+              SrcIpAddr = SourceIP,
+              EventMessage = Message,
+              OldValue = DeviceCustomString2,
+              DvcHostname = DeviceName,
+              ActorUsername = DestinationUserName,
+              Object = FileName,
+              ThreatConfidence = toint(ThreatConfidence)     
           | extend
               Src = SrcIpAddr,
               EventEndTime = EventStartTime,
               ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
               ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""),
               User = ActorUsername,
-              Value = NewValue          
+              Value = NewValue 
           | extend
               IpAddr = SrcIpAddr,
               ValueType = iff(isnotempty(Value), "Other", "")
           | project-away
-              *_d,
-              *_s,
               EventType_lookup,
-              _ResourceId,
+              ThreatConfidence,
+              CommunicationDirection,
+              AdditionalExtensions,
+              Device*,
+              Source*,
               Reason,
-              severity,
-              RawData,
-              SourceIP,
+              Destination*,
+              Activity,
+              LogSeverity,
+              ApplicationProtocol,
+              ProcessID,
+              ExtID,
+              Protocol,
+              ReceiptTime,
+              SimplifiedDeviceAction,
+              OriginalLogSeverity,
+              ProcessName,
+              EndTime,
+              ExternalID,
+              File*,
+              ReceivedBytes,
               Message,
+              Old*,
+              EventOutcome,
+              Request*,
+              StartTime,
+              Field*,
+              Flex*,
+              Remote*,
+              Malicious*,
+              severity,
+              ThreatSeverity,
+              IndicatorThreatType,
+              ThreatDescription,
+              _ResourceId,
+              SentBytes,
+              ReportReferenceLink,
               Computer,
-              MG,
-              ManagementGroupName,
               TenantId,
-              SourceSystem
-          );
-      BarracudaCustom
+              CollectorHostName;
+      BarracudaCEF
   };
   parser(disabled=disabled)
