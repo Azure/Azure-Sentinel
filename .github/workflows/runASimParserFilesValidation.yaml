@@ -1,0 +1,56 @@
+# Each pull request that updates ASIM parsers triggers the script.
+# The script runs ASIM parsers file validation tests.
+name: Run ASim Parser File Validation tests
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled]
+    paths:
+    - 'Parsers/ASimDns/Parsers/**'
+    - 'Parsers/ASimNetworkSession/Parsers/**'
+    - 'Parsers/ASimWebSession/Parsers/**'
+    - 'Parsers/ASimProcessEvent/Parsers/**'
+    - 'Parsers/ASimAuditEvent/Parsers/**'
+    - 'Parsers/ASimAuthentication/Parsers/**'
+    - 'Parsers/ASimFileEvent/Parsers/**'
+    - 'Parsers/ASimRegistryEvent/Parsers/**'
+    - 'Parsers/ASimUserManagement/Parsers/**'
+    - 'Parsers/ASimDhcpEvent/Parsers/**'
+    branches:
+      - master
+
+jobs:
+  run-ASim-FileValidation-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout pull request branch
+      uses: actions/checkout@v3
+      with:
+            ref: ${{github.event.pull_request.head.ref}}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
+            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+
+    - name: Setup git config
+      run: |
+              git config --local user.name "github-actions[bot]"
+              git config --local user.email "<>"
+    - name: Merge master into pull request branch
+      run: |
+              git merge origin/master
+              Conflicts=$(git ls-files -u | wc -l)
+              if [ "$Conflicts" -gt 0 ] ; then
+                echo "There is a merge conflict. Aborting"
+                git merge --abort
+                exit 1
+              fi
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Run Python script
+      run: |
+        python .script/tests/asimParsersTest/Review_ASIM_PR.py
