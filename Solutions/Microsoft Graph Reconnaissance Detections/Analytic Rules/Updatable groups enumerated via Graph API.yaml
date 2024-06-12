@@ -1,0 +1,52 @@
+id: ff4ea1c0-02a0-4867-9fd5-fab5ee2ac2ff
+name: Updatable groups enumerated via Graph API
+version: 1.0.0
+kind: Scheduled
+description: |-
+  This rule aims to detect the enumeration of updatable groups via Graph API. It will check for users calling the API to search for all groups AND having more than 10 EstimateAccess calls within the hour.
+
+  Investigation steps
+  ---------------------------
+  1. Scrutinize the user doing this. Are they an IT profile?
+  2. Look at the user agent being used. Powershell is highly suspicious as this may be GraphRunner.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - MicrosoftGraphActivityLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+relevantTechniques:
+- T1069
+query: |-
+  MicrosoftGraphActivityLogs
+  | where TimeGenerated > ago(1h)
+  | where RequestUri contains "https://graph.microsoft.com/beta/roleManagement/directory/estimateAccess" or RequestUri == "https://graph.microsoft.com/v1.0/groups"
+  | join kind=inner (IdentityInfo| where TimeGenerated > ago(14d) | distinct AccountUPN, AccountObjectId) on $left.UserId == $right.AccountObjectId
+  | summarize make_set(RequestUri), AmountsOfAccessEstimated = countif(RequestUri contains "https://graph.microsoft.com/beta/roleManagement/directory/estimateAccess") by AccountUPN
+  | where set_RequestUri contains "https://graph.microsoft.com/v1.0/groups"
+  | where AmountsOfAccessEstimated > 10
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: AccountUPN
+suppressionDuration: 5h
+
