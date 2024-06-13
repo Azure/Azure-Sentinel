@@ -8,6 +8,8 @@ $global:workspaceId = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
 
 # ANSI escape code for green text
 $green = "`e[32m"
+# ANSI escape code for yellow text
+$yellow = "`e[33m"
 # ANSI escape code to reset color
 $reset = "`e[0m"
 
@@ -52,11 +54,9 @@ function run {
         }
     }
     # Print the file names and their status
-    Write-Host "::notice::The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:"
+    Write-Host "${green}The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:${reset}"
     foreach ($file in $modifiedFiles) {
-        Write-Host "::group::Changed Files:"
-        Write-Host "${green}'{0} ({1})' -f $file.Name, $file.Status${reset}"
-        Write-Host "::endgroup::"
+        Write-Host ${yellow}("{0} ({1})" -f $file.Name, $file.Status)${reset}
     }
     Write-Host "***************************************************"
 
@@ -78,7 +78,7 @@ function testSchema([string] $ParserFile) {
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
     if ($parsersAsObject.Parsers) {
         Write-Host "***************************************************"
-        Write-Host "::notice::The parser '$functionName' is a main parser, ignoring it" -ForegroundColor Yellow
+        Write-Host "${yellow}The parser '$functionName' is a main parser, ignoring it${reset}"
         Write-Host "***************************************************"
     } else {
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
@@ -143,7 +143,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                     # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
-                    Write-Host "::notice::$FinalMessage"
+                    Write-Host "${green}$FinalMessage${reset}"
                 }
             } else {
                 Write-Host "::warning::$name $kind - test completed. No records found"
@@ -190,6 +190,6 @@ if ($global:failed -ne 0) {
     Write-Host "::error::Script failed with errors."
     exit 0 # Exit with error code 1 if you want to fail the build
 } else {
-    Write-Host "::notice::Script completed successfully."
+    Write-Host "${green}Script completed successfully.${reset}"
     exit 0
 }
