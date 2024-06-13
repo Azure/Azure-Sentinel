@@ -6,6 +6,13 @@ $global:subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
 $global:workspaceId = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
 
+# ANSI escape code for green text
+$green = "`e[32m"
+# ANSI escape code for yellow text
+$yellow = "`e[33m"
+# ANSI escape code to reset color
+$reset = "`e[0m"
+
 Class Parser {
     [string] $Name
     [string] $OriginalQuery
@@ -47,9 +54,9 @@ function run {
         }
     }
     # Print the file names and their status
-    Write-Host "The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:"
+    Write-Host "${green}The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:${reset}"
     foreach ($file in $modifiedFiles) {
-        Write-Host ("{0} ({1})" -f $file.Name, $file.Status) -ForegroundColor Green
+        Write-Host ${yellow}("{0} ({1})" -f $file.Name, $file.Status)${reset}
     }
     Write-Host "***************************************************"
 
@@ -71,7 +78,7 @@ function testSchema([string] $ParserFile) {
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
     if ($parsersAsObject.Parsers) {
         Write-Host "***************************************************"
-        Write-Host "The parser '$functionName' is a main parser, ignoring it" -ForegroundColor Yellow
+        Write-Host "${yellow}The parser '$functionName' is a main parser, ignoring it${reset}"
         Write-Host "***************************************************"
     } else {
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
@@ -80,18 +87,18 @@ function testSchema([string] $ParserFile) {
 
 function testParser([Parser] $parser) {
     Write-Host "***************************************************"
-    Write-Host "Testing parser - '$($parser.Name)'" -ForegroundColor Green
+    Write-Host "${yellow}Testing parser - '$($parser.Name)'${reset}"
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $letStatementName = ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
     
-    Write-Host "Running ASIM 'Schema' tests for '$($parser.Name)' parser"
+    Write-Host "${yellow}Running ASIM 'Schema' tests for '$($parser.Name)' parser${reset}"
     Write-Host "***************************************************"
     $schemaTest = "$parserAsletStatement`r`n$letStatementName | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
-    Write-Host "Schema name is: $($parser.Schema)"
+    Write-Host "${yellow}Schema name is: $($parser.Schema)${reset}"
     invokeAsimTester $schemaTest $parser.Name "schema"
     
     Write-Host "***************************************************"
-    Write-Host "Running ASIM 'Data' tests for '$($parser.Name)' parser"
+    Write-Host "${yellow}Running ASIM 'Data' tests for '$($parser.Name)' parser${reset}"
     $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
@@ -122,22 +129,29 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 $resultsArray | ForEach-Object { $TestResults += "$($_.Result)`r`n" }
                 Write-Host $TestResults
                 $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
-                if ($Errorcount -gt 0) {
-                    $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount errors:`r`n"
-                    Write-Host $FinalMessage -ForegroundColor Red
+                $IgnoreParserIsSet = IgnoreValidationForASIMParsers | Where-Object { $name -like "$_*" }
+                if ($Errorcount -gt 0 -and $IgnoreParserIsSet)
+                {
+                    $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
+                    Write-Host "::error::$FinalMessage"
+                    Write-Host "::warning::Ignoring the errors for the parser '$name' as it is part of the exclusions list."
+                }
+                elseif ($Errorcount -gt 0) {
+                    $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
+                    Write-Host "::error:: $FinalMessage"
                     # $global:failed = 1 # Commented out to allow the script to continue running
                     # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
-                    $FinalMessage = "'$name' '$kind' - test completed successfully with no errors."
-                    Write-Host $FinalMessage -ForegroundColor Green
+                    $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
+                    Write-Host "${green}$FinalMessage${reset}"
                 }
             } else {
-                Write-Host "$name $kind test done successfully. No records found"
+                Write-Host "::warning::$name $kind - test completed. No records found"
             }
         }
     } catch {
-        Write-Host "  -- $_"
-        Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
+        Write-Host "::error::  -- $_"
+        Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
         # $global:failed = 1 # Commented out to allow the script to continue running
         # throw $_
     }
@@ -157,12 +171,25 @@ function getParameters([System.Collections.Generic.List`1[System.Object]] $parse
     return ""
 }
 
+function IgnoreValidationForASIMParsers() {
+    $csvPath = "$($PSScriptRoot)/ExclusionListForASimTests.csv"
+    $csvContent = Import-Csv -Path $csvPath
+    $parserNames = @()
+
+    foreach ($row in $csvContent) {
+        $parserNames += $row.ParserName
+    }
+
+    return $parserNames
+}
+
+# Call the run function. This is the entry point of the script
 run
 
 if ($global:failed -ne 0) {
-    Write-Host "Script failed with errors." -ForegroundColor Red
+    Write-Host "::error::Script failed with errors."
     exit 0 # Exit with error code 1 if you want to fail the build
 } else {
-    Write-Host "Script completed successfully." -ForegroundColor Green
+    Write-Host "${green}Script completed successfully.${reset}"
     exit 0
 }
