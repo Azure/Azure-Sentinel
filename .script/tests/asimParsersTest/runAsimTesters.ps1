@@ -148,8 +148,8 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
             }
         }
     } catch {
-        Write-Host "  -- $_"
-        Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
+        Write-Host "::error::  -- $_"
+        Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
         # $global:failed = 1 # Commented out to allow the script to continue running
         # throw $_
     }
