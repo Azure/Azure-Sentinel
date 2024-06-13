@@ -1,4 +1,4 @@
-# AS-Revoke-Azure-AD-User-Session-From-Incident
+# AS-Revoke-Entra-ID-User-Session-From-Incident
 Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
@@ -33,7 +33,7 @@ Click "**New registration**".
 
 ![RevokeUserSession_App_Registration_1](Images/RevokeUserSession_App_Registration_1.png)
 
-Enter "**AS-Revoke-Azure-AD-User-Session-From-Incident**" for the name, all else can be left as is. Click "**Register**"
+Enter "**AS-Revoke-Entra-ID-User-Session-From-Incident**" for the name, all else can be left as is. Click "**Register**"
 
 ![RevokeUserSession_App_Registration_2](Images/RevokeUserSession_App_Registration_2.png)
 
@@ -78,7 +78,7 @@ Navigate to an existing key vault or create a new one. From the key vault overvi
 
 ![RevokeUserSession_Key_Vault_1](Images/RevokeUserSession_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**AS-Revoke-Azure-AD-User-Session-From-Incident--App-Registration-Client-Secret**", and enter the client secret copied in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Revoke-Azure-AD-User-Session-From-Incident#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**AS-Revoke-Entra-ID-User-Session-From-Incident--App-Registration-Client-Secret**", and enter the client secret copied in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Revoke-Azure-AD-User-Session-From-Incident#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
 
 ![RevokeUserSession_Key_Vault_2](Images/RevokeUserSession_Key_Vault_2.png)
 
@@ -107,7 +107,7 @@ In the **Project Details** section:
 
 In the **Instance Details** section:
 
-* **Playbook Name**: This can be left as "**AS-Revoke-Azure-AD-User-Session-From-Incident**" or you may change it.
+* **Playbook Name**: This can be left as "**AS-Revoke-Entra-ID-User-Session-From-Incident**" or you may change it.
 
 * **Client ID**: Enter the Application (client) ID of your app registration referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Revoke-Azure-AD-User-Session-From-Incident#create-an-app-registration).
 
@@ -142,7 +142,7 @@ Select the "**Get**" checkbox under "**Secret permissions**", then click "**Next
 
 ![RevokeUserSession_Key_Vault_Access_2](Images/RevokeUserSession_Key_Vault_Access_2.png)
 
-Paste "**AS-Revoke-Azure-AD-User-Session-From-Incident**" into the principal search box and click the option that appears. If the app registration also appears, select the option that does **not** match the Application (client) ID of your app registration. Click "**Next**" towards the bottom of the page.
+Paste "**AS-Revoke-Entra-ID-User-Session-From-Incident**" into the principal search box and click the option that appears. If the app registration also appears, select the option that does **not** match the Application (client) ID of your app registration. Click "**Next**" towards the bottom of the page.
 
 ![RevokeUserSession_Key_Vault_Access_3](Images/RevokeUserSession_Key_Vault_Access_3.png)
 
@@ -166,7 +166,7 @@ Select the "**Microsoft Sentinel Contributor**" role, then click "**Next**".
 
 ![RevokeUserSession_Add_Contributor_Role_2](Images/RevokeUserSession_Add_Contributor_Role_2.png)
 
-Select the "**Managed identity**" option, then click "**Select Members**". Under the subscription the Logic App is located, set the value of "**Managed identity**" to "**Logic app**". Next, enter "**AS-Revoke-Azure-AD-User-Session-From-Incident**", or the alternative playbook name used during deployment, in the field labeled "**Select**". Select the playbook, then click "**Select**".
+Select the "**Managed identity**" option, then click "**Select Members**". Under the subscription the Logic App is located, set the value of "**Managed identity**" to "**Logic app**". Next, enter "**AS-Revoke-Entra-ID-User-Session-From-Incident**", or the alternative playbook name used during deployment, in the field labeled "**Select**". Select the playbook, then click "**Select**".
 
 ![RevokeUserSession_Add_Contributor_Role_3](Images/RevokeUserSession_Add_Contributor_Role_3.png)
 
