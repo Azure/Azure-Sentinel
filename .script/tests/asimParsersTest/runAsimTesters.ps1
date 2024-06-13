@@ -87,18 +87,18 @@ function testSchema([string] $ParserFile) {
 
 function testParser([Parser] $parser) {
     Write-Host "***************************************************"
-    Write-Host "Testing parser - '$($parser.Name)'" -ForegroundColor Green
+    Write-Host "${yellow}Testing parser - '$($parser.Name)'${reset}"
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $letStatementName = ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
     
-    Write-Host "Running ASIM 'Schema' tests for '$($parser.Name)' parser"
+    Write-Host "${yellow}Running ASIM 'Schema' tests for '$($parser.Name)' parser${reset}"
     Write-Host "***************************************************"
     $schemaTest = "$parserAsletStatement`r`n$letStatementName | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
-    Write-Host "Schema name is: $($parser.Schema)"
+    Write-Host "${yellow}Schema name is: $($parser.Schema)${reset}"
     invokeAsimTester $schemaTest $parser.Name "schema"
     
     Write-Host "***************************************************"
-    Write-Host "Running ASIM 'Data' tests for '$($parser.Name)' parser"
+    Write-Host "${yellow}Running ASIM 'Data' tests for '$($parser.Name)' parser${reset}"
     $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
@@ -132,13 +132,13 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 $IgnoreParserIsSet = IgnoreValidationForASIMParsers | Where-Object { $name -like "$_*" }
                 if ($Errorcount -gt 0 -and $IgnoreParserIsSet)
                 {
-                    $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount error(s):`r`n"
+                    $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
                     Write-Host "::error::$FinalMessage"
                     Write-Host "::warning::Ignoring the errors for the parser '$name' as it is part of the exclusions list."
                 }
                 elseif ($Errorcount -gt 0) {
-                    $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount error(s):`r`n"
-                    Write-Host "::error::$FinalMessage"
+                    $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
+                    Write-Host "::error:: $FinalMessage"
                     # $global:failed = 1 # Commented out to allow the script to continue running
                     # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
