@@ -4,12 +4,12 @@ import time
 import azure.functions as func
 from azure.identity import ClientSecretCredential
 from azure.monitor.ingestion import LogsIngestionClient
-from lib.constants import *
-from lib.utils import download_mmdbs
-from lib.utils import check_and_create_data_collection_endpoint
-from lib.utils import check_and_create_table
-from lib.utils import check_and_create_data_collection_rules
-from lib.utils import get_table
+from constants import *
+from utils import download_mmdbs
+from utils import check_and_create_data_collection_endpoint
+from utils import check_and_create_table
+from utils import check_and_create_data_collection_rules
+from utils import get_table
 
 app = func.FunctionApp()
 

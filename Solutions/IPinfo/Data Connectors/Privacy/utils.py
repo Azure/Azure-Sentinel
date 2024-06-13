@@ -1,7 +1,7 @@
 import requests
 import logging
 import os
-from lib.constants import *
+from constants import *
 
 def generate_url(resource_type, **kwargs):
     url_templates = {
