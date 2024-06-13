@@ -52,9 +52,11 @@ function run {
         }
     }
     # Print the file names and their status
-    Write-Host "The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:"
+    Write-Host "::notice::The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:"
     foreach ($file in $modifiedFiles) {
-        Write-Host ("{0} ({1})" -f $file.Name, $file.Status) -ForegroundColor Green
+        Write-Host "::group::Changed Files:"
+        Write-Host "${green}'{0} ({1})' -f $file.Name, $file.Status${reset}"
+        Write-Host "::endgroup::"
     }
     Write-Host "***************************************************"
 
@@ -76,7 +78,7 @@ function testSchema([string] $ParserFile) {
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
     if ($parsersAsObject.Parsers) {
         Write-Host "***************************************************"
-        Write-Host "The parser '$functionName' is a main parser, ignoring it" -ForegroundColor Yellow
+        Write-Host "::notice::The parser '$functionName' is a main parser, ignoring it" -ForegroundColor Yellow
         Write-Host "***************************************************"
     } else {
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
@@ -131,17 +133,17 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 if ($Errorcount -gt 0 -and $IgnoreParserIsSet)
                 {
                     $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount error(s):`r`n"
-                    Write-Host $FinalMessage -ForegroundColor Red
+                    Write-Host "::error::$FinalMessage"
                     Write-Host "::warning::Ignoring the errors for the parser '$name' as it is part of the exclusions list."
                 }
                 elseif ($Errorcount -gt 0) {
                     $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount error(s):`r`n"
-                    Write-Host "::error:: '$FinalMessage'"
+                    Write-Host "::error::$FinalMessage"
                     # $global:failed = 1 # Commented out to allow the script to continue running
                     # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
-                    Write-Host "::warning::'$FinalMessage'"
+                    Write-Host "::notice::$FinalMessage"
                 }
             } else {
                 Write-Host "::warning::$name $kind - test completed. No records found"
@@ -188,6 +190,6 @@ if ($global:failed -ne 0) {
     Write-Host "::error::Script failed with errors."
     exit 0 # Exit with error code 1 if you want to fail the build
 } else {
-    Write-Host "${green}Script completed successfully.${reset}"
+    Write-Host "::notice::Script completed successfully."
     exit 0
 }
