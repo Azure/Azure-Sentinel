@@ -6,6 +6,11 @@ $global:subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
 $global:workspaceId = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
 
+# ANSI escape code for green text
+$green = "`e[32m"
+# ANSI escape code to reset color
+$reset = "`e[0m"
+
 Class Parser {
     [string] $Name
     [string] $OriginalQuery
@@ -127,19 +132,19 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 {
                     $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount error(s):`r`n"
                     Write-Host $FinalMessage -ForegroundColor Red
-                    Write-Host "Ignoring the errors for the parser '$name' as it is part of the exclusions list." -ForegroundColor Red
+                    Write-Host "::warning::Ignoring the errors for the parser '$name' as it is part of the exclusions list."
                 }
                 elseif ($Errorcount -gt 0) {
                     $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount error(s):`r`n"
-                    Write-Host $FinalMessage -ForegroundColor Red
+                    Write-Host "::error:: '$FinalMessage'"
                     # $global:failed = 1 # Commented out to allow the script to continue running
                     # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
-                    Write-Host $FinalMessage -ForegroundColor Green
+                    Write-Host "::warning::'$FinalMessage'"
                 }
             } else {
-                Write-Host "$name $kind - test completed. No records found" -ForegroundColor Yellow
+                Write-Host "::warning::$name $kind - test completed. No records found"
             }
         }
     } catch {
@@ -180,9 +185,9 @@ function IgnoreValidationForASIMParsers() {
 run
 
 if ($global:failed -ne 0) {
-    Write-Host "Script failed with errors." -ForegroundColor Red
+    Write-Host "::error::Script failed with errors."
     exit 0 # Exit with error code 1 if you want to fail the build
 } else {
-    Write-Host "Script completed successfully." -ForegroundColor Green
+    Write-Host "${green}Script completed successfully.${reset}"
     exit 0
 }
