@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This folder contains the Azure function time trigger code for the Transmit Security-Microsoft Sentinel connector. The connector will run periodically and ingest the Transmit Security data into the Microsoft Sentinel logs custom table `TransmitSecurity_CL`.
+This folder contains the Azure function time trigger code for the Transmit Security-Microsoft Sentinel connector. The connector will run periodically and ingest the Transmit Security data into the Microsoft Sentinel logs custom table `TransmitSecurityAdminActivity_CL` and `TransmitSecurityUserActivity_CL`.
 
 ## Folders
 
