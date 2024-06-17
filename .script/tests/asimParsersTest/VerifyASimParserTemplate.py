@@ -22,6 +22,7 @@ failed = 0
 SchemaInfo = [
     {"SchemaName": "AuditEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
     {"SchemaName": "Authentication", "SchemaVersion": "0.1.3","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
+    {"SchemaName": "UserManagement", "SchemaVersion": "0.1.1", "SchemaTitle":"ASIM User Management Schema","SchemaLink": "https://aka.ms/ASimUserManagementDoc"},
     # Add more schemas as needed
 ]
 
