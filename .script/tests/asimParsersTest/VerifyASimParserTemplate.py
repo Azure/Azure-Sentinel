@@ -9,8 +9,7 @@ from urllib.parse import urlparse
 from tabulate import tabulate
 
 #variables
-#SentinelRepoUrl = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
-SentinelRepoUrl = 'https://raw.githubusercontent.com/vakohl/vakohlASIMRepoTest'
+SentinelRepoUrl = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
 SampleDataPath = '/Sample%20Data/ASIM/'
 
 # Global array to store results
