@@ -329,7 +329,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
 # Function to read Exclusion list for ASim Parser test from a CSV file
 def read_exclusion_list_from_csv():
     exclusion_list = []
-    file_path = '.script/tests/asimParserTest/ExclusionListForASimTests.csv'
+    file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
     with open(file_path, newline='') as csvfile:
         reader = csv.reader(csvfile)
         for row in reader:
