@@ -65,12 +65,13 @@ def run():
         ASimParserUrl = f'{SentinelRepoUrl}/{commit_number}/{parser}'
         # Construct union parser URL
         ASimUnionParserURL = f'{SentinelRepoUrl}/{commit_number}/Parsers/ASim{SchemaName}/Parsers/ASim{SchemaName}.yaml'
-        print("***********************************")
-        print("Performing tests for ASim Parser")
-        print("***********************************")
 
         ASimParser = read_github_yaml(ASimParserUrl)
         ASimUnionParser = read_github_yaml(ASimUnionParserURL)
+
+        print("***********************************")
+        print("Performing tests for ASim Parser: "+ASimParser.get('EquivalentBuiltInParser'))
+        print("***********************************")
 
         results = extract_and_check_properties(ASimParser, ASimUnionParser,"ASim", ASimParserUrl, ASIMSampleDataURL)
         # for result in results:
@@ -93,10 +94,6 @@ def run():
         else:
             failed = 0
 
-        print("***********************************")
-        print("Performing tests for vim Parser")
-        print("***********************************")
-
         # Replace 'ASim' with 'vim' in the filename
         # Extract the filename from ASimParserUrl
         ASimParserfilename = ASimParserUrl.split('/')[-1]
@@ -112,6 +109,10 @@ def run():
 
         vimParser = read_github_yaml(vimParserUrl)
         vimUnionParser = read_github_yaml(vimUnionParserUrl)
+
+        print("***********************************")
+        print("Performing tests for vim Parser: "+vimParser.get('EquivalentBuiltInParser'))
+        print("***********************************")
 
         # Check if vim parser properties
         results = extract_and_check_properties(vimParser, vimUnionParser,"vim", vimParserUrl, ASIMSampleDataURL)
