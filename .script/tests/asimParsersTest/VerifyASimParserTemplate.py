@@ -51,6 +51,7 @@ def run():
     # Split the output into lines
     modified_files_lines = modified_files.split("\n")
     Parser_yaml_files = [line for line in modified_files_lines if line.split('/')[-1].startswith('ASim') and line.endswith('.yaml')]
+    print ("Printing Parser Files" + Parser_yaml_files)
     for parser in Parser_yaml_files:
         # Use regular expression to extract SchemaName from the parser filename
         SchemaNameMatch = re.search(r'ASim(\w+)/', parser)
