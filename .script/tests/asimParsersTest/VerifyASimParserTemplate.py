@@ -29,7 +29,7 @@ SchemaInfo = [
 def run():
     # Get modified ASIM Parser files along with their status
     current_directory = os.path.dirname(os.path.abspath(__file__))
-    GetModifiedFiles = f"git diff --name-only origin/main {current_directory}/../../../Parsers/"
+    GetModifiedFiles = f"git diff --name-only origin/master {current_directory}/../../../Parsers/"
     print (GetModifiedFiles)
     try:
         modified_files = subprocess.check_output(GetModifiedFiles, shell=True).decode()
