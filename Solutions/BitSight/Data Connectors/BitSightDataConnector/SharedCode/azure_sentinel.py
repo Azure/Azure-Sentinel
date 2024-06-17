@@ -1,19 +1,18 @@
-"""This file contains AzureSentinel class which is used to post data into log analytics workspace."""
+"""This file contains MicrosoftSentinel class which is used to post data into log analytics workspace."""
 import base64
 import datetime
 import hashlib
 import hmac
 import logging
-import os
+
 import requests
+
 from .bitsight_exception import BitSightException
-
-customer_id = os.environ.get("WorkspaceID")
-shared_key = os.environ.get("WorkspaceKey")
+from .consts import WORKSPACE_ID, WORKSPACE_KEY
 
 
-class AzureSentinel:
-    """AzureSentinel class is used to post data into log Analytics workspace."""
+class MicrosoftSentinel:
+    """MicrosoftSentinel class is used to post data into log Analytics workspace."""
 
     def build_signature(
         self,
@@ -37,11 +36,11 @@ class AzureSentinel:
             + resource
         )
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
-        decoded_key = base64.b64decode(shared_key)
+        decoded_key = base64.b64decode(WORKSPACE_KEY)
         encoded_hash = base64.b64encode(
             hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()
         ).decode()
-        authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
+        authorization = "SharedKey {}:{}".format(WORKSPACE_ID, encoded_hash)
         return authorization
 
     # Build and send a request to the POST API
@@ -75,7 +74,7 @@ class AzureSentinel:
             )
         uri = (
             "https://"
-            + customer_id
+            + WORKSPACE_ID
             + ".ods.opinsights.azure.com"
             + resource
             + "?api-version=2016-04-01"

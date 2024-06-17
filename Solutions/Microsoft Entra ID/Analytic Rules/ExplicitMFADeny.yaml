@@ -13,8 +13,8 @@ requiredDataConnectors:
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceInfo
-queryFrequency: 1d
-queryPeriod: 1d
+queryFrequency: 1h
+queryPeriod: 1h
 triggerOperator: gt
 triggerThreshold: 0
 status: Available
@@ -23,21 +23,23 @@ tactics:
 relevantTechniques:
   - T1110
 query: |
-  let aadFunc = (tableName:string){ 
-  table(tableName) 
-  | where ResultType == 500121 
-  | where Status has "MFA Denied; user declined the authentication" or Status has "MFA denied; Phone App Reported Fraud" 
-  | extend Type = Type, PublicIP = IPAddress  
-  | extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0]) 
-  }; 
-  let aadSignin = aadFunc("SigninLogs"); 
+  let aadFunc = (tableName: string) {
+      table(tableName)
+      | where ResultType == 500121
+      | where Status has "MFA Denied; user declined the authentication" or Status has "MFA denied; Phone App Reported Fraud"
+      | extend Type = Type, PublicIP = IPAddress
+      | extend
+          Name = tostring(split(UserPrincipalName, '@', 0)[0]),
+          UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+  };
+  let aadSignin = aadFunc("SigninLogs");
   let dvcInfo = DeviceInfo
-  | extend SensorHealthState = column_ifexists("SensorHealthState", "")
-  | where OnboardingStatus == "Onboarded" and SensorHealthState == "Active" 
-  | project PublicIP, AadDeviceId; 
-  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs"); 
-  union isfuzzy=true aadSignin, aadNonInt  
-  | join kind=leftouter dvcInfo on PublicIP  
+      | extend SensorHealthState = column_ifexists("SensorHealthState", "")
+      | where OnboardingStatus == "Onboarded" and SensorHealthState == "Active"
+      | project PublicIP, AadDeviceId;
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  union isfuzzy=true aadSignin, aadNonInt
+  | join kind=leftouter dvcInfo on PublicIP
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -53,11 +55,13 @@ entityMappings:
         columnName: PublicIP
   - entityType: AzureResource
     fieldMappings:
-      - identifier: ResourceID
-        columnName: ResourceID
-  - entityType: URL
+      - identifier: ResourceId
+        columnName: ResourceId
+  - entityType: CloudApplication
     fieldMappings:
-      - identifier: Url
-        columnName: ClientAppUsed
-version: 1.0.4
+      - identifier: Name
+        columnName: AppDisplayName
+      - identifier: AppId
+        columnName: AppId
+version: 1.0.6
 kind: Scheduled
