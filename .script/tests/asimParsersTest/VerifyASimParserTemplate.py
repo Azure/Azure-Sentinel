@@ -4,7 +4,6 @@ import re
 import os
 import subprocess
 import csv
-import sys
 from datetime import datetime
 from urllib.parse import urlparse
 from tabulate import tabulate
@@ -287,14 +286,13 @@ def print_results_table(results):
 def check_test_failures(results, parser):
     if any(result[-1] is not True for result in results):
         print("::error::Some tests failed for Parser. Please check the results above.")
-        exclusion_list = read_exclusion_list_from_csv()
-        if parser.get('EquivalentBuiltInParser') in exclusion_list:
-            print(f"::warning::{parser.get('EquivalentBuiltInParser')} is in the exclusion list. Ignoring error(s).")
-            global failed
-            failed = 0
-        else:
-            failed = 1
-            # sys.exit(1)  # Exit with error code 1 # uncomment this line to fail the test
+    exclusion_list = read_exclusion_list_from_csv()
+    if parser.get('EquivalentBuiltInParser') in exclusion_list:
+        print(f"::warning::{parser.get('EquivalentBuiltInParser')} is in the exclusion list. Ignoring error(s).")
+        global failed
+        failed = 0
+    else:
+        failed = 1
 
 def get_vim_parsers(asim_parser_url, asim_union_parser_url, asim_parser):
     # Split the URL into parts
