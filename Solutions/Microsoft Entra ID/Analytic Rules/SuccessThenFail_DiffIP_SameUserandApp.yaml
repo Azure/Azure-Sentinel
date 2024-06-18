@@ -1,7 +1,8 @@
 id: 02ef8d7e-fc3a-4d86-a457-650fa571d8d2
 name: Successful logon from IP and failure from a different IP
 description: |
-  'Identifies when a user account successfully logs onto an Azure App from one IP and within 10 mins failed to logon to the same App via a different IP (may indicate a malicious attempt at password guessing with known account). UEBA added for context.'
+  'Identifies when a user account successfully logs onto an Azure App from one IP and within 10 mins failed to logon to the same App via a different IP (may indicate a malicious attempt at password guessing with known account). 
+  UEBA added for context to gather all asoociated information assocaited with IP addressed initiating Faile Logon and affected user.'
 severity: Medium 
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
@@ -66,6 +67,7 @@ query: |
       by AccountUPN
       | extend UserPrincipalName=tolower(AccountUPN)
   ) on UserPrincipalName
+  //Below it will be joined with BehaviorAnalytics table to the Failed IP Addresses
   | join kind=leftouter (
       BehaviorAnalytics
       | where ActivityType in ("FailedLogOn", "LogOn")
@@ -73,14 +75,12 @@ query: |
       | project UsersInsights, DevicesInsights, ActivityInsights, InvestigationPriority, SourceIPAddress
       | project-rename FailedIPAddress = SourceIPAddress
       | summarize
-          UsersInsights = make_set(UsersInsights, 1000),
-          DevicesInsights = make_set(DevicesInsights, 1000),
-          IPInvestigationPriority = sum(InvestigationPriority)
+          Total_IPInvestigationPriority = sum(InvestigationPriority)  // Sum of all Investigation Property for IP of all Users
       by FailedIPAddress)
   on FailedIPAddress
-  | extend UEBARiskScore = IPInvestigationPriority
-  | where  UEBARiskScore > riskScoreCutoff
-  | sort by UEBARiskScore desc 
+  | extend UEBARiskScoreforIP = Total_IPInvestigationPriority
+  | where  UEBARiskScoreforIP > riskScoreCutoff
+  | sort by UEBARiskScoreforIP desc 
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -98,5 +98,5 @@ entityMappings:
     fieldMappings:
       - identifier: Address
         columnName: FailedIPAddress
-version: 2.1.9
+version: 2.1.10
 kind: Scheduled
