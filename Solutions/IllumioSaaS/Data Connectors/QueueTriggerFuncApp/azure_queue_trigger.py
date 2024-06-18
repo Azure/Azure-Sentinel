@@ -18,8 +18,8 @@ NORMALIZED_DCE_ENDPOINT = os.environ['DCE_INGESTION_ENDPOINT']
 NORMALIZED_DCR_ID = os.environ['NORMALIZATION_DCR_ID']
 LOG_ANALYTICS_URI = os.environ['LOG_ANALYTICS_URI']
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
-FLOW_LOGS_CUSTOM_TABLE = os.environ.get('FLOW_LOGS_CUSTOM_TABLE', 'Custom-Illumio-Audit-Events_CL')
-AUDIT_LOGS_CUSTOM_TABLE = os.environ.get('AUDIT_LOGS_CUSTOM_TABLE', 'Custom-Illumio--Events_CL')
+FLOW_LOGS_CUSTOM_TABLE = os.environ.get('FLOW_LOGS_CUSTOM_TABLE', 'Custom-Illumio_Flow_Events_CL')
+AUDIT_LOGS_CUSTOM_TABLE = os.environ.get('AUDIT_LOGS_CUSTOM_TABLE', 'Custom-Illumio_Auditable_Events_CL')
 LOGS_TO_CONSUME = os.environ.get('LogTypes', 'All') # by default, ingest all
 
 # AWS config

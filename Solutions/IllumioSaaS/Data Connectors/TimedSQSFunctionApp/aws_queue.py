@@ -46,12 +46,24 @@ def check_if_script_runs_too_long(percentage, script_start_time):
     return duration > max_duration
 
 def process_body_obj(body):
-    # body is a hash of Records. Records is an array that contains s3 object's key and file size
-     
-    record = body['Records'][0] # typically one record
-    file_path = record['s3']['object']['key'] # full path to s3
-    file_size = record['s3']['object']['size'] # in bytes
-    bucket_name = record['s3']['bucket']['name']
+    # SQS record info can sometimes be encompassed within a SNS notification in certain deployments, hence
+    # its better to make this method compatible with both SNS topics and SQS 
+
+    # Check if the message is from SNS
+    try:
+        record = None
+        if body['Message']:
+            # Extract the actual SQS message from the SNS message
+            record = json.loads(body['Message']['Records'][0])        
+        else:
+            # Assume the message is directly from SQS
+            record = body['Records'][0]        
+        file_path = record['s3']['object']['key'] # full path to s3
+        file_size = record['s3']['object']['size'] # in bytes
+        bucket_name = record['s3']['bucket']['name']
+    except Exception as e:
+        logging.error("Error {} observed when parsing queue body".format(e))
+        return None, None, None
     
     return file_path, file_size, bucket_name
 
