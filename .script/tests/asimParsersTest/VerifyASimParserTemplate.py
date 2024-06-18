@@ -181,7 +181,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
         results.append(('\033[91mEventProduct\033[0m', '\033[91mEventProduct not found in Parser query\033[0m', '\033[91mFalse\033[0m'))
 
     # Use a regular expression to find 'EventVendor' in the KQL query
-    match = re.search(r'EventVendor\s*=\s*[\'"](\w+)[\'"]', parser_query)
+    match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
 
     # If 'EventVendor' was found in the KQL query, extract its value
     if match:
