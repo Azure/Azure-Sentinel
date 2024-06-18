@@ -170,7 +170,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     parser_query = Parser_file.get('ParserQuery', '')
 
     # Use a regular expression to find 'EventProduct' in the KQL query
-    match = re.search(r'EventProduct\s*=\s*[\'"](\w+)[\'"]', parser_query)
+    match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
 
     # If 'EventProduct' was found in the KQL query, extract its value
     if match:
