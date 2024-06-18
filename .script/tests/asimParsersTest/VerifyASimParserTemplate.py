@@ -293,6 +293,7 @@ def check_test_failures(results, parser):
         failed = 0
     else:
         failed = 1
+        # exit(1)
 
 def get_vim_parsers(asim_parser_url, asim_union_parser_url, asim_parser):
     # Split the URL into parts
