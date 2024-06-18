@@ -64,7 +64,16 @@ class AbnormalSoarConnectorAsync:
         if gte_datetime:
             filter_string += ' ' + f'gte {gte_datetime}'
         if lte_datetime:
-            filter_string += ' ' + f'lte {lte_datetime}'
+            final_lte_value = lte_datetime
+            try:
+                parsed_lte_value = datetime.strptime(lte_datetime, TIME_FORMAT)
+                final_lte_value = (parsed_lte_value + timedelta(seconds=30)).strftime(TIME_FORMAT)
+                
+                logging.info(f"Adding buffer to lte time {lte_datetime} to make it {final_lte_value}")
+            except Exception as e:
+                logging.error(f"Failed to parse lte time {lte_datetime} to add buffer with error {e}")
+
+            filter_string += ' ' + f'lte {final_lte_value}'
         return {
             'filter': filter_string,
         }
