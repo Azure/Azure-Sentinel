@@ -64,7 +64,16 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
  * Version: Version to be used during package creation. Default version will be 3.0.0. This tool supports package creation for 2.x.x(Template Spec) and 3.x.x(contentPackages). Based on variable 'defaultPackageVersion' and given Version input. If the defaultPackageVersion is 3.0.0 and Data file input version is 2.0.1 then it package generated is of 3.0.0 i.e which ever is higher takes precedence. Here we are also verifying the catalogAPI to check version deployed in PartnerCenter. If 'defaultPackageVersion' is 2.0.0 and data input file version is 2.0.4 but in PartnerCenter catalogAPI version installed is 2.0.2 then package generated is of 2.0.3 i.e it will increment the package version based on catalogAPI.
  * Metadata: Name of metadata file for the Solution, path is to be considered from BasePath.
  * TemplateSpec: Boolean value used to determine whether the package should be generated as a template spec
- * GenericDataConnectorIds: Optional Property: Specify "id" from data connector file to create GenericUI kind of data connectors. If you have multiple data connectors and want mix of StaticUI and GenericUI kind data connectors then make "Is1PConnector": true and in property "GenericDataConnectorIds" specify the "id" of data connectors for which you want GenericUI kind connectors. When "Is1PConnector" is set to false then it always creates GenericUI kind of data connectors.
+ * StaticDataConnectorIds: Optional Array Property: Specify which data connector should be of StaticUI connector kind. If this property is not present then by default it will treat data connector as GenericUI kind. If you want to create a StaticUI data connector then specify the value of "id" property from data connector in this array property.
+eg 1 For single static data connector: 
+  "StaticDataConnectorIds": [ "AzureActivity" ]
+eg 2 For multiple static data connector:  
+  "StaticDataConnectorIds": [
+    "ThreatIntelligenceTaxii",
+		"ThreatIntelligence",
+		"ThreatIntelligenceUploadIndicatorsAPI",
+		"MicrosoftDefenderThreatIntelligence"
+  ]
  */
 {
   "Name": "{SolutionName}",
@@ -91,7 +100,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": true, // Default should be true
   "Is1PConnector": false,
-  "GenericDataConnectorIds": []
+  "StaticDataConnectorIds": []
 }
 
 ```
@@ -160,7 +169,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Metadata": "SolutionMetadata.json",
   "TemplateSpec": true, // Default should be true
   "Is1PConnector": false,
-  "GenericDataConnectorIds": []
+  "StaticDataConnectorIds": []
 }
 ```
 
