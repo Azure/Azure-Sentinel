@@ -225,7 +225,7 @@ try {
 
     #Optional Fields
     $TemplateSpecAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "TemplateSpec")
-    $Is1PconnectorAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "Is1Pconnector")
+    #$Is1PconnectorAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "Is1Pconnector")
     $logoAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "Logo")
     $basePathAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "BasePath")
     $packageVersionAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "Version")
@@ -267,9 +267,9 @@ try {
         $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'TemplateSpec' -Value $true 
     }
 
-    if (!$is1PconnectorAttribute) {
-        $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'Is1Pconnector' -Value $false 
-    }
+    # if (!$is1PconnectorAttribute) {
+    #     $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'Is1Pconnector' -Value $false 
+    # }
 
     if (!$logoAttribute) {
         $logoAttributeValue = '<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">'
