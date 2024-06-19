@@ -2,13 +2,13 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "AS-Revoke-Azure-AD-User-Session-From-Entity", 
-        "description": "This playbook is intended to be run from a Microsoft Sentinel Entity. It will look up Azure AD users associated with the account entities and revoke their sessions.",
+        "title": "AS-Revoke-Entra-ID-User-Session-From-Entity", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Entity. It will look up Entra ID users associated with the account entities and revoke their sessions.",
         "prerequisites": "1. An App Registration with User.ReadWrite.All permissions granted on Microsoft Graph API. 2. A client secret for the App Registration must be generated. 3. An Azure Key Vault Secret to hold the client secret. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Revoke-Azure-AD-User-Session-From-Entity",
         "postDeployment": ["Access to the Azure Key Vault must be granted to the playbook"],
-        "lastUpdateTime": "2023-10-24T3:17:47Z",
+        "lastUpdateTime": "2024-05-22T23:40:50Z",
         "entities": ["Account"], 
-        "tags": ["Microsoft Sentinel", "Entity", "Azure AD", "Revoke User Sessions"], 
+        "tags": ["Microsoft Sentinel", "Entity", "Entra ID", "Revoke User Sessions"], 
         "support": {
             "tier": "partner"
         },
@@ -18,7 +18,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "AS-Revoke-Azure-AD-User-Session-From-Entity",
+            "defaultValue": "AS-Revoke-Entra-ID-User-Session-From-Entity",
             "type": "string",
             "metadata": {
                 "description": "Name of the Logic App resource to be created"
@@ -125,6 +125,46 @@
                         }
                     },
                     "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Set_variable_-_Concatenate": {
+                                    "inputs": {
+                                        "name": "UPN",
+                                        "value": "@{concat(triggerBody()?['Entity']?['properties']?['Name'],'@', triggerBody()?['Entity']?['properties']?['UPNSuffix'])}"
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_variable_-_UID": {
+                                        "inputs": {
+                                            "name": "UPN",
+                                            "value": "@triggerBody()?['Entity']?['properties']?['AadUserId']"
+                                        },
+                                        "runAfter": {},
+                                        "type": "SetVariable"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['Entity']?['properties']?['AadUserId']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_UPN": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
                         "Get_Client_Secret": {
                             "runAfter": {},
                             "type": "ApiConnection",
@@ -157,7 +197,7 @@
                         },
                         "HTTP_-_Revoke_user_sign_in_sessions": {
                             "runAfter": {
-                                "Parse_JSON_-_Access_token": [
+                                "Condition": [
                                     "Succeeded"
                                 ]
                             },
@@ -165,11 +205,28 @@
                             "inputs": {
                                 "headers": {
                                     "Authorization": "Bearer @{body('Parse_JSON_-_Access_token')?['access_token']}",
+                                    "Content-Type": "application/json",
                                     "Host": "graph.microsoft.com"
                                 },
                                 "method": "POST",
-                                "uri": "https://graph.microsoft.com/v1.0/users/@{triggerBody()?['Entity']?['properties']?['AadUserId']}/revokeSignInSessions"
+                                "uri": "https://graph.microsoft.com/v1.0/users/@{variables('UPN')}/revokeSignInSessions"
                             }
+                        },
+                        "Initialize_variable_-_UPN": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "UPN",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_Access_token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
                         },
                         "Parse_JSON_-_Access_token": {
                             "runAfter": {
