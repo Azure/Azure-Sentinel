@@ -10,8 +10,6 @@ import azure.durable_functions as df
 
 API_HOST = os.environ.get('API_HOST', 'https://api.abnormalplatform.com/v1')
 MAX_THREATS = int(os.environ.get('MAX_NUMBER_OF_THREATS', 120))
-TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-TIME_FORMAT_WITHMS = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 class Resources(Enum):
     threats = 0
@@ -48,7 +46,7 @@ class AbnormalSoarConnectorAsync:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Soar-Integration-Origin": "AZURE SENTINEL",
-            "Azure-Sentinel-Version": "2024-05-29"
+            "Azure-Sentinel-Version": "2023-11-09"
         }
 
     def _get_filter_query(self, filter_param, gte_datetime=None, lte_datetime=None):
@@ -76,46 +74,7 @@ class AbnormalSoarConnectorAsync:
         return f"{self.BASEURL}/{resource_name}/{resource_id}"
 
     def _extract_messages(self, context, threat_resp):
-        threat_id = threat_resp.get("threatId")
-        gte_datetime_str = context['gte_datetime']
-        lte_datetime_str = context['lte_datetime']
-
-        ctx = {
-            "threat_id": threat_id,
-            "gte_datetime_str": gte_datetime_str, 
-            "lte_datetime_str": lte_datetime_str
-        }
-
-        try:
-            gte_datetime = datetime.strptime(gte_datetime_str, TIME_FORMAT)
-            lte_datetime = datetime.strptime(lte_datetime_str, TIME_FORMAT)
-        except Exception as e:
-            logging.error(f"Failed to parse time for threat_id: {ctx} with error {e}")
-            return []
-
-        filtered_messages = []
-        for message in threat_resp.get("messages"):
-            message_id = message.get("abxMessageId")
-            remediation_time_str = message.get("remediationTimestamp")
-
-            ctx = {
-                **ctx,
-                "message_id": message_id, 
-                "remediation_time_str": remediation_time_str
-            }
-
-            try:
-                remediation_time = datetime.strptime(remediation_time_str, TIME_FORMAT_WITHMS)
-                if remediation_time >= gte_datetime and remediation_time <= lte_datetime:
-                    filtered_messages.append(message)
-                    logging.info(f"Successfully processed message for threat: {ctx}")
-                else:
-                    logging.warn(f"Skipped processing message for threat: {ctx}")
-            except Exception as e:
-                logging.error(f"Failed to process message for threat: {ctx} with error {e}")
-
-
-        return filtered_messages
+        return [message for message in threat_resp.get("messages") if message.get("receivedTime") >= context.get("gte_datetime") and message.get("receivedTime") <= context.get("lte_datetime")]
 
     def _extract_message_ids(self, threats_resp):
         return [threat.get("threatId") for threat in threats_resp.get('threats', [])]
@@ -178,8 +137,8 @@ class AbnormalSoarConnectorAsync:
         """
         gte_datetime_str = context['gte_datetime']
         lte_datetime_str = context['lte_datetime']
-        gte_datetime = datetime.strptime(gte_datetime_str, TIME_FORMAT)
-        lte_datetime = datetime.strptime(lte_datetime_str, TIME_FORMAT)
+        gte_datetime = datetime.strptime(gte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
+        lte_datetime = datetime.strptime(lte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
 
         if (lte_datetime - gte_datetime) <= timedelta(minutes=1):
             logging.warning("Reached minimum date range for filter query")
@@ -198,10 +157,10 @@ class AbnormalSoarConnectorAsync:
         try:
             gte_datetime_str = threats_date_filter['gte_datetime']
             lte_datetime_str = threats_date_filter['lte_datetime']
-            gte_datetime = datetime.strptime(gte_datetime_str, TIME_FORMAT)
-            lte_datetime = datetime.strptime(lte_datetime_str, TIME_FORMAT)
+            gte_datetime = datetime.strptime(gte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
+            lte_datetime = datetime.strptime(lte_datetime_str, "%Y-%m-%dT%H:%M:%SZ")
             midpoint_datetime = gte_datetime + (lte_datetime - gte_datetime) / 2
-            midpoint_datetime_str = midpoint_datetime.strftime(TIME_FORMAT)
+            midpoint_datetime_str = midpoint_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
             threats_date_filter['lte_datetime'] = midpoint_datetime_str 
             logging.warning(f"Halved date range, too many results. New date range is {gte_datetime_str} - {midpoint_datetime_str}")
         except Exception as e:

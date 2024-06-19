@@ -1,7 +1,13 @@
-SUPPORTED_EVENT_TYPES = set(["observation", "suricata", "detections"])
+SUPPORTED_EVENT_TYPES = set(['observation', 'suricata', 'detections'])
 
-ORCHESTRATION_NAME = "SingletonEternalOrchestrator"
+ORCHESTRATION_NAME = 'SingletonEternalOrchestrator'
 
-DEFAULT_BUCKET_NAME = "fortindr-cloud-metastream"
+AUTH_URLS = {
+    "production": "auth.icebrg.io",
+    "uat": "auth-uat.icebrg.io"
+}
 
-INTEGRATION_NAME = "Sentinel-FortiNdrCloud-3.0.2"
+BUCKETS = {
+    "production": "fortindr-cloud-metastream",
+    "uat": "fortindr-cloud-metastream-uat"
+}

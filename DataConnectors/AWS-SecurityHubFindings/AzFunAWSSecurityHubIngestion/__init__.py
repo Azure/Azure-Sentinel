@@ -101,7 +101,6 @@ def main(mytimer: func.TimerRequest) -> None:
                 payload.update({'Resources':finding['Resources']})            
                 payload.update({'WorkflowState':finding['WorkflowState']})                
                 payload.update({'RecordState':finding['RecordState']})
-                payload.update({'Compliance':finding['Compliance']})
                 
                 with sentinel:
                     sentinel.send(payload)

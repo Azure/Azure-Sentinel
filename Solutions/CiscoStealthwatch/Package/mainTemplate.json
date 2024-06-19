@@ -1,0 +1,629 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for CiscoStealthwatch"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-ciscostealthwatch",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "parserVersion1": "1.0.0",
+    "parserContentId1": "StealthwatchEvent-Parser",
+    "_parserContentId1": "[variables('parserContentId1')]",
+    "parserName1": "CiscoStealthwatch Data Parser",
+    "_parserName1": "[concat(parameters('workspace'),'/',variables('parserName1'))]",
+    "parserId1": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+    "_parserId1": "[variables('parserId1')]",
+    "parserTemplateSpecName1": "[concat(parameters('workspace'),'-pr-',uniquestring(variables('_parserContentId1')))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "Stealthwatch",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "Stealthwatch",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('parserTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "properties": {
+        "description": "StealthwatchEvent Data Parser with template",
+        "displayName": "StealthwatchEvent Data Parser template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('parserTemplateSpecName1'),'/',variables('parserVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Parser"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('parserTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "StealthwatchEvent Data Parser with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('parserVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('_parserName1')]",
+              "apiVersion": "2020-08-01",
+              "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "CiscoStealthwatch Data Parser",
+                "category": "Samples",
+                "functionAlias": "StealthwatchEvent",
+                "query": "\nSyslog\r\n| where SyslogMessage has 'Stealthwatch'\r\n| extend EventVendor = 'Cisco'\r\n| extend EventProduct = 'Stealthwatch'\r\n| parse-kv SyslogMessage as (start:string, end:string, alarmID:string, alarmSev:string, alarmStatus:string, cat:string, domain:string, dst:string, dstPort:string, msg:string, proto:string, sourceHG:string, sourceHostSnapshot:string, src:string, flowCollectorIP:string, flowCollectorName:string, sourceUser:string, targetUser:string, argetHG:string, targetHostname:string, targetHostSnapshot:string) with (pair_delimiter='|', kv_delimiter='=')\r\n| parse SyslogMessage with * \"argetHG=\" argetHG\"|\" *\r\n| parse SyslogMessage with * \"targetHG=\" targetHG\"|\" *\r\n| extend DstGeoCountry = iff(SyslogMessage contains \"argetHG\",argetHG, targetHG)\r\n| extend EventStartTime=todatetime(start)\r\n| extend EventEndTime=todatetime(end)\r\n| project-rename EventOriginalUid=alarmID\r\n                , EventSeverity=alarmSev\r\n                , EventStatus=alarmStatus\r\n                , EventType=cat\r\n                , SrcDvcDomain=domain\r\n                , DstIpAddr=dst\r\n                , DstPortNumber=dstPort\r\n                , EventMessage=msg\r\n                , Protocol=proto\r\n                , SrcGeoCountry=sourceHG\r\n                , SrcHostSnapshot=sourceHostSnapshot\r\n                , SrcIpAddr=src\r\n                , DvcIpAddr=flowCollectorIP\r\n                , DvcHostname=flowCollectorName\r\n                , SrcUserName=sourceUser\r\n                , DstUserName=targetUser\r\n                , DstDvcHostname=targetHostname\r\n                , DstHostSnapshot=targetHostSnapshot\r\n| project-away start\r\n             , end\r\n             , SyslogMessage\r\n\t\t\t , argetHG\r\n\t\t\t , targetHG\r\n",
+                "version": 1,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "CiscoStealthwatch Data Parser"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+              "dependsOn": [
+                "[variables('_parserName1')]"
+              ],
+              "properties": {
+                "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+                "contentId": "[variables('_parserContentId1')]",
+                "kind": "Parser",
+                "version": "[variables('parserVersion1')]",
+                "source": {
+                  "name": "CiscoStealthwatch",
+                  "kind": "Solution",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+      "apiVersion": "2021-06-01",
+      "name": "[variables('_parserName1')]",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "eTag": "*",
+        "displayName": "CiscoStealthwatch Data Parser",
+        "category": "Samples",
+        "functionAlias": "StealthwatchEvent",
+        "query": "\nSyslog\r\n| where SyslogMessage has 'Stealthwatch'\r\n| extend EventVendor = 'Cisco'\r\n| extend EventProduct = 'Stealthwatch'\r\n| parse-kv SyslogMessage as (start:string, end:string, alarmID:string, alarmSev:string, alarmStatus:string, cat:string, domain:string, dst:string, dstPort:string, msg:string, proto:string, sourceHG:string, sourceHostSnapshot:string, src:string, flowCollectorIP:string, flowCollectorName:string, sourceUser:string, targetUser:string, argetHG:string, targetHostname:string, targetHostSnapshot:string) with (pair_delimiter='|', kv_delimiter='=')\r\n| parse SyslogMessage with * \"argetHG=\" argetHG\"|\" *\r\n| parse SyslogMessage with * \"targetHG=\" targetHG\"|\" *\r\n| extend DstGeoCountry = iff(SyslogMessage contains \"argetHG\",argetHG, targetHG)\r\n| extend EventStartTime=todatetime(start)\r\n| extend EventEndTime=todatetime(end)\r\n| project-rename EventOriginalUid=alarmID\r\n                , EventSeverity=alarmSev\r\n                , EventStatus=alarmStatus\r\n                , EventType=cat\r\n                , SrcDvcDomain=domain\r\n                , DstIpAddr=dst\r\n                , DstPortNumber=dstPort\r\n                , EventMessage=msg\r\n                , Protocol=proto\r\n                , SrcGeoCountry=sourceHG\r\n                , SrcHostSnapshot=sourceHostSnapshot\r\n                , SrcIpAddr=src\r\n                , DvcIpAddr=flowCollectorIP\r\n                , DvcHostname=flowCollectorName\r\n                , SrcUserName=sourceUser\r\n                , DstUserName=targetUser\r\n                , DstDvcHostname=targetHostname\r\n                , DstHostSnapshot=targetHostSnapshot\r\n| project-away start\r\n             , end\r\n             , SyslogMessage\r\n\t\t\t , argetHG\r\n\t\t\t , targetHG\r\n",
+        "version": 1
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_parserId1')]"
+      ],
+      "properties": {
+        "parentId": "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName1'))]",
+        "contentId": "[variables('_parserContentId1')]",
+        "kind": "Parser",
+        "version": "[variables('parserVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "CiscoStealthwatch",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "CiscoStealthwatch data connector with template",
+        "displayName": "CiscoStealthwatch template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "CiscoStealthwatch data connector with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "GenericUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Cisco Stealthwatch",
+                  "publisher": "Cisco",
+                  "descriptionMarkdown": "The [Cisco Stealthwatch](https://www.cisco.com/c/en/us/products/security/stealthwatch/index.html) data connector provides the capability to ingest [Cisco Stealthwatch events](https://www.cisco.com/c/dam/en/us/td/docs/security/stealthwatch/management_console/securit_events_alarm_categories/SW_7_2_1_Security_Events_and_Alarm_Categories_DV_1_0.pdf) into Microsoft Sentinel. Refer to [Cisco Stealthwatch documentation](https://www.cisco.com/c/dam/en/us/td/docs/security/stealthwatch/system_installation_configuration/SW_7_3_2_System_Configuration_Guide_DV_1_0.pdf) for more information.",
+                  "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**StealthwatchEvent**](https://aka.ms/sentinel-stealthwatch-parser) which is deployed with the Microsoft Sentinel Solution.",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "Stealthwatch",
+                      "baseQuery": "StealthwatchEvent"
+                    }
+                  ],
+                  "sampleQueries": [
+                    {
+                      "description": "Top 10 Sources",
+                      "query": "StealthwatchEvent\n | summarize count() by tostring(DvcHostname)\n | top 10 by count_"
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "Syslog (StealthwatchEvent)",
+                      "lastDataReceivedQuery": "StealthwatchEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "IsConnectedQuery",
+                      "value": [
+                        "StealthwatchEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+                      ]
+                    }
+                  ],
+                  "availability": {
+                    "status": 1,
+                    "isPreview": false
+                  },
+                  "permissions": {
+                    "resourceProvider": [
+                      {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                          "write": true,
+                          "delete": true
+                        }
+                      }
+                    ]
+                  },
+                  "instructionSteps": [
+                    {
+                      "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**StealthwatchEvent**](https://aka.ms/sentinel-stealthwatch-parser) which is deployed with the Microsoft Sentinel Solution."
+                    },
+                    {
+                      "description": ">**NOTE:** This data connector has been developed using Cisco Stealthwatch version 7.3.2"
+                    },
+                    {
+                      "description": "Install the agent on the Server where the Cisco Stealthwatch logs are forwarded.\n\n> Logs from Cisco Stealthwatch Server deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Linux agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Linux Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Linux Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnLinuxNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ],
+                      "title": "1. Install and onboard the agent for Linux or Windows"
+                    },
+                    {
+                      "instructions": [
+                        {
+                          "parameters": {
+                            "title": "Choose where to install the Windows agent:",
+                            "instructionSteps": [
+                              {
+                                "title": "Install agent on Azure Windows Virtual Machine",
+                                "description": "Select the machine to install the agent on and then click **Connect**.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnVirtualMachine"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              },
+                              {
+                                "title": "Install agent on a non-Azure Windows Machine",
+                                "description": "Download the agent on the relevant machine and follow the instructions.",
+                                "instructions": [
+                                  {
+                                    "parameters": {
+                                      "linkType": "InstallAgentOnNonAzure"
+                                    },
+                                    "type": "InstallAgent"
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          "type": "InstructionStepsGroup"
+                        }
+                      ]
+                    },
+                    {
+                      "description": "Follow the configuration steps below to get Cisco Stealthwatch logs into Microsoft Sentinel.\n1. Log in to the Stealthwatch Management Console (SMC) as an administrator.\n2. In the menu bar, click **Configuration** **>** **Response Management**.\n3. From the **Actions** section in the **Response Management** menu, click **Add > Syslog Message**.\n4. In the Add Syslog Message Action window, configure parameters.\n5. Enter the following custom format:\n|Lancope|Stealthwatch|7.3|{alarm_type_id}|0x7C|src={source_ip}|dst={target_ip}|dstPort={port}|proto={protocol}|msg={alarm_type_description}|fullmessage={details}|start={start_active_time}|end={end_active_time}|cat={alarm_category_name}|alarmID={alarm_id}|sourceHG={source_host_group_names}|targetHG={target_host_group_names}|sourceHostSnapshot={source_url}|targetHostSnapshot={target_url}|flowCollectorName={device_name}|flowCollectorIP={device_ip}|domain={domain_name}|exporterName={exporter_hostname}|exporterIPAddress={exporter_ip}|exporterInfo={exporter_label}|targetUser={target_username}|targetHostname={target_hostname}|sourceUser={source_username}|alarmStatus={alarm_status}|alarmSev={alarm_severity_name}\n\n6. Select the custom format from the list and click **OK**\n7. Click **Response Management > Rules**.\n8. Click **Add** and select **Host Alarm**.\n9. Provide a rule name in the **Name** field.\n10. Create rules by selecting values from the Type and Options menus. To add more rules, click the ellipsis icon. For a Host Alarm, combine as many possible types in a statement as possible.",
+                      "title": "2. Configure Cisco Stealthwatch event forwarding"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "CiscoStealthwatch",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "CiscoStealthwatch",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "GenericUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Cisco Stealthwatch",
+          "publisher": "Cisco",
+          "descriptionMarkdown": "The [Cisco Stealthwatch](https://www.cisco.com/c/en/us/products/security/stealthwatch/index.html) data connector provides the capability to ingest [Cisco Stealthwatch events](https://www.cisco.com/c/dam/en/us/td/docs/security/stealthwatch/management_console/securit_events_alarm_categories/SW_7_2_1_Security_Events_and_Alarm_Categories_DV_1_0.pdf) into Microsoft Sentinel. Refer to [Cisco Stealthwatch documentation](https://www.cisco.com/c/dam/en/us/td/docs/security/stealthwatch/system_installation_configuration/SW_7_3_2_System_Configuration_Guide_DV_1_0.pdf) for more information.",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "Stealthwatch",
+              "baseQuery": "StealthwatchEvent"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog (StealthwatchEvent)",
+              "lastDataReceivedQuery": "StealthwatchEvent\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "IsConnectedQuery",
+              "value": [
+                "StealthwatchEvent\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
+              ]
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Top 10 Sources",
+              "query": "StealthwatchEvent\n | summarize count() by tostring(DvcHostname)\n | top 10 by count_"
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "delete": true
+                }
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": ">**NOTE:** This data connector depends on a parser based on a Kusto Function to work as expected [**StealthwatchEvent**](https://aka.ms/sentinel-stealthwatch-parser) which is deployed with the Microsoft Sentinel Solution."
+            },
+            {
+              "description": ">**NOTE:** This data connector has been developed using Cisco Stealthwatch version 7.3.2"
+            },
+            {
+              "description": "Install the agent on the Server where the Cisco Stealthwatch logs are forwarded.\n\n> Logs from Cisco Stealthwatch Server deployed on Linux or Windows servers are collected by **Linux** or **Windows** agents.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Linux agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Linux Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Linux Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnLinuxNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ],
+              "title": "1. Install and onboard the agent for Linux or Windows"
+            },
+            {
+              "instructions": [
+                {
+                  "parameters": {
+                    "title": "Choose where to install the Windows agent:",
+                    "instructionSteps": [
+                      {
+                        "title": "Install agent on Azure Windows Virtual Machine",
+                        "description": "Select the machine to install the agent on and then click **Connect**.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnVirtualMachine"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      },
+                      {
+                        "title": "Install agent on a non-Azure Windows Machine",
+                        "description": "Download the agent on the relevant machine and follow the instructions.",
+                        "instructions": [
+                          {
+                            "parameters": {
+                              "linkType": "InstallAgentOnNonAzure"
+                            },
+                            "type": "InstallAgent"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "type": "InstructionStepsGroup"
+                }
+              ]
+            },
+            {
+              "description": "Follow the configuration steps below to get Cisco Stealthwatch logs into Microsoft Sentinel.\n1. Log in to the Stealthwatch Management Console (SMC) as an administrator.\n2. In the menu bar, click **Configuration** **>** **Response Management**.\n3. From the **Actions** section in the **Response Management** menu, click **Add > Syslog Message**.\n4. In the Add Syslog Message Action window, configure parameters.\n5. Enter the following custom format:\n|Lancope|Stealthwatch|7.3|{alarm_type_id}|0x7C|src={source_ip}|dst={target_ip}|dstPort={port}|proto={protocol}|msg={alarm_type_description}|fullmessage={details}|start={start_active_time}|end={end_active_time}|cat={alarm_category_name}|alarmID={alarm_id}|sourceHG={source_host_group_names}|targetHG={target_host_group_names}|sourceHostSnapshot={source_url}|targetHostSnapshot={target_url}|flowCollectorName={device_name}|flowCollectorIP={device_ip}|domain={domain_name}|exporterName={exporter_hostname}|exporterIPAddress={exporter_ip}|exporterInfo={exporter_label}|targetUser={target_username}|targetHostname={target_hostname}|sourceUser={source_username}|alarmStatus={alarm_status}|alarmSev={alarm_severity_name}\n\n6. Select the custom format from the list and click **OK**\n7. Click **Response Management > Rules**.\n8. Click **Add** and select **Host Alarm**.\n9. Provide a rule name in the **Name** field.\n10. Create rules by selecting values from the Type and Options menus. To add more rules, click the ellipsis icon. For a Host Alarm, combine as many possible types in a statement as possible.",
+              "title": "2. Configure Cisco Stealthwatch event forwarding"
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]",
+          "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**StealthwatchEvent**](https://aka.ms/sentinel-stealthwatch-parser) which is deployed with the Microsoft Sentinel Solution."
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "CiscoStealthwatch",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Parser",
+              "contentId": "[variables('_parserContentId1')]",
+              "version": "[variables('parserVersion1')]"
+            },
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2021-10-20",
+        "providers": [
+          "Cisco"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Network"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

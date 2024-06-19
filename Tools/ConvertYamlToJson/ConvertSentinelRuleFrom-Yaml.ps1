@@ -1,4 +1,3 @@
-#Requires -Version 7.2
 <#
 .SYNOPSIS
     Convert Microsoft Sentinel YAML rules to JSON ARM format
@@ -19,7 +18,7 @@
     Output is the JSON file
 .NOTES
     AUTHOR: P.Khabazi
-    LASTEDIT: 05-06-2024
+    LASTEDIT: 16-03-2022
 #>
 
 function ConvertSentinelRuleFrom-Yaml {
@@ -150,7 +149,7 @@ function ConvertSentinelRuleFrom-Yaml {
 
             #Export to JSON
             try {
-                $template | ConvertTo-Json -Depth 20 -EscapeHandling EscapeNonAscii | Out-File $outputFile -ErrorAction Stop
+                $template | ConvertTo-Json -Depth 20 | Out-File $outputFile -ErrorAction Stop
             }
             catch {
                 Write-Error $_.Exception.Message

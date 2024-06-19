@@ -1,7 +1,5 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
-| 3.0.7       | 25-04-2024                     | Repackaged for parser issue with old names       |
-| 3.0.6       | 17-04-2024                     | Repackaged solution for parser fix   |
 | 3.0.5       | 08-04-2024                     | Added Azure Deploy button for government portal deployments   |
 | 3.0.4       | 18-03-2024                     | Updated description in data file, data connector and added logo for ccp data connector                    |
 | 3.0.3       | 08-03-2024                     | Updated ccp with domainname in dcr, tables, name change in definition and poller                     |

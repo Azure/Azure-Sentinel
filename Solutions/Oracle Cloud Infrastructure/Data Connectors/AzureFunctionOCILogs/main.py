@@ -122,9 +122,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
             if message:
                 event = b64decode(message.value.encode()).decode()
                 logging.info('event details {}'.format(event))
-                myjson = str(event)
-                if(myjson.startswith("{")):
-                #if event != 'ok' and event != 'Test': 
+                if event != 'Test': 
                     event = json.loads(event)
                     if "data" in event:
                         if "request" in event["data"] and event["type"] != "com.oraclecloud.loadbalancer.access":
