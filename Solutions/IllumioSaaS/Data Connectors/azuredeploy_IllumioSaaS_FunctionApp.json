@@ -17,9 +17,6 @@
         "description": "Enter the name of the resource group linked with log analytics workspace"
       }
     },
-    "AzureSentinelWorkspaceId": {
-      "type": "String"
-    },
     "Data collection endpoint": {
       "type": "String",
       "metadata": {
@@ -41,6 +38,17 @@
     "function-name": {
       "type": "String"
     },
+    "functionAppType": {
+      "type": "string",
+      "allowedValues": [
+        "consumption",
+        "premium"
+      ],
+      "defaultValue": "consumption",
+      "metadata": {
+        "description": "Specify the type of Function App: consumption or premium"
+      }
+    },    
     "AWS_Key": {
       "type": "String"
     },
@@ -86,9 +94,9 @@
     "custom-table-auditable-events": "Illumio_Auditable_Events_CL",
     "custom-table-flow-events": "Illumio_Flow_Events_CL",
     "FunctionName": "[parameters('function-name')]",
-    "storageAccountName": "[format('{0}azfunctions', uniqueString(resourceGroup().id))]",
+    "storageAccountName": "[format('illumio-{0}-azfunctions', uniqueString(resourceGroup().id))]",
     "StorageSuffix": "[environment().suffixes.storage]",
-    "functionapp-hosting-plan": "Consumption",
+    "functionapp-hosting-plan": "[parameters('functionAppType')]",
     "AWS_Key": "[parameters('AWS_Key')]",
     "AWS_Secret": "[parameters('AWS_Secret')]",
     "AWS_Region_Name": "[parameters('AWS_Region_Name')]",
@@ -98,7 +106,7 @@
     "AADApplicationSecret": "[parameters('AADApplicationSecret')]",
     "schedule": "[parameters('Schedule')]",
     "hostingPlan": "[concat(parameters('function-name'), uniqueString(resourceGroup().id))]",
-    "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('AzureSentinelWorkspaceId')), '.ods.opinsights'))]"
+    "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('loganalyticsworkspace')), '.ods.opinsights'))]"
   },
   "resources": [
     {
@@ -585,8 +593,28 @@
         "workerSizeId": "0",
         "numberOfWorkers": "1",
         "reserved": true
-      }
+      },
+      "condition": "[equals(parameters('functionAppType'),'Consumption')]"
     },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('hostingPlan')]",
+      "location": "[parameters('location')]",
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Web/serverfarms'), parameters('tagsByResource')['Microsoft.Web/serverfarms'], json('{}')) ]",
+      "sku": {
+        "tier": "ElasticPremium",
+        "name": "[variables('functionapp-hosting-plan')]"
+      },
+      "kind": "elastic",
+      "properties": {
+        "targetWorkerCount": "1",
+        "targetWorkerSizeId": "3",
+        "reserved": true,
+        "maximumElasticWorkerCount": "100"
+      },
+      "condition": "[not(equals(parameters('functionAppType'),'Consumption'))]"
+    },   
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices",
       "apiVersion": "2023-04-01",
