@@ -52,7 +52,7 @@ Possible remediations include requiring a password reset, or temporarily locking
 1) [Overview](#overview)
 2) [Playbooks](#playbooks)
    1) ["Base" playbooks (Workforce and External)](#base_playbooks)
-   2) ["Reactive" playbooks](#reactive_playbooks)
+   2) ["Search" playbooks](#search_playbooks)
       1) [Add risky user to Active Directory Security Group](#add_risky_user_to_active_directory_security_group)
       2) [Active Directory Identity Protection - confirm user is compromised](#active_directory_identity_protection_confirm_user_is_compromised)
       3) [Lookup risky user and save results](#lookup_risky_user_and_save_results)
@@ -91,7 +91,7 @@ This Solution consists of 5 Playbooks (Logic Apps).
 
 <br/>
 
-"Reactive" playbooks:
+"Search" playbooks:
 Theese are sub playbooks that are called by the base playbooks. 
 
 | Playbook Name                                          | Description                                                                            |
@@ -124,11 +124,11 @@ Those playbooks search the Recorded Future Identity Intelligence Module for comp
 | 2   | Pull previously seen/saved leaks data from Log Analytics Custom Log.                                                           |
 | 3   | Compare data from step 1 and step 2 - to determine which leaks are new and haven't been seen previously by the Base Logic App. |
 | 4   | Save the new leaks from step 3, so on the next run of the Base Logic App we would get that data on step 2.                     |
-| 5   | Use "Reactive" Logic Apps to react / take actions on the newly leaked credentials.                                             |
+| 5   | Use "Search" Logic Apps to react / take actions on the newly leaked credentials.                                             |
 
 <br/>
 
-If you are using External use case - you will get info on your clients leaks, so probably the most valuable "reactive" Logic App for you will be "Lookup risky user and save results", as "Add risky user to Active Directory Security Group" and "Active Directory Identity Protection - confirm user is compromised" assumes that the leaked email is a user in your organization Microsoft Entra ID, which is mostly probably not true for External use case.
+If you are using External use case - you will get info on your clients leaks, so probably the most valuable "Search" Logic App for you will be "Lookup risky user and save results", as "Add risky user to Active Directory Security Group" and "Active Directory Identity Protection - confirm user is compromised" assumes that the leaked email is a user in your organization Microsoft Entra ID, which is mostly probably not true for External use case.
 
 <br/>
 
@@ -145,7 +145,7 @@ Logic App Parameters for Base Logic App Workforce use case:
 | **active_directory_security_group_id**             | ID of Active Directory Security Group for users at risk. You need to pre-create it by hand: search for "Groups" in Service search at the top of the page. For more information, see [Active Directory Security Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **lookup_lookback_days**                           | Time range for Lookup / number of days before today to search (e.g. input "-14" to search the last 14 days). **Make sure to use `lookup_lookback_days` same or larger than `search_lookback_days`. Otherwise you can encounter a situation when you get empty results on Lookup for the compromised credentials from the Search.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **lookup_results_log_analytics_custom_log_name**   | Name for Log Analytics Custom Log to save Lookup results at (**needs to end with "`_CL`"**).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **active_directory_domain**                        | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and reactive playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
+| **active_directory_domain**                        | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 
 <br/>
 
@@ -153,13 +153,13 @@ Logic App Parameters for Base Logic App "External use case" are the same as for 
 
 <br/>
 
-<a id="reactive_playbooks"></a>
+<a id="search_playbooks"></a>
 
-### "Reactive" playbooks
+### "Search" playbooks
 
 <br/>
 
-"Reactive" playbooks can be used to react to leaked credentials and mitigate the risks.
+"Search" playbooks can be used to react to leaked credentials and mitigate the risks.
 
 <br/>
 
@@ -196,7 +196,7 @@ HTTP request parameters:
 |----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **risky_user_email**                   | Compromised user email.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **active_directory_security_group_id** | ID of Active Directory Security Group for users at risk. You need to pre-create security group by hand: search for "Groups" in Service search at the top of the page. For more information, see [Active Directory Security Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **active_directory_domain**            | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and reactive playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
+| **active_directory_domain**            | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 
 
 <br/>
@@ -232,7 +232,7 @@ HTTP request parameters:
 | Parameter                              | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 |----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **risky_user_email**                   | Compromised user email.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **active_directory_domain**            | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and reactive playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
+| **active_directory_domain**            | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 
 
 <br/>
@@ -301,8 +301,8 @@ Another way to cover this case - you can add a corresponding check to RFI-lookup
 ## Deployment
 
 > [!IMPORTANT]  
-> Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.
-> Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
+> Make sure you deploy all "Base" playbooks before deploying any of the "search" playbooks. And make sure you configure all 3 base playbooks before running "RFI-search..." playbooks.
+> Make sure to specify correct playbook names while deploying "search" playbooks.** "Correct" - are just the same as you have used while deploying playbooks.
 
 
 <a id="prerequisites"></a>
@@ -319,13 +319,32 @@ Another way to cover this case - you can add a corresponding check to RFI-lookup
 
 #### Deploy Playbooks one by one
 
-> [!IMPORTANT]  
-> **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
-> **Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
 
-<br/>
+> [!IMPORTANT]  
+> Make sure you deploy all "Base" playbooks before deploying any of the "search" playbooks. And make sure you configure all 3 base playbooks before running "RFI-search..." playbooks.
+> Make sure to specify correct playbook names while deploying "search" playbooks.** "Correct" - are just the same as you have used while deploying playbooks.
 
 <a id="deployment_custom_template_playbooks_add_EntraID_security_group_user"></a>
+
+
+##### RecordedFuture-CustomConnector
+Logic-app custom connector\
+
+This connector is used by other logic apps in this solution to comunicate with Recorded Future backend API. 
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-CustomConnector-0-1-0%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%20Future%20Identity%2FPlaybooks%2FRFI-CustomConnector-0-1-0%2Fazuredeploy.json)
+
+Parameters for deployment:
+
+| Parameter          | Description                                                                                                                                                            |
+|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Subscription**   | Your Azure Subscription to deploy the Solution in. All resources in an Azure subscription are billed together.                                                         |
+| **Resource group** | Resource group in your Subscription to deploy the Solution in. A resource group is a collection of resources that share the same lifecycle, permissions, and policies. |
+| **Region**         | Choose the Azure region that's right for you and your customers. Not every resource is available in every region.                                                      |
+| **Connector-Name**  | Connector name to use for this playbook (ex. "RFI-CustomConnector-0-1-0").                                                                     |
+|**Service Endpoint**| API Endpoint, always use the default ```https://api.recordedfuture.com/gw/azure-identity```| 
+
 
 ##### RFI-add-EntraID-security-group-user
 
@@ -443,8 +462,8 @@ After deployment - initial set up for each deployed Logic App (playbook) include
 <br/>
 
 **Important:**
-- **Make sure you deploy all 3 "Reactive" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Reactive" playbooks before running "Base" playbooks.**
-- **Make sure to specify correct "Reactive" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Reactive" playbooks.
+- **Make sure you deploy all 3 "Search" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Search" playbooks before running "Base" playbooks.**
+- **Make sure to specify correct "Search" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Search" playbooks.
 - **Make sure to use `lookup_lookback_days` same or larger than `search_lookback_days`. Otherwise you can encounter a situation when you get empty results on Lookup for the compromised credentials from the Search.**
 
 <br/>
@@ -537,7 +556,7 @@ Permissions / Roles:
 
 ## How to obtain Recorded Future API token
 
-Recorded Future clients interested in API access for custom scripts or to enable a paid integration can request an API Token via this Integration Support Ticket form.  Please fill out the following fields, based on intended API usage.
+Recorded Future clients interested in API access for custom scripts or to enable a paid integration can request an API Token via this [Integration Support Ticket form](https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens).  Please fill out the following fields, based on intended API usage.
 
 Recorded Future API Services - Choose if your token is pertaining to one of the below Recorded Future API offerings:
 - Connect API
