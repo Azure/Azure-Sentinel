@@ -77,7 +77,7 @@ def main(mytimer: func.TimerRequest):
     logging.info('Script started. Getting events from created_before {}, created_after {}'.format(
         created_before, created_after))
 
-    if created_before == "2024-05-29T00:10:00+00:00":
+    if created_before == "2024-05-29T03:00:00+00:00":
         logging.info("The function will break")
         exit(1)
 
