@@ -150,5 +150,5 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.error(f"Error: {e}")
         raise
 
-    logging.info(f"Events processed successfully",extra={"Admin": azure_sentinel.success_admin_events, "User": azure_sentinel.success_user_events})
-    logging.info(f"Events failed",extra={"Admin": azure_sentinel.failed_admin_events, "User": azure_sentinel.failed_user_events})
+    logging.info(f"Events processed successfully - Admin: {azure_sentinel.success_admin_events}, User: {azure_sentinel.success_user_events}")
+    logging.info(f"Events failed - Admin: {azure_sentinel.failed_admin_events}, User: {azure_sentinel.failed_user_events}")
