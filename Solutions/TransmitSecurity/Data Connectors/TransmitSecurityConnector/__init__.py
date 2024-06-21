@@ -140,6 +140,7 @@ def main(mytimer: func.TimerRequest) -> None:
         config = zip([user_activity_endpoint, admin_activity_endpoint], [user_activity_tbl_name, admin_activity_tbl_name])
         for endpoint, table in config:
             if endpoint:
+                logging.info(f"Processing events for {table}")
                 connector.fetch_events(token, endpoint)
                 azure_sentinel.post_results(connector.results_array, table)
 
