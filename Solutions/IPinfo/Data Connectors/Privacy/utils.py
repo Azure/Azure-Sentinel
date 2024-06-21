@@ -29,8 +29,7 @@ def download_with_retry(url, file_path, retries=3):
             if attempt < retries - 1:
                 logging.info("Retrying...")
                 continue
-            else:
-                return False
+    return False
             
 def download_mmdbs():
     url = f"{IPINFO_BASE_URL}/{MMDB_NAME}?token="
