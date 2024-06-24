@@ -1,0 +1,182 @@
+Parser:
+  Title: Network Session ASIM parser for PfELK
+  Version: '0.1'
+  LastUpdated: May 2nd, 2023
+Product:
+  Name: PfELK
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing PfELK's logs to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionPfELK
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DvcActionLookup = datatable(tempPfResult:string, DvcAction:string) [
+    "block", "Drop",
+    "pass", "Allow",
+    "reject", "Deny"
+  ];
+  let EventResultLookup = datatable(tempPfResult:string, EventResult:string) [
+    "block", "Failure",
+    "pass", "Success",
+    "reject", "Failure"
+  ];
+  let NetworkProtocolVersionLookup = datatable(tempNetworkProtocolVersion:int, NetworkProtocolVersion:string) [
+    4, "IPv4",
+    6, "IPv6"
+  ];
+  let EventCountOne = toint(1);
+  let parser = (
+    starttime:datetime=datetime(null),
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstipaddr_has_any_prefix:dynamic=dynamic([]),
+    ipaddr_has_any_prefix:dynamic=dynamic([]),
+    dstportnumber:int=int(null),
+    url_has_any:dynamic=dynamic([]),              // not used
+    httpuseragent_has_any:dynamic=dynamic([]),    // not used
+    hostname_has_any:dynamic=dynamic([]),         // not used
+    dvcaction:dynamic=dynamic([]),
+    eventresult:string='*'
+  )
+  {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
+    PfELK_CL
+    // Filters (most of)
+    | where data_stream.namespace == "firewall"
+    | where (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    | where (isnull(dstportnumber) or destination.port == dstportnumber)
+    | where (array_length(src_or_any) == 0 and array_length(dst_or_any) == 0) or       // match not requested
+      (array_length(src_or_any)==0 or has_any_ipv4_prefix(source.ip, src_or_any)) or   // src matches
+      (array_length(dst_or_any)==0 or has_any_ipv4_prefix(destination.ip, dst_or_any)) // dst matches
+    | extend
+        RawData = pack_all()
+    | extend tempPfResult = tostring(event.action)
+    | lookup EventResultLookup on tempPfResult
+    | where (eventresult == "*" or eventresult == EventResult)
+    | lookup DvcActionLookup on tempPfResult
+    | where ((array_length(dvcaction) == 0) or DvcAction has_any (dvcaction))
+    | extend 
+        EventCount = EventCountOne,
+        EventStartTime = TimeGenerated,
+        EventEndTime = TimeGenerated,
+        EventType = 'NetworkSession',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion = '0.2.6',
+        EventProduct = 'PfElk',
+        EventVendor = 'PfElk'
+    | extend
+        EventSeverity = case(EventResult in ("Drop", "Deny"), "Low", "Informational"),
+        DvcIpAddr = tostring(source.ip),
+        NetworkProtocol = toupper(network.transport),
+        tempNetworkProtocolVersion = toint(network.type)
+    | lookup NetworkProtocolVersionLookup on tempNetworkProtocolVersion
+    | extend
+        DstIpAddr = tostring(destination.ip),
+        DstPortNumber = toint(destination.port),
+        SrcIpAddr = tostring(source.ip),
+        SrcPortNumber = toint(source.port),
+        NetworkRuleName = tostring(rule.alias),
+        NetworkRuleNumber = toint(rule.ruleset),
+        DvcInboundInterface = tostring(interface.name)
+    // Add aliases
+    | extend
+        DvcInterface = DvcInboundInterface,
+        Src = SrcIpAddr,
+        Dst = DstIpAddr,
+        Dvc = SrcIpAddr,
+        IpAddr = SrcIpAddr
+    // Finalize
+    | project-away temp*
+    // Use RawData to access the original fields
+    | project-away
+        data_stream,
+        destination,
+        ecs,
+        event,
+        host,
+        interface,
+        log,
+        logstash_type,
+        ls_timestamp,
+        ls_version,
+        network,
+        pf,
+        process,
+        rule,
+        service,
+        source,
+        tags
+    | project-reorder
+        // ASIM Common (mandatory) fields
+        EventCount,
+        EventStartTime,
+        EventEndTime,
+        EventType,
+        EventResult,
+        EventSeverity,
+        EventProduct,
+        EventVendor,
+        EventSchema,
+        EventSchemaVersion,
+        // ASIM Device fields
+        Dvc,
+        DvcIpAddr,
+        DvcAction,
+        // Network session fields
+        NetworkProtocol,
+        NetworkProtocolVersion,
+        IpAddr,
+        // Destination system fields
+        Dst,
+        DstIpAddr,
+        DstPortNumber,
+        // Source system fields
+        SrcIpAddr,
+        Src,
+        SrcPortNumber,
+        // Intermediary device and Network Address Translation (NAT) fields
+        DvcInboundInterface,
+        // Inspection fields
+        NetworkRuleName,
+        NetworkRuleNumber
+  };
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, dstipaddr_has_any_prefix=dstipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, dstportnumber=dstportnumber, hostname_has_any=hostname_has_any, dvcaction=dvcaction, eventresult=eventresult, disabled=disabled)
