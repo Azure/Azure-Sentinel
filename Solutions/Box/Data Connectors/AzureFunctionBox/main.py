@@ -79,36 +79,35 @@ def main(mytimer: func.TimerRequest):
 
     if created_before == "2024-05-29T03:00:00+00:00":
         logging.info("The function will break")
+        exit()
+
+    sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri=logAnalyticsUri,
+                                      shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
+    with sentinel:
+        last_event_date = None
+        for events, stream_position in get_events(start_time, config_dict, created_after=created_after, created_before=created_before, stream_position=stream_position):
+            for event in events:
+                sentinel.send(event)
+            last_event_date = get_last_event_ts(
+                events=events, last_ts=created_after, field_name='created_at') if events else last_event_date
+            logging.getLogger().setLevel(logging.INFO)
+
+    if last_event_date:
+        save_marker(state_manager, stream_position, str(last_event_date))
+        logging.info(
+            f"Events are available. Saving Marker processed till: {last_event_date}")
+    elif created_before:
+        save_marker(state_manager, stream_position, str(created_before))
+        logging.info(
+            f"Events are not available. Saving Marker processed till: {created_before}")
+
+    if sentinel.failed_sent_events_number:
+        logging.error('Script finished unsuccessfully. {} events have been sent. {} events have not been sent'.format(
+            sentinel.successful_sent_events_number, sentinel.failed_sent_events_number))
         exit(1)
-
     else:
-        sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri=logAnalyticsUri,
-                                          shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
-        with sentinel:
-            last_event_date = None
-            for events, stream_position in get_events(start_time, config_dict, created_after=created_after, created_before=created_before, stream_position=stream_position):
-                for event in events:
-                    sentinel.send(event)
-                last_event_date = get_last_event_ts(
-                    events=events, last_ts=created_after, field_name='created_at') if events else last_event_date
-                logging.getLogger().setLevel(logging.INFO)
-
-        if last_event_date:
-            save_marker(state_manager, stream_position, str(last_event_date))
-            logging.info(
-                f"Events are available. Saving Marker processed till: {last_event_date}")
-        elif created_before:
-            save_marker(state_manager, stream_position, str(created_before))
-            logging.info(
-                f"Events are not available. Saving Marker processed till: {created_before}")
-
-        if sentinel.failed_sent_events_number:
-            logging.error('Script finished unsuccessfully. {} events have been sent. {} events have not been sent'.format(
-                sentinel.successful_sent_events_number, sentinel.failed_sent_events_number))
-            exit(1)
-        else:
-            logging.info('Script finished successfully. {} events have been sent. {} events have not been sent'.format(
-                sentinel.successful_sent_events_number, sentinel.failed_sent_events_number))
+        logging.info('Script finished successfully. {} events have been sent. {} events have not been sent'.format(
+            sentinel.successful_sent_events_number, sentinel.failed_sent_events_number))
 
 
 def get_last_event_ts(events: List[dict], last_ts: datetime.datetime, field_name: str) -> datetime.datetime:
