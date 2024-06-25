@@ -79,7 +79,7 @@ def main(mytimer: func.TimerRequest):
 
     if created_before == "2024-05-29T03:00:00+00:00":
         logging.info("The function will break")
-        exit()
+        return
 
     sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri=logAnalyticsUri,
                                       shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
