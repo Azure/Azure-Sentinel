@@ -189,6 +189,7 @@ def process_auth_logs(admin_api: duo_client.Admin, start_ts, state_manager: Stat
 
 def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int):
     limit = 1000
+    res = None
     logging.info('Making authentication logs request: mintime={}, maxtime={}'.format(mintime, maxtime))
     try:
         res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
