@@ -162,7 +162,7 @@ class BHEClient(object):
         paths = list()
         for path_id in path_ids:
             ## Get nice title from API and strip newline
-            path_title = self._request('GET', '/ui/findings/' + path_id + '/title.md')
+            path_title = self._request('GET', '/api/v2/assets/findings/' + path_id + '/title.md')
 
             ## Create attackpath object
             path = AttackPath(path_id, path_title.text.strip(), domain)
