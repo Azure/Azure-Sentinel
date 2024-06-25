@@ -33,7 +33,7 @@ The connector should start ingesting the data into the logs in the next 10-15 mi
 Each invocation and its logs of the function can be seen in the Function App service of Azure, available in the Azure Portal outside Microsoft Sentinel.
 
 1. Go to **Function App** and click on the function you have deployed, identified with the given name at the deployment stage.
-2. Go to **Functions** -> **TransmitSecurityConnector** -> **Monitor**.
+2. Go to **Functions** -> **Transmit Security Connector** -> **Monitor**.
 3. By clicking on the invocation time, you can see all the logs for that run.
 
 **Note:** For more detailed logs, you can check Application Insights of the given function. You can search the logs by operation ID in the Transaction search section.
