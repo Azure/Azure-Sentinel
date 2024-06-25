@@ -77,10 +77,6 @@ def main(mytimer: func.TimerRequest):
     logging.info('Script started. Getting events from created_before {}, created_after {}'.format(
         created_before, created_after))
 
-    if created_before == "2024-05-29T03:00:00+00:00":
-        logging.info("The function will break")
-        return
-
     sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri=logAnalyticsUri,
                                       shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
     with sentinel:
@@ -103,11 +99,11 @@ def main(mytimer: func.TimerRequest):
 
     if sentinel.failed_sent_events_number:
         logging.error('Script finished unsuccessfully. {} events have been sent. {} events have not been sent'.format(
-            sentinel.successful_sent_events_number, sentinel.failed_sent_events_number))
+            sentinel.successfull_sent_events_number, sentinel.failed_sent_events_number))
         exit(1)
     else:
         logging.info('Script finished successfully. {} events have been sent. {} events have not been sent'.format(
-            sentinel.successful_sent_events_number, sentinel.failed_sent_events_number))
+            sentinel.successfull_sent_events_number, sentinel.failed_sent_events_number))
 
 
 def get_last_event_ts(events: List[dict], last_ts: datetime.datetime, field_name: str) -> datetime.datetime:
@@ -221,6 +217,8 @@ def get_events(start_time, config_dict, created_after=None, created_before=None,
         yield events, stream_position
         if check_if_time_is_over(start_time, SCRIPT_EXECUTION_INTERVAL_MINUTES, AZURE_FUNC_MAX_EXECUTION_TIME_MINUTES):
             logging.info('Stopping script because time for execution is over')
+            break
+        if created_before == "2024-05-29 03:00:00+00:00":
             break
         if len(events) < limit:
             break
