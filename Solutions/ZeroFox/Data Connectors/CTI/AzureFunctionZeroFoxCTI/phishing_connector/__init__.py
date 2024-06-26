@@ -21,13 +21,11 @@ def main(mytimer: func.TimerRequest) -> None:
 
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
-    query_to = (datetime.now(
-        timezone.utc) - timedelta(minutes=1)).isoformat()
 
     zf_client = get_zf_client()
 
     results = get_cti_phishing(
-        zf_client, scanned_after=query_from, scanned_before=query_to
+        zf_client, scanned_after=query_from
     )
 
     logging.debug("Trigger function retrieved results")
@@ -51,9 +49,9 @@ def get_zf_client():
     return ZeroFoxClient(user, token)
 
 
-def get_cti_phishing(client: ZeroFoxClient, scanned_before, scanned_after):
+def get_cti_phishing(client: ZeroFoxClient, scanned_after):
     url_suffix = "phishing/"
-    params = dict(scanned_after=scanned_after, scanned_before=scanned_before)
+    params = dict(scanned_after=scanned_after)
     return client.cti_request(
         "GET",
         url_suffix,

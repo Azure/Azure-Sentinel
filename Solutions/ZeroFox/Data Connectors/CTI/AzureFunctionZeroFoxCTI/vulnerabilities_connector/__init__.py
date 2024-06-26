@@ -21,15 +21,13 @@ def main(mytimer: func.TimerRequest) -> None:
 
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
-    query_to = (datetime.now(
-        timezone.utc) - timedelta(minutes=1)).isoformat()
 
-    logging.info(f"Querying ZeroFox between {query_from} and {query_to}")
+    logging.info(f"Querying ZeroFox since {query_from}")
 
     zf_client = get_zf_client()
 
     results = get_cti_vulnerabilities(
-        zf_client, created_after=query_from, created_before=query_to
+        zf_client, created_after=query_from
     )
 
     logging.debug("Trigger function retrieved results")
@@ -54,10 +52,10 @@ def get_zf_client():
 
 
 def get_cti_vulnerabilities(
-    client: ZeroFoxClient, created_after: str, created_before: str
+    client: ZeroFoxClient, created_after: str
 ):
     url_suffix = "vulnerabilities/"
-    params = dict(created_after=created_after, created_before=created_before)
+    params = dict(created_after=created_after)
     return client.cti_request(
         "GET",
         url_suffix,
