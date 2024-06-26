@@ -55,7 +55,7 @@ def main(mytimer: func.TimerRequest):
     created_before = created_before.replace(
         tzinfo=datetime.timezone.utc, second=0, microsecond=0).isoformat()
 
-    if created_before >= "2024-05-28T17:49:00+00:00":
+    if created_before >= "2024-05-28 17:49:00+00:00":
         return
 
     file_storage_connection_string = os.environ['AzureWebJobsStorage']
