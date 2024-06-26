@@ -86,7 +86,7 @@ class LogStashEventsBatcher
                 end
             rescue Exception => ex
                 @logger.trace("Exception in posting data to #{api_name}.[amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")       
-                @logger.error("Exception in posting data to #{api_name}. [Exception: '#{ex}, amount of documents=#{amount_of_documents}]'")
+                @logger.error("Exception in posting data to #{api_name}. [Exception: '[#{ex.class.name}]#{ex}, amount of documents=#{amount_of_documents}]'")
             end
             is_retry = true
             @logger.info("Retrying transmission to #{api_name} in #{seconds_to_sleep} seconds.")
