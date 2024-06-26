@@ -1,1 +1,0 @@
-from .sentinel import post_data
