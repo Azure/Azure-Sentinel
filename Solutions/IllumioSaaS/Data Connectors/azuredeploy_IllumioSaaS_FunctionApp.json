@@ -82,7 +82,22 @@
     },
     "tagsByResource": {
       "type": "Object"
-    }
+    },
+    "API_KEY": {
+      "type": "String"
+    },
+    "API_SECRET": {
+      "type": "securestring"
+    },
+    "FQDN": {
+      "type": "String"
+    },
+    "PORT": {
+      "type": "String"
+    },    
+    "ORG_ID": {
+      "type": "String"
+    }    
   },
   "variables": {
     "loganalyticsworkspace": "[parameters('loganalyticsworkspace')]",
@@ -93,6 +108,7 @@
     "Data collection rule": "[parameters('Data collection rule')]",
     "custom-table-auditable-events": "Illumio_Auditable_Events_CL",
     "custom-table-flow-events": "Illumio_Flow_Events_CL",
+    "custom-table-workloads-summarized": "Illumio_Workloads_Summarized_API_CL",    
     "FunctionName": "[parameters('function-name')]",
     "storageAccountName": "[format('illumio{0}', uniqueString(resourceGroup().id))]",
     "StorageSuffix": "[environment().suffixes.storage]",
@@ -306,6 +322,54 @@
       }
     },
     {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(variables('loganalyticsworkspace'),'/',variables('custom-table-workloads-summarized'))]",
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.OperationalInsights/workspaces'), parameters('tagsByResource')['Microsoft.OperationalInsights/workspaces'], json('{}')) ]",
+      "properties": {
+        "plan": "Analytics",
+        "schema": {
+          "name": "[variables('custom-table-workloads-summarized')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime",
+              "isDefaultDisplay": true,
+              "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+            },
+            {
+              "name": "vens_by_enforcement_mode",
+              "type": "Dynamic"
+            },
+            {
+              "name": "vens_by_managed",
+              "type": "Dynamic"
+            },
+            {
+              "name": "vens_by_os",
+              "type": "dynamic"
+            },
+            {
+              "name": "vens_by_status",
+              "type": "dynamic"
+            },
+            {
+              "name": "vens_by_sync_state",
+              "type": "dynamic"
+            },
+            {
+              "name": "vens_by_type",
+              "type": "dynamic"
+            },
+            {
+              "name": "vens_by_version",
+              "type": "dynamic"
+            }
+          ]
+        }
+      }
+    },    
+    {
       "type": "Microsoft.Insights/dataCollectionEndpoints",
       "apiVersion": "2022-06-01",
       "name": "[variables('Data collection endpoint')]",
@@ -506,7 +570,45 @@
                 "type": "int"
               }
             ]
-          }
+          },
+          "[concat('Custom-',variables('custom-table-workloads-summarized'))]": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime",
+                "isDefaultDisplay": true,
+                "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+              },
+              {
+                "name": "vens_by_enforcement_mode",
+                "type": "Dynamic"
+              },
+              {
+                "name": "vens_by_managed",
+                "type": "Dynamic"
+              },
+              {
+                "name": "vens_by_os",
+                "type": "dynamic"
+              },
+              {
+                "name": "vens_by_status",
+                "type": "dynamic"
+              },
+              {
+                "name": "vens_by_sync_state",
+                "type": "dynamic"
+              },
+              {
+                "name": "vens_by_type",
+                "type": "dynamic"
+              },
+              {
+                "name": "vens_by_version",
+                "type": "dynamic"
+              }
+            ]
+          }          
         },
         "destinations": {
           "logAnalytics": [
@@ -536,7 +638,17 @@
             ],
             "transformKql": "source\n| extend TimeGenerated = todatetime(timestamp)\n| project-rename flow_count=['count']\n | project-away timestamp\n\n",
             "outputStream": "[concat('Custom-',variables('custom-table-flow-events'))]"
-          }
+          },
+          {
+            "streams": [
+              "[concat('Custom-',variables('custom-table-workloads-summarized'))]"
+            ],
+            "destinations": [
+              "la-data-destination"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(timestamp) | project-away timestamp \n\n",
+            "outputStream": "[concat('Custom-',variables('custom-table-workloads-summarized'))]"
+          }          
         ]
       }
     },
@@ -613,8 +725,24 @@
         "reserved": true,
         "maximumElasticWorkerCount": "100"
       },
-      "condition": "[not(equals(parameters('functionAppType'),'Consumption'))]"
+      "condition": "[equals(parameters('functionAppType'),'Premium')]"
     },   
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2023-12-01",
+      "name": "[variables('hostingPlan')]",
+      "location": "[parameters('location')]",
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Web/serverfarms'), parameters('tagsByResource')['Microsoft.Web/serverfarms'], json('{}')) ]",
+      "sku": {
+        "tier": "FlexConsumption",
+        "name": "FC1"
+      },
+      "kind": "functionapp",
+      "properties": {
+        "reserved": true
+      },
+      "condition": "[equals(parameters('functionAppType'),'Flex')]"
+    },      
     {
       "type": "Microsoft.Storage/storageAccounts/blobServices",
       "apiVersion": "2023-04-01",
@@ -778,7 +906,27 @@
             {
               "name": "LogTypes",
               "value": "[parameters('LogTypes')]"
-            }
+            },
+            {
+              "name": "API_KEY",
+              "value": "[parameters('API_KEY')]"
+            },
+            {
+              "name": "API_SECRET",
+              "value": "[parameters('API_SECRET')]"
+            },
+            {
+              "name": "ILLUMIO_FQDN",
+              "value": "[parameters('FQDN')]"
+            },
+            {
+              "name": "ORG_ID",
+              "value": "[parameters('ORG_ID')]"
+            },
+            {
+              "name": "PORT",
+              "value": "[parameters('PORT')]"
+            }                        
           ],
           "cors": {
             "allowedOrigins": [

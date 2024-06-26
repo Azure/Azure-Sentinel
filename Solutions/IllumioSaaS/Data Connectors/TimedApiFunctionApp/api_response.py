@@ -10,7 +10,7 @@ import json
 API_KEY = os.environ['API_KEY']
 API_PASSWORD = os.environ['API_PASSWORD']
 PCE_FQDN = os.environ['PCE_FQDN']
-PORT = os.environ['PCE_PORT']
+PORT = int(os.environ.get('PCE_PORT', 443))
 ORG_ID = os.environ['ORG_ID']
 
 AZURE_TENANT_ID = os.environ['AZURE_TENANT_ID']
@@ -20,7 +20,7 @@ DCE_ENDPOINT = os.environ['DCE_ENDPOINT']
 DCR_ID = os.environ['DCR_ID']
 LOG_ANALYTICS_URI = os.environ['LOG_ANALYTICS_URI']
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
-MAX_RESULTS = os.environ.get('MAX_RESULTS', 100000)
+MAX_RESULTS = os.environ.get('MAX_WORKLOADS', 100000)
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
 
