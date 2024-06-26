@@ -17,6 +17,7 @@ tactics:
 relevantTechniques:
   - T1030
 query: |
+query: |
   // Set threshold for the number of downloads/uploads from a new user agent
   let threshold = 5;
   // Define constants for SharePoint file operations
@@ -27,7 +28,7 @@ query: |
   let endtime = 1d;   // Define the end time for historical data (1 day ago)
   // Extract the base events for analysis
   let Baseevents =
-    OfficeActivity
+    EnrichedMicrosoft365AuditLogs
     | where TimeGenerated between (ago(starttime) .. ago(endtime))
     | where RecordType =~ szSharePointFileOperation
     | where Operation in~ (szOperations)
@@ -42,14 +43,14 @@ query: |
     | summarize Count = count() by UserId, Operation, Site_Url
     | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;
   // Extract recent activity for analysis
-  let RecentActivity = OfficeActivity
+  let RecentActivity = EnrichedMicrosoft365AuditLogs
     | where TimeGenerated > ago(endtime)
     | where RecordType =~ szSharePointFileOperation
     | where Operation in~ (szOperations)
     | where isnotempty(UserAgent)
     | where UserAgent in~ (FrequentUA)
-    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OfficeObjectIdCount = dcount(OfficeObjectId), OfficeObjectIdList = make_set(OfficeObjectId), UserAgentSeenCount = count() 
-    by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url;
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ObjectIdCount = dcount(ObjectId), ObjectIdList = make_set(ObjectId), UserAgentSeenCount = count() 
+    by RecordType, Operation, UserAgent, UserType, UserId, ClientIp, OfficeWorkload, Site_Url;
   // Analyze user behavior based on baseline and recent activity
   let UserBehaviorAnalysis = UserBaseLine
     | join kind=inner (RecentActivity) on UserId, Operation, Site_Url
@@ -58,7 +59,7 @@ query: |
   UserBehaviorAnalysis
     | where Deviation > 25
     | extend UserIdName = tostring(split(UserId, '@')[0]), UserIdUPNSuffix = tostring(split(UserId, '@')[1])
-    | project-reorder StartTime, EndTime, UserAgent, UserAgentSeenCount, UserId, ClientIP, Site_Url
+    | project-reorder StartTime, EndTime, UserAgent, UserAgentSeenCount, UserId, ClientIp, Site_Url
     | project-away Site_Url1, UserId1, Operation1
     | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc
 entityMappings:

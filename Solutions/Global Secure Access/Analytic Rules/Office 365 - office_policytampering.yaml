@@ -21,25 +21,27 @@ relevantTechniques:
   - T1098
   - T1562
 query: |
-  let opList = dynamic(["Remove-AntiPhishRule", "Disable-AntiPhishRule", "Remove-SafeAttachmentRule", "Disable-SafeAttachmentRule", "Remove-SafeLinksRule", "Disable-SafeLinksRule", "Remove-DlpPolicy", "Disable-DlpPolicy", "Remove-AuditConfig", "Disable-AuditConfig"]);
+  let opList = EnrichedMicrosoft365AuditLogs 
+    | summarize by Operation
+    | where Operation has_any ("Remove", "Disable")
+    | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
+    | summarize make_set(Operation, 500);
   EnrichedMicrosoft365AuditLogs
-  // Only admin or global-admin can disable/remove policy
-  | where RecordType == "ExchangeAdmin"
-  | where UserType in ("Admin", "DcAdmin")
-  // Pass in interesting Operation list
-  | where Operation in (opList)
-  | extend ClientIPOnly = case(
-      ClientIp has ".", tostring(split(ClientIp, ":")[0]),
-      ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))),
-      ClientIp
-  )  
-  | extend Port = case(
-      ClientIp has ".", split(ClientIp, ":")[1],
-      ClientIp has "[", tostring(split(ClientIp, "]:")[1]),
-      ClientIp
-  )
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, AdditionalProperties
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    | where RecordType =~ "ExchangeAdmin"
+    | where UserType in~ ("Admin", "DcAdmin")
+    | where Operation in~ (opList)
+    | extend ClientIPOnly = case( 
+        ClientIp has ".", tostring(split(ClientIp, ":")[0]), 
+        ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))),
+        ClientIp
+      )  
+    | extend Port = case(
+        ClientIp has ".", tostring(split(ClientIp, ":")[1]),
+        ClientIp has "[", tostring(split(ClientIp, "]:")[1]),
+        ""
+      )
+    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters)
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:

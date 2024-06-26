@@ -1,7 +1,7 @@
 id: 558f15dd-3171-4b11-bf24-31c0610a20e0
 name: User made Owner of multiple teams
 description: |
-  'This hunting query identifies users who have been made Owner of multiple Teams.'
+  This hunting query identifies users who have been made Owner of multiple Teams.
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
@@ -13,25 +13,23 @@ relevantTechniques:
 query: |
   // Adjust this value to change how many teams a user is made owner of before detecting
   let max_owner_count = 3;
-  // Change this value to adjust how large a timeframe the query is run over.
+  // Identify users who have been made owner of multiple Teams
   let high_owner_count = (
     EnrichedMicrosoft365AuditLogs
     | where Workload == "MicrosoftTeams"
     | where Operation == "MemberRoleChanged"
-    | mv-expand Members
-    | extend Member = tostring(parse_json(Members).UPN)
-    | extend NewRole = toint(parse_json(Members).Role)
+    | extend Member = tostring(UserId)
+    | extend NewRole = toint(parse_json(tostring(AdditionalProperties)).Role)
     | where NewRole == 2
-    | summarize dcount(TeamName) by Member
-    | where dcount_TeamName > max_owner_count
+    | summarize TeamCount = dcount(ObjectId) by Member
+    | where TeamCount > max_owner_count
     | project Member
   );
   EnrichedMicrosoft365AuditLogs
   | where Workload == "MicrosoftTeams"
   | where Operation == "MemberRoleChanged"
-  | mv-expand Members
-  | extend Member = tostring(parse_json(Members).UPN)
-  | extend NewRole = toint(parse_json(Members).Role)
+  | extend Member = tostring(UserId)
+  | extend NewRole = toint(parse_json(tostring(AdditionalProperties)).Role)
   | where NewRole == 2
   | where Member in (high_owner_count)
   | extend AccountName = tostring(split(Member, "@")[0]), AccountUPNSuffix = tostring(split(Member, "@")[1])
@@ -43,3 +41,4 @@ entityMappings:
       - identifier: UPNSuffix
         columnName: AccountUPNSuffix
 version: 2.0.1
+kind: Scheduled
