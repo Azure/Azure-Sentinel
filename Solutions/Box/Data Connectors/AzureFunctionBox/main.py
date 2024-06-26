@@ -76,8 +76,10 @@ def main(mytimer: func.TimerRequest):
 
     logging.info('Script started. Getting events from created_before {}, created_after {}'.format(
         created_before, created_after))
-    
-    if created_before >= "2024-05-28 17:49:00+00:00":
+
+    date_time_str = '2024-05-28 17:49:00+00:00'
+
+    if created_before >= datetime.fromisoformat(date_time_str):
         return
 
     sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri=logAnalyticsUri,
