@@ -15,7 +15,7 @@ param logAnalyticsWorkspaceName string
 @description('FQDN/IP for the Integration Connection - Enter the Varonis Web Interface address (e.g. https://example.varonis.com).')
 param varonisFQDN string
 
-@description('Varonis API Key.')
+@description('Copy the API Key from the Varonis web interface.')
 @secure()
 param varonisApiKey string
 

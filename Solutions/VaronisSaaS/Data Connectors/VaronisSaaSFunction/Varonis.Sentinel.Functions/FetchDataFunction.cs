@@ -41,8 +41,6 @@ namespace Varonis.Sentinel.Functions
                     log.LogWarning("Timer is running late!");
                 }
 
-                var minDate = DateTime.MinValue.ToUniversalTime();
-
                 var last = timer.ScheduleStatus.Last.ToUniversalTime();
                 var lastUpdated = timer.ScheduleStatus.LastUpdated.ToUniversalTime();
                 var next = timer.ScheduleStatus.Next.ToUniversalTime().AddSeconds(-1);
