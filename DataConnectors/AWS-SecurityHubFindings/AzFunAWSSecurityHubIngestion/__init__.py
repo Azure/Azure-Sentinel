@@ -15,12 +15,10 @@ import hmac
 import base64
 import re
 from threading import Thread
-import asn1
 import cffi
 from boto3.session import Session
 import azure.functions as func
 from azure.identity import AzureCliCredential, ChainedTokenCredential, ManagedIdentityCredential, DefaultAzureCredential
-import botocore
 from azure.core.exceptions import ClientAuthenticationError
 
 client_id = os.environ.get('ClientID')
@@ -103,6 +101,7 @@ def main(mytimer: func.TimerRequest) -> None:
                 payload.update({'Resources':finding['Resources']})            
                 payload.update({'WorkflowState':finding['WorkflowState']})                
                 payload.update({'RecordState':finding['RecordState']})
+                payload.update({'Compliance':finding['Compliance']})
                 
                 with sentinel:
                     sentinel.send(payload)
@@ -145,7 +144,7 @@ class SecurityHubClient:
                 WebIdentityToken=self.web_identity_token
                 )
             logging.info ("Successfully assumed role with web identity.")            
-        except botocore.exceptions.ClientError as error:
+        except boto3.exceptions.ClientAuthenticationError as error:
             logging.info ("Assuming role with web identity failed: %s" % error)
 
         # from the response, get credentials
