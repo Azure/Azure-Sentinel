@@ -3,7 +3,7 @@ import json
 from enum import Enum
 
 from azure.storage.queue import QueueClient, BinaryBase64EncodePolicy, BinaryBase64DecodePolicy
-from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError
+from azure.core.exceptions import ResourceExistsError
 
 
 class ExportsQueue:

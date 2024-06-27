@@ -67,7 +67,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     logging.info(f'Number of chunks: {len(chunks)}')
 
     tenable_status = TenableStatus.finished.value
-    if 'status' in job_status and (job_status['status'] is 'CANCELLED' or job_status['status'] is 'ERROR'):
+    if 'status' in job_status and (job_status['status'] == 'CANCELLED' or job_status['status'] == 'ERROR'):
         tenable_status = TenableStatus.failed.value
 
     return {

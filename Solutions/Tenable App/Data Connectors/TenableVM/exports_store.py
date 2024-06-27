@@ -69,19 +69,6 @@ class ExportsTableStore:
             print(e.message)
             return []
 
-    # def get_chunk_details_by_job_id(self, pk):
-    #     total_chunk_count = 0
-    #     failed_chunk_count = 0
-    #     finished_chunk_count = 0
-    #     failed_chunk_ids = []
-    #     finished_chunk_ids = []
-    #     for chunk in self.query_by_partition_key(pk):
-    #         total_chunk_count += 1
-    #         if 'jobStatus' in chunk and chunk['jobStatus'] == 'FINISH':
-    #             finished_chunk_count += 1
-
-    #     return total_chunk_count
-
     def query_for_finished_chunks_by_partition_key(self, pk):
         table_client = TableClient.from_connection_string(
             self.connection_string, self.table_name)
