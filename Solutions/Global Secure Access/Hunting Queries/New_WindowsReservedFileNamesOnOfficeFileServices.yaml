@@ -21,11 +21,10 @@ query: |
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = totimespan((endtime - starttime) * 7);
-  let threshold = 1;
   let Reserved = dynamic(['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9']);
   EnrichedMicrosoft365AuditLogs
   | where TimeGenerated between (starttime .. endtime)
-  | extend FileName = tostring(parse_json(AdditionalProperties).SourceFileName)
+  | extend FileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
   | where isnotempty(ObjectId)
   | where ObjectId !~ FileName
   | where ObjectId in (Reserved) or FileName in (Reserved)
@@ -34,14 +33,12 @@ query: |
   | join kind=leftanti (
       EnrichedMicrosoft365AuditLogs
       | where TimeGenerated between (ago(lookback) .. starttime)
-      | extend FileName = tostring(parse_json(AdditionalProperties).SourceFileName)
+      | extend FileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
       | where isnotempty(ObjectId)
       | where ObjectId !~ FileName
       | where ObjectId in (Reserved) or FileName in (Reserved)
       | where ClientUserAgent !has "Mac OS"
-      | summarize ObjectId = make_set(ObjectId, 100000), UserId = make_set(UserId, 100000), FileName = make_set(FileName, 100000), PrevSeenCount = count() by ObjectId
-      | mvexpand ObjectId, UserId, FileName
-      | extend ObjectId = tostring(ObjectId), UserId = tostring(UserId), FileName = tostring(FileName)
+      | summarize PrevSeenCount = count() by ObjectId, UserId, FileName
   ) on ObjectId
   | extend SiteUrlUserFolder = tolower(split(SiteUrl, '/')[-2])
   | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
@@ -70,3 +67,4 @@ entityMappings:
       - identifier: Url
         columnName: URL_0_Url
 version: 2.0.1
+kind: Scheduled

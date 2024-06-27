@@ -8,9 +8,6 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - EnrichedMicrosoft365AuditLogs
-  - connectorId: AzureActiveDirectory
-    dataTypes:
-      - EnrichedMicrosoft365AuditLogs
 queryFrequency: 1h
 queryPeriod: 1h
 triggerOperator: gt
@@ -40,17 +37,17 @@ query: |
         EnrichedMicrosoft365AuditLogs
         | where RecordType == "SharePointFileOperation"
         | where Operation == "FileUploaded"
-        | extend MemberAdded = UserId, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
+        | extend MemberAdded = UserId, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
         | where SourceRelativeUrl has "Microsoft Teams Chat Files"
         | join kind=inner (
             EnrichedMicrosoft365AuditLogs
             | where RecordType == "SharePointFileOperation"
             | where Operation == "FileAccessed"
-            | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
+            | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
             | where SourceRelativeUrl has "Microsoft Teams Chat Files"
-            | summarize FileAccessCount = count() by ObjectId
+            | summarize FileAccessCount = count() by ObjectId, TeamName
             | where FileAccessCount > fileAccessThreshold
-        ) on ObjectId
+        ) on ObjectId, TeamName
     ) on MemberAdded, TeamName
     | project-away MemberAdded1, MemberAdded2, ObjectId1, Operation1, Operation2
     | extend MemberAddedAccountName = tostring(split(MemberAdded, "@")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded, "@")[1])
