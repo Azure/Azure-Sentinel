@@ -16,7 +16,7 @@ This tool will do the following:
 * Add the URL to the JIRA incident as a comment in Sentinel
 * Sync public comments from JIRA to Sentinel
 
-![Overview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Solution%20overview.png)
+![Overview](https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AtlassianJiraAudit/Playbooks/Images/Azure%20-%20Switch%20Organization.png)
 
 [Blog post with more background information](https://www.thecollective.eu/en/insights/setting-up-a-bidirectional-sync-between-sentinel-and-jira)
 
@@ -200,7 +200,7 @@ It uses one connections:
 To sync incident comments from JIRA to Microsoft Sentinel an Azure Function is used. This Function App contains one Powershell Function.
 There are two types of comments in JIRA: internal and public comments. This script will only sync the public comments, so that customers don't have access to the internal ones.
 
-The code for this function can be found [in this repository](Sync-Comments/Sync-Comment.ps1).
+The code for this function can be found [in this repository](Sync-CommentsFunctionApp/Sync-Comment.ps1).
 This Function uses a managed identity to authenticate to the Key Vault.
 
 Either deployment the Function App through the ARM template linked above or deploy a Function app manually and paste the ps1 code
