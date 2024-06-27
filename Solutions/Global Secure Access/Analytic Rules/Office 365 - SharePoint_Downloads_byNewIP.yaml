@@ -16,36 +16,40 @@ tactics:
   - Exfiltration
 relevantTechniques:
   - T1030
-query: |
-    let threshold = 25;
-    let szSharePointFileOperation = "SharePointFileOperation";
-    let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
-    let starttime = 14d;
-    let endtime = 1d;
-    // Define a baseline of normal user behavior
-    let userBaseline = EnrichedMicrosoft365AuditLogs
-    | where TimeGenerated between(ago(starttime)..ago(endtime))
-    | where RecordType =~ szSharePointFileOperation
-    | where Operation in~ (szOperations)
-    | where isnotempty(UserAgent)
-    | summarize Count = count() by UserId, Operation, Site_Url, ClientIp
-    | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIp;
-    // Get recent user activity
-    let recentUserActivity = EnrichedMicrosoft365AuditLogs
-    | where TimeGenerated > ago(endtime)
-    | where RecordType =~ szSharePointFileOperation
-    | where Operation in~ (szOperations)
-    | where isnotempty(UserAgent)
-    | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIp, OfficeObjectId, OfficeWorkload, UserAgent;
-    // Join the baseline and recent activity, and calculate the deviation
-    let UserBehaviorAnalysis = userBaseline | join kind=inner (recentUserActivity) on UserId, Operation, Site_Url, ClientIp
-    | extend Deviation = abs(RecentCount - AvgCount) / AvgCount;
-    // Filter for significant deviations
-    UserBehaviorAnalysis
-    | where Deviation > threshold
-    | project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIp, Site_Url, OfficeObjectId, OfficeWorkload, UserAgent, Deviation, Count=RecentCount
-    | order by Count desc, ClientIp asc, Operation asc, UserId asc
-    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+let threshold = 25;
+let szSharePointFileOperation = "SharePointFileOperation";
+let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+let starttime = 14d;
+let endtime = 1d;
+// Define a baseline of normal user behavior
+let userBaseline = EnrichedMicrosoft365AuditLogs
+| where TimeGenerated between(ago(starttime)..ago(endtime))
+| where RecordType == szSharePointFileOperation
+| where Operation in (szOperations)
+| extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+| extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+| where isnotempty(UserAgent)
+| summarize Count = count() by UserId, Operation, Site_Url, ClientIp
+| summarize AvgCount = avg(Count) by UserId, Operation, Site_Url, ClientIp;
+// Get recent user activity
+let recentUserActivity = EnrichedMicrosoft365AuditLogs
+| where TimeGenerated > ago(endtime)
+| where RecordType == szSharePointFileOperation
+| where Operation in (szOperations)
+| extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+| extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+| where isnotempty(UserAgent)
+| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), RecentCount = count() by UserId, UserType, Operation, Site_Url, ClientIp, ObjectId, Workload, UserAgent;
+// Join the baseline and recent activity, and calculate the deviation
+let UserBehaviorAnalysis = userBaseline 
+| join kind=inner (recentUserActivity) on UserId, Operation, Site_Url, ClientIp
+| extend Deviation = abs(RecentCount - AvgCount) / AvgCount;
+// Filter for significant deviations
+UserBehaviorAnalysis
+| where Deviation > threshold
+| project StartTimeUtc, EndTimeUtc, UserId, UserType, Operation, ClientIp, Site_Url, ObjectId, Workload, UserAgent, Deviation, Count=RecentCount
+| order by Count desc, ClientIp asc, Operation asc, UserId asc
+| extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:

@@ -21,25 +21,20 @@ relevantTechniques:
   - T1098
   - T1078
 query: |
-    let Keywords = dynamic(["helpdesk", " alert", " suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
+    let Keywords = dynamic(["helpdesk", "alert", "suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
     EnrichedMicrosoft365AuditLogs
     | where Workload =~ "Exchange"
     | where Operation =~ "New-InboxRule" and (ResultStatus =~ "True" or ResultStatus =~ "Succeeded")
-    | where tostring(AdditionalProperties.Parameters) has "Deleted Items" or tostring(AdditionalProperties.Parameters) has "Junk Email" or tostring(AdditionalProperties.Parameters) has "DeleteMessage"
-    | extend Events = todynamic(tostring(AdditionalProperties.Parameters))
-    | parse Events with * "SubjectContainsWords" SubjectContainsWords '}'*
-    | parse Events with * "BodyContainsWords" BodyContainsWords '}'*
-    | parse Events with * "SubjectOrBodyContainsWords" SubjectOrBodyContainsWords '}'*
-    | where SubjectContainsWords has_any (Keywords)
-       or BodyContainsWords has_any (Keywords)
-       or SubjectOrBodyContainsWords has_any (Keywords)
+    | where tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "Deleted Items" or tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "Junk Email" or tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "DeleteMessage"
+    | extend Events = parse_json(tostring(AdditionalProperties)).Parameters
+    | extend SubjectContainsWords = tostring(Events.SubjectContainsWords), BodyContainsWords = tostring(Events.BodyContainsWords), SubjectOrBodyContainsWords = tostring(Events.SubjectOrBodyContainsWords)
+    | where SubjectContainsWords has_any (Keywords) or BodyContainsWords has_any (Keywords) or SubjectOrBodyContainsWords has_any (Keywords)
     | extend ClientIPAddress = case(ClientIp has ".", tostring(split(ClientIp, ":")[0]), ClientIp has "[", tostring(trim_start(@'[[]',tostring(split(ClientIp, "]")[0]))), ClientIp)
     | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords), BodyContainsWords, SubjectOrBodyContainsWords)))
     | extend RuleDetail = case(ObjectId contains '/', tostring(split(ObjectId, '/')[-1]), tostring(split(ObjectId, '\\')[-1]))
-    | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer = SourceSystem, ObjectId, RuleDetail
+    | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, ObjectId, RuleDetail
     | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
-    | extend OriginatingServerName = tostring(split(SourceSystem, " ")[0])
-
+    | extend OriginatingServerName = tostring(split(OriginatingServer, " ")[0])
 
 entityMappings:
   - entityType: Account

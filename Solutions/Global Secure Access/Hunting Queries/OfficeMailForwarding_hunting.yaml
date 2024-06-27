@@ -22,7 +22,7 @@ query: |
   | where (Operation == "Set-Mailbox" and AdditionalProperties contains 'ForwardingSmtpAddress') 
   or (Operation in ('New-InboxRule','Set-InboxRule') and (AdditionalProperties contains 'ForwardTo' or AdditionalProperties contains 'RedirectTo'))
   | extend parsed = parse_json(AdditionalProperties)
-  | extend fwdingDestination_initial = (iif(Operation == "Set-Mailbox", tostring(parsed['ForwardingSmtpAddress']), iif(Operation in ('New-InboxRule', 'Set-InboxRule'), coalesce(tostring(parsed['ForwardTo']), tostring(parsed['RedirectTo'])))))
+  | extend fwdingDestination_initial = iif(Operation == "Set-Mailbox", tostring(parsed['ForwardingSmtpAddress']), coalesce(tostring(parsed['ForwardTo']), tostring(parsed['RedirectTo'])))
   | where isnotempty(fwdingDestination_initial)
   | extend fwdingDestination = iff(fwdingDestination_initial has "smtp", (split(fwdingDestination_initial, ":")[1]), fwdingDestination_initial)
   | parse fwdingDestination with * '@' ForwardedtoDomain 
@@ -36,9 +36,9 @@ query: |
       ClientIp has "[", tostring(split(ClientIp, "]:")[1]),
       ClientIp
   )
-  | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, Port, OriginatingServer, ObjectId, fwdingDestination
+  | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, Port, ObjectId, fwdingDestination
   | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
-  | extend Host = tostring(split(OriginatingServer, " (")[0])
+  | extend Host = tostring(parse_json(tostring(AdditionalProperties)).OriginatingServer)
   | extend HostName = tostring(split(Host, ".")[0])
   | extend DnsDomain = tostring(strcat_array(array_slice(split(Host, '.'), 1, -1), '.'))
   | extend Account_0_Name = AccountName

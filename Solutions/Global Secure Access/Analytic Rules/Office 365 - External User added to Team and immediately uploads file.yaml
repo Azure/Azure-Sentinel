@@ -24,33 +24,34 @@ query: |
     EnrichedMicrosoft365AuditLogs
     | where Workload =~ "MicrosoftTeams"
     | where Operation =~ "MemberAdded"
-    | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties.Members))[0].UPN)
-    | where MemberAdded contains ("#EXT#")
-    | project TimeAdded = TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName = tostring(AdditionalProperties.TeamName)
-    | join kind = inner (
+    | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)
+    | where MemberAdded contains "#EXT#"
+    | project TimeAdded = TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+    | join kind=inner (
         EnrichedMicrosoft365AuditLogs
         | where Workload =~ "MicrosoftTeams"
         | where Operation =~ "MemberRemoved"
-        | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties.Members))[0].UPN)
-        | where MemberAdded contains ("#EXT#")
-        | project TimeDeleted = TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName = tostring(AdditionalProperties.TeamName)
-        ) on MemberAdded
+        | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)
+        | where MemberAdded contains "#EXT#"
+        | project TimeDeleted = TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+    ) on MemberAdded
     | where TimeDeleted > TimeAdded
-    | join kind = inner (
+    | join kind=inner (
         EnrichedMicrosoft365AuditLogs
         | where RecordType == "SharePointFileOperation"
-        | where SourceRelativeUrl has "Microsoft Teams Chat Files"
         | where Operation == "FileUploaded"
-        | extend MemberAdded = UserId
-        | join kind = inner (
+        | extend MemberAdded = UserId, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
+        | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+        | join kind=inner (
             EnrichedMicrosoft365AuditLogs
             | where RecordType == "SharePointFileOperation"
-            | where Operation  == "FileAccessed"
+            | where Operation == "FileAccessed"
+            | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
             | where SourceRelativeUrl has "Microsoft Teams Chat Files"
             | summarize FileAccessCount = count() by ObjectId
             | where FileAccessCount > fileAccessThreshold
-            ) on $left.ObjectId == $right.ObjectId
-        ) on MemberAdded
+        ) on ObjectId
+    ) on MemberAdded
     | project-away MemberAdded1, MemberAdded2, ObjectId1, Operation1, Operation2, TeamName1, TeamName2
     | extend MemberAddedAccountName = tostring(split(MemberAdded, "@")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded, "@")[1])
     | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, "@")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, "@")[1])

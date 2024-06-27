@@ -22,33 +22,36 @@ relevantTechniques:
   - T1105
   - T1570
 query: |
-  let threshold = 2;
-  let uploadOp = 'FileUploaded';
-  let execExt = dynamic(['exe', 'inf', 'gzip', 'cmd', 'bat']);
-  let starttime = 8d;
-  let endtime = 1d;
-  EnrichedMicrosoft365AuditLogs 
-  | where TimeGenerated >= ago(endtime)
-  | where Operation =~ uploadOp
-  | where SourceFileExtension has_any (execExt)
-  | project TimeGenerated, OfficeId, OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIp, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName
-  | join kind= leftanti (
-      EnrichedMicrosoft365AuditLogs 
-      | where TimeGenerated between (ago(starttime) .. ago(endtime))
-      | where Operation =~ uploadOp
-      | where SourceFileExtension has_any (execExt)
-      | summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000), PrevSeenCount = count() by SourceFileName
-      // Uncomment the line below to enforce the threshold
-      // | where PrevSeenCount > threshold
-      | mvexpand SourceRelativeUrl, UserId
-      | extend SourceRelativeUrl = tostring(SourceRelativeUrl), UserId = tostring(UserId)
+    let threshold = 2;
+    let uploadOp = 'FileUploaded';
+    let execExt = dynamic(['exe', 'inf', 'gzip', 'cmd', 'bat']);
+    let starttime = 8d;
+    let endtime = 1d;
+    EnrichedMicrosoft365AuditLogs
+    | where TimeGenerated >= ago(endtime)
+    | where Operation == uploadOp
+    | extend SourceFileExtension = extract(@"\.([^\./]+)$", 1, tostring(parse_json(tostring(AdditionalProperties)).SourceFileName))  // Extract file extension
+    | where SourceFileExtension in (execExt)
+    | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+    | project TimeGenerated, Id, Workload, RecordType, Operation, UserType, UserKey, UserId, ClientIp, UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent), Site_Url, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
+    | join kind=leftanti (
+        EnrichedMicrosoft365AuditLogs
+        | where TimeGenerated between (ago(starttime) .. ago(endtime))
+        | where Operation == uploadOp
+        | extend SourceFileExtension = extract(@"\.([^\./]+)$", 1, tostring(parse_json(tostring(AdditionalProperties)).SourceFileName))  // Extract file extension
+        | where SourceFileExtension in (execExt)
+        | summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000), PrevSeenCount = count() by SourceFileName
+        // Uncomment the line below to enforce the threshold
+        // | where PrevSeenCount > threshold
+        | mvexpand SourceRelativeUrl, UserId
+        | extend SourceRelativeUrl = tostring(SourceRelativeUrl), UserId = tostring(UserId)
     ) on SourceFileName, SourceRelativeUrl, UserId
-  | extend SiteUrlUserFolder = tolower(split(Site_Url, '/')[-2])
-  | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
-  | extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true , false )
-  | summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), UserAgents = make_list(UserAgent, 100000), OfficeIds = make_list(OfficeId, 100000), SourceRelativeUrls = make_list(SourceRelativeUrl, 100000), FileNames = make_list(SourceFileName, 100000)
-  by OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIp, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    | extend SiteUrlUserFolder = tolower(split(Site_Url, '/')[-2])
+    | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
+    | extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true, false)
+    | summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), UserAgents = make_list(UserAgent, 100000), Ids = make_list(Id, 100000), SourceRelativeUrls = make_list(SourceRelativeUrl, 100000), FileNames = make_list(SourceFileName, 100000)
+    by Workload, RecordType, Operation, UserType, UserKey, UserId, ClientIp, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:

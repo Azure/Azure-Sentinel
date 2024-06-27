@@ -17,19 +17,20 @@ relevantTechniques:
   - T1190
   - T1133
 query: |
-  let listCountries = 
+    let listCountries = 
+        NetworkAccessTraffic
+        | where TimeGenerated > ago(14d)
+        | where Action == 'Allowed'
+        | extend GeoInfo = geo_info_from_ip_address(SourceIP) // Extend each row with geolocation info
+        | project UserPrincipalName, Country = tostring(GeoInfo.country);
     NetworkAccessTraffic
-    | where TimeGenerated > ago(14d)
-    | where Action == 'Allowed'
-    | summarize ListofCountries = make_set(ProcessingRegion) by UserPrincipalName
-    | project UserPrincipalName, ListofCountries;
-  NetworkAccessTraffic
-    | where isnotempty(ProcessingRegion)
-    | join kind=leftanti (listCountries) on UserPrincipalName
-    | where ProcessingRegion !in (ListofCountries)
-    | summarize EventCount = count() by UserPrincipalName, ProcessingRegion
-    | project UserPrincipalName, ProcessingRegion
-    | extend IPCustomEntity = tostring(array_first(SourceIps)), PreviousIPCustomEntity = tostring(array_first(PreviousSourceIps)), AccountCustomEntity = UserPrincipalName
+        | extend GeoInfo = geo_info_from_ip_address(SourceIP) // Extend each row with geolocation info
+        | project TimeGenerated, UserPrincipalName, SourceIP, Country = tostring(GeoInfo.country), State = tostring(GeoInfo.state), City = tostring(GeoInfo.city), Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)
+        | join kind=leftanti (listCountries) on UserPrincipalName
+        | where Country !in (listCountries)
+        | summarize EventCount = count() by UserPrincipalName, Country
+        | project UserPrincipalName, Country
+        | extend IPCustomEntity = tostring(array_first(SourceIPs)), PreviousIPCustomEntity = tostring(array_first(PreviousSourceIps)), AccountCustomEntity = UserPrincipalName
 entityMappings:
   - entityType: Account
     fieldMappings:

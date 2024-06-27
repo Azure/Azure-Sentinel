@@ -1,7 +1,7 @@
 id: 90e198a9-efb6-4719-ad89-81b8e93633a7
 name: Files uploaded to teams and access summary
 description: |
-  'This hunting queries identifies files uploaded to SharePoint via a Teams chat and
+  'This hunting query identifies files uploaded to SharePoint via a Teams chat and
   summarizes users and IP addresses that have accessed these files. This allows for 
   identification of anomalous file sharing patterns.'
 requiredDataConnectors:
@@ -21,12 +21,14 @@ query: |
   | where Operation == "FileUploaded"
   | where UserId != "app@sharepoint"
   | where ObjectId has "Microsoft Teams Chat Files"
+  | extend SourceFileName = tostring(parse_json(AdditionalProperties).SourceFileName)
   | join kind=leftouter (
       EnrichedMicrosoft365AuditLogs
       | where RecordType == "SharePointFileOperation"
       | where Operation == "FileDownloaded" or Operation == "FileAccessed"
       | where UserId != "app@sharepoint"
       | where ObjectId has "Microsoft Teams Chat Files"
+      | extend UserId1 = UserId, ClientIp1 = ClientIp
   ) on ObjectId
   | extend userBag = bag_pack(UserId1, ClientIp1)
   | summarize make_set(UserId1, 10000), make_bag(userBag, 10000) by TimeGenerated, UserId, ObjectId, SourceFileName
