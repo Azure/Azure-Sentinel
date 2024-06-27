@@ -21,12 +21,10 @@ def main(mytimer: func.TimerRequest) -> None:
 
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
-    query_to = (datetime.now(
-        timezone.utc) - timedelta(minutes=1)).isoformat()
 
     zf_client = get_zf_client()
 
-    results = get_cti_irc(zf_client, timestamp_after= query_from, timestamp_before= query_to)
+    results = get_cti_irc(zf_client, timestamp_after=query_from)
 
     logging.debug("Trigger function retrieved results")
 
@@ -49,13 +47,12 @@ def get_zf_client():
     return ZeroFoxClient(user, token)
 
 
-def get_cti_irc(client: ZeroFoxClient, timestamp_after: str, timestamp_before: str):
+def get_cti_irc(client: ZeroFoxClient, timestamp_after: str):
 
-        url_suffix = "irc/"
-        params = dict(timestamp_after=timestamp_after, timestamp_before=timestamp_before)
-        return client.cti_request(
-            "GET",
-            url_suffix,
-            params=params,
-        )
-
+    url_suffix = "irc/"
+    params = dict(timestamp_after=timestamp_after)
+    return client.cti_request(
+        "GET",
+        url_suffix,
+        params=params,
+    )

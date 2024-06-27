@@ -21,13 +21,11 @@ def main(mytimer: func.TimerRequest) -> None:
 
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
-    query_to = (datetime.now(
-        timezone.utc) - timedelta(minutes=1)).isoformat()
 
     zf_client = get_zf_client()
 
     results = get_cti_advanced_dark_web(
-        zf_client, created_after=query_from, created_before=query_to)
+        zf_client, created_after=query_from)
 
     logging.debug("Trigger function retrieved results")
 
@@ -50,9 +48,9 @@ def get_zf_client():
     return ZeroFoxClient(user, token)
 
 
-def get_cti_advanced_dark_web(client: ZeroFoxClient, created_before, created_after):
+def get_cti_advanced_dark_web(client: ZeroFoxClient, created_after):
     url_suffix = "advanced-dark-web/"
-    params = dict(created_after=created_after, created_before=created_before)
+    params = dict(created_after=created_after)
     return client.cti_request(
         "GET",
         url_suffix,

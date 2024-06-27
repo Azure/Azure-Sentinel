@@ -105,7 +105,7 @@ class SentinelConnector:
         encoded_hash = base64.b64encode(
             hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()
         ).decode()
-        authorization = "SharedKey {}:{}".format(customer_id, encoded_hash)
+        authorization = f"SharedKey {customer_id}:{encoded_hash}"
         return authorization
 
     def _post_data(self, customer_id, shared_key, body, log_type):
@@ -137,9 +137,7 @@ class SentinelConnector:
         response = requests.post(uri, data=body, headers=headers)
         if response.status_code >= 200 and response.status_code <= 299:
             logging.info(
-                "{} events have been successfully sent to Microsoft Sentinel".format(
-                    events_number
-                )
+                f"{events_number} events have been successfully sent to Microsoft Sentinel"
             )
             self.successfull_sent_events_number += events_number
         else:
