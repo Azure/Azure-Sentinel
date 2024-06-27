@@ -21,12 +21,11 @@ query: |
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = totimespan((endtime - starttime) * 7);
-  // a threshold can be enabled, see commented line below for PrevSeenCount
   let threshold = 1;
-  // Reserved FileNames/Extension for Windows
   let Reserved = dynamic(['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9']);
   EnrichedMicrosoft365AuditLogs
   | where TimeGenerated between (starttime .. endtime)
+  | extend FileName = tostring(parse_json(AdditionalProperties).SourceFileName)
   | where isnotempty(ObjectId)
   | where ObjectId !~ FileName
   | where ObjectId in (Reserved) or FileName in (Reserved)
@@ -35,24 +34,21 @@ query: |
   | join kind=leftanti (
       EnrichedMicrosoft365AuditLogs
       | where TimeGenerated between (ago(lookback) .. starttime)
+      | extend FileName = tostring(parse_json(AdditionalProperties).SourceFileName)
       | where isnotempty(ObjectId)
       | where ObjectId !~ FileName
       | where ObjectId in (Reserved) or FileName in (Reserved)
       | where ClientUserAgent !has "Mac OS"
       | summarize ObjectId = make_set(ObjectId, 100000), UserId = make_set(UserId, 100000), FileName = make_set(FileName, 100000), PrevSeenCount = count() by ObjectId
-      // To exclude previous matches when only above a specific count, change threshold above and uncomment the line below
-      // | where PrevSeenCount > threshold
       | mvexpand ObjectId, UserId, FileName
       | extend ObjectId = tostring(ObjectId), UserId = tostring(UserId), FileName = tostring(FileName)
   ) on ObjectId
   | extend SiteUrlUserFolder = tolower(split(SiteUrl, '/')[-2])
   | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
-  // identify when UserId is not a match to the specific site url personal folder reference
   | extend UserIdDiffThanUserFolder = iff(SiteUrl has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true, false)
   | summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), Operations = make_list(Operation, 100000), UserAgents = make_list(ClientUserAgent, 100000),
       Ids = make_list(Id, 100000), SourceRelativeUrls = make_list(ObjectId, 100000), FileNames = make_list(FileName, 100000)
       by Workload, RecordType, UserType, UserKey, UserId, ClientIp, SiteUrl, ObjectId, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
-  // Use mvexpand on any list items and you can expand out the exact time and other metadata about the hit
   | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
   | extend IP_0_Address = ClientIp
   | extend Account_0_Name = AccountName

@@ -33,14 +33,17 @@ query: |
     | extend SourceFileExtension = extract(@"\.([^\./]+)$", 1, tostring(parse_json(tostring(AdditionalProperties)).SourceFileName))  // Extract file extension
     | where SourceFileExtension in (execExt)
     | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
-    | project TimeGenerated, Id, Workload, RecordType, Operation, UserType, UserKey, UserId, ClientIp, UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent), Site_Url, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
+    | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
+    | extend SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
+    | project TimeGenerated, Id, Workload, RecordType, Operation, UserType, UserKey, UserId, ClientIp, UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent), Site_Url, SourceRelativeUrl, SourceFileName
     | join kind=leftanti (
         EnrichedMicrosoft365AuditLogs
         | where TimeGenerated between (ago(starttime) .. ago(endtime))
         | where Operation == uploadOp
         | extend SourceFileExtension = extract(@"\.([^\./]+)$", 1, tostring(parse_json(tostring(AdditionalProperties)).SourceFileName))  // Extract file extension
         | where SourceFileExtension in (execExt)
-        | summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000), PrevSeenCount = count() by SourceFileName
+        | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
+        | summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000), PrevSeenCount = count() by SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
         // Uncomment the line below to enforce the threshold
         // | where PrevSeenCount > threshold
         | mvexpand SourceRelativeUrl, UserId
