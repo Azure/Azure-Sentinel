@@ -17,35 +17,51 @@ relevantTechniques:
   - T1114
   - T1020
 query: |
-  EnrichedMicrosoft365AuditLogs
-  | where Workload == "Exchange"
-  | where (Operation == "Set-Mailbox" and tostring(parse_json(tostring(AdditionalProperties))) contains 'ForwardingSmtpAddress') 
-  or (Operation in ('New-InboxRule','Set-InboxRule') and (tostring(parse_json(tostring(AdditionalProperties))) contains 'ForwardTo' or tostring(parse_json(tostring(AdditionalProperties))) contains 'RedirectTo'))
-  | extend parsed = parse_json(tostring(AdditionalProperties))
-  | extend fwdingDestination_initial = iif(Operation == "Set-Mailbox", tostring(parsed.ForwardingSmtpAddress), coalesce(tostring(parsed.ForwardTo), tostring(parsed.RedirectTo)))
-  | where isnotempty(fwdingDestination_initial)
-  | extend fwdingDestination = iff(fwdingDestination_initial has "smtp", (split(fwdingDestination_initial, ":")[1]), fwdingDestination_initial)
-  | parse fwdingDestination with * '@' ForwardedtoDomain 
-  | parse UserId with *'@' UserDomain
-  | extend subDomain = ((split(strcat(tostring(split(UserDomain, '.')[-2]), '.', tostring(split(UserDomain, '.')[-1])), '.'))[0])
-  | where ForwardedtoDomain !contains subDomain
-  | extend Result = iff(ForwardedtoDomain != UserDomain, "Mailbox rule created to forward to External Domain", "Forward rule for Internal domain")
-  | extend ClientIPAddress = case(ClientIp has ".", tostring(split(ClientIp, ":")[0]), ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))), ClientIp)
-  | extend Port = case(
-      ClientIp has ".", (split(ClientIp, ":")[1]),
-      ClientIp has "[", tostring(split(ClientIp, "]:")[1]),
-      ClientIp
-  )
-  | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, Port, ObjectId, fwdingDestination
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
-  | extend Host = tostring(parse_json(tostring(AdditionalProperties)).OriginatingServer)
-  | extend HostName = tostring(split(Host, ".")[0])
-  | extend DnsDomain = tostring(strcat_array(array_slice(split(Host, '.'), 1, -1), '.'))
-  | extend Account_0_Name = AccountName
-  | extend Account_0_UPNSuffix = AccountUPNSuffix
-  | extend IP_0_Address = ClientIPAddress
-  | extend Host_0_HostName = HostName
-  | extend Host_0_DnsDomain = DnsDomain
+    EnrichedMicrosoft365AuditLogs
+    | where Workload == "Exchange"
+    | where (Operation == "Set-Mailbox" and tostring(parse_json(tostring(AdditionalProperties))) contains 'ForwardingSmtpAddress') 
+        or (Operation in ('New-InboxRule', 'Set-InboxRule') and (tostring(parse_json(tostring(AdditionalProperties))) contains 'ForwardTo' or tostring(parse_json(tostring(AdditionalProperties))) contains 'RedirectTo'))
+    | extend parsed = parse_json(tostring(AdditionalProperties))
+    | extend fwdingDestination_initial = iif(Operation == "Set-Mailbox", tostring(parsed.ForwardingSmtpAddress), coalesce(tostring(parsed.ForwardTo), tostring(parsed.RedirectTo)))
+    | where isnotempty(fwdingDestination_initial)
+    | extend fwdingDestination = iff(fwdingDestination_initial has "smtp", (split(fwdingDestination_initial, ":")[1]), fwdingDestination_initial)
+    | parse fwdingDestination with * '@' ForwardedtoDomain 
+    | parse UserId with *'@' UserDomain
+    | extend subDomain = ((split(strcat(tostring(split(UserDomain, '.')[-2]), '.', tostring(split(UserDomain, '.')[-1])), '.'))[0])
+    | where ForwardedtoDomain !contains subDomain
+    | extend Result = iff(ForwardedtoDomain != UserDomain, "Mailbox rule created to forward to External Domain", "Forward rule for Internal domain")
+    | extend ClientIPAddress = case(ClientIp has ".", tostring(split(ClientIp, ":")[0]), ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))), ClientIp)
+    | extend Port = case(
+                        ClientIp has ".",
+                        (split(ClientIp, ":")[1]),
+                        ClientIp has "[",
+                        tostring(split(ClientIp, "]:")[1]),
+                        ClientIp
+                    )
+    | project
+        TimeGenerated,
+        UserId,
+        UserDomain,
+        subDomain,
+        Operation,
+        ForwardedtoDomain,
+        ClientIPAddress,
+        Result,
+        Port,
+        ObjectId,
+        fwdingDestination,
+        AdditionalProperties
+    | extend
+        AccountName = tostring(split(UserId, "@")[0]),
+        AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    | extend Host = tostring(parse_json(tostring(AdditionalProperties)).OriginatingServer)
+    | extend HostName = tostring(split(Host, ".")[0])
+    | extend DnsDomain = tostring(strcat_array(array_slice(split(Host, '.'), 1, -1), '.'))
+    | extend Account_0_Name = AccountName
+    | extend Account_0_UPNSuffix = AccountUPNSuffix
+    | extend IP_0_Address = ClientIPAddress
+    | extend Host_0_HostName = HostName
+    | extend Host_0_DnsDomain = DnsDomain
 entityMappings:
   - entityType: Account
     fieldMappings:

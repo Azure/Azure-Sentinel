@@ -12,34 +12,34 @@ tactics:
 relevantTechniques:
   - T1036
 query: |
-    let known_ext = dynamic(["lnk", "log", "option", "config", "manifest", "partial"]);
-    let excluded_users = dynamic(["app@sharepoint"]);
-    EnrichedMicrosoft365AuditLogs
-    | where RecordType == "SharePointFileOperation" and isnotempty(ObjectId)
-    | where ObjectId has ".exe." 
-        and not(ObjectId endswith ".lnk") 
-        and not(ObjectId endswith ".log") 
-        and not(ObjectId endswith ".option") 
-        and not(ObjectId endswith ".config") 
-        and not(ObjectId endswith ".manifest") 
-        and not(ObjectId endswith ".partial")
-    | extend Extension = extract("[^.]*\\.[^.]*$", 0, ObjectId)
-    | join kind=leftouter (
-        EnrichedMicrosoft365AuditLogs
-        | where RecordType == "SharePointFileOperation" and (Operation == "FileDownloaded" or Operation == "FileAccessed")
-        | where not(ObjectId endswith ".lnk") 
-            and not(ObjectId endswith ".log") 
-            and not(ObjectId endswith ".option") 
-            and not(ObjectId endswith ".config") 
-            and not(ObjectId endswith ".manifest") 
-            and not(ObjectId endswith ".partial")
-    ) on ObjectId
-    | where UserId1 !in (excluded_users)
-    | extend userBag = bag_pack(UserId1, ClientIp1)
-    | summarize make_set(UserId1, 10000), make_bag(userBag), Start = max(TimeGenerated), End = min(TimeGenerated) by UserId, ObjectId, SourceFileName, Extension
-    | extend NumberOfUsers = array_length(bag_keys(userBag))
-    | project UploadTime = Start, Uploader = UserId, FileLocation = ObjectId, FileName = SourceFileName, AccessedBy = userBag, Extension, NumberOfUsers
-    | extend UploaderName = tostring(split(Uploader, "@")[0]), UploaderUPNSuffix = tostring(split(Uploader, "@")[1])
+  let known_ext = dynamic(["lnk", "log", "option", "config", "manifest", "partial"]);
+  let excluded_users = dynamic(["app@sharepoint"]);
+  EnrichedMicrosoft365AuditLogs
+  | where RecordType == "SharePointFileOperation" and isnotempty(ObjectId)
+  | where ObjectId has ".exe." 
+      and not(ObjectId endswith ".lnk") 
+      and not(ObjectId endswith ".log") 
+      and not(ObjectId endswith ".option") 
+      and not(ObjectId endswith ".config") 
+      and not(ObjectId endswith ".manifest") 
+      and not(ObjectId endswith ".partial")
+  | extend Extension = extract("[^.]*\\.[^.]*$", 0, ObjectId)
+  | join kind=leftouter (
+      EnrichedMicrosoft365AuditLogs
+      | where RecordType == "SharePointFileOperation" and (Operation == "FileDownloaded" or Operation == "FileAccessed")
+      | where not(ObjectId endswith ".lnk") 
+          and not(ObjectId endswith ".log") 
+          and not(ObjectId endswith ".option") 
+          and not(ObjectId endswith ".config") 
+          and not(ObjectId endswith ".manifest") 
+          and not(ObjectId endswith ".partial")
+  ) on ObjectId
+  | where UserId1 !in (excluded_users)
+  | extend userBag = bag_pack("UserId", UserId1, "ClientIp", ClientIp1)
+  | summarize make_set(UserId1, 10000), make_bag(userBag) by UserId, ObjectId, TimeGenerated, Extension
+  | extend NumberOfUsers = array_length(bag_keys(userBag))
+  | project UploadTime = TimeGenerated, Uploader = UserId, FileLocation = ObjectId, FileName = ObjectId, AccessedBy = userBag, Extension, NumberOfUsers
+  | extend UploaderName = tostring(split(Uploader, "@")[0]), UploaderUPNSuffix = tostring(split(Uploader, "@")[1])
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -48,3 +48,4 @@ entityMappings:
       - identifier: UPNSuffix
         columnName: UploaderUPNSuffix
 version: 2.0.1
+kind: Scheduled
