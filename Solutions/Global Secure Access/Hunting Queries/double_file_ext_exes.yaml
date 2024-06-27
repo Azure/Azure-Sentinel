@@ -24,6 +24,7 @@ query: |
       and not(ObjectId endswith ".manifest") 
       and not(ObjectId endswith ".partial")
   | extend Extension = extract("[^.]*\\.[^.]*$", 0, ObjectId)
+  | extend SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
   | join kind=leftouter (
       EnrichedMicrosoft365AuditLogs
       | where RecordType == "SharePointFileOperation" and (Operation == "FileDownloaded" or Operation == "FileAccessed")
@@ -36,9 +37,9 @@ query: |
   ) on ObjectId
   | where UserId1 !in (excluded_users)
   | extend userBag = bag_pack("UserId", UserId1, "ClientIp", ClientIp1)
-  | summarize make_set(UserId1, 10000), make_bag(userBag) by UserId, ObjectId, TimeGenerated, Extension
+  | summarize make_set(UserId1, 10000), userBag = make_bag(userBag), UploadTime = max(TimeGenerated) by UserId, ObjectId, SourceFileName, Extension
   | extend NumberOfUsers = array_length(bag_keys(userBag))
-  | project UploadTime = TimeGenerated, Uploader = UserId, FileLocation = ObjectId, FileName = ObjectId, AccessedBy = userBag, Extension, NumberOfUsers
+  | project UploadTime, Uploader = UserId, FileLocation = ObjectId, FileName = SourceFileName, AccessedBy = userBag, Extension, NumberOfUsers
   | extend UploaderName = tostring(split(Uploader, "@")[0]), UploaderUPNSuffix = tostring(split(Uploader, "@")[1])
 entityMappings:
   - entityType: Account
