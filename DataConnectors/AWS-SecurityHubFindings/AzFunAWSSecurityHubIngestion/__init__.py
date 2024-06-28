@@ -46,7 +46,7 @@ payload_fields = [
     'ProductArn',
     'GeneratorId',
     'AwsAccountId',
-    'Types'
+    'Types',
     'FirstObservedAt',
     'LastObservedAt',
     'UpdatedAt',
