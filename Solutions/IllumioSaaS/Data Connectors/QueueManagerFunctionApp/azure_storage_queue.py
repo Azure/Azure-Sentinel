@@ -25,13 +25,11 @@ class AzureStorageQueueHelper:
     # This method is used to read messages from the queue. 
     # This will pop the message from the queue (deque operation)
     def deque_from_queue(self):
-        logging.getLogger().setLevel(logging.WARNING)
         message = self.__queue.receive_message()
         return message
 
     # This method send data into the queue
     def send_to_queue(self, message, encoded):
-        logging.getLogger().setLevel(logging.WARNING)
         if encoded:
             self.__queue.send_message(self.base64Encoded(message))
         else:
@@ -39,11 +37,9 @@ class AzureStorageQueueHelper:
     
     # This method deletes the message based on messageId
     def delete_queue_message(self, messageId, popReceipt):
-        logging.getLogger().setLevel(logging.WARNING)
         self.__queue.delete_message(messageId, popReceipt)
 
     # This method reads an approximate count of messages in the queue
     def get_queue_current_count(self):
-        logging.getLogger().setLevel(logging.WARNING)
         properties = self.__queue.get_queue_properties()
         return properties.approximate_message_count

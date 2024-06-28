@@ -58,6 +58,7 @@ class AzureSentinelConnectorAsync:
         client = LogsIngestionClient(endpoint=dce_endpoint, credential=credential, logging_enable=True)
         async with client:
             try:
-                await client.upload(rule_id=dcr_id, stream_name=stream_name, logs=data)
+                response = await client.upload(rule_id=dcr_id, stream_name=stream_name, logs=data)
+                logging.info("[QueueTrigger] response from uploading logs is {}".format(response))
             except HttpResponseError as e:
                 logging.error(f"Upload failed: {e}")    
