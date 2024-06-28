@@ -19,10 +19,10 @@ AZURE_CLIENT_SECRET = os.environ['AZURE_CLIENT_SECRET']
 DCE_ENDPOINT = os.environ['DCE_ENDPOINT']
 DCR_ID = os.environ['DCR_ID']
 LOG_ANALYTICS_URI = os.environ['LOG_ANALYTICS_URI']
+WORKLOADS_API_LOGS_CUSTOM_TABLE = os.environ['WORKLOADS_API_LOGS_CUSTOM_TABLE']
+STREAM_NAME = WORKLOADS_API_LOGS_CUSTOM_TABLE
 WORKSPACE_ID = os.environ['WORKSPACE_ID']
 MAX_RESULTS = os.environ.get('MAX_WORKLOADS', 100000)
-
-MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
 
 URL = 'https://{}:{}/api/v2/orgs/{}/workloads/?max_results={}'.format(PCE_FQDN, PORT, ORG_ID, MAX_RESULTS)
 
@@ -32,34 +32,58 @@ headers = {
     "Content-type": "application/json"
 }
 
-STREAM_NAME = 'Custom-Illumio_Workloads_Summarized_API_CL'
-
 def getVensByVersion(data):
-    # add an exception handler
-    # for ex, returns {'22.5.32-9876': 1, '23.3.0': 1}    
-    return data[data['managed']==True].groupby('ven.version').size().to_dict()    
+    try:
+        return data[data['managed'] == True].groupby('ven.version').size().to_dict()
+    except Exception as e:
+        # You can log the exception here if needed
+        logging.error("getVensByVersion error: {e}")
+        return {}  
     
 def getVensByManaged(data):
-    return data.groupby('managed').size().to_dict()  
+    try:    
+        return data.groupby('managed').size().to_dict()  
+    except Exception as e:
+        logging.error("getVensByManaged error: {e}")
+        return {}          
 
 def getVensByType(data):
-    return data[data['managed']==True].groupby('ven.ven_type').size().to_dict()
+    try:        
+        return data[data['managed']==True].groupby('ven.ven_type').size().to_dict()
+    except Exception as e:
+        logging.error("getVensByType error: {e}")
+        return {}                  
 
 def getVensByOS(data):
-    return data[data['managed']==True].groupby('os_id').size().to_dict()
+    try:        
+        return data[data['managed']==True].groupby('os_id').size().to_dict()
+    except Exception as e:
+        logging.error("getVensByOS error: {e}")
+        return {}                          
 
 def getVensByEnforcementMode(data):
-    return data[data['managed']==True].groupby('enforcement_mode').size().to_dict()
+    try:
+        return data[data['managed']==True].groupby('enforcement_mode').size().to_dict()
+    except Exception as e:
+        logging.error("getVensByEnforcementMode error: {e}")
+        return {}                                  
 
 def getVensByStatus(data):
-    return data[data['managed']==True].groupby('ven.status').size().to_dict()
+    try:    
+        return data[data['managed']==True].groupby('ven.status').size().to_dict()
+    except Exception as e:
+        logging.error("getVensByStatus error: {e}")
+        return {}                                          
 
 def getVensBySyncState(data):
-    return data[data['managed']==True].groupby('agent.status.security_policy_sync_state').size().to_dict()
-
+    try:    
+        return data[data['managed']==True].groupby('agent.status.security_policy_sync_state').size().to_dict()
+    except Exception as e:
+        logging.error("getVensBySyncState error: {e}")
+        return {}                                                  
 
 def main(mytimer: func.TimerRequest) -> None:
-    logging.info("url to be exercised is {} ".format(URL))
+    logging.debug("url to be exercised is {} ".format(URL))
 
     response = requests.request("GET", URL, headers=headers, data={})
 
