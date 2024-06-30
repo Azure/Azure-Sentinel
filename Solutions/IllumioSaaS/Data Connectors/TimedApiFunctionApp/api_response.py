@@ -88,9 +88,9 @@ def main(mytimer: func.TimerRequest) -> None:
     response = requests.request("GET", URL, headers=headers, data={})
 
     if response:
-        logging.info("Response from url is {}".format(response.headers))
+        logging.info("[TimedApi] Response from url is {}".format(response.headers))
     else:
-        logging.info("Error in response {}".format(response))
+        logging.info("[TimedApi] Error in response {}".format(response))
         return
         
     response = json.loads(response.text)
@@ -113,7 +113,7 @@ def main(mytimer: func.TimerRequest) -> None:
                          "vens_by_sync_state": vens_by_sync_state
                          })
     
-    logging.info("Summary of workload api response that will be stored in log analytics table is {}".format(api_response))
+    logging.info("[TimedApi] Summary of workload api response that will be stored in log analytics table is {}".format(api_response))
     
     with requests.Session() as session:
         sentinel = SentinelConnector(session, DCE_ENDPOINT, DCR_ID, STREAM_NAME, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)    
