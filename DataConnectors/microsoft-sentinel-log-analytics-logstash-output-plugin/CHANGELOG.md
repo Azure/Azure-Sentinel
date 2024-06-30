@@ -11,3 +11,7 @@
 
 ## 1.1.1
 * Support China and US Government Azure sovereign clouds.
+
+## 1.1.2
+* Replace rest-client with excon for connectivity.
+* Change the default value for plugin_flush_interval from 5 seconds to 60 to batch more events per logs transmission.

@@ -1,11 +1,11 @@
 # encoding: utf-8
 require "logstash/sentinel_la/version"
-require 'rest-client'
 require 'json'
 require 'openssl'
 require 'base64'
 require 'time'
 require 'rbconfig'
+require 'excon'
 
 module LogStash; module Outputs; class MicrosoftSentinelOutputInternal 
 class LogAnalyticsClient
@@ -22,6 +22,9 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
     @uri = sprintf("%s/dataCollectionRules/%s/streams/%s?api-version=%s",@logstashLoganalyticsConfiguration.data_collection_endpoint, @logstashLoganalyticsConfiguration.dcr_immutable_id, logstashLoganalyticsConfiguration.dcr_stream_name, la_api_version)
     @aadTokenProvider=LogAnalyticsAadTokenProvider::new(logstashLoganalyticsConfiguration)
     @userAgent = getUserAgent()
+    @connection = Excon.new(@uri, :persistent => true, :proxy => @logstashLoganalyticsConfiguration.proxy_endpoint, 
+                            expects: [200, 201, 202, 204, 206, 207, 208, 226, 300, 301, 302, 303, 304, 305, 306, 307, 308],
+                            read_timeout: 240, write_timeout: 240, connect_timeout: 240)
   end # def initialize
 
   # Post the given json to Azure Loganalytics
@@ -32,14 +35,13 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
     headers = get_header()
 
     # Post REST request
-
-    return RestClient::Request.execute(method: :post, url: @uri, payload: body, headers: headers,
-                                        proxy: @logstashLoganalyticsConfiguration.proxy_endpoint, timeout: 120)
-  end # def post_data
+    return @connection.request(method: :post, body: body, headers: headers)
+    
+    end # def post_data
 
   # Static function to return if the response is OK or else
   def self.is_successfully_posted(response)
-    return (response.code >= 200 && response.code < 300 ) ? true : false
+    return (response.status >= 200 && response.status < 300 ) ? true : false
   end # def self.is_successfully_posted
 
   private 
