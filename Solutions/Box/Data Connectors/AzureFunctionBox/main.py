@@ -58,9 +58,6 @@ def main(mytimer: func.TimerRequest):
     logging.info('Getting events from created_before {}'.format(
         created_before))
 
-    if created_before >= "2024-07-01T15:15:00+00:00":
-        return
-
     file_storage_connection_string = os.environ['AzureWebJobsStorage']
     state_manager = StateManager(
         connection_string=file_storage_connection_string)
@@ -83,11 +80,15 @@ def main(mytimer: func.TimerRequest):
     logging.info('Script started. Getting events from created_before {}, created_after {}'.format(
         created_before, created_after))
 
-    # date_time_str = '2024-05-28 5:49:00+00:00'
-    # date_format_str = '%Y-%m-%d %H:%M:%S%z'
-
-    # if created_before >= datetime.datetime.strptime(date_time_str, date_format_str):
+    # if created_before >= "2024-07-01T15:30:00":
     #     return
+
+    date_time_str = '2024-07-01 15:30:00'
+    date_format_str = '%Y-%m-%d %H:%M:%S'
+
+    if created_before >= datetime.datetime.strptime(date_time_str, date_format_str):
+        logging.info('returning')
+        return
 
     sentinel = AzureSentinelConnector(workspace_id=WORKSPACE_ID, logAnalyticsUri=logAnalyticsUri,
                                       shared_key=SHARED_KEY, log_type=LOG_TYPE, queue_size=10000)
