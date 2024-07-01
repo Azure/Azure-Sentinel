@@ -83,8 +83,8 @@ def main(mytimer: func.TimerRequest):
     # if created_before >= "2024-07-01T15:30:00":
     #     return
 
-    date_time_str = '2024-07-01 15:30:00'
-    date_format_str = '%Y-%m-%d %H:%M:%S'
+    date_time_str = '2024-07-01 15:30:00+00:00'
+    date_format_str = '%Y-%m-%d %H:%M:%S%z'
 
     if created_before >= datetime.datetime.strptime(date_time_str, date_format_str):
         logging.info('returning')
