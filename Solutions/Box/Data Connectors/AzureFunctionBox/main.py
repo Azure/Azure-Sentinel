@@ -77,7 +77,7 @@ def main(mytimer: func.TimerRequest):
     logging.info('Script started. Getting events from created_before {}, created_after {}'.format(
         created_before, created_after))
 
-    date_time_str = '2024-05-28 5:49:00+00:00'
+    date_time_str = '2024-07-01 15:15:00+00:00'
     date_format_str = '%Y-%m-%d %H:%M:%S%z'
 
     if created_before >= datetime.datetime.strptime(date_time_str, date_format_str):
