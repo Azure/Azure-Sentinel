@@ -8,7 +8,7 @@ import pandas as pd
 import json
 
 API_KEY = os.environ['API_KEY']
-API_PASSWORD = os.environ['API_PASSWORD']
+API_SECRET = os.environ['API_SECRET']
 PCE_FQDN = os.environ['PCE_FQDN']
 PORT = int(os.environ.get('PCE_PORT', 443))
 ORG_ID = os.environ['ORG_ID']
@@ -26,7 +26,7 @@ MAX_RESULTS = os.environ.get('MAX_WORKLOADS', 100000)
 
 URL = 'https://{}:{}/api/v2/orgs/{}/workloads/?max_results={}'.format(PCE_FQDN, PORT, ORG_ID, MAX_RESULTS)
 
-credentials = b64encode(f"{API_KEY}:{API_PASSWORD}".encode()).decode('utf-8')
+credentials = b64encode(f"{API_KEY}:{API_SECRET}".encode()).decode('utf-8')
 headers = {
     "Authorization": f"Basic {credentials}",
     "Content-type": "application/json"
