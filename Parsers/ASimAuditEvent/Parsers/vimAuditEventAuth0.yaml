@@ -1,0 +1,193 @@
+Parser:
+  Title: ASIM Audit filtering parser for Okta Auth0
+  Version: "0.1.0"
+  LastUpdated: Apr 29, 2024
+Product:
+  Name: Auth0
+Normalization:
+  Schema: Authentication
+  Version: "0.1"
+References:
+  - Title: Using functions
+    Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+  - Title: ASIM Authentication Schema
+    Link: https://aka.ms/ASimAuthenticationDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
+  - Title: Auth0
+    Link: https://auth0.com/docs/deploy-monitor/logs/log-event-type-codes
+Description:  This ASIM parser supports filtering and normalizing the Auth0 logs stored in 'Auth0AM_CL_CL' table to the ASIM authentication normalized schema.
+ParserName: vimAuditEventAuth0
+EquivalentBuiltInParser: _Im_AuditEvent_Auth0
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])  
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+ParserQuery: |
+  let parser=  (
+            starttime:datetime=datetime(null), 
+            endtime:datetime=datetime(null),
+            srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+            eventresult:string='*',
+            actorusername_has_any:dynamic=dynamic([]),
+            eventtype_in:dynamic=dynamic([]),
+            operation_has_any:dynamic=dynamic([]),
+            object_has_any:dynamic=dynamic([]),
+            newvalue_has_any:dynamic=dynamic([]),
+            disabled:bool = false
+            )
+     {
+     let Auth0AuditEventLookup=datatable(EventOriginalResultDetails:string,EventType:string,EventSeverity:string,EventResult:string)
+     [
+     "cls","other","Informational","Success",
+     "cs","Other","Informational","Success",
+     "depnote","Other","Informational","Success",
+     "fc","Other","Informational","Failure",
+     "fce","Other","Informational","Failure",
+     "fcp","Other","Informational","Failure",
+     "fcph","Other","Informational","Failure",
+     "fcpn","Other","Informational","Failure",
+     "fcpr","Other","Informational","Failure",
+     "fcpro","Other","Informational","Failure",
+     "fcu","Other","Informational","Failure",
+     "fd","Other","Informational","Failure",
+     "fdeac","Other","Informational","Failure",
+     "fdeaz","Other","Informational","Failure",
+     "fdecc","Other","Informational","Failure",
+     "fn","Other","Informational","Failure",
+     "fpar","Other","Informational","Failure",
+     "fs","Other","Informational","Failure",
+     "fui","Other","Informational","Failure",
+     "fv","Other","Informational","Failure",
+     "fvr","Other","Informational","Failure",
+     "gd_send_email","Other","Informational","Success",
+     "gd_send_pn_failure","Other","Informational","Failure",
+     "gd_send_sms","Other","Informational","Success",
+     "gd_send_sms_failure","Other","Informational","Failure",
+     "gd_send_voice","Other","Informational","Success",
+     "gd_send_voice_failure","Other","Informational","Failure",
+     "gd_start_enroll","Other","Informational","Success",
+     "gd_start_enroll_failed","Other","Informational","Failure",
+     "gd_tenant_update","Other","Informational","Success",
+     "gd_unenroll","Other","Informational","Success",
+     "gd_update_device_account","Other","Informational","Success",
+     "gd_webauthn_challenge_failed","Other","Informational","Failure",
+     "gd_webauthn_enrollment_failed","Other","Informational","Failure",
+     "limit_delegation","Other","Informational","Success", 
+     "mgmt_api_read","Other","Informational","Success",
+     "pla","Other","Informational","Success",
+     "resource_cleanup","Other","Informational","Success",
+     "sapi","Create","Informational","Success",
+     "sce","Other","Informational","Success",
+     "scp","Other","Informational","Success",
+     "scpn","Other","Informational","Success",
+     "scpr","Other","Informational","Success",
+     "scu","Other","Informational","Success",
+     "sd","Other","Informational","Success",
+     "sdu","Other","Informational","Success",
+     "si","Other","Informational","Success",
+     "signup_pwd_leak","Other","Informational","Failure",
+     "srrt","Other","Informational","Success",  
+     "ss","Other","Informational","Success",
+     "sui","Other","Informational","Success",
+     "sv","Other","Informational","Success",
+      "svr","Other","Informational","Success",
+     ];
+     let Auth0AuditEvent=Auth0AuditEventLookup
+     |project EventOriginalResultDetails
+     |summarize makeset(EventOriginalResultDetails);
+     Auth0AM_CL
+        |where not(disabled)
+        |where type_s in (Auth0AuditEvent)
+              and (isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and (array_length(newvalue_has_any) == 0) //new value not available at source          
+          and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(ip_s,srcipaddr_has_any_prefix)))
+        //username, Eventtype and eventresult done down in the parser
+     |project TimeGenerated,
+              EventCount=int(1),
+              EventStartTime=date_t,
+              EventEndTime=TimeGenerated,
+              EventProduct='Auth0',
+              EventVendor='Okta',
+              EventSchema='AuditEvent',
+              EventSchemaVersion='0.1',
+              EventUid=_ItemId,
+              DvcFQDN=hostname_s,         
+              DvcIpAddr=ip_s,
+              DvcDomainType='FQDN',
+              DvcId=client_id_s,         
+              DvcAction=scope_s,         
+              EventMessage=description_s,         
+              EventOriginalResultDetails=type_s,
+              EventProductVersion='4.3.1',
+              ActorUsername=coalesce ( details_request_auth_user_email_s, details_request_auth_user_name_s, user_name_s),
+              ActorUsernameType='UPN',
+              ActorUserIdType='Oktaid',
+              EventOriginalUid=_id_s,
+              Object=client_name_s,
+              ObjectType='Other',
+              TargetIpAddr=details_request_ip_s,
+              Src=hostname_s,
+              HttpUserAgent=coalesce(details_request_userAgent_s ,user_agent_s),
+              TargetAppName="Auth0",
+              TargetAppType="Saas application",
+              DvcIdType='Other',      
+              Type
+              |lookup Auth0AuditEventLookup on EventOriginalResultDetails
+              | where      ( eventresult == '*' or EventResult =~eventresult)
+                   and((array_length(actorusername_has_any) == 0) or (ActorUsername  has_any (actorusername_has_any)))
+                   and ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))                   
+                   |extend Dvc=DvcFQDN,
+              DvcHostname=DvcFQDN,
+              Dst=TargetIpAddr,
+              Src=DvcIpAddr,
+              IpAddr=DvcIpAddr,
+              DvcDomain=DvcFQDN,
+              Application=TargetAppName,
+		          Operation=EventOriginalResultDetails,
+              ActorUsernameType=ActorUserIdType,
+              User=ActorUsername
+      | where ((array_length(operation_has_any ) ==0) or(Operation has_any(operation_has_any )))
+      and ((array_length(object_has_any )== 0) or (Object has_any(object_has_any)))          
+     };
+  parser
+    (
+    starttime = starttime,
+    endtime = endtime,
+    srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+    actorusername_has_any = actorusername_has_any,
+    eventtype_in = eventtype_in,
+    eventresult = eventresult,
+    operation_has_any = operation_has_any,
+    object_has_any=object_has_any,
+    newvalue_has_any=newvalue_has_any,
+    disabled=disabled
+  )

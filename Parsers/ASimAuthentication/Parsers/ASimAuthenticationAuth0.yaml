@@ -1,0 +1,128 @@
+Parser:
+  Title: ASIM Authentication parser for Auth0
+  Version: '0.1.0'
+  LastUpdated: APR 07,2024
+Product:
+  Name: AUTH0
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the Auth0 logs to the ASIM Authentication normalized schema.
+ParserName: ASimAuthenticationAuth0
+EquivalentBuiltInParser: _ASim_Authentication_Auth0
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+     let parser = (
+     disabled:bool = false
+     )
+     {
+     let EventResultDetailslookup=datatable
+     ( 
+     EventOriginalResultDetails:string,
+     EventResult:string,
+     EventType:string,
+     EventResultDetails:string,
+     EventSeverity:string,
+     EventSubType:string
+     )
+     ["s","Success","Logon","Other","Informational","Remote",
+     "seccft","Success","Logon","Other","Informational","Remote",
+     "sede","Success","Logon","Other","Informational","Interactive",
+     "sens","Success","Logon","Other","Informational","Interactive",
+     "seoobft","Success","Logon","Other","Informational","Interactive",
+     "seotpft","Success","Logon","Other","Informational","Interactive",
+     "sepft","Success","Logon","Other","Informational","Interactive",
+     "sercft","Success","Logon","Other","Informational","Interactive",
+     "sertft","Success","Logon","Other","Informational","Interactive",
+     "ssa","Success","Logon","Other","Informational","Interactive",
+     "scoa","Success","Logon","Other","Informational","Interactive",
+     "so","Success","Logoff","Other",Informational","Interactive",
+     "sd","Success",Elevate","Other","Informational","Remote",
+     "signup_pwd_leak","Failure","Logon","Incorrect key","High","Interactive",
+     "pwd_leak","Failure","Logon","Incorrect key","High",Interactive",
+     "limit_wc","Failure","Logon","Other","High","Interactive",
+     "limit_sul","Failure","Logon","User locked","High","Interactive",
+     "limit_mu","Failure","Logon","Other","High","Interactive",
+     "mfar","Success","Logon","Other","Informational","Interactive",
+     "f","Failure","Logon","Other","High","Interactive",
+     "fu","Failure","Logon","No such user","High","Interactive",
+     "fp","Failure","Logon","Incorrect password","High","Interactive",
+     "flo","Failure","Logoff","Other","Medium","Interactive",
+     "feccft","Failure","Logon","Other","High","Interactive",
+     "fede","Failure","Logon","Other","High","Interactive",
+     "fens","Failure","Logon","Other","High","Interactive",
+     "feoobft","Failure","Logon","Other","High","Interactive",
+     "feotpft","Failure","Logon","Other","High","Interactive",
+     "fepft","Failure","Logon","Other","High","Interactive",
+     "fepotpft","Failure","Logon","Other","High","Interactive",
+     "fercft","Failure","Logon","Other","High","Interactive",
+     "fertft","Failure","Logon","Incorrect key","High","Interactive",
+     "ferrt","Failure","Logon","Incorrect key","High","Interactive",
+     "oidc_backchannel_logout_failed","Failure","Logoff","Other","Informational","Interactive",
+     "fn","Failure","Logon","Other","Informational","Interactive",
+     "fsa","Failure","Logon","Other","Informational","Interactive",
+     "fco","Failure","Logon","Other","Informational","Interactive",
+     "fcoa","Failure","Logon","Incorrect key","Informational","Interactive",
+     "fdeaz","Failure","Logon","Incorret key","Informational","Interactive",
+     "api_limit","Failure","Logon","Other","Informational","Interactive",
+     "gd_recovery_failed","Failure","Logon","Incorrect key","Medium","Interactive",
+     "gd_send_pn","Success","Logon","Other","Informational","Interactive",
+     "gd_recovery_rate_limit_exceed","Failure","Logon","Incorrect key","High","Interactive",
+     "gd_recovery_succeed","Success","Logon","Other","Informational","Interactive",
+     "gd_otp_rate_limit_exceed","Failure","Logon","Incorrect key","High","Interactive",
+     "gd_start_auth","Success","Logon","Other","Informational","Interactive",
+     "gd_auth_failed","Failure","Logon","Other","High","Interactive",
+     "oidc_backchannel_logout_succeeded","Success","Logoff","Other","Informational","Interactive"
+      ];
+     let AuthenticationEvent=EventResultDetailslookup 
+     | project EventOriginalResultDetails
+     | summarize make_set(EventOriginalResultDetails);
+     Auth0AM_CL   
+     |   where type_s in (AuthenticationEvent)
+     |   project TimeGenerated,
+         EventCount=int(1),
+         EventVendor="Okta",
+         EventProduct="Auth0",
+         EventSchema="Authentication",
+         EventSchemaVersion='0.1.3',
+         EventUid=_ItemId,
+         EventStartTime=date_t,
+         EventEndTime=TimeGenerated,
+         TargetUsername=details_request_auth_user_name_s,
+         TargetUserId=details_request_auth_user_user_id_s,         
+         DvcFQDN=hostname_s,         
+         DvcIpAddr=ip_s,
+         DvcDomainType='FQDN',
+         DvcId=client_id_s,         
+         DvcAction=scope_s,         
+         EventMessage=description_s,         
+         EventOriginalResultDetails=type_s,
+         EventProductVersion='4.3.1',
+         EventOriginalType=details_request_auth_strategy_s,
+         TargetIpAddr=details_request_ip_s,
+         HttpUserAgent=user_agent_s,
+         TargetAppName="Auth0",
+         TargetAppType="Saas application",      
+         Type 
+     |lookup EventResultDetailslookup on EventOriginalResultDetails
+     | extend  TargetUsernameType=_ASIM_GetUsernameType(TargetUsername),
+               TargetUserType = _ASIM_GetUserType(TargetUsername, ""),
+               Dvc=DvcFQDN,
+               DvcHostname=DvcFQDN,
+               Dst=TargetIpAddr,
+               SrcIpAddr=DvcIpAddr,
+               Src=DvcIpAddr,
+               IpAddr=DvcIpAddr,
+               DvcDomain=DvcFQDN,
+               Application=TargetAppName                 
+     };
+     parser (disabled = disabled)
