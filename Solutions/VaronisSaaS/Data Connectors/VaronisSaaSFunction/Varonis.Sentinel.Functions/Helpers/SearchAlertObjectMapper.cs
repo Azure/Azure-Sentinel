@@ -17,44 +17,50 @@ namespace Varonis.Sentinel.Functions.Helpers
 
         protected override AlertItem Map(IDictionary<string, string> row)
         {
-            var alertItem = new AlertItem();
             try
             {
-                alertItem.ID = Guid.Parse(row[AlertAttributes.Id]);
-                alertItem.Name = row[AlertAttributes.RuleName];
-                alertItem.Time = DateTime.Parse(row[AlertAttributes.Time]);
-                alertItem.Severity = row[AlertAttributes.RuleSeverityName];
-                alertItem.SeverityId = int.Parse(row[AlertAttributes.RuleSeverityId]);
-                alertItem.Category = row[AlertAttributes.RuleCategoryName];
-                alertItem.Country = MultiValueToStringArray(row[AlertAttributes.LocationCountryName]);
-                alertItem.State = MultiValueToStringArray(row[AlertAttributes.LocationSubdivisionName]);
-                alertItem.Status = row[AlertAttributes.StatusName];
-                alertItem.StatusId = int.Parse(row[AlertAttributes.StatusId]);
-                alertItem.CloseReason = row[AlertAttributes.CloseReasonName];
-                alertItem.BlacklistLocation = GetBoolValue(row, AlertAttributes.LocationBlacklistedLocation);
-                alertItem.AbnormalLocation = MultiValueToStringArray(row[AlertAttributes.LocationAbnormalLocation]);
-                alertItem.NumOfAlertedEvents = int.Parse(row[AlertAttributes.EventsCount]);
-                alertItem.UserName = MultiValueToStringArray(row[AlertAttributes.UserName]);
-                alertItem.SamAccountName = MultiValueToStringArray(row[AlertAttributes.UserSamAccountName]);
-                alertItem.PrivilegedAccountType = MultiValueToStringArray(row[AlertAttributes.UserAccountTypeName]);
-                alertItem.ContainMaliciousExternalIP = GetBoolValue(row, AlertAttributes.DeviceIsMaliciousExternalIp);
-                alertItem.IPThreatTypes = MultiValueToStringArray(row[AlertAttributes.DeviceExternalIpThreatTypesName]);
-                alertItem.Asset = MultiValueToStringArray(row[AlertAttributes.AssetPath]);
-                alertItem.AssetContainsFlaggedData = MultiValueToBooleanArray(row[AlertAttributes.DataIsFlagged]);
-                alertItem.AssetContainsSensitiveData = MultiValueToBooleanArray(row[AlertAttributes.DataIsSensitive]);
-                alertItem.Platform = MultiValueToStringArray(row[AlertAttributes.FilerPlatformName]);
-                alertItem.FileServerOrDomain = MultiValueToStringArray(row[AlertAttributes.FilerName]);
-                alertItem.DeviceName = MultiValueToStringArray(row[AlertAttributes.DeviceHostname]);
-                alertItem.IngestTime = DateTime.Parse(row[AlertAttributes.IngestTime]);
-                alertItem.EventUTC = GetDateValue(row, AlertAttributes.InitialEventUtcTime);
+                var alertItem = new AlertItem
+                {
+                    AlertId = Guid.Parse(row[AlertAttributes.Id]),
+                    ThreatDetectionPolicyName = row[AlertAttributes.RuleName],
+                    AlertTime = GetDateValue(row, AlertAttributes.Time),
+                    AlertSeverity = row[AlertAttributes.RuleSeverityName],
+                    AlertCategory = row[AlertAttributes.RuleCategoryName],
+                    Countries = MultiValueToStringArray(row[AlertAttributes.LocationCountryName]),
+                    States = MultiValueToStringArray(row[AlertAttributes.LocationSubdivisionName]),
+                    Status = row[AlertAttributes.StatusName],
+                    CloseReason = row[AlertAttributes.CloseReasonName],
+                    BlacklistedLocation = GetBoolValue(row, AlertAttributes.LocationBlacklistedLocation),
+                    AbnormalLocations = MultiValueToStringArray(row[AlertAttributes.LocationAbnormalLocation]),
+                    EventsCount = GetIntValue(row, AlertAttributes.EventsCount),
+                    PrivilegedAccountType = MultiValueToStringArray(row[AlertAttributes.UserAccountTypeName]),
+                    UserNames = MultiValueToStringArray(row[AlertAttributes.UserName]),
+                    UserSamAccountNames = MultiValueToStringArray(row[AlertAttributes.UserSamAccountName]),
+                    ContainsMaliciousExternalIPs = GetBoolValue(row, AlertAttributes.DeviceIsMaliciousExternalIp),
+                    AggregatedExternalIPThreatTypes = MultiValueToStringArray(row[AlertAttributes.DeviceExternalIpThreatTypesName]),
+                    Assets = MultiValueToStringArray(row[AlertAttributes.AssetPath]),
+                    FlaggedDataExposed = MultiValueToBooleanArray(row[AlertAttributes.DataIsFlagged]),
+                    SensitiveDataExposed = MultiValueToBooleanArray(row[AlertAttributes.DataIsSensitive]),
+                    DataSourceTypes = MultiValueToStringArray(row[AlertAttributes.FilerPlatformName]),
+                    DataSources = MultiValueToStringArray(row[AlertAttributes.FilerName]),
+                    DeviceNames = MultiValueToStringArray(row[AlertAttributes.DeviceHostName]),
+                    InitialEventTimeUTC = GetDateValue(row, AlertAttributes.InitialEventTimeUtc),
+                    AccountsHaveFollowUpIndicators = MultiValueToBooleanArray(row[AlertAttributes.UserIsFlagged]),
+                    AlertTimeUTC = GetDateValue(row, AlertAttributes.TimeUTC),
+                    InitialEventTime = GetDateValue(row, AlertAttributes.InitialEventTimeLocal),
+                    AssignedtoVaronis = GetBoolValue(row, AlertAttributes.AssignedToVaronis),
+                    EscalationType = row[AlertAttributes.ActionTypeName],
+                    MitreTacticName = row[AlertAttributes.MitreTacticName],
+                    ClosedBy = row[AlertAttributes.ClosedByName],
+                    IngestTime = GetDateValue(row, AlertAttributes.IngestTime),
+                };
+                return alertItem;
             }
             catch (Exception ex)
             {
                 _logger.LogError("Failed to map search Alert row, skipping alert.", ex);
                 return null;
             }
-
-            return alertItem;
         }
 
         private static string[] MultiValueToStringArray(string multiValue)
@@ -100,9 +106,14 @@ namespace Varonis.Sentinel.Functions.Helpers
             return bool.TryParse(value, out var boolValue) ? (bool?)boolValue : null;
         }
 
-        private DateTime? GetDateValue(IDictionary<string, string> row, string name)
+        private static DateTime? GetDateValue(IDictionary<string, string> row, string name)
         {
-            return DateTime.TryParse(row[name], out var dateTimeValue) ? (DateTime?)dateTimeValue : null;
+            return DateTime.TryParse(row[name], out var dateTimeValue) ? dateTimeValue : null;
+        }
+
+        private static int? GetIntValue(IDictionary<string, string> row, string name)
+        {
+            return int.TryParse(row[name], out var intValue) ? intValue : null;
         }
     }
 }
