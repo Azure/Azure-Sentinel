@@ -1,4 +1,5 @@
 """This file contains all constants."""
+
 import os
 
 # To do: in every file, just import consts.py file, rather than importing all constants.
@@ -19,7 +20,7 @@ AZURE_AUTHENTICATION_URL = "https://login.microsoftonline.com/{}/oauth2/token"
 CREATE_SENTINEL_INDICATORS_URL = (
     "https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers"
     "/Microsoft.OperationalInsights/workspaces/{workspaceName}/providers/Microsoft.SecurityInsights/threatIntelligence"
-    "/main/createIndicator?api-version=2022-12-01-preview"
+    "/main/createIndicator?api-version=2024-03-01"
 )
 AZURE_RESOURCE_GROUP = os.environ.get("Azure_Resource_Group_Name", "")
 AZURE_WORKSPACE_NAME = os.environ.get("Azure_Workspace_Name", "")
@@ -42,6 +43,7 @@ COFENSE_UPDATE_INDICATOR_URL = COFENSE_BASE_URL + "/api/public/v2/threat_indicat
 SENTINEL_TO_COFENSE = "SentinelToCofense"
 COFENSE_429_SLEEP = 300
 SENTINEL_429_SLEEP = 60
+SENTINEL_400_SLEEP = 60
 SENTINEL_SOURCE_PREFIX = "Sentinel : "
 COFENSE_SOURCE_PREFIX = "Cofense : "
 COFENSE_PAGE_SIZE = 100
@@ -54,9 +56,7 @@ THREAT_LEVEL_INTERMEDIATE = 33
 THREAT_LEVEL_SUSPICIOUS = 75
 THREAT_LEVEL_MALICIOUS = 100
 SCHEDULE = os.environ.get("Schedule", "")
-NON_COFENSE_THROTTLE_LIMIT = os.environ.get(
-    "Throttle_Limit_For_Non_Cofense_Indicators", ""
-)
+NON_COFENSE_THROTTLE_LIMIT = os.environ.get("Throttle_Limit_For_Non_Cofense_Indicators", "")
 DEFENDER_POST_INDICATOR_URL = "https://api.securitycenter.microsoft.com/api/indicators"
 SENTINEL_TO_DEFENDER = "SentinelToDefender"
 DEFENDER_429_SLEEP = 60
@@ -65,3 +65,6 @@ THREAT_LEVEL = os.environ.get("Threat_Level", "")
 THREAT_LEVEL_FILTER_BENIGN = "Benign"
 THREAT_LEVEL_FILTER_SUSPICIOUS = "Suspicious"
 THREAT_LEVEL_FILTER_MALICIOUS = "Malicious"
+RETRY_FAILED_INDICATORS = "Retry Failed Indicators"
+FAILED_INDICATORS_TABLE_NAME = "Cofense_Triage_failed_indicators"
+FAILED_INDICATORS_FILE_SHARE = "failed-indicators"
