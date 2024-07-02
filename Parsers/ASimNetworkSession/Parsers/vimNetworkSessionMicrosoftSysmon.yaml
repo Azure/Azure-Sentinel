@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session Event ASIM parser for Sysmon (Event 3)
-  Version: '0.2.1'
-  LastUpdated: June 5, 2024
+  Version: '0.1.1'
+  LastUpdated: June 18, 2024
 Product:
   Name: Windows Sysmon
 Normalization:
@@ -14,17 +14,63 @@ References:
   Link: https:/aka.ms/AboutASIM
 Description: |
   This ASIM parser supports normalizing Sysmon network session events (event 3) collected using the Event or WEF (WindowsEvent table) connectors logs ingested in 'Event' table to the ASIM Process Event normalized schema. 
-ParserName: ASimNetworkSessionMicrosoftSysmon
-EquivalentBuiltInParser: _ASim_NetworkSession_MicrosoftSysmon
+ParserName: vimNetworkSessionMicrosoftSysmon
+EquivalentBuiltInParser: _im_NetworkSession_MicrosoftSysmon
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
-ParserQuery: | 
-  let parser = (disabled:bool = false) {
-  let Sysmon3_Event=(disabled:bool=false) {
-        Event
+ParserQuery: |
+    let parser = (
+        starttime:datetime=datetime(null), 
+        endtime:datetime=datetime(null), 
+        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
+        dstportnumber:int=int(null), 
+        hostname_has_any:dynamic=dynamic([]), 
+        dvcaction:dynamic=dynamic([]), 
+        eventresult:string='*', 
+        disabled:bool=false
+        )
+        {
+        let Sysmon3_Event=Event
+        | where (isnull(starttime) or TimeGenerated >= starttime) and  (isnull(endtime) or TimeGenerated <= endtime)
         | where not(disabled)
+        // -- Pre-filtering:
+        | where
+            eventresult  in ("*", "Success") 
+            and array_length(dvcaction) == 0
+            and  dstportnumber==int(null) 
+            and (array_length(hostname_has_any)==0 or Computer has_any (hostname_has_any))
+        // -- End pre-filtering
         | where Source == "Microsoft-Windows-Sysmon" and EventID==3
         | parse-kv EventData as (
                     SourceIp:string,
@@ -60,9 +106,8 @@ ParserQuery: |
                 RenderedDescription,
                 MG,
                 AzureDeploymentID,
-                Role
-      };
-  Sysmon3_Event
+                Role; 
+        Sysmon3_Event
         | extend
                 AppName = tostring(split(Image, "\\")[-1])
         | extend
@@ -80,7 +125,7 @@ ParserQuery: |
                 DstProcessName = iff(Initiated, tostring(Image), ""),
                 DstAppName = iff(Initiated, AppName, ""),
                 DstAppType = iff(Initiated, 'Process', "")
-        | project-away  ProcessId, ProcessGuid, Image, AppName
+        | project-away ProcessId, ProcessGuid, Image, AppName
         | project-rename 
                 EventStartTime = UtcTime,
                 Dvc = Computer,
@@ -144,4 +189,4 @@ ParserQuery: |
                 EventLevelName,
                 EventLevel,_ResourceId
       };
-      parser (disabled)
+      parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix,dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

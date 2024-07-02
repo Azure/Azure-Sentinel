@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session Event ASIM parser for Sysmon (Event 3)
-  Version: '0.2.1'
-  LastUpdated: June 5, 2024
+  Version: '0.1.1'
+  LastUpdated: June 20, 2024
 Product:
   Name: Windows Sysmon
 Normalization:
@@ -13,57 +13,94 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Sysmon network session events (event 3) collected using the Event or WEF (WindowsEvent table) connectors logs ingested in 'Event' table to the ASIM Process Event normalized schema. 
-ParserName: ASimNetworkSessionMicrosoftSysmon
-EquivalentBuiltInParser: _ASim_NetworkSession_MicrosoftSysmon
+  This ASIM parser supports normalizing Sysmon network session events (event 3) collected using the Event or WEF (WindowsEvent table) connectors logs ingested in 'WindowsEvent' table to the ASIM Process Event normalized schema. 
+ParserName: vimNetworkSessionMicrosoftSysmonWindowsEvent
+EquivalentBuiltInParser: _im_NetworkSession_MicrosoftSysmonWindowsEvent
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
   - Name: disabled
     Type: bool
     Default: false
-ParserQuery: | 
-  let parser = (disabled:bool = false) {
-  let Sysmon3_Event=(disabled:bool=false) {
-        Event
-        | where not(disabled)
-        | where Source == "Microsoft-Windows-Sysmon" and EventID==3
-        | parse-kv EventData as (
-                    SourceIp:string,
-                    DestinationIp:string,
-                    SourceHostname:string,
-                    DestinationHostname:string,
-                    Initiated:bool,  // Initiated indicates the process initiated a connection (meaning outbound)
-                    RuleName:string,
-                    UtcTime:datetime,
-                    ProcessGuid:string,
-                    ProcessId:string,
-                    Image:string,
-                    User:string,
-                    Protocol:string,
-                    SourceIsIpv6:bool,
-                    SourcePort:int,
-                    SourcePortName:string,
-                    DestinationIsIpv6:bool,
-                    DestinationPort:int,
-                    DestinationPortName:string
-                ) with (regex=@'<Data Name="(\w+)">{?([^>]*?)}?</Data>')
-        | project-away EventData
-        | project-rename
-                SrcHostname = SourceHostname,
-                DstHostname = DestinationHostname
-        | project-away
-                Source,
-                EventLog,
-                EventCategory,
-                UserName,
-                Message,
-                ParameterXml,
-                RenderedDescription,
-                MG,
-                AzureDeploymentID,
-                Role
-      };
-  Sysmon3_Event
+ParserQuery: |
+    let parser = (
+        starttime:datetime=datetime(null), 
+        endtime:datetime=datetime(null), 
+        srcipaddr_has_any_prefix:dynamic=dynamic([]), 
+        dstipaddr_has_any_prefix:dynamic=dynamic([]), 
+        ipaddr_has_any_prefix:dynamic=dynamic([]),
+        dstportnumber:int=int(null), 
+        hostname_has_any:dynamic=dynamic([]), 
+        dvcaction:dynamic=dynamic([]), 
+        eventresult:string='*', 
+        disabled:bool=false
+        )
+        {
+        let Sysmon3_WindowsEvent=WindowsEvent
+        | where not(disabled) 
+        | where (isnull(starttime) or TimeGenerated >= starttime) and  (isnull(endtime) or TimeGenerated <= endtime)
+        // -- Pre-filtering:
+        | where
+            eventresult  in ("*", "Success") 
+            and array_length(dvcaction) == 0
+            and  dstportnumber==int(null) 
+            and (array_length(hostname_has_any)==0 or Computer has_any (hostname_has_any))
+        // -- End pre-filtering
+        | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3
         | extend
+                SourceIp = tostring(EventData.SourceIp),
+                DestinationIp = tostring(EventData.DestinationIp),
+                DstHostname = tostring(EventData.DestinationHostname),
+                SrcHostname = tostring(EventData.SrcHostname),
+                RuleName = tostring(EventData.RuleName),
+                UtcTime = todatetime(EventData.UtcTime),
+                ProcessId = tostring(EventData.ProcessId),
+                Image = tostring(EventData.Image),
+                User = tostring(EventData.User),
+                Protocol = tostring(EventData.Protocol),
+                Initiated = tobool(EventData.Initiated), // Initiated indicates the process initiated a connection (meaning outbound)
+                SourceIsIpv6 = tobool(EventData.SourceIsIpv6),
+                SourcePort = toint(EventData.SourcePort),
+                SourcePortName = tostring(EventData.SourcePortName),
+                DestinationIsIpv6 = tobool(EventData.DestinationIsIpv6),
+                DestinationPort = toint(EventData.DestinationPort),
+                DestinationPortName = tostring(EventData.DestinationPortName)
+        | parse EventData.ProcessGuid with "{" ProcessGuid "}"
+        | project-away EventData
+        | project-away
+                      Provider,
+                      Channel,
+                      Task,
+                      Data,
+                      RawEventData,
+                      EventOriginId;
+    Sysmon3_WindowsEvent
+    | extend
                 AppName = tostring(split(Image, "\\")[-1])
         | extend
                 SrcUsernameType = iff(not(Initiated), "Windows", ""),
@@ -142,6 +179,6 @@ ParserQuery: |
                 Source*,
                 EventID,
                 EventLevelName,
-                EventLevel,_ResourceId
+                EventLevel,Correlation,EventRecordId,Keywords,Opcode,SystemProcessId,SystemThreadId,SystemUserId,TimeCreated,_ResourceId,Version
       };
-      parser (disabled)
+      parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix,dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
