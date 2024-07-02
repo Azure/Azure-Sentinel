@@ -13,9 +13,9 @@ References:
   - Title: ASIM
     Link: https://aka.ms/AboutASIM
 Description: 
-  This ASIM parser supports normalizing Sysmon event 11, 23, and 26, stored in either the Event or WindowsEvent tables, logs ingested in 'Event' table to the ASIM file event schema.
-ParserName: vimFileEventMicrosoftSysmon
-EquivalentBuiltInParser: _Im_FileEvent_MicrosoftSysmon
+  This ASIM parser supports normalizing Sysmon event 11, 23, and 26, stored in either the Event or WindowsEvent tables, logs ingested in 'WindowsEvent' table to the ASIM file event schema.
+ParserName: vimFileEventMicrosoftSysmonWindowsEvent
+EquivalentBuiltInParser: _Im_FileEvent_MicrosoftSysmonWindowsEvent
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -60,54 +60,45 @@ ParserQuery: |
     dvchostname_has_any: dynamic=dynamic([]),
     disabled: bool=false
     ) {
-    // -- Event parser
-    let EventParser = () {
-    Event
-        | where not(disabled)
-        | where (isnull(starttime) or TimeGenerated >= starttime) 
-            and (isnull(endtime) or TimeGenerated <= endtime)
-        | project
-            EventID,
-            EventData,
-            Computer,
-            TimeGenerated,
-            _ResourceId,
-            _SubscriptionId,
-            Source,
-            Type // , _ItemId 
-        | where Source == "Microsoft-Windows-Sysmon" and EventID in (11, 23, 26)
-        | project-away Source
-        // pre-filtering
-        | where ((array_length(eventtype_in) == 0 or (iff (EventID == 11, 'FileCreated', 'FileDeleted') in~ (eventtype_in)))) and
-            (array_length(srcipaddr_has_any_prefix) == 0) and
-            ((array_length(srcfilepath_has_any) == 0)) and
-            ((array_length(dvchostname_has_any) == 0) or Computer has_any (dvchostname_has_any))
-        | parse-kv EventData as (
-            RuleName: string,
-            UtcTime: datetime, 
-            ProcessGuid: string,
-            ProcessId: string,
-            Image: string,
-            User: string,
-            TargetFilename: string,
-            Hashes: string,
-            CreationUtcTime: datetime
-            )
-            with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-        | project-rename 
-            ActingProcessGuid = ProcessGuid,
-            ActingProcessId = ProcessId,
-            ActorUsername = User,
-            ActingProcessName = Image,
-            TargetFileCreationTime=CreationUtcTime,
-            TargetFilePath=TargetFilename,
-            EventStartTime=UtcTime
-        // Filter for ActorUsername and TargetFilePath
-        | where ((array_length(actorusername_has_any) == 0) or (ActorUsername has_any (actorusername_has_any))) and 
-            ((array_length(targetfilepath_has_any) == 0) or (TargetFilePath has_any (targetfilepath_has_any)))
-        | project-away EventData
+      //
+      // -- WindowsEvent parser
+      let WindowsEventParser=() {
+      WindowsEvent 
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | project
+              EventID,
+              EventData,
+              Computer,
+              TimeGenerated,
+              _ResourceId,
+              _SubscriptionId,
+              Provider,
+              Type // , _ItemId 
+          | where Provider == "Microsoft-Windows-Sysmon" and EventID in (11, 23, 26)
+          | project-away Provider
+          // pre-filtering
+          | where ((array_length(eventtype_in) == 0 or (iff (EventID == 11, 'FileCreated', 'FileDeleted') in~ (eventtype_in)))) and
+              (array_length(srcipaddr_has_any_prefix) == 0) and
+              ((array_length(actorusername_has_any) == 0) or (tostring(EventData.User) has_any (actorusername_has_any))) and
+              ((array_length(targetfilepath_has_any) == 0) or (tostring(EventData.TargetFilename) has_any (targetfilepath_has_any))) and
+              ((array_length(srcfilepath_has_any) == 0)) and
+              ((array_length(dvchostname_has_any) == 0) or Computer has_any (dvchostname_has_any))
+          | extend 
+              TargetFileCreationTime=todatetime(EventData.CreationUtcTime),
+              TargetFilePath=tostring(EventData.TargetFilename),
+              ActingProcessName = tostring(EventData.Image),
+              ActingProcessId = tostring(EventData.ProcessId),
+              ActingProcessGuid = tostring(EventData.ProcessGuid),
+              ActorUsername = tostring(EventData.User),
+              EventStartTime = todatetime(EventData.UtcTime),
+              RuleName = tostring(EventData.RuleName),
+              Hashes = tostring(EventData.Hashes)
+          | parse ActingProcessGuid with "{" ActingProcessGuid "}"
+          | project-away EventData
   };
-      EventParser 
+      WindowsEventParser 
       | project-rename
           DvcHostname = Computer,
           //EventUid = _ItemId,
