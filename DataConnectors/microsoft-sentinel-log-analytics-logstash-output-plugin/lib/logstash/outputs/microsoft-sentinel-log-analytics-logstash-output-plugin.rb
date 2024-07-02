@@ -34,8 +34,8 @@ class LogStash::Outputs::MicrosoftSentinelOutput < LogStash::Outputs::Base
   # Subset of keys to send to the Azure Loganalytics workspace
   config :key_names, :validate => :array, :default => []
 
-  # Max number of seconds to wait between flushes. Default 5
-  config :plugin_flush_interval, :validate => :number, :default => 5
+  # Max number of seconds to wait between flushes. Default 60
+  config :plugin_flush_interval, :validate => :number, :default => 60
 
   # Factor for adding to the amount of messages sent
   config :decrease_factor, :validate => :number, :default => 100
