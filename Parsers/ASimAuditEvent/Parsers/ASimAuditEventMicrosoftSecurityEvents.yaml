@@ -15,9 +15,9 @@ References:
     - Title: Office 365 Management Activity API schema
       Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
 Description: |
-    This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) logs ingested in 'WindowsEvent' table to the ASIM Audit Event schema.
-ParserName: ASimAuditEventMicrosoftWindowsEvents
-EquivalentBuiltInParser: _ASim_AuditEvent_MicrosoftWindowsEvents
+    This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) logs ingested in 'SecurityEvent' table to the ASIM Audit Event schema.
+ParserName: ASimAuditEventMicrosoftSecurityEvents
+EquivalentBuiltInParser: _ASim_AuditEvent_MicrosoftSecurityEvents
 ParserParams:
     - Name: disabled
       Type: bool
@@ -75,37 +75,42 @@ ParserQuery: |
           let ParsedEvents =
               union
                   (
-                  WindowsEvent
-                  | where not(disabled)
-                  | where EventID in(ParsedEventIds)
-                  | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
-                  | extend
-                      SubjectUserSid = tostring(EventData.SubjectUserSid),
-                      SubjectUserName = tostring(EventData.SubjectUserName),
-                      SubjectDomainName = tostring(EventData.SubjectDomainName),
-                      SubjectLogonId = tostring(EventData.SubjectLogonId),
-                      TaskName = tostring(EventData.TaskName),
-                      TaskContent = tostring(EventData.TaskContent),
-                      TaskContentNew = tostring(EventData.TaskContentNew),
-                      ClientProcessId = tostring(EventData.ClientProcessId),
-                      DestinationDRA = tostring(EventData.DestinationDRA),
-                      SourceDRA = tostring(EventData.SourceDRA),
-                      SourceAddr = tostring(EventData.SourceAddr),
-                      ObjectDN = tostring(EventData.ObjectDN),
-                      AttributeValue = tostring(EventData.AttributeValue)
+                      // SecurityEvents
+                      SecurityEvent
+                      | where not(disabled)
+                      | where EventID in(ParsedEventIds)
+                      | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
+                  | parse-kv EventData as 
+                      (
+                      SubjectUserSid: string,
+                      SubjectUserName: string,
+                      SubjectDomainName: string,
+                      SubjectLogonId: string,
+                      TaskName: string,
+                      TaskContent: string,
+                      TaskContentNew: string,
+                      ClientProcessId: string,
+                      DestinationDRA: string,
+                      SourceDRA: string,
+                      SourceAddr: string,
+                      ObjectDN: string,
+                      AttributeValue: string
+                      ) 
+                      with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
                   | project-away EventData
                   ),
                   (
-                  WindowsEvent
+                  SecurityEvent
                   | where not(disabled)
-                  | where EventID in (AuditLogClearedEventID) and Provider == "Microsoft-Windows-Eventlog"
+                  | where EventID in (AuditLogClearedEventID) and EventSourceName == "Microsoft-Windows-Eventlog"
                   | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
+                  | extend Parsed_EventData = parse_xml(EventData)
                   | extend
-                      SubjectUserSid = tostring(EventData.SubjectUserSid),
-                      SubjectUserName = tostring(EventData.SubjectUserName),
-                      SubjectDomainName = tostring(EventData.SubjectDomainName),
-                      SubjectLogonId = tostring(EventData.SubjectLogonId)
-                  | project-away EventData
+                      SubjectUserSid = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectUserSid),
+                      SubjectUserName = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectUserName),
+                      SubjectDomainName = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectDomainName),
+                      SubjectLogonId = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectLogonId)
+                  | project-away EventData, Parsed_EventData
                   )
               | lookup EventIDLookup on EventID
           ;

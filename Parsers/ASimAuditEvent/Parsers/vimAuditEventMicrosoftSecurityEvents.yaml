@@ -15,9 +15,9 @@ References:
     - Title: Office 365 Management Activity API schema
       Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
 Description: |
-    This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) logs ingested in 'WindowsEvent' table to the ASIM Audit Event schema.
-ParserName: vimAuditEventMicrosoftWindowsEvents
-EquivalentBuiltInParser: _Im_AuditEvent_MicrosoftWindowsEvents
+    This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) logs ingested in 'SecurityEvent' table to the ASIM Audit Event schema.
+ParserName: vimAuditEventMicrosoftSecurityEvents
+EquivalentBuiltInParser: _Im_AuditEvent_MicrosoftSecurityEvents
 ParserParams:
     - Name: starttime
       Type: datetime
@@ -120,41 +120,46 @@ ParserQuery: |
         let ParsedEvents =
             union
                 (
-                WindowsEvent
-                | where not(disabled)
-                | where (isnull(starttime) or TimeGenerated >= starttime) 
-                    and (isnull(endtime) or TimeGenerated <= endtime)
-                    and EventID in(FilteredEventIds)
-                | where (array_length(srcipaddr_has_any_prefix) == 0)
-                    and (array_length(actorusername_has_any) == 0 or EventData has_any (actorusername_has_any))   
-                    and (array_length(newvalue_has_any) == 0 or EventData has_any (newvalue_has_any))
-                | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
-                | extend
-                    SubjectUserSid = tostring(EventData.SubjectUserSid),
-                    SubjectUserName = tostring(EventData.SubjectUserName),
-                    SubjectDomainName = tostring(EventData.SubjectDomainName),
-                    SubjectLogonId = tostring(EventData.SubjectLogonId),
-                    TaskName = tostring(EventData.TaskName),
-                    TaskContent = tostring(EventData.TaskContent),
-                    TaskContentNew = tostring(EventData.TaskContentNew),
-                    ClientProcessId = tostring(EventData.ClientProcessId),
-                    DestinationDRA = tostring(EventData.DestinationDRA),
-                    SourceDRA = tostring(EventData.SourceDRA),
-                    SourceAddr = tostring(EventData.SourceAddr),
-                    ObjectDN = tostring(EventData.ObjectDN),
-                    AttributeValue = tostring(EventData.AttributeValue)
+                    // SecurityEvents
+                    SecurityEvent
+                    | where not(disabled)
+                    | where (isnull(starttime) or TimeGenerated >= starttime) 
+                        and (isnull(endtime) or TimeGenerated <= endtime)
+                        and EventID in(FilteredEventIds)
+                    | where (array_length(srcipaddr_has_any_prefix) == 0)
+                        and (array_length(actorusername_has_any) == 0 or EventData has_any (actorusername_has_any))
+                        and (array_length(newvalue_has_any) == 0 or EventData has_any (newvalue_has_any))         
+                    | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
+                | parse-kv EventData as 
+                    (
+                    SubjectUserSid: string,
+                    SubjectUserName: string,
+                    SubjectDomainName: string,
+                    SubjectLogonId: string,
+                    TaskName: string,
+                    TaskContent: string,
+                    TaskContentNew: string,
+                    ClientProcessId: string,
+                    DestinationDRA: string,
+                    SourceDRA: string,
+                    SourceAddr: string,
+                    ObjectDN: string,
+                    AttributeValue: string
+                    ) 
+                    with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
                 | where 
                     array_length(actorusername_has_any) == 0 
                     or SubjectUserName has_any (actorusername_has_any) 
-                    or SubjectUserName has_any (actorusername_has_any)        
+                    or SubjectDomainName has_any (actorusername_has_any)
                 | project-away EventData
                 ),
+                //Section for SecurityEvent(1102)
                 (
-                WindowsEvent
+                SecurityEvent
                 | where not(disabled)
                 | where (isnull(starttime) or TimeGenerated >= starttime) 
                     and (isnull(endtime) or TimeGenerated <= endtime)
-                | where EventID in (AuditLogClearedEventID) and Provider == "Microsoft-Windows-Eventlog"
+                | where EventID in (AuditLogClearedEventID) and EventSourceName == "Microsoft-Windows-Eventlog"
                 | where (array_length(srcipaddr_has_any_prefix) == 0)
                     and (array_length(actorusername_has_any) == 0 or EventData has_any (actorusername_has_any))
                     and (array_length(newvalue_has_any) == 0 or EventData has_any (newvalue_has_any))
@@ -162,17 +167,18 @@ ParserQuery: |
                     and (array_length(operation_has_any) == 0 or 'Delete Logs' has_any (operation_has_any))
                     and (eventresult == '*' or 'Success' =~ eventresult)
                 | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
+                | extend Parsed_EventData = parse_xml(EventData)
                 | extend
-                    SubjectUserSid = tostring(EventData.SubjectUserSid),
-                    SubjectUserName = tostring(EventData.SubjectUserName),
-                    SubjectDomainName = tostring(EventData.SubjectDomainName),
-                    SubjectLogonId = tostring(EventData.SubjectLogonId)
+                    SubjectUserSid = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectUserSid),
+                    SubjectUserName = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectUserName),
+                    SubjectDomainName = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectDomainName),
+                    SubjectLogonId = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectLogonId)
                 | where 
                     array_length(actorusername_has_any) == 0 
                     or SubjectUserName has_any (actorusername_has_any) 
                     or SubjectDomainName has_any (actorusername_has_any)
                     or (strcat(SubjectDomainName, '\\', SubjectUserName)) has_any (actorusername_has_any)
-                | project-away EventData
+                | project-away EventData, Parsed_EventData
                 )
             | lookup EventIDLookup on EventID
         ;
@@ -266,7 +272,7 @@ ParserQuery: |
         | extend
             User = ActorUsername,
             Dvc = DvcFQDN
-        | project-away Subject*, EventID, Computer
+        | project-away Subject*, EventID, Computer,NewValue,ObjectType,Object,OldValue,Operation,Value
     };
       parser (
           starttime = starttime,
