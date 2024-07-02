@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM  parser for Microsoft Windows Firewall Events
-  Version: '0.4'
-  LastUpdated: May 1st 2023
+  Version: '0.5.1'
+  LastUpdated: June 4 2024
 Product:
   Name: Windows Firewall
 Normalization:
@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Microsoft Windows Firewall Events (WindowsEvent and SecurityEvent tables) to the ASIM Network Session schema. Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
+  This ASIM parser supports normalizing Microsoft Windows Firewall Events (WindowsEvent and SecurityEvent tables) logs ingested in 'WindowsEvent' table to the ASIM Network Session schema. Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
 ParserName: ASimNetworkSessionMicrosoftWindowsEventFirewall
 EquivalentBuiltInParser: _ASim_NetworkSession_MicrosoftWindowsEventFirewall
 ParserParams:
@@ -21,7 +21,7 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
- // Data tables for mapping raw values into string
+  // Data tables for mapping raw values into string
   let LayerCodeTable = datatable (LayerCode:string,LayerName:string)[
     '%%14596', 'IP Packet',
     '%%14597', 'Transport',
@@ -64,79 +64,10 @@ ParserQuery: |
     '%%14594', 'Forward',false,
     '%%14595', 'Bidirectional', false,
     '%%14609', 'Listen', false];
-  ///////////////////////////////////////////////////////
-  // this query extract data fields from EventData column from SecurityEvent table
-  ///////////////////////////////////////////////////////
-  let WindowsFirewall_SecurityEvent=(){ // Event IDs between (5151 .. 5159)
-  // will be extracting Event specific fields from 'EventData' field
-    let SecurityEventProjected =
-        SecurityEvent
-        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Type
-    ;
-    let SecurityEvent_5152 = 
-        SecurityEventProjected | where not(disabled)
-        | where EventID==5152
-        | parse EventData with * '<Data Name="ProcessId">'ProcessId:string'</Data>'
-            '\x0d\x0a  <Data Name="Application">'Application'</Data>'
-            '\x0d\x0a  <Data Name="Direction">'DirectionCode'</Data>'
-            '\x0d\x0a  <Data Name="SourceAddress">'SrcIpAddr:string'</Data>'
-            '\x0d\x0a  <Data Name="SourcePort">'SrcPortNumber:int'</Data>'
-            '\x0d\x0a  <Data Name="DestAddress">'DstIpAddr:string'</Data>'
-            '\x0d\x0a  <Data Name="DestPort">'DstPortNumber:int'</Data>'
-            '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-            '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-            '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-            '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'*
-        | project-away EventData;
-    let SecurityEvent_5154_5155_5158_5159 =
-        SecurityEventProjected | where not(disabled)
-        | where EventID in (5154, 5155, 5158, 5159)
-        | parse EventData with * '<Data Name="ProcessId">'ProcessId:string'</Data>' 
-            '\x0d\x0a  <Data Name="Application">'Application'</Data>'
-            '\x0d\x0a  <Data Name="SourceAddress">'SrcIpAddr:string'</Data>'
-            '\x0d\x0a  <Data Name="SourcePort">'SrcPortNumber:int'</Data>'
-            '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-            '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-            '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-            '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'*
-        | extend DirectionCode = "%%14609"
-        | project-away EventData;
-    let SecurityEvent_5156_5157 =
-        SecurityEventProjected | where not(disabled)
-        | where EventID in (5156, 5157)
-        | parse EventData with * '<Data Name="ProcessID">'ProcessId:string'</Data>'
-            '\x0d\x0a  <Data Name="Application">'Application:string'</Data>'
-            '\x0d\x0a  <Data Name="Direction">'DirectionCode:string'</Data>'
-            '\x0d\x0a  <Data Name="SourceAddress">'SrcIpAddr:string'</Data>'
-            '\x0d\x0a  <Data Name="SourcePort">'SrcPortNumber:int'</Data>'
-            '\x0d\x0a  <Data Name="DestAddress">'DstIpAddr:string'</Data>'
-            '\x0d\x0a  <Data Name="DestPort">'DstPortNumber:int'</Data>'
-            '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-            '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-            '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-            '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'
-            '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID'</Data>'
-            '\x0d\x0a  <Data Name="RemoteMachineID">'RemoteMachineID'</Data>'*
-        | project-away EventData;
-    union SecurityEvent_5152, SecurityEvent_5156_5157, SecurityEvent_5154_5155_5158_5159
-        | lookup Directions on DirectionCode
-        | project-rename DvcHostname = Computer
-        | extend
-            SrcAppName = iff(isOutBound, Application, ""),
-            DstAppName = iff(not(isOutBound), Application, ""),
-            SrcDvcId = iff(isOutBound, RemoteMachineID, ""),
-            DstDvcId = iff(not(isOutBound), RemoteMachineID, ""),
-            SrcProcessId =  iff(isOutBound, tostring(ProcessId), ""),
-            DstProcessId =  iff(not(isOutBound), tostring(ProcessId), ""),
-            DstUserId = iff(isOutBound, RemoteUserID, ""),
-            SrcUserId = iff(not(isOutBound), RemoteUserID, ""),
-            DstHostname = iff(isOutBound, "", DvcHostname),
-            SrcHostname = iff(isOutBound, DvcHostname, "")
-        | project-away Application, RemoteMachineID, RemoteUserID, ProcessId
-  };
   //////////////////////////////////////////////////////
   // this query extract the data from WindowsEvent table
   //////////////////////////////////////////////////////
+  let parser = (disabled: bool=false) {
   let WindowsFirewall_WindowsEvent=(){   
         WindowsEvent | where not(disabled)
         | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Type
@@ -166,7 +97,7 @@ ParserQuery: |
         | project-away EventData
     };
   // Main query -> outputs both schemas as one normalized table
-  union WindowsFirewall_SecurityEvent, WindowsFirewall_WindowsEvent 
+  WindowsFirewall_WindowsEvent 
        | extend 
               DvcAction = iff(EventID in (5154, 5156, 5158), "Allow", "Deny"),
               DvcOs = 'Windows',
@@ -199,4 +130,6 @@ ParserQuery: |
               Rule = tostring (NetworkRuleNumber)
       | lookup LayerCodeTable on LayerCode
       | lookup ProtocolTable on Protocol
-      | project-away LayerCode, DirectionCode, Protocol, isOutBound, LayerName, EventID, LayerRTID
+      | project-away LayerCode, DirectionCode, Protocol, isOutBound, LayerName, EventID,_ResourceId,_SubscriptionId
+      };                    
+      parser(disabled=false)
