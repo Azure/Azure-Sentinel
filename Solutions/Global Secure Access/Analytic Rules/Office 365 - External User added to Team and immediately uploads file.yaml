@@ -1,0 +1,86 @@
+id: bff058b2-500e-4ae5-bb49-a5b1423cbd5b
+name: Accessed files shared by temporary external user
+description: |
+  'This detection identifies when an external user is added to a Team or Teams chat and shares a file which is accessed by many users (>10) and the users is removed within short period of time. This might be an indicator of suspicious activity.'
+severity: Low
+status: Available 
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1566
+query: |
+    let fileAccessThreshold = 10;
+    EnrichedMicrosoft365AuditLogs
+    | where Workload =~ "MicrosoftTeams"
+    | where Operation =~ "MemberAdded"
+    | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)
+    | where MemberAdded contains "#EXT#"
+    | project TimeAdded = TimeGenerated, Operation, MemberAdded, UserWhoAdded = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+    | join kind=inner (
+        EnrichedMicrosoft365AuditLogs
+        | where Workload =~ "MicrosoftTeams"
+        | where Operation =~ "MemberRemoved"
+        | extend MemberAdded = tostring(parse_json(tostring(AdditionalProperties)).Members[0].UPN)
+        | where MemberAdded contains "#EXT#"
+        | project TimeDeleted = TimeGenerated, Operation, MemberAdded, UserWhoDeleted = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+    ) on MemberAdded, TeamName
+    | where TimeDeleted > TimeAdded
+    | join kind=inner (
+        EnrichedMicrosoft365AuditLogs
+        | where RecordType == "SharePointFileOperation"
+        | where Operation == "FileUploaded"
+        | extend MemberAdded = UserId, SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+        | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+        | join kind=inner (
+            EnrichedMicrosoft365AuditLogs
+            | where RecordType == "SharePointFileOperation"
+            | where Operation == "FileAccessed"
+            | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl), TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+            | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+            | summarize FileAccessCount = count() by ObjectId, TeamName
+            | where FileAccessCount > fileAccessThreshold
+        ) on ObjectId, TeamName
+    ) on MemberAdded, TeamName
+    | project-away MemberAdded1, MemberAdded2, ObjectId1, Operation1, Operation2
+    | extend MemberAddedAccountName = tostring(split(MemberAdded, "@")[0]), MemberAddedAccountUPNSuffix = tostring(split(MemberAdded, "@")[1])
+    | extend UserWhoAddedAccountName = tostring(split(UserWhoAdded, "@")[0]), UserWhoAddedAccountUPNSuffix = tostring(split(UserWhoAdded, "@")[1])
+    | extend UserWhoDeletedAccountName = tostring(split(UserWhoDeleted, "@")[0]), UserWhoDeletedAccountUPNSuffix = tostring(split(UserWhoDeleted, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: MemberAdded
+      - identifier: Name
+        columnName: MemberAddedAccountName
+      - identifier: UPNSuffix
+        columnName: MemberAddedAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserWhoAdded
+      - identifier: Name
+        columnName: UserWhoAddedAccountName
+      - identifier: UPNSuffix
+        columnName: UserWhoAddedAccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserWhoDeleted
+      - identifier: Name
+        columnName: UserWhoDeletedAccountName
+      - identifier: UPNSuffix
+        columnName: UserWhoDeletedAccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 2.1.1
+kind: Scheduled

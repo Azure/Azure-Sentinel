@@ -1,0 +1,39 @@
+id: 9eb64924-ec8d-44d0-b1f2-10665150fb74
+name: Bots added to multiple teams
+description: |
+  'This hunting query helps identify bots added to multiple Teams in a short space of time.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1176
+  - T1119
+query: |
+  // Adjust these thresholds to suit your environment.
+  let threshold = 2;
+  let time_threshold = timespan(5m);
+  EnrichedMicrosoft365AuditLogs
+    | where Workload == "MicrosoftTeams"
+    | where Operation == "BotAddedToTeam"
+    | extend TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+    | summarize Start = max(TimeGenerated), End = min(TimeGenerated), Teams = make_set(TeamName, 10000) by UserId
+    | extend CountOfTeams = array_length(Teams)
+    | extend TimeDelta = End - Start
+    | where CountOfTeams > threshold
+    | where TimeDelta <= time_threshold
+    | project Start, End, Teams, CountOfTeams, UserId
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    | extend Account_0_Name = AccountName
+    | extend Account_0_UPNSuffix = AccountUPNSuffix
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.1

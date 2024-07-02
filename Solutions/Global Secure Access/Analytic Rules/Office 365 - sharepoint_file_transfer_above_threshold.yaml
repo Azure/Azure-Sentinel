@@ -1,0 +1,59 @@
+id: 299e96a8-5524-41b2-ac72-4527742590f1
+name: Office365 Sharepoint File Transfer Above Threshold
+description: |
+  Identifies Office365 Sharepoint File Transfers above a certain threshold in a 15-minute time period.
+  Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1020
+query: |
+  let threshold = 5000;
+  EnrichedMicrosoft365AuditLogs
+  | where Workload has_any("SharePoint", "OneDrive") and Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
+  | summarize count_distinct_ObjectId=dcount(ObjectId), fileslist=make_set(ObjectId, 10000) by UserId, ClientIp, bin(TimeGenerated, 15m)
+  | where count_distinct_ObjectId >= threshold
+  | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField","_", tostring(hash(tostring(fileslist)))))
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileSample
+customDetails:
+  TransferCount: count_distinct_ObjectId
+  FilesList: fileslist
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+version: 1.0.4
+kind: Scheduled
