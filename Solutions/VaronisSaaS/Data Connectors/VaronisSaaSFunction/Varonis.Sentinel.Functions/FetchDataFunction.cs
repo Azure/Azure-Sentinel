@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using Varonis.Sentinel.Functions.LogAnalytics;
 using Varonis.Sentinel.Functions.DatAlert;
-using Varonis.Sentinel.Functions.Helpers;
 using System.Linq;
 using System.Text.Json;
 
@@ -22,13 +21,13 @@ namespace Varonis.Sentinel.Functions
                 var logAnalyticsKey = Environment.GetEnvironmentVariable("LogAnalyticsKey");
                 var logAnalyticsWorkspace = Environment.GetEnvironmentVariable("LogAnalyticsWorkspace");
 
-                var firstFetchTimeStr = Environment.GetEnvironmentVariable("AlertRetrievalStart");
+                var firstFetchTime = int.TryParse(Environment.GetEnvironmentVariable("AlertRetrievalStart"), out var maxdays)
+                    ? maxdays
+                    : 30;
                 var severities = Environment.GetEnvironmentVariable("AlertSeverity");
                 var threatModelName = Environment.GetEnvironmentVariable("ThreatDetectionPolicies");
                 var status = Environment.GetEnvironmentVariable("AlertStatus");
-                var maxAlerts = int.TryParse(Environment.GetEnvironmentVariable("MaxAlertRetrieval"), out var maxvalue)
-                    ? maxvalue
-                    : 1000;
+                const int maxAlerts = 1000;
 
                 var baseUri = hostname.StartsWith("http") 
                     ? new Uri(hostname)
@@ -42,17 +41,15 @@ namespace Varonis.Sentinel.Functions
                     log.LogWarning("Timer is running late!");
                 }
 
-                var minDate = DateTime.MinValue.ToUniversalTime();
-
                 var last = timer.ScheduleStatus.Last.ToUniversalTime();
                 var lastUpdated = timer.ScheduleStatus.LastUpdated.ToUniversalTime();
                 var next = timer.ScheduleStatus.Next.ToUniversalTime().AddSeconds(-1);
 
                 log.LogInformation($"Schedule status: {last}, {lastUpdated}, {next}");
 
-                if (!string.IsNullOrWhiteSpace(firstFetchTimeStr))
+                if (firstFetchTime > 0)
                 {
-                    var firstDate = CustomParser.ParseDate(firstFetchTimeStr);
+                    var firstDate = DateTime.UtcNow.AddDays(-firstFetchTime);
 
                     if (last <= firstDate)
                     {

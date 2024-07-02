@@ -12,27 +12,26 @@ param location string = resourceGroup().location
 @description('Name of the Log Analytics workspace used by Microsoft Sentinel.')
 param logAnalyticsWorkspaceName string
 
-@description('FQDN/IP for the Integration Connection - Enter the Varonis Web Interface address. This is the Fully Qualified Domain Name (FQDN) of the Varonis server to which you want to connect.')
+@description('FQDN/IP for the Integration Connection - Enter the Varonis Web Interface address (e.g. https://example.varonis.com).')
 param varonisFQDN string
 
-@description('Varonis API Key.')
+@description('Copy the API Key from the Varonis web interface.')
 @secure()
 param varonisApiKey string
 
-@description('Number of days since retrieval started.')
-param alertRetrievalStart string = '2 weeks'
+@description('Enter the past number of days from which to start retrieving alerts. Up to 30 days and 1,000 alerts are supported.')
+@minValue(0)
+@maxValue(30)
+param alertRetrievalStartPoint int = 7
 
-@description('(Optional) Specify the threat detection policies.')
+@description('To retrieve alerts related to specific threat detection policies, enter the relevant policy names. RECOMMENDED: LEAVE THIS BLANK TO RETRIEVE ALL ALERTS (DEFAULT).')
 param threatDetectionPolicies string = ''
 
 @description('Specify the Varonis alert status.')
 param alertStatus string = 'New, Under Investigation'
 
-@description('Specify the alert severity')
+@description('Specify the alert severity.')
 param alertSeverity string = 'Low, Medium, High'
-
-@description('Maximum number of alert retrievals.')
-param maxAlertRetrieval string = '1000'
 
 var functionAppName = 'VaronisSaaS-${uniqueString(resourceGroup().id)}'
 var functionWorkerRuntime = 'dotnet'
@@ -97,11 +96,11 @@ resource functionApp 'Microsoft.Web/sites@2022-03-01' = {
         }
         {
           name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${listKeys(storageAccount.id,'2022-05-01').keys[0].value}'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
         }
         {
           name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${listKeys(storageAccount.id,'2022-05-01').keys[0].value}'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
         }
         {
           name: 'WEBSITE_CONTENTSHARE'
@@ -143,7 +142,7 @@ resource functionApp 'Microsoft.Web/sites@2022-03-01' = {
         }
         {
           name: 'AlertRetrievalStart'
-          value: alertRetrievalStart
+            value: '${alertRetrievalStartPoint}'
         }
         {
           name: 'AlertSeverity'
@@ -156,10 +155,6 @@ resource functionApp 'Microsoft.Web/sites@2022-03-01' = {
         {
           name: 'AlertStatus'
           value: alertStatus
-        }
-        {
-          name: 'MaxAlertRetrieval'
-          value: maxAlertRetrieval
         }
       ]
     }
