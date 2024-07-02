@@ -13,9 +13,9 @@ References:
   - Title: ASIM
     Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) logs ingested in 'WindowsEvent' table to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
-ParserName: vimFileEventMicrosoftWindowsEvents
-EquivalentBuiltInParser: _Im_FileEvent_MicrosoftWindowsEvents
+  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) logs ingested in 'SecurityEvent' table to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
+ParserName: vimFileEventMicrosoftSecurityEvents
+EquivalentBuiltInParser: _Im_FileEvent_MicrosoftSecurityEvents
 ParserParams:
   - Name: starttime
     Type: datetime
@@ -98,35 +98,32 @@ ParserQuery: |
       'S-1-5-18', 'Local System', 'Simple',
       'S-1-0-0', 'Nobody', 'Simple'
   ];
-      WindowsEvent
+      SecurityEvent
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime)
           | where EventID == 4663 
-              and EventData.ObjectType == "File"
-              and EventData.ObjectName !startswith @"\Device\"
+              and ObjectType == "File"
+              and ObjectName !startswith @"\Device\"
+          | where (array_length(srcipaddr_has_any_prefix) == 0) and 
+              ((array_length(targetfilepath_has_any) == 0) or (ObjectName has_any (targetfilepath_has_any))) and 
+              (array_length(srcfilepath_has_any) == 0) and
+              (array_length(hashes_has_any) == 0) and 
+              (array_length(dvchostname_has_any) == 0 or Computer has_any (dvchostname_has_any))
           | project
-              TimeGenerated
-              ,
+              TimeGenerated,
               EventID,
-              AccessMask = tostring(EventData.AccessMask)
-              ,
-              ProcessName = tostring(EventData.ProcessName)
-              ,
-              SubjectUserSid = tostring(EventData.SubjectUserSid)
-              ,
-              AccountType = tostring(EventData.AccountType)
-              ,
-              Computer = tostring(EventData.Computer)
-              ,
-              ObjectName = tostring(EventData.ObjectName)
-              ,
-              ProcessId = tostring(EventData.ProcessId)
-              ,
-              SubjectUserName = tostring(EventData.SubjectUserName)
-              ,
-              SubjectAccount = tostring(EventData.SubjectAccount)
-              ,
-              SubjectLogonId = tostring(EventData.SubjectLogonId)
-              ,
-              HandleId = tostring(EventData.HandleId)
+              AccessMask,
+              ProcessName,
+              SubjectUserSid,
+              AccountType,
+              Computer,
+              ObjectName,
+              ProcessId,
+              SubjectUserName,
+              SubjectAccount,
+              SubjectLogonId,
+              HandleId
       | lookup EventTypeLookup on AccessMask
       | where ((array_length(eventtype_in) == 0 or EventType in~ (eventtype_in)))
       | lookup UserTypeLookup on AccountType
