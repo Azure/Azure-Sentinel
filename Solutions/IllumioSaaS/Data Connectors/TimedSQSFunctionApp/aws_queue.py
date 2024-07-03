@@ -129,6 +129,9 @@ async def main(mytimer: func.TimerRequest):
                         body_obj = json.loads(msg['Body'])
                         file_path, file_size, bucket_name = process_body_obj(body_obj)
 
+                        if file_path is None: # case when sqs message doesnt have any records in it
+                            return 
+
                         if fileToBeFiltered(file_path):
                             logging.warn('[AWSQueue] Skipping file since logs to be consumed is {}, but file is {}'.format(LOGS_TO_CONSUME, file_path))
                             continue                        
