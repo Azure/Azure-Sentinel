@@ -1,7 +1,6 @@
 import logging
 import requests
 from base64 import b64encode
-from .sentinel_connector import SentinelConnector
 import azure.functions as func
 import pandas as pd
 import json
