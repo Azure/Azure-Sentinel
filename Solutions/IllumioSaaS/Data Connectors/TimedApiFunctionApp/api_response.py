@@ -1,30 +1,30 @@
 import logging
 import requests
-import os
 from base64 import b64encode
 from .sentinel_connector import SentinelConnector
 import azure.functions as func
 import pandas as pd
 import json
+from .. import constants
+from ..sentinel_connector import AzureSentinelConnectorAsync
 
-API_KEY = os.environ['API_KEY']
-API_SECRET = os.environ['API_SECRET']
-PCE_FQDN = os.environ['PCE_FQDN']
-PORT = int(os.environ.get('PCE_PORT', 443))
-ORG_ID = os.environ['ORG_ID']
+API_KEY = constants.API_KEY
+API_SECRET = constants.API_SECRET
+PCE_FQDN = constants.PCE_FQDN
+PORT = constants.PORT
+ORG_ID = constants.ORG_ID
 
-AZURE_TENANT_ID = os.environ['AZURE_TENANT_ID']
-AZURE_CLIENT_ID = os.environ['AZURE_CLIENT_ID']
-AZURE_CLIENT_SECRET = os.environ['AZURE_CLIENT_SECRET']
-DCE_ENDPOINT = os.environ['DCE_ENDPOINT']
-DCR_ID = os.environ['DCR_ID']
-LOG_ANALYTICS_URI = os.environ['LOG_ANALYTICS_URI']
-WORKLOADS_API_LOGS_CUSTOM_TABLE = os.environ['WORKLOADS_API_LOGS_CUSTOM_TABLE']
-STREAM_NAME = WORKLOADS_API_LOGS_CUSTOM_TABLE
-WORKSPACE_ID = os.environ['WORKSPACE_ID']
-MAX_RESULTS = os.environ.get('MAX_WORKLOADS', 100000)
+AZURE_TENANT_ID = constants.AZURE_TENANT_ID
+AZURE_CLIENT_ID = constants.AZURE_CLIENT_ID
+AZURE_CLIENT_SECRET = constants.AZURE_CLIENT_SECRET
+DCE_ENDPOINT = constants.DCE_ENDPOINT
+DCR_ID = constants.DCR_ID
+LOG_ANALYTICS_URI = constants.LOG_ANALYTICS_URI
+WORKLOADS_API_LOGS_CUSTOM_TABLE = constants.WORKLOADS_API_LOGS_CUSTOM_TABLE
+WORKSPACE_ID = constants.WORKSPACE_ID
+MAX_WORKLOADS = constants.MAX_WORKLOADS
 
-URL = 'https://{}:{}/api/v2/orgs/{}/workloads/?max_results={}'.format(PCE_FQDN, PORT, ORG_ID, MAX_RESULTS)
+URL = 'https://{}:{}/api/v2/orgs/{}/workloads/?max_results={}'.format(PCE_FQDN, PORT, ORG_ID, MAX_WORKLOADS)
 
 credentials = b64encode(f"{API_KEY}:{API_SECRET}".encode()).decode('utf-8')
 headers = {
@@ -117,5 +117,5 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("[TimedApi] Summary of workload api response that will be stored in log analytics table is {}".format(api_response))
     
     with requests.Session() as session:
-        sentinel = SentinelConnector(session, DCE_ENDPOINT, DCR_ID, STREAM_NAME, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)    
+        sentinel = AzureSentinelConnectorAsync(session, DCE_ENDPOINT, DCR_ID, WORKLOADS_API_LOGS_CUSTOM_TABLE, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, queue_size=1)    
         sentinel.send(api_response)

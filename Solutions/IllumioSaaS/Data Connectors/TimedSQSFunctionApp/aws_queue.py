@@ -5,25 +5,26 @@ import time
 import logging
 import azure.functions as func
 import urllib.parse
-from .azure_storage_queue import AzureStorageQueueHelper
+from ..azure_storage_queue import AzureStorageQueueHelper
 import traceback
 import base64
+from .. import constants
 
-AWS_KEY = os.environ['AWS_KEY']
-AWS_SECRET = os.environ['AWS_SECRET']
-AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
-QUEUE_URL = os.environ['QUEUE_URL']
+AWS_KEY = constants.AWS_KEY
+AWS_SECRET = constants.AWS_SECRET
+AWS_REGION_NAME = constants.AWS_REGION_NAME
+SQS_QUEUE_URL = constants.SQS_QUEUE_URL
 VISIBILITY_TIMEOUT = 1800
-LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
-MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
-FLOW_LOGS_CUSTOM_TABLE = os.environ['FLOW_LOGS_CUSTOM_TABLE']
-AUDIT_LOGS_CUSTOM_TABLE = os.environ['AUDIT_LOGS_CUSTOM_TABLE']
-AZURE_STORAGE_CONNECTION_STRING = os.environ['AzureWebJobsStorage'] 
-MAX_QUEUE_MESSAGES_MAIN_QUEUE = int(os.environ.get('MAX_QUEUE_MESSAGES_MAIN_QUEUE', 80))
+LINE_SEPARATOR = constants.LINE_SEPARATOR
+MAX_SCRIPT_EXEC_TIME_MINUTES = constants.MAX_SCRIPT_EXEC_TIME_MINUTES
+FLOW_LOGS_CUSTOM_TABLE = constants.FLOW_LOGS_CUSTOM_TABLE
+AUDIT_LOGS_CUSTOM_TABLE = constants.AUDIT_LOGS_CUSTOM_TABLE
+AZURE_STORAGE_CONNECTION_STRING = constants.AZURE_STORAGE_CONNECTION_STRING
+MAX_QUEUE_MESSAGES_MAIN_QUEUE = constants.MAX_QUEUE_MESSAGES_MAIN_QUEUE
 MAX_ACCUMULATED_FILE_SIZE = 500*1000 # 500kb since 64kb is limit per sqs message; tried earlier with 10kb
 MAX_QUEUE_SIZE = 64*1000 # 64KB
 QUEUE_LIMIT = 0.5 * MAX_QUEUE_SIZE #32kb
-LOGS_TO_CONSUME = os.environ.get('LogTypes', 'All') # by default, ingest all
+LOGS_TO_CONSUME = constants.LOGS_TO_CONSUME
 sentinel_connectors = {}
 
 # Defining the SQS Client object based on AWS Credentials
@@ -122,7 +123,7 @@ async def main(mytimer: func.TimerRequest):
         while True:
             try:
                 # This should return 1 message from SQS only
-                response = await client.receive_message(QueueUrl=QUEUE_URL, WaitTimeSeconds=2, VisibilityTimeout=VISIBILITY_TIMEOUT)
+                response = await client.receive_message(QueueUrl=SQS_QUEUE_URL, WaitTimeSeconds=2, VisibilityTimeout=VISIBILITY_TIMEOUT)
 
                 if 'Messages' in response: # this is an array
                     for msg in response['Messages']: # typically only one message since client.receive_message retrieves only one msg by default                        
@@ -147,7 +148,7 @@ async def main(mytimer: func.TimerRequest):
                                          })
                         
                         try:
-                            await client.delete_message(QueueUrl=QUEUE_URL, ReceiptHandle=msg['ReceiptHandle'])
+                            await client.delete_message(QueueUrl=SQS_QUEUE_URL, ReceiptHandle=msg['ReceiptHandle'])
                         except Exception as e:
                             logging.error("[AWSQueue] Error during deleting message with MessageId {} from queue. Bucket: {}. Error: {}".format(msg['MessageId'], body_obj['s3']['bucket'], e))                            
                             continue
