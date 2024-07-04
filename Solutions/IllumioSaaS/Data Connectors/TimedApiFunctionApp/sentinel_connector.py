@@ -39,4 +39,7 @@ class SentinelConnector:
         try:
             client.upload(rule_id=dcr_id, stream_name=stream_name, logs=data)
         except HttpResponseError as e:
-            logging.error(f"Upload failed: {e}")    
+            logging.error(f"Upload failed: {e.message}, status code is {e.status_code}")  
+        except Exception as e:
+            # Handle any other exceptions
+            print(f"An unexpected error occurred: {str(e)}")                  
