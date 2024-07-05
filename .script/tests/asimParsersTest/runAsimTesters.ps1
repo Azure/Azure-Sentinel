@@ -1,170 +1,150 @@
-$global:failed = 0
-
-# Subscription ID which contains Log Analytics workspace where the ASim schema and data tests will be conducted
-#$global:subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
-$global:subscriptionId = "419581d6-4853-49bd-83b6-d94bb8a77887"
-
-# Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-#$global:workspaceId = "46bec743-35fa-4608-b7e2-2aa3c38a97c2"
-$global:workspaceId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
-
-Class Parser {
-    [string] $Name
-    [string] $OriginalQuery
-    [string] $Schema
-    [System.Collections.Generic.List`1[System.Object]] $Parameters
-
-    Parser([string] $Name, [string] $OriginalQuery, [string] $Schema, [System.Collections.Generic.List`1[System.Object]] $Parameters) {
-        $this.Name = $Name
-        $this.OriginalQuery = $OriginalQuery
-        $this.Schema = $Schema
-        $this.Parameters = $Parameters
-    }
-}
-
-function run {
-    $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
-    # Get modified ASIM Parser files along with their status
-    $modifiedFilesStatus = Invoke-Expression "git diff --name-status origin/master -- $($PSScriptRoot)/../../../Parsers/"
-    # Split the output into lines
-    $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
-    # Initialize an empty array to store the file names and their status
-    $global:modifiedFiles = @()
-    # Iterate over the lines
-    foreach ($line in $modifiedFilesStatusLines) {
-        # Split the line into status and file name
-        $status, $file = $line -split "\t", 2
-        # Check if the file is a YAML file
-        if ($file -like "*.yaml") {
-            # Add the file name and status to the array
-            $global:modifiedFiles += New-Object PSObject -Property @{
-                Name = $file
-                Status = switch ($status) {
-                    "A" { "Added" }
-                    "M" { "Modified" }
-                    "D" { "Deleted" }
-                    default { "Unknown" }
-                }
-            }
-        }
-    }
-    # Print the file names and their status
-    Write-Host "The following ASIM parser files have been updated. 'Schema' and 'Data' tests will be performed for each of these parsers:"
-    foreach ($file in $modifiedFiles) {
-        Write-Host ("{0} ({1})" -f $file.Name, $file.Status) -ForegroundColor Green
-    }
-    Write-Host "***************************************************"
-
-    # Call testSchema function for each modified parser file
-    $modifiedFiles | ForEach-Object { testSchema $_.Name }
-}
-
-function testSchema([string] $ParserFile) {
-    $parsersAsObject = & "$($PSScriptRoot)/convertYamlToObject.ps1" -Path "$ParserFile"
-    $functionName = "$($parsersAsObject.EquivalentBuiltInParser)V$($parsersAsObject.Parser.Version.Replace('.', ''))"
-    # Iterate over the modified files
-    for ($i = 0; $i -lt $modifiedFiles.Count; $i++) {
-        # Check if the current file is the parser file
-        if ($modifiedFiles[$i].Name -eq $parserfile) {
-            # Replace 'Name' with the function name
-            $modifiedFiles[$i].Name = $functionName
-        }
-    }
-    $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
-    if ($parsersAsObject.Parsers) {
-        Write-Host "***************************************************"
-        Write-Host "The parser '$functionName' is a main parser, ignoring it" -ForegroundColor Yellow
-        Write-Host "***************************************************"
-    } else {
-        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
-    }
-}
-
-function testParser([Parser] $parser) {
-    Write-Host "***************************************************"
-    Write-Host "Testing parser - '$($parser.Name)'" -ForegroundColor Green
-    $letStatementName = "generated$($parser.Name)"
-    $parserAsletStatement = "let $letStatementName = ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
+# Each pull request that updates ASIM parsers triggers the script.
+# The script runs ASIM Schema and Data testers on the "eco-connector-test" workspace.
+name: Run ASIM tests on "ASIM-SchemaDataTester-GithubShared" workspace
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled]
+    branches:
+      - master
+    paths:
+    - 'Parsers/ASimDns/Parsers/**'
+    - 'Parsers/ASimNetworkSession/Parsers/**'
+    - 'Parsers/ASimWebSession/Parsers/**'
+    - 'Parsers/ASimProcessEvent/Parsers/**'
+    - 'Parsers/ASimAuditEvent/Parsers/**'
+    - 'Parsers/ASimAuthentication/Parsers/**'
+    - 'Parsers/ASimFileEvent/Parsers/**'
+    - 'Parsers/ASimRegistryEvent/Parsers/**'
+    - 'Parsers/ASimUserManagement/Parsers/**'
+    - 'Parsers/ASimDhcpEvent/Parsers/**'
     
-    Write-Host "Running ASIM 'Schema' tests for '$($parser.Name)' parser"
-    Write-Host "***************************************************"
-    $schemaTest = "$parserAsletStatement`r`n$letStatementName | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
-    Write-Host "Schema name is: $($parser.Schema)"
-    invokeAsimTester $schemaTest $parser.Name "schema"
-    
-    Write-Host "***************************************************"
-    Write-Host "Running ASIM 'Data' tests for '$($parser.Name)' parser"
-    $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
-    invokeAsimTester $dataTest $parser.Name "data"
-    Write-Host "***************************************************"
-}
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
-function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
-    $query = $test
-    $TestResults = ""
-    try {
-        $rawResults = Invoke-AzOperationalInsightsQuery -WorkspaceId $global:workspaceId -Query $query -ErrorAction Stop
-        if ($rawResults.Results) {
-            $resultsArray = [System.Linq.Enumerable]::ToArray($rawResults.Results)
-            if ($resultsArray.Count) {
-                # Iterate over the modified files
-                foreach ($file in $modifiedFiles) {
-                    # Check if the file name matches and the status is 'Added'
-                    if ($file.Name -eq $name -and $file.Status -eq 'Added') {
-                        # Iterate over the test results
-                        for ($i = 0; $i -lt $resultsArray.Count; $i++) {
-                            # Check if the test result contains the specified strings
-                            if (($resultsArray[$i].Result -like '*Error: 1 invalid value(s)*') -and ($resultsArray[$i].Result -like '*EventProduct*' -or $resultsArray[$i].Result -like '*EventVendor*')) {
-                                # Replace 'Error' with 'Warning'
-                                $resultsArray[$i].Result = $resultsArray[$i].Result -replace 'Error', 'Warning'
-                            }
-                        }
-                    }
-                }
-                $resultsArray | ForEach-Object { $TestResults += "$($_.Result)`r`n" }
-                Write-Host $TestResults
-                $Errorcount = ($resultsArray | Where-Object { $_.Result -like "(0) Error:*" }).Count
-                if ($Errorcount -gt 0) {
-                    $FinalMessage = "`r`n'$name' '$kind' - test failed with $Errorcount errors:`r`n"
-                    Write-Host $FinalMessage -ForegroundColor Red
-                    $global:failed = 1
-                    throw "Test failed with errors. Please fix the errors and try again."
-                } else {
-                    $FinalMessage = "'$name' '$kind' - test completed successfully with no errors."
-                    Write-Host $FinalMessage -ForegroundColor Green
-                }
-            } else {
-                Write-Host "$name $kind test done successfully. No records found"
-            }
-        }
-    } catch {
-        Write-Host "  -- $_"
-        Write-Host "     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
-        $global:failed = 1
-        throw $_
-    }
-}
+permissions:
+  id-token: write
+  contents: read
 
-function getParameters([System.Collections.Generic.List`1[System.Object]] $parserParams) {
-    $paramsArray = @()
-    if ($parserParams) {
-        $parserParams | ForEach-Object {
-            if ($_.Type -eq "string") {
-                $_.Default = "'$($_.Default)'"
-            }
-            $paramsArray += "$($_.Name):$($_.Type)= $($_.Default)"
-        }
-        return $paramsArray -join ','
-    }
-    return ""
-}
+jobs: 
+  Run-ASim-Schema-Data-tests:
+    name: Run ASim Schema and Data tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          persist-credentials: false
+          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      
+      - name: Login to Azure Public Cloud with AzPowershell
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          enable-AzPSSession: true
+          allow-no-subscriptions: true
 
-run
+      - name: Setup git config
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "<>"
 
-if ($global:failed -ne 0) {
-    Write-Host "Script failed with errors." -ForegroundColor Red
-    exit 1
-} else {
-    Write-Host "Script completed successfully." -ForegroundColor Green
-    exit 0
-}
+      - name: Merge master into pull request branch
+        run: |
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
+      - name: Run ASIM testers
+        uses: azure/powershell@v2
+        with:
+          inlineScript: |
+            & ".script/tests/asimParsersTest/runAsimTesters.ps1"
+          azPSVersion: "latest"
+          errorActionPreference: continue
+          failOnStandardError: false
+  Run-ASim-TemplateValidation:
+    name: Run ASim Template Validation tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
+        with:
+            ref: ${{github.event.pull_request.head.ref}}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
+            persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+            fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      - name: Setup git config
+        run: |
+              git config --local user.name "github-actions[bot]"
+              git config --local user.email "<>"
+      - name: Merge master into pull request branch
+        run: |
+              git merge origin/master
+              Conflicts=$(git ls-files -u | wc -l)
+              if [ "$Conflicts" -gt 0 ] ; then
+                echo "There is a merge conflict. Aborting"
+                git merge --abort
+                exit 1
+              fi
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+              python -m pip install --upgrade pip
+              pip install requests
+              pip install PyYAML
+              pip install tabulate
+      - name: Run Python script
+        run: |
+              python .script/tests/asimParsersTest/VerifyASimParserTemplate.py
+  Run-ASim-Parser-Filtering-Tests:
+    name: Run ASim Parser Filtering tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          fetch-depth: 0 # otherwise, there would be errors pushing refs to the destination repository.
+      - name: Setup git config
+        run: |
+              git config --local user.name "github-actions[bot]"
+              git config --local user.email "<>"
+      - name: Merge master into pull request branch
+        run: |
+          git merge origin/master
+          Conflicts=$(git ls-files -u | wc -l)
+          if [ "$Conflicts" -gt 0 ] ; then
+            echo "There is a merge conflict. Aborting"
+            git merge --abort
+            exit 1
+          fi
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+              python -m pip install --upgrade pip
+              pip install PyYAML
+              pip install azure-identity
+              pip install azure-monitor-query
+      - name: Login to Azure Public Cloud
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Run Python script
+        run: |
+          python .script/tests/asimParsersTest/ASimFilteringTest.py
