@@ -1,5 +1,5 @@
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId = "02dd2616-a0e2-4ca5-a303-bd69e22e0c12"
+$global:workspaceId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
 
 # ANSI escape code for green text
 $green = "`e[32m"
