@@ -279,7 +279,7 @@ def main():
                 else:
                     print(f"::error::Tests failed for {parser_file_path}")
                     sys.stdout.flush()  # Explicitly flush stdout
-                    sys.exit(0) # Change to 1 if you want github workflow to fail when tests are not successful.
+                    #sys.exit(1) # uncomment this line to fail workflow when tests are not successful.
             except subprocess.CalledProcessError as e:
                 print(f"::error::An error occurred while reading parser file: {e}")
                 sys.stdout.flush()  # Explicitly flush stdout
