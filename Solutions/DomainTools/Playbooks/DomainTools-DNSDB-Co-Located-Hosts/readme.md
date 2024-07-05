@@ -1,7 +1,7 @@
 ![DomainTools DNSDB](images/logo.png)
 
 # DomainTools DNSDB Co-Located Hosts 
-This playbook uses the Farsight DNSDB connector to automatically enrich Domain's found in the Sentinel incidents. This use case describes the desire to easily identify Hosts that are co-located (based on Address) based on the input of a domain and a given point in time. The response would be a set of domains that also shared the same IP address as the originating domain name at the given point in time.
+This playbook uses the Farsight DNSDB connector to automatically enrich Domain's found in the Microsoft Sentinel incidents. This use case describes the desire to easily identify Hosts that are co-located (based on Address) based on the input of a domain and a given point in time. The response would be a set of domains that also shared the same IP address as the originating domain name at the given point in time.
 
 ## Table of Contents
 

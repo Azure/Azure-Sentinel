@@ -1,7 +1,7 @@
 ![DomainTools DNSDB](images/logo.png)
 
 # DomainTools DNSDB Historical Addresses
-This playbook uses the Farsight DNSDB connector to automatically enrich IP Addresses found in the Sentinel incidents. This use case describes the desire to identify all Addresses used as DNS A records for a given Host based on a time window from a starting and stopping point in time. 
+This playbook uses the Farsight DNSDB connector to automatically enrich IP Addresses found in the Microsoft Sentinel incidents. This use case describes the desire to identify all Addresses used as DNS A records for a given Host based on a time window from a starting and stopping point in time. 
 
 ## Table of Contents
 

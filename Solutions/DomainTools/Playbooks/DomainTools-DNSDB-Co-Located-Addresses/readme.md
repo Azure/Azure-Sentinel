@@ -1,7 +1,7 @@
 ![DomainTools DNSDB](images/logo.png)
 
 # DomainTools DNSDB Co-Located Addresses 
-This playbook uses the Farsight DNSDB connector to automatically enrich IP Addresses found in the Sentinel incidents. This lookup will identify all the IPs that are co-located (based on Domain) based on the Offense Source value. This would be set of IPs that also shared the same Domain as the originating IP address.
+This playbook uses the Farsight DNSDB connector to automatically enrich IP Addresses found in the Microsoft Sentinel incidents. This lookup will identify all the IPs that are co-located (based on Domain) based on the Offense Source value. This would be set of IPs that also shared the same Domain as the originating IP address.
 
 ## Table of Contents
 
