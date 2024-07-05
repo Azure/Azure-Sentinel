@@ -1,10 +1,5 @@
-$global:failed = 0
-
-# Subscription ID which contains Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
-
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
+$global:workspaceId = "02dd2616-a0e2-4ca5-a303-bd69e22e0c12"
 
 # ANSI escape code for green text
 $green = "`e[32m"
@@ -12,6 +7,9 @@ $green = "`e[32m"
 $yellow = "`e[33m"
 # ANSI escape code to reset color
 $reset = "`e[0m"
+
+# Parser exclusion file path
+$ParserExclusionsFilePath ="$($PSScriptRoot)/ExclusionListForASimTests.csv"
 
 Class Parser {
     [string] $Name
@@ -28,7 +26,6 @@ Class Parser {
 }
 
 function run {
-    $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
     # Get modified ASIM Parser files along with their status
     $modifiedFilesStatus = Invoke-Expression "git diff --name-status origin/master -- $($PSScriptRoot)/../../../Parsers/"
     # Split the output into lines
@@ -78,7 +75,7 @@ function testSchema([string] $ParserFile) {
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
     if ($parsersAsObject.Parsers) {
         Write-Host "***************************************************"
-        Write-Host "${yellow}The parser '$functionName' is a main parser, ignoring it${reset}"
+        Write-Host "${yellow}The parser '$functionName' is a union parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
@@ -91,14 +88,14 @@ function testParser([Parser] $parser) {
     $letStatementName = "generated$($parser.Name)"
     $parserAsletStatement = "let $letStatementName = ($(getParameters($parser.Parameters))) { $($parser.OriginalQuery) };"
     
-    Write-Host "${yellow}Running ASIM 'Schema' tests for '$($parser.Name)' parser${reset}"
+    Write-Host "${yellow}Running 'Schema' test for '$($parser.Name)' parser${reset}"
     Write-Host "***************************************************"
     $schemaTest = "$parserAsletStatement`r`n$letStatementName | getschema | invoke ASimSchemaTester('$($parser.Schema)')"
-    Write-Host "${yellow}Schema name is: $($parser.Schema)${reset}"
+    Write-Host "${yellow}Schema name : $($parser.Schema)${reset}"
     invokeAsimTester $schemaTest $parser.Name "schema"
     
     Write-Host "***************************************************"
-    Write-Host "${yellow}Running ASIM 'Data' tests for '$($parser.Name)' parser${reset}"
+    Write-Host "${yellow}Running 'Data' tests for '$($parser.Name)' parser${reset}"
     $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
@@ -134,12 +131,11 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 {
                     $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
                     Write-Host "::error::$FinalMessage"
-                    Write-Host "::warning::Ignoring the errors for the parser '$name' as it is part of the exclusions list."
+                    Write-Host "::warning::The parser '$name' is listed in the parser exclusions file. Therefore, this workflow run will not fail because of it. To allow this parser to cause the workflow to fail, please remove its name from the exclusions list file located at: '$ParserExclusionsFilePath'"
                 }
                 elseif ($Errorcount -gt 0) {
                     $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
                     Write-Host "::error:: $FinalMessage"
-                    # $global:failed = 1 # Commented out to allow the script to continue running
                     # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
@@ -152,8 +148,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
     } catch {
         Write-Host "::error::  -- $_"
         Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
-        # $global:failed = 1 # Commented out to allow the script to continue running
-        # throw $_
+        #throw $_ # Commented out to allow the script to continue running
     }
 }
 
@@ -172,8 +167,7 @@ function getParameters([System.Collections.Generic.List`1[System.Object]] $parse
 }
 
 function IgnoreValidationForASIMParsers() {
-    $csvPath = "$($PSScriptRoot)/ExclusionListForASimTests.csv"
-    $csvContent = Import-Csv -Path $csvPath
+    $csvContent = Import-Csv -Path $ParserExclusionsFilePath
     $parserNames = @()
 
     foreach ($row in $csvContent) {
@@ -185,11 +179,3 @@ function IgnoreValidationForASIMParsers() {
 
 # Call the run function. This is the entry point of the script
 run
-
-if ($global:failed -ne 0) {
-    Write-Host "::error::Script failed with errors."
-    exit 0 # Exit with error code 1 if you want to fail the build
-} else {
-    Write-Host "${green}Script completed successfully.${reset}"
-    exit 0
-}
