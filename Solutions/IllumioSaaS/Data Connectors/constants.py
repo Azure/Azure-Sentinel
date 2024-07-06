@@ -8,7 +8,7 @@ SQS_QUEUE_URL = os.environ['SQS_QUEUE_URL']
 VISIBILITY_TIMEOUT = 1800
 LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+') # used in aws_queue and queue trigger.py
 MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
-SQS_FILES_READ_LIMIT = int(os.environ('SQS_FILES_READ_LIMIT', 200))
+SQS_FILES_READ_LIMIT = int(os.environ.get('SQS_FILES_READ_LIMIT', 200))
 
 #PCE config
 API_KEY = os.environ['API_KEY']
