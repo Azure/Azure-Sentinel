@@ -2,7 +2,7 @@ import logging
 import requests
 from base64 import b64encode
 import azure.functions as func
-import pandas as pd
+import polars as pl
 import json
 from .. import constants
 from ..sentinel_connector import AzureSentinelConnectorAsync
@@ -33,7 +33,9 @@ headers = {
 
 def getVensByVersion(data):
     try:
-        return data[data['managed'] == True].groupby('ven.version').size().to_dict()
+        filtered_data = data.filter(pl.col('managed') == True)
+        grouped_data = filtered_data.group_by('ven.version').agg(pl.len()).rename({'len': 'size'})
+        return dict(zip(grouped_data['ven.version'], grouped_data['size']))
     except Exception as e:
         # You can log the exception here if needed
         logging.error("getVensByVersion error: {e}")
@@ -41,42 +43,54 @@ def getVensByVersion(data):
     
 def getVensByManaged(data):
     try:    
-        return data.groupby('managed').size().to_dict()  
+        grouped_data = data.group_by('managed').agg(pl.len()).rename({'len': 'size'})
+        # Convert to dictionary
+        return dict(zip(grouped_data['managed'], grouped_data['size']))
     except Exception as e:
         logging.error("getVensByManaged error: {e}")
         return {}          
 
 def getVensByType(data):
     try:        
-        return data[data['managed']==True].groupby('ven.ven_type').size().to_dict()
+        filtered_data = data.filter(pl.col('managed') == True)
+        results = filtered_data.group_by('ven.ven_type').agg(pl.len()).rename({'len': 'size'})
+        return dict(zip(results['ven.ven_type'], results['size']))    
     except Exception as e:
         logging.error("getVensByType error: {e}")
         return {}                  
 
 def getVensByOS(data):
     try:        
-        return data[data['managed']==True].groupby('os_id').size().to_dict()
+        filtered_data = data.filter(pl.col('managed') == True)
+        results = filtered_data.group_by('os_id').agg(pl.len()).rename({'len': 'size'})
+        return dict(zip(results['os_id'], results['size']))        
     except Exception as e:
         logging.error("getVensByOS error: {e}")
         return {}                          
 
 def getVensByEnforcementMode(data):
     try:
-        return data[data['managed']==True].groupby('enforcement_mode').size().to_dict()
+        filtered_data = data.filter(pl.col('managed') == True)
+        results = filtered_data.group_by('enforcement_mode').agg(pl.len()).rename({'len': 'size'})
+        return dict(zip(results['enforcement_mode'], results['size']))     
     except Exception as e:
         logging.error("getVensByEnforcementMode error: {e}")
         return {}                                  
 
 def getVensByStatus(data):
     try:    
-        return data[data['managed']==True].groupby('ven.status').size().to_dict()
+        filtered_data = data.filter(pl.col('managed') == True)
+        results = filtered_data.group_by('ven.status').agg(pl.len()).rename({'len': 'size'})
+        return dict(zip(results['ven.status'], results['size']))         
     except Exception as e:
         logging.error("getVensByStatus error: {e}")
         return {}                                          
 
 def getVensBySyncState(data):
     try:    
-        return data[data['managed']==True].groupby('agent.status.security_policy_sync_state').size().to_dict()
+        filtered_data = data.filter(pl.col('managed') == True)
+        results = filtered_data.group_by('agent.status.security_policy_sync_state').agg(pl.len()).rename({'len': 'size'})
+        return dict(zip(results['agent.status.security_policy_sync_state'], results['size']))         
     except Exception as e:
         logging.error("getVensBySyncState error: {e}")
         return {}                                                  
@@ -93,7 +107,7 @@ def main(mytimer: func.TimerRequest) -> None:
         return
         
     response = json.loads(response.text)
-    df = pd.json_normalize(response)
+    df = pl.json_normalize(response)
     
     vens_by_version = getVensByVersion(df)
     vens_by_managed = getVensByManaged(df)
@@ -109,10 +123,9 @@ def main(mytimer: func.TimerRequest) -> None:
                          "vens_by_os": vens_by_os,
                          "vens_by_enforcement_mode": vens_by_enf_mode,
                          "vens_by_status": vens_by_status,                        
-                         "vens_by_sync_state": vens_by_sync_state,
-                         "pce_fqdn": PCE_FQDN
+                         "vens_by_sync_state": vens_by_sync_state
                          })
-    
+       
     logging.info("[TimedApi] Summary of workload api response that will be stored in log analytics table is {}".format(api_response))
     
     with requests.Session() as session:

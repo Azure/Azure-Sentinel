@@ -73,6 +73,7 @@ async def main(msg: func.QueueMessage ):
     try:            
         total_events = 0
         accumulated_file_size = 0
+        sqs_ids_seen_so_far = 0
         # stores the connection objects that can be reused when uploading events to specific tables
         sentinel_connectors = {}
         # initialize sentinel_connectors
@@ -101,6 +102,7 @@ async def main(msg: func.QueueMessage ):
             if fileToBeFiltered(link):
                 continue
             
+            sqs_ids_seen_so_far += 1
             stream_name = AUDIT_LOGS_CUSTOM_TABLE if 'auditable' in link else FLOW_LOGS_CUSTOM_TABLE                        
 
             file_stats = {"Trigger":"Queue", "stream_name":stream_name, "Type":"file_stats", "link": link, "bucket": bucket, "sqs_message_id": messageId, "file_size_bytes": file_size}        
@@ -117,7 +119,7 @@ async def main(msg: func.QueueMessage ):
         # ensure data is flushed at the end in case queue limit of 4000 is not reached
         for connector in sentinel_connectors.keys():
             await sentinel_connectors[connector].flush()
-        event_stats = {"Trigger":"Queue", "Type":"event_stats", "total_events": total_events, "file_count": len(body), "aggregated_file_size": accumulated_file_size}
+        event_stats = {"Trigger":"Queue", "Type":"event_stats", "total_events": total_events, "sqs_ids_seen_so_far": sqs_ids_seen_so_far, "aggregated_file_size": accumulated_file_size}
         logging.info(json.dumps(event_stats))
 
 
