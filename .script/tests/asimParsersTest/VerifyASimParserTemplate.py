@@ -210,8 +210,10 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
                 if schema == info.get('SchemaName'):
                     if title == titleSchemaInfo and link == linkSchemaInfo:
                         results.append((title, 'Schema specific reference link matching', 'Pass'))
-                    elif title == 'ASIM' and link == 'https:/aka.ms/AboutASIM':
+                    elif title == 'ASIM' and link == 'https://aka.ms/AboutASIM':
                         results.append((title, 'ASim doc reference link matching', 'Pass'))
+                    elif title != 'ASIM' and title != titleSchemaInfo :
+                        results.append(title, 'Product specific reference title exist. Please access URL manually to confirm it is a valid link', 'Pass')
                     else:
                         results.append((f'{RED}' + str(title) + f'{RESET}', f'{RED}Reference title or link not matching. Please use title as "{titleSchemaInfo}" and link as "{linkSchemaInfo}"{RESET}', f'{RED}Fail{RESET}'))
     else:
