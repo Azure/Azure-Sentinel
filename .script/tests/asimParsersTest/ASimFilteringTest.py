@@ -16,9 +16,7 @@ import csv
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
 MAX_FILTERING_PARAMETERS = 2
 # Workspace ID for the Log Analytics workspace where the ASim filtering tests will be performed.
-#WORKSPACE_ID = "02dd2616-a0e2-4ca5-a303-bd69e22e0c12"
-# CyberSOC
-WORKSPACE_ID = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
+WORKSPACE_ID = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
 # Timespan for the parser query
 TIME_SPAN_IN_DAYS = 7
 
