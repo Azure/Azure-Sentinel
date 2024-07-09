@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for AWS sign-in logs
-  Version: '0.2'
-  LastUpdated: Feb 26, 2023
+  Version: '0.2.1'
+  LastUpdated: 21 Jul 2023
 Product:
   Name: AWS
 Normalization:
@@ -17,6 +17,7 @@ References:
 Description: |
   This ASIM parser supports normalizing Amazon Web Service sign in logs, stored in the  AWSCloudTrail table, to the ASIM Authentication schema.
 ParserName: ASimAuthenticationAWSCloudTrail
+EquivalentBuiltInParser: _ASim_Authentication_AWSCloudTrail
 ParserParams:
   - Name: disabled
     Type: bool
@@ -41,11 +42,11 @@ ParserQuery: |
   ];
   let ASIM_GetUsernameType = (username:string) { 
       case ( 
-          username contains "@" , "UPN"
-          , username contains "\\", "Windows"
-          , (username has "CN=" or username has "OU=" or username has "DC="), "DN"
-          , isempty(username), ""
-          , "Simple"
+          username contains "@" , "UPN",
+          username contains "\\", "Windows",
+          (username has "CN=" or username has "OU=" or username has "DC="), "DN",
+          isempty(username), "",
+          "Simple"
       )
   };
   let parser=(disabled:bool=false){
@@ -53,57 +54,59 @@ ParserQuery: |
     | where not(disabled)
     | where EventName == 'ConsoleLogin'
     | project-rename
-        EventOriginalUid            = AwsEventId,
         EventOriginalResultDetails  = ErrorMessage,
-        TargetOriginalUserType      = UserIdentityType,
+        EventOriginalUid            = AwsEventId,
         EventProductVersion         = EventVersion,
+        EventUid                    = _ItemId,
+        HttpUserAgent               = UserAgent,
         SrcIpAddr                   = SourceIpAddress,
         TargeCloudRegion            = AWSRegion,
-        TargetUserScopeId           = UserIdentityAccountId,
-        HttpUserAgent               = UserAgent,
-        EventUid                    = _ItemId
+        TargetOriginalUserType      = UserIdentityType,
+        TargetUserScopeId           = UserIdentityAccountId
     | extend
-        EventVendor                 = 'AWS',
         Dvc                         = 'AWS',
-        EventProduct                = 'CloudTrail',
         EventCount                  = int(1),
-        EventSchemaVersion          = '0.1.3',
-        EventSchema                 = 'Authentication',
-        EventStartTime              = TimeGenerated,
         EventEndTime                = TimeGenerated,
-        EventType                   = 'Logon',
-        EventSubType                = 'Interactive',
-        TargetUserIdType            = 'AWSId',
-        LogonProtocol               = 'HTTPS',
-        TargetUserId                = tostring(split(UserIdentityPrincipalid, ':')[0]),
-        LogonMethod                 = iff (AdditionalEventData has '"MFAUsed": "Yes"', 'MFA',''),
-        SrcDeviceType               = iff (AdditionalEventData has '"MobileVersion":"Yes"', 'Mobile Device', 'Computer'),
+        EventProduct                = 'CloudTrail',
         EventResult                 = iff (ResponseElements has 'Success', 'Success', 'Failure'),
+        EventSchema                 = 'Authentication',
+        EventSchemaVersion          = '0.1.3',
+        EventStartTime              = TimeGenerated,
+        EventSubType                = 'Interactive',
+        EventType                   = 'Logon',
+        EventVendor                 = 'AWS',
+        LogonMethod                 = iff (AdditionalEventData has '"MFAUsed": "Yes"', 'MFA',''),
+        LogonProtocol               = 'HTTPS',
+        SrcDeviceType               = iff (AdditionalEventData has '"MobileVersion":"Yes"', 'Mobile Device', 'Computer'),
+        TargetUserId                = tostring(split(UserIdentityPrincipalid, ':')[0]),
+        TargetUserIdType            = 'AWSId',
         TargetUsername              = case (
-                UserIdentityUserName   == "HIDDEN_DUE_TO_SECURITY_REASONS", "",
-                TargetOriginalUserType == 'IAMUser'                       , UserIdentityUserName,
-                TargetOriginalUserType == 'Root'                          , 'root',
-                TargetOriginalUserType == 'AssumedRole'                   , tostring(split(UserIdentityArn, '/')[-1]), // -- This is the AssuderRole session name, which typically represents a user.           
-                UserIdentityUserName
-            )
+              UserIdentityUserName   == "HIDDEN_DUE_TO_SECURITY_REASONS", "",
+              TargetOriginalUserType == 'IAMUser'                       , UserIdentityUserName,
+              TargetOriginalUserType == 'Root'                          , 'root',
+              TargetOriginalUserType == 'AssumedRole'                   , tostring(split(UserIdentityArn, '/')[-1]), // -- This is the AssuderRole session name, which typically represents a user.           
+              UserIdentityUserName
+          )
     | extend
         TargetUsernameType          = ASIM_GetUsernameType (TargetUsername)
     | parse AdditionalEventData with * '"LoginTo":"' TargetUrl:string '"' *
     | lookup eventresultdetails_lookup on EventOriginalResultDetails
     | lookup usertype_lookup on TargetOriginalUserType 
     | extend 
+        EventSeverity = iff(EventResult == 'Failure', 'Low','Informational'),
         LogonTarget=tostring(split(TargetUrl,'?')[0]),
-        EventSeverity = iff(EventResult == 'Failure', 'Low','Informational')
-      // -- Specific idetifier aliases
-      | extend 
-          TargetUserAWSId = TargetUserId
+      // -- Specific identifier aliases
+        TargetUserAWSId = TargetUserId
       // -- Aliases
       | extend
-          User   = TargetUsername,
-          Dvc    = EventVendor,
           Dst    = LogonTarget,
+          Dvc    = EventVendor,
           IpAddr = SrcIpAddr,
-          Src    = SrcIpAddr
+          Src    = SrcIpAddr,
+          User   = TargetUsername
       | project-away EventSource, EventTypeName, EventName, ResponseElements, AdditionalEventData, Session*, Category, ErrorCode, Aws*, ManagementEvent, OperationName, ReadOnly, RequestParameters, Resources, ServiceEventDetails, SharedEventId, SourceSystem, UserIdentity*, VpcEndpointId, APIVersion, RecipientAccountId, TenantId, EC2RoleDelivery
       };
-      parser (disabled=disabled) 
+      parser  
+      (
+          disabled = disabled
+      )

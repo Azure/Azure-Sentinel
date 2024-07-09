@@ -1,7 +1,7 @@
 # SNOW-CreateAndUpdateIncident
 author: Benjamin Kovacevic
 
-This playbook will create or update incident in SNOW. When incident is created, playbook will run and create incident in SNOW. When incident is updated, playbook will run and add update to comment section. When incident is closed, playbook will run and close incident in SNOW.
+This playbook will create or update incident in ServiceNow (SNOW). When incident is created, playbook will run and create incident in SNOW. When incident is updated, playbook will run and add update to comment section. When incident is closed, playbook will run and close incident in SNOW.
 
 # Prerequisites
 
@@ -22,8 +22,10 @@ We will need following data to make Jira connector:<br>
 3. Add playbook as an action to the automation rule, ex.:
 - Trigger = When incident is updated;  
 - Condition = Staus > Changed To > Closed;.<br>
-**Automation rule example**<br>
+**Automation Rule Example**<br>
 ![Automation Rule Example](./images/AutomationRuleExampleDark.jpg)
+**Automation Rule Condition Example**<br>
+![Automation Rule Condition Example](./images/AutomationRuleExample2Dark.jpg)
 
 # Screenshots
 

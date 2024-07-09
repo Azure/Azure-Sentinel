@@ -1,0 +1,69 @@
+id: 8db2b374-0337-49bd-94c9-cfbf8e5d83ad
+name: Infoblox - Data Exfiltration Attack
+description: |
+  'Data exfiltration attack detected by Infoblox Threat Insight. Customize query count, scheduling, responses and more. This rule depends on a parser based on a Kusto Function to work as expected called [**InfobloxCDC**](https://aka.ms/sentinel-InfobloxCloudDataConnector-parser).'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: InfobloxCloudDataConnector
+    dataTypes: 
+      - CommonSecurityLog (InfobloxCDC)
+  - connectorId: InfobloxCloudDataConnectorAma
+    dataTypes: 
+      - CommonSecurityLog (InfobloxCDC)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1498
+  - T1565
+query: |
+  let threshold = 1;
+  InfobloxCDC
+  | where DeviceEventClassID has_cs "RPZ"
+  | where InfobloxB1FeedName == "Threat Insight - Data Exfiltration"
+  | summarize count() by SourceIP
+  | where count_ > threshold
+  | join kind=innerunique (InfobloxCDC
+    | where DeviceEventClassID has_cs "RPZ"
+    | where InfobloxB1FeedName == "Threat Insight - Data Exfiltration"
+    ) on SourceIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceName
+      - identifier: OSVersion
+        columnName: InfobloxB1SrcOSVersion
+      - identifier: FullName
+        columnName: SourceUserName
+  - entityType: Malware
+    fieldMappings:
+      - identifier: Name
+        columnName: InfobloxB1FeedName
+      - identifier: Category
+        columnName: InfobloxB1FeedName
+customDetails:
+  SourceMACAddress: SourceMACAddress
+  InfobloxB1FeedName: InfobloxB1FeedName
+  InfobloxB1Network: InfobloxB1Network
+  InfobloxB1Action: InfobloxB1PolicyAction
+  InfobloxB1PolicyName: InfobloxB1PolicyName
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 7d
+    matchingMethod: AllEntities
+version: 1.0.1
+kind: Scheduled

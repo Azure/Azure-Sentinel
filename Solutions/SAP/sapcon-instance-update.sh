@@ -25,6 +25,8 @@ STARTPARAMS="$@"
 dockerimage="mcr.microsoft.com/azure-sentinel/solutions/sapcon"
 sdkfileloc="/sapcon-app/inst/"
 CONTAINERNAMES=()
+test_logs="NO LOGS TO DISPLAY"
+
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -49,13 +51,30 @@ while [[ $# -gt 0 ]]; do
 		CONTAINERNAMES+=("$2")
 		shift 2
 		;;
+	--appid)
+		APPID="$2"
+		shift 2
+		;;
+	--appsecret)
+		APPSECRET="$2"
+		shift 2
+		;;
 	--devmode)
 		DEVMODE=1
 		shift 1
 		;;
+	--tag-version)
+		TAG_VERSION="$2"
+		FORCE=1
+		shift 2
+		;;	
 	--dev-acr)
 		DEVURL="$2"
 		shift 2
+		;;
+    --hostnetwork)
+		HOSTNETWORK=1
+		shift 1
 		;;
 	--dev-acr-login)
 		DEVACRLOGIN="$2"
@@ -155,6 +174,14 @@ while IFS= read -r contname; do
 		else
 			tagver=$tag
 		fi
+		# in case the TAG_VERSION is defined we are updating the tag specific version
+		if [ $TAG_VERSION ]; then
+			if [ $PREVIEW ]; then
+				tagver=${tagver/latest/$TAG_VERSION}
+			else
+				tagver=${tagver/latest/$TAG_VERSION-latest}
+			fi
+		fi
 	fi
 
 	sysfileloc=$(docker inspect "$contname" --format '{{ .Mounts }}'| awk 'NR==1 {print $2}')
@@ -201,7 +228,14 @@ while IFS= read -r contname; do
 		fi
 		read -r -a containervariables <<<$(docker inspect "$contname" --format '{{.Config.Env}}' | tr -d '[' | tr -d ']' | tr ' ' ' ')
 		envstring=""
+		cmdparams=""
 		for variable in "${containervariables[@]}"; do
+			# Check if we set the APPID and APPSECRET, if we do, we need to update the container with the new values
+			if [[ -n $APPID && -n $APPSECRET ]]; then
+				[[ $variable == AZURE_CLIENT_ID=* ]] && variable="AZURE_CLIENT_ID=$APPID"
+				[[ $variable == AZURE_CLIENT_SECRET=* ]] && variable="AZURE_CLIENT_SECRET=$APPSECRET"
+			fi
+
 			if [[ ! $variable == PATH=* ]] &&
 				[[ ! $variable == LANG=* ]] &&
 				[[ ! $variable == GPG_KEY=* ]] &&
@@ -218,7 +252,7 @@ while IFS= read -r contname; do
 				envstring+="-e $variable "
 			fi
 		done
-		
+
 		# Check if we have an agent guid already. if we don't have - generate and add to the envstring
 		if [[ $envstring != *"SENTINEL_AGENT_GUID="* ]]; then
 			envstring+="-e SENTINEL_AGENT_GUID=$(uuidgen) "
@@ -263,12 +297,14 @@ while IFS= read -r contname; do
 			docker cp "$contname":$sdkfileloc "/tmp/sapcon-update/$contname/inst/"
 		fi
 		sdkfilename=$(ls -1r /tmp/sapcon-update/$contname/inst/nwrfc*.zip | head -n 1)
-
+		if [ $HOSTNETWORK ]; then
+			cmdparams+=" --network host "
+		fi
 		if [ ! $NOTESTRUN ]; then
 			# If test run is required
 			testruncontainer="$contname-testrun"
 			log "Creating agent $contname in test mode"
-			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $envstring $ContainerNetworkSetting --name "$testruncontainer" $dockerimage$tagver --sapconinstanceupdate >/dev/null
+			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $cmdparams $envstring $ContainerNetworkSetting --name "$testruncontainer" $dockerimage$tagver --sapconinstanceupdate >/dev/null
 			docker cp "$sdkfilename" "$testruncontainer":$sdkfileloc
 			docker start "$testruncontainer" >/dev/null
 
@@ -283,6 +319,16 @@ while IFS= read -r contname; do
 					log "Agent test run finished. Exit code $containerexitcode"
 					if [ "$containerexitcode" == 0 ]; then
 						dryrunsuccess=1
+					elif [ "$containerexitcode" == 5 ]; then
+						echo ""
+						log "Failed to connect to the SAP system"
+						dryrunsuccess=0
+						break
+					elif [ "$containerexitcode" == 6 ]; then
+						echo ""
+						log "Failed to send heartbeat data to Azure Sentinel Workspace"
+						dryrunsuccess=0
+						break
 					elif [ "$containerexitcode" == 7 ]; then
 						echo ""
 						log "Insufficient authorizations in SAP"
@@ -312,6 +358,7 @@ while IFS= read -r contname; do
 				docker stop "$testruncontainer" >/dev/null
 			fi
 			log "Test run finished, removing agent in test run mode"
+            		test_logs=$(docker logs "$testruncontainer" --tail 70 2>&1)
 			docker rm "$testruncontainer" >/dev/null
 		else
 			log "Creating new agent without test mode"
@@ -325,13 +372,13 @@ while IFS= read -r contname; do
 			echo ""
 			log "Test run NOT successful, removing new agent, renaming the old agent to original name"
 			log "----Agent debug logs START----"
-			log "$(docker logs "$contname")"
+			log "$test_logs"
 			log "----Agent debug logs END----"
 		fi
 		if [ $dryrunsuccess == 1 ]; then
 			log "Creating updated agent $contname"
 			labelstring="--label Cloud=$CLOUD "
-			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $envstring $labelstring $restartpolicystring $ContainerNetworkSetting --name "$contname" $dockerimage$tagver >/dev/null
+			docker create -v "$sysfileloc:/sapcon-app/sapcon/config/system" $cmdparams $envstring $labelstring $restartpolicystring $ContainerNetworkSetting --name "$contname" $dockerimage$tagver >/dev/null
 			docker cp "$sdkfilename" "$contname":"$sdkfileloc"
 		fi
 		#Cleaning sapcon-update folder

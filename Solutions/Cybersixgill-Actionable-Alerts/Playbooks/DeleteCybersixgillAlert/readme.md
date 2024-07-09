@@ -16,7 +16,7 @@ Client ID and Client Secret can be obtained from [Cybersixgill Developer Portal]
 * Enter Application name and brief description and optional Application image
 * All other fields can be left to default.
 * Once done click on Create the app.
-* Copy Client ID and Client Secret.
+* Copy Client ID, Client Secret and Organization ID.
 
 
 # Deployment instructions
@@ -30,6 +30,7 @@ Client ID and Client Secret can be obtained from [Cybersixgill Developer Portal]
     * Keyvault name : Enter the key vault name where secret key is stored.
     * Client ID key name: Key name for Cybersixgill Client ID stored api secret.
     * Client Secret key name: Key name for Cybersixgill Client Secret the stored api secret.
+    * Organization ID key name: Key name for Cybersixgill organization ID
 
 # Post-deployment
 #### a. Authorize connections (Perform this action if needed)

@@ -1,7 +1,7 @@
 id: b81ed294-28cf-48c3-bac8-ac60dcef293b
 name: Insider Risk_Sensitive Data Access Outside Organizational Geo-location
 description: |
-  'This alert joins Azure Information Protection Logs (InformationProtectionLogs_CL) with Azure Active Directory Sign in Logs (SigninLogs) to provide a correlation of sensitive data access by geo-location. Results include User Principal Name, Label Name, Activity, City, State, Country/Region, and Time Generated. Recommended configuration is to include (or exclude) Sign in geo-locations (City, State, Country and/or Region) for trusted organizational locations. There is an option for configuration of correlations against Microsoft Sentinel watchlists. Accessing sensitive data from a new or unauthorized geo-location warrants further review. For more information see [Sign-in logs in Azure Active Directory: Location Filtering](https://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins)'
+  'This alert joins Azure Information Protection Logs (InformationProtectionLogs_CL) with Microsoft Entra ID Sign in Logs (SigninLogs) to provide a correlation of sensitive data access by geo-location. Results include User Principal Name, Label Name, Activity, City, State, Country/Region, and Time Generated. Recommended configuration is to include (or exclude) Sign in geo-locations (City, State, Country and/or Region) for trusted organizational locations. There is an option for configuration of correlations against Microsoft Sentinel watchlists. Accessing sensitive data from a new or unauthorized geo-location warrants further review. For more information see [Sign-in logs in Microsoft Entra ID: Location Filtering](https://docs.microsoft.com/azure/active-directory/reports-monitoring/concept-sign-ins)'
 severity: High
 requiredDataConnectors:
   - connectorId: AzureInformationProtection
@@ -32,12 +32,26 @@ query: |
   // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
   | summarize count() by UserPrincipalName, LabelName_s, Activity_s, City, State, Country_Region, TimeGenerated
   | sort by count_ desc
-  | limit 25
-  | extend AccountCustomEntity = UserPrincipalName
+  | extend AccountName = tostring(split(UserPrincipalName, "@")[0]), AccountUPNSuffix = tostring(split(UserPrincipalName, "@")[1])
+eventGroupingSettings:
+  aggregationKind: SingleAlert
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: AadUserId
-        columnName: AccountCustomEntity
-version: 1.1.0
+      - identifier: FullName
+        columnName: UserPrincipalName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: true
+    lookbackDuration: 3d
+    matchingMethod: Selected
+    groupByEntities:
+      - Account
+version: 1.1.3
 kind: Scheduled

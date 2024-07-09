@@ -1,0 +1,17 @@
+let ProcessTree = (MachineName:string, cmd:string, when:timespan  =30d ){
+let DeviceProcessLogs= materialize (
+DeviceProcessEvents
+| where TimeGenerated >ago(when) // Adjust Time for more visibility
+| where DeviceName == MachineName
+| extend EnhancedProcessID = strcat(DeviceId,'-', ProcessId,'-', ProcessCreationTime), EnhancedInitProcessID = strcat(DeviceId,'-', InitiatingProcessId,'-', InitiatingProcessCreationTime)
+);
+DeviceProcessLogs
+| make-graph EnhancedProcessID -->  EnhancedInitProcessID with DeviceProcessLogs on EnhancedProcessID 
+| graph-match (End) -[Command*1..10]-> (Start) 
+    // Filter here
+    // Filter by start Process
+    where Start.ProcessCommandLine has cmd 
+    // // Filter by end Process
+    //  where Start.ProcessCommandLine contains cmd
+    project Start.FileName, Start.ProcessId, End.FileName, End.ProcessId, Command.FileName,Command.ProcessId,Command.ProcessCreationTime, Command.ProcessCommandLine
+};

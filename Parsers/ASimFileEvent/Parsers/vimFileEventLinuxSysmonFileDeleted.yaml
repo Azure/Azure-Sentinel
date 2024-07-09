@@ -1,62 +1,154 @@
 Parser:
-  Title: File delete activity ASIM parser for Sysmon for Linux
-  Version: '0.2'
-  LastUpdated: July 27, 2021
+  Title: File delete activity ASIM filtering parser for Sysmon for Linux
+  Version: "0.2.1"
+  LastUpdated: Nov 17, 2023
 Product:
   Name: Microsoft Sysmon for Linux
 Normalization:
   Schema: FileEvent
-  Version: '0.1.0'
+  Version: "0.1.0"
 References:
-- Title: ASIM File Schema
-  Link: https://aka.ms/ASimFileEventDoc
-- Title: ASIM
-  Link: https://aka.ms/AboutASIM
+  - Title: ASIM File Schema
+    Link: https://aka.ms/ASimFileEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
 Description: This ASIM parser supports normalizing Sysmon for Linux events 23 and 26, stored in the Syslog table, to the ASIM file activity schema file delete event.
 ParserName: vimFileEventLinuxSysmonFileDeleted
+EquivalentBuiltInParser: _Im_FileEvent_LinuxSysmonFileDeleted
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  Syslog
-    | where SyslogMessage has ('<Provider Name="Linux-Sysmon"') and SyslogMessage has_any('<EventID>23</EventID>','<EventID>26</EventID>')	
+  let parser=(
+    starttime: datetime=datetime(null),
+    endtime: datetime=datetime(null),
+    eventtype_in: dynamic=dynamic([]),
+    srcipaddr_has_any_prefix: dynamic=dynamic([]),
+    actorusername_has_any: dynamic=dynamic([]),
+    targetfilepath_has_any: dynamic=dynamic([]),
+    srcfilepath_has_any: dynamic=dynamic([]),
+    hashes_has_any: dynamic=dynamic([]),
+    dvchostname_has_any: dynamic=dynamic([]),
+    disabled: bool=false
+    ) {
+    Syslog
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    | where SyslogMessage has ('<Provider Name="Linux-Sysmon"') and SyslogMessage has_any('<EventID>23</EventID>', '<EventID>26</EventID>')
+    // pre-filtering
+    | where ((array_length(eventtype_in) == 0) or ('FileDeleted' in~ (eventtype_in))) and
+        (array_length(srcipaddr_has_any_prefix) == 0) and
+        ((array_length(actorusername_has_any) == 0) or (SyslogMessage has_any (actorusername_has_any))) and
+        ((array_length(targetfilepath_has_any) == 0) or (SyslogMessage has_any (targetfilepath_has_any))) and
+        (array_length(srcfilepath_has_any) == 0) and
+        (array_length(hashes_has_any) == 0) and
+        (array_length(dvchostname_has_any) == 0 or Computer has_any (dvchostname_has_any))
     | parse SyslogMessage with  
-      '<Event><System><Provider Name="Linux-Sysmon" Guid="{ff032593-a8d3-4f13-b0d6-01fc615a0f97}"/><EventID>'msgEventId:string'</EventID>'
-      *
-      '<EventRecordID>'msgEventRecordID:string'</EventRecordID>'
-      *
-      '<Computer>'msgComputer:string'</Computer>'
-      '<Security UserId="'msgUserId:string'"/>'
-      *
-      '<Data Name="ProcessGuid">{'msgProcessGuid:string'}</Data>'
-      '<Data Name="ProcessId">'msgProcessId:string'</Data>'
-      '<Data Name="User">'msgUser:string'</Data>'
-      '<Data Name="Image">'msgImage:string'</Data>'
-      '<Data Name="TargetFilename">'msgTargetFilename:string'</Data>'
-      '<Data Name="Hashes">'msgHashes:string'</Data>' *	
+        '<Event><System><Provider Name="Linux-Sysmon" Guid="{ff032593-a8d3-4f13-b0d6-01fc615a0f97}"/><EventID>'msgEventId: string'</EventID>'
+        *
+        '<EventRecordID>'msgEventRecordID: string'</EventRecordID>'
+        *
+        '<Computer>'msgComputer: string'</Computer>'
+        '<Security UserId="'msgUserId: string'"/>'
+        *
+        '<Data Name="ProcessGuid">{'msgProcessGuid: string'}</Data>'
+        '<Data Name="ProcessId">'msgProcessId: string'</Data>'
+        '<Data Name="User">'msgUser: string'</Data>'
+        '<Data Name="Image">'msgImage: string'</Data>'
+        '<Data Name="TargetFilename">'msgTargetFilename: string'</Data>'
+        '<Data Name="Hashes">'msgHashes: string'</Data>' *
+    // post-filtering
+    | where ((array_length(actorusername_has_any) == 0) or (msgUser has_any (actorusername_has_any))) and
+        ((array_length(targetfilepath_has_any) == 0) or (msgTargetFilename has_any (targetfilepath_has_any)))
     | extend
-     EventCount=int(1)
-    , EventStartTime =TimeGenerated
-    , EventEndTime=TimeGenerated
-    , EventType = 'FileDeleted'
-    , EventResult ='Success' 
-    , EventProduct='Sysmon for Linux'
-    , EventProductVersion='v13.22' 
-    , EventVendor ='Microsoft'
-    , EventSchemaVersion ='0.1.0'
-    , DvcOs = 'Linux'
-    , TargetFilePathType='Unix'
-    , ActorUsernameType='Simple'
-  | project-rename
-      DvcHostname=Computer
-    , EventOriginalUid=msgEventRecordID
-    , EventOriginalType =msgEventId 
-    , ActorUsername=msgUser
-    , ActingProcessName =msgImage
-    , ActingProcessId=msgProcessId
-    , ActingProcessGuid=msgProcessGuid
-    , TargetFilePath =msgTargetFilename
+        EventCount=int(1)
+        ,
+        EventStartTime =TimeGenerated
+        ,
+        EventEndTime=TimeGenerated
+        ,
+        EventType = 'FileDeleted'
+        ,
+        EventResult ='Success' 
+        ,
+        EventProduct='Sysmon for Linux'
+        ,
+        EventProductVersion='v13.22' 
+        ,
+        EventVendor ='Microsoft'
+        ,
+        EventSchemaVersion ='0.1.0'
+        ,
+        DvcOs = 'Linux'
+        ,
+        TargetFilePathType='Unix'
+        ,
+        ActorUsernameType='Simple'
+    | project-rename
+        DvcHostname=Computer
+        ,
+        EventOriginalUid=msgEventRecordID
+        ,
+        EventOriginalType =msgEventId 
+        ,
+        ActorUsername=msgUser
+        ,
+        ActingProcessName =msgImage
+        ,
+        ActingProcessId=msgProcessId
+        ,
+        ActingProcessGuid=msgProcessGuid
+        ,
+        TargetFilePath =msgTargetFilename
     // ------  Alias
-  | extend
-      Process=ActingProcessName
-      , FilePath=TargetFilePath
-      , Dvc =DvcHostname
-      , User=ActorUsername
-  | project-away SyslogMessage
+    | extend
+        Process=ActingProcessName
+        ,
+        FilePath=TargetFilePath
+        ,
+        Dvc =DvcHostname
+        ,
+        User=ActorUsername
+    | project-away SyslogMessage
+  };
+  parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      eventtype_in=eventtype_in,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      actorusername_has_any=actorusername_has_any,
+      targetfilepath_has_any=targetfilepath_has_any,
+      srcfilepath_has_any=srcfilepath_has_any,
+      hashes_has_any=hashes_has_any,
+      dvchostname_has_any=dvchostname_has_any,
+      disabled=disabled
+  )

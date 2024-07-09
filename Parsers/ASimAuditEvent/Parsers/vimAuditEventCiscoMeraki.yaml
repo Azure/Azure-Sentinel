@@ -1,0 +1,269 @@
+Parser:
+  Title: Audit Event ASIM parser for Cisco Meraki
+  Version: '0.1'
+  LastUpdated: Jun 20 2023
+Product:
+  Name: Cisco Meraki
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Cisco Meraki Documentation
+  Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
+Description: |
+  This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Audit Event normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
+ParserName: vimAuditEventCiscoMeraki
+EquivalentBuiltInParser: _Im_AuditEvent_CiscoMeraki
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: operation_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: object_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: newvalue_has_any
+    Type: dynamic
+    Default: dynamic([])
+ParserQuery: |
+  let EventFieldsLookup = datatable(TempOperation: string, Operation: string, EventResult: string, EventType: string)
+  [
+    "vpn_connectivity_change", "VPN connectivity change","Success", "Set",
+    "purging ISAKMP-SA", "Purging ISAKMP-SA","Partial", "Delete",
+    "purged ISAKMP-SA", "Purged ISAKMP-SA","Success", "Delete",
+    "ISAKMP-SA deleted", "ISAKMP-SA deleted","Success", "Delete",
+    "IPsec-SA request", "IPsec-SA request queued","Failure", "Other",
+    "failed to get sainfo", "Failed to get sainfo","Failure", "Other",
+    "failed to pre-process ph2 packet", "Failed to pre-process ph2 packet","Failure", "Other",
+    "phase2 negotiation failed", "Phase2 negotiation failed","Failure", "Other",
+    "initiate new phase 1 negotiation", "Initiate new phase 1 negotiation","Success", "Initialize",
+    "ISAKMP-SA established", "ISAKMP-SA established","Success", "Create",
+    "initiate new phase 2 negotiation", "Initiate new phase 2 negotiation","Partial", "Initialize",
+    "IPsec-SA established", "IPsec-SA established","Success", "Create",
+    "STP role", "Spanning-tree interface role change","Success", "Set",
+    "STP BPDU", "Spanning-tree guard state change", "", "",
+    "VRRP transition", "VRRP transition","Success", "Set",
+    "port status change", "Port status change", "", ""
+  ];
+  let EventSeverityLookup=datatable(EventResult: string, EventSeverity: string)[
+      "Success", "Informational",
+      "Partial", "Informational",
+      "Failure", "Low"
+  ];
+  let parser=(disabled: bool = false, starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventresult: string='*', operation_has_any: dynamic=dynamic([]), eventtype_in: dynamic=dynamic([]), srcipaddr_has_any_prefix: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), object_has_any: dynamic=dynamic([]), newvalue_has_any: dynamic=dynamic([])) {
+  let allData = union isfuzzy=true
+      (
+      meraki_CL
+      | project-rename LogMessage =  Message
+      ),
+      (
+      Syslog
+      | where Computer in (_ASIM_GetSourceBySourceType('CiscoMeraki'))
+      | project-rename LogMessage =  SyslogMessage
+      );
+  let PreFilteredData = allData
+      | where not(disabled)
+          and (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime) 
+          and array_length(newvalue_has_any) == 0
+          and array_length(object_has_any) == 0
+          and array_length(actorusername_has_any) == 0
+          and LogMessage has "events"
+          and (LogMessage has_any ("vpn_connectivity_change", "status changed", "VRRP active", "VRRP passive") or LogMessage has_cs "Site-to-site" or LogMessage has_cs "Port")
+      | extend Parser = extract_all(@"(\d+.\d+)\s([\w\-\_]+)\s([\w\-\_]+)\s([\S\s]+)$", dynamic([1, 2, 3, 4]), LogMessage)[0]
+      | extend
+      Epoch = tostring(Parser[0])
+      | extend EpochTimestamp = split(Epoch, ".")
+      | extend EventStartTime = unixtime_seconds_todatetime(tolong(EpochTimestamp[0]))
+      | extend LogType = tostring(Parser[2]),
+          Substring = tostring(Parser[3])
+      | where LogType == "events";
+  let SiteToSiteData = PreFilteredData
+      | where Substring has_cs "Site-to-site";
+  let SiteToSite_deleted = SiteToSiteData
+      | where Substring has "ISAKMP-SA deleted"
+      | extend TempOperation = "ISAKMP-SA deleted"
+      | parse Substring with * " deleted " temp_deletedSrcIp:string  "-" temp_deletedTargetIp:string " " temp_restmessage:string
+      | extend temp_srcipport = temp_deletedSrcIp,
+              temp_targetipport = temp_deletedTargetIp;
+  let SiteToSite_negotiation = SiteToSiteData
+      | where Substring has_any("initiate new phase 1 negotiation", "initiate new phase 2 negotiation")
+      | parse Substring with * "Site-to-site VPN: " TempOperation:string ": " temp_negotiationSrcIp:string "<=>" temp_negotiationTargetIp:string
+      | extend temp_srcipport = temp_negotiationSrcIp,
+              temp_targetipport = temp_negotiationTargetIp;
+  let SiteToSite_ESP = SiteToSiteData
+      | where Substring has "phase2 negotiation failed due to time up waiting for phase1"
+      | parse Substring with * "Site-to-site VPN: " TempOperation:string " due to " EventResultDetails " ESP " temp_espSrcIp:string "->" temp_espTargetIp:string
+      | extend temp_srcipport = temp_espSrcIp,
+              temp_targetipport = temp_espTargetIp;
+  let SiteToSite_tunnel = SiteToSiteData
+      | where Substring has "IPsec-SA established"
+      | parse Substring with * "Site-to-site VPN: " TempOperation:string ":" * "Tunnel " temp_tunnelSrcIp:string "->" temp_tunnelTargetIp:string " " temp_restmessage:string
+      | extend temp_srcipport = temp_tunnelSrcIp,
+              temp_targetipport = temp_tunnelTargetIp;
+  let SiteToSite_ISAKMPestablished = SiteToSiteData
+      | where Substring has "ISAKMP-SA established"
+      | parse Substring with * "Site-to-site VPN: " TempOperation:string " established " temp_estSrcIp:string "-" temp_estTargetIp:string " " temp_restmessage:string
+      | extend TempOperation = strcat(TempOperation, ' ', 'established'),
+              temp_srcipport = temp_estSrcIp,
+              temp_targetipport = temp_estTargetIp;
+  let SiteToSite_IPsecSArequest = SiteToSiteData
+      | where Substring has "IPsec-SA request"
+      | parse Substring with * "Site-to-site VPN: " TempOperation:string " for " temp_forTaregtSrcIp:string " " * " due to" EventResultDetails:string
+      | extend temp_targetipport = temp_forTaregtSrcIp;
+  let SiteToSite_purging = SiteToSiteData
+      | where Substring has_any("purging ISAKMP-SA", "purged ISAKMP-SA")
+      | parse Substring with * "Site-to-site VPN: " TempOperation:string " spi=" temp_restmessage:string;
+  let SiteToSite_failed = SiteToSiteData
+      | where Substring has_any ("failed to get sainfo", "failed to pre-process ph2 packet")
+      | parse Substring with * "Site-to-site VPN: " TempOperation:string
+      | extend TempOperation = tostring(split(TempOperation, ' (')[0]);
+  let VPNConnectivityChangeData = PreFilteredData
+      | where Substring has "vpn_connectivity_change"
+      | parse-kv Substring as (type: string, peer_contact: string, connectivity: string) with (pair_delimiter=" ", kv_delimiter="=", quote="'")
+      | extend type = trim('"', type),
+              connectivity = trim('"', connectivity)
+      | extend TempOperation = type,
+              temp_srcipport = peer_contact;
+  let StatusChangedData = PreFilteredData
+      | where Substring has "status changed"
+      | parse Substring with * "port " port:string " " portnextpart:string
+      | extend TempOperation = "port status change";
+  let PortData = PreFilteredData
+      | where Substring has_cs "Port"
+      | parse Substring with * "Port " Port1:string " received an " TempOperation1:string " from " STPMac:string " " temp_restmessage:string
+      | parse Substring with * "Port " Port2:string " changed " TempOperation2:string " from " PortNextPart:string
+      | extend Port = coalesce(Port1,Port2)
+      | extend TempOperation = coalesce(TempOperation1, TempOperation2);
+  let VRRPData = PreFilteredData
+      | where Substring has_any("VRRP active", "VRRP passive")
+      | extend TempOperation = "VRRP transition";
+  union VPNConnectivityChangeData, StatusChangedData, PortData, VRRPData, SiteToSite_deleted, SiteToSite_ESP, SiteToSite_failed, SiteToSite_IPsecSArequest, SiteToSite_ISAKMPestablished, SiteToSite_negotiation, SiteToSite_purging, SiteToSite_tunnel
+      | lookup EventFieldsLookup on TempOperation
+      | where (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+      | extend EventResult = case(
+                              (Operation == "Port status change" and Substring has "from Down") or (Operation has_cs "Spanning-tree guard state change" and Substring has_any ("connected", "forwarding")),
+                              "Success",
+                              (Operation == "Port status change" and Substring has "to Down") or (Operation has_cs "Spanning-tree guard state change" and Substring has_any ("disconnected", "error disabled", "blocked", "disabled", "not configured")),
+                              "Failure",
+                              Operation has_cs "Spanning-tree guard state change" and Substring has "learning",
+                              "Partial",
+                              EventResult
+                          )
+      | where (eventresult == "*" or EventResult =~ eventresult)
+      | extend EventType = case(Operation in("Port status change", "Spanning-tree guard state change") and EventResult == "Success", "Enable",
+          (Operation == "Port status change" and EventResult == "Failure") or (Operation == "Spanning-tree guard state change" and EventResult in ("Partial", "Failure")), "Disable",
+          EventType
+      )
+      | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
+      | extend 
+          temp_srcipport = iff(temp_srcipport has "]" and temp_srcipport !has ":", trim(']', temp_srcipport), temp_srcipport),
+          temp_targetipport = iff(temp_targetipport has "]" and temp_targetipport !has ":", trim(']', temp_targetipport), temp_targetipport)
+      | extend 
+          temp_srcipport = iff(temp_srcipport has "[" and temp_srcipport !has ":", replace_string(temp_srcipport,'[',':'), temp_srcipport),
+          temp_targetipport = iff(temp_targetipport has "[" and temp_targetipport !has ":", replace_string(temp_targetipport,'[',':'), temp_targetipport),
+          DvcMacAddr = iff(Operation == "Spanning-tree guard state change" and isnotempty(STPMac) and STPMac matches regex "([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})|([0-9a-fA-F]{4}\\.[0-9a-fA-F]{4}\\.[0-9a-fA-F]{4})\'*", STPMac, "")
+      | extend temp_srcipport = iff(isempty(DvcMacAddr) and isnotempty(STPMac) and Operation == "Spanning-tree guard state change", STPMac, temp_srcipport)
+      | extend
+          temp_srcipport = trim("'", temp_srcipport),
+          temp_targetipport = trim("'", temp_targetipport)
+      | extend 
+          temp_srcipport = trim('"', temp_srcipport),
+          temp_targetipport = trim('"', temp_targetipport)
+      | parse temp_srcipport with * "[" temp_srcip "]:" temp_srcport
+      | extend SrcIpAddr = iff(temp_srcipport has ".", split(temp_srcipport, ":")[0], coalesce(temp_srcip, temp_srcipport))
+      | extend
+      temp_SrcMatch=has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix)
+      | where (array_length(srcipaddr_has_any_prefix) == 0 or temp_SrcMatch)
+      | parse temp_targetipport with * "[" temp_targetip "]:" temp_targetport
+      | extend TargetIpAddr = iff(temp_targetipport has ".", split(temp_targetipport, ":")[0], coalesce(temp_targetip, temp_targetipport))
+      | extend TargetPortNumber = iff(TargetIpAddr has ".", toint(split(temp_targetipport, ":")[1]), toint(coalesce(temp_targetport, "")))
+      | extend SrcPortNumber = case(
+                              isnotempty(temp_srcipport),
+                              iff(SrcIpAddr has ".", toint(split(temp_srcipport, ":")[1]), toint(coalesce(temp_srcport, ""))),
+                              Substring has_cs "Port",
+                              toint(Port),
+                              Operation == "Port status change",
+                              toint(port),
+                              int(null)
+                          )
+      | lookup EventSeverityLookup on EventResult
+      | extend
+          EventResultDetails = case(
+                                  Operation == "VPN connectivity change" and isnotempty(connectivity), strcat("connectivity=", connectivity),
+                                  Operation == "IPsec-SA request queued" or Operation == "Phase2 negotiation failed", split(Substring, 'due to')[1], 
+                                  Substring has "Site-to-site", split(Substring, 'Site-to-site ')[1],
+                                  Substring
+                              ),
+          EventMessage = Substring,
+          EventOriginalType = LogType,
+          EventUid = _ResourceId
+      | extend Device = tostring(Parser[1])
+      | invoke _ASIM_ResolveDvcFQDN('Device')
+      | extend
+          Dvc = DvcHostname,
+          IpAddr = SrcIpAddr,
+          Src = SrcIpAddr,
+          EventEndTime = EventStartTime, 
+          EventCount = int(1),
+          EventProduct = "Meraki",
+          EventVendor = "Cisco",
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "0.1"
+      | project-away
+          LogMessage,
+          Parser,
+          Epoch,
+          EpochTimestamp,
+          Device,
+          Substring,
+          TempOperation*,
+          temp*,
+          STPMac,
+          peer_contact,
+          connectivity,
+          Port*,
+          port,
+          portnextpart,
+          LogType,
+          type,
+          TenantId,
+          SourceSystem,
+          Computer,
+          _ResourceId,
+          MG,
+          ManagementGroupName,
+          RawData,
+          EventTime,
+          Facility,
+          HostName,
+          SeverityLevel,
+          ProcessID,
+          HostIP,
+          ProcessName
+  };
+  parser(disabled=disabled, starttime=starttime, endtime=endtime, eventresult=eventresult, operation_has_any=operation_has_any, eventtype_in=eventtype_in, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, actorusername_has_any=actorusername_has_any, object_has_any=object_has_any, newvalue_has_any=newvalue_has_any)

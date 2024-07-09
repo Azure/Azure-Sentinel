@@ -1,7 +1,7 @@
 Parser:
-  Title: File create Activity ASIM parser for Sysmon for Linux
-  Version: '0.2'
-  LastUpdated: July 27, 2021
+  Title: File create Activity ASIM filtering parser for Sysmon for Linux
+  Version: '0.2.1'
+  LastUpdated: Nov 16, 2023
 Product:
   Name: Microsoft Sysmon for Linux
 Normalization:
@@ -14,47 +14,138 @@ References:
   Link: https://aka.ms/AboutASIM
 Description: This ASIM parser supports normalizing Sysmon for Linux event 11, stored in the Syslog table, to the ASIM file activity schema file create event.
 ParserName: vimFileEventLinuxSysmonFileCreated
+EquivalentBuiltInParser: _Im_FileEvent_LinuxSysmonFileCreated
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: disabled
+    Type: bool
+    Default: false
 ParserQuery: |
-  Syslog
-  | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>11</EventID>')
-  | parse SyslogMessage with  *
-    '<EventRecordID>'msgEventRecordID:string'</EventRecordID>'
-    *
-    //'<Computer>'msgComputer:string'</Computer>'
-    '<Security UserId="'msgUserId:string '"/>'
-    * 
-    '<Data Name="ProcessGuid">'msgProcessGuid:string'</Data>'
-    '<Data Name="ProcessId">'msgProcessId:string'</Data>'
-    '<Data Name="Image">'msgImage:string'</Data>'
-    '<Data Name="TargetFilename">'msgTargetFileName:string'</Data>'
-    '<Data Name="CreationUtcTime">'msgCreationUtcTime:datetime'</Data>'*
-  | parse SyslogMessage with *'<Data Name="User">'ActorUsername '</Data>'*
-  | extend
-      EventCount=int(1)
-    , EventStartTime =TimeGenerated 
-    , EventEndTime=TimeGenerated
-    , EventType = 'FileCreated'
-    , EventResult ='Success'
-    , EventOriginalType ='11' 
-    , EventProduct='Sysmon for Linux'
-    , EventProductVersion='v13.22'
-    , EventVendor ='Microsoft'
-    , EventSchemaVersion ='0.1.0'
-    , DvcOs = 'Linux'
-    , TargetFilePathType='Unix'
-    , ActorUserType = iff(isnotempty(ActorUsername),'Simple', '') // make sure user type is okay
-  | project-rename
-      DvcHostname=Computer
-    , EventOriginalUid=msgEventRecordID
-    , ActingProcessName =msgImage
-    , ActingProcessId=msgProcessId
-    , ActingProcessGuid=msgProcessGuid
-    , TargetFilePath =msgTargetFileName
-    , TargetFileCreationTime =msgCreationUtcTime
+  let parser=(
+    starttime: datetime=datetime(null),
+    endtime: datetime=datetime(null),
+    eventtype_in: dynamic=dynamic([]),
+    srcipaddr_has_any_prefix: dynamic=dynamic([]),
+    actorusername_has_any: dynamic=dynamic([]),
+    targetfilepath_has_any: dynamic=dynamic([]),
+    srcfilepath_has_any: dynamic=dynamic([]),
+    hashes_has_any: dynamic=dynamic([]),
+    dvchostname_has_any: dynamic=dynamic([]),
+    disabled: bool=false
+    ) {
+    Syslog
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    | where SyslogMessage has_all ('<Provider Name="Linux-Sysmon"', '<EventID>11</EventID>')
+    // pre-filtering
+    | where ((array_length(eventtype_in) == 0) or ('FileCreated' in~ (eventtype_in))) and
+        (array_length(srcipaddr_has_any_prefix) == 0) and
+        ((array_length(actorusername_has_any) == 0) or (SyslogMessage has_any (actorusername_has_any))) and
+        ((array_length(targetfilepath_has_any) == 0) or (SyslogMessage has_any (targetfilepath_has_any))) and
+        ((array_length(srcfilepath_has_any) == 0)) and
+        (array_length(hashes_has_any) == 0) and 
+        (array_length(dvchostname_has_any) == 0 or Computer has_any (dvchostname_has_any)) 
+    | parse SyslogMessage with  *
+        '<EventRecordID>'msgEventRecordID: string'</EventRecordID>'
+        *
+        //'<Computer>'msgComputer:string'</Computer>'
+        '<Security UserId="'msgUserId: string '"/>'
+        * 
+        '<Data Name="ProcessGuid">'msgProcessGuid: string'</Data>'
+        '<Data Name="ProcessId">'msgProcessId: string'</Data>'
+        '<Data Name="Image">'msgImage: string'</Data>'
+        '<Data Name="TargetFilename">'msgTargetFileName: string'</Data>'
+        '<Data Name="CreationUtcTime">'msgCreationUtcTime: datetime'</Data>'*
+    | where ((array_length(targetfilepath_has_any) == 0) or (msgTargetFileName has_any (targetfilepath_has_any)))
+    | parse SyslogMessage with *'<Data Name="User">'ActorUsername '</Data>'*
+    | where ((array_length(actorusername_has_any) == 0) or (ActorUsername has_any (actorusername_has_any)))
+    | extend
+        EventCount=int(1)
+        ,
+        EventStartTime =TimeGenerated 
+        ,
+        EventEndTime=TimeGenerated
+        ,
+        EventType = 'FileCreated'
+        ,
+        EventResult ='Success'
+        ,
+        EventOriginalType ='11' 
+        ,
+        EventProduct='Sysmon for Linux'
+        ,
+        EventProductVersion='v13.22'
+        ,
+        EventVendor ='Microsoft'
+        ,
+        EventSchemaVersion ='0.1.0'
+        ,
+        DvcOs = 'Linux'
+        ,
+        TargetFilePathType='Unix'
+        ,
+        ActorUserType = iff(isnotempty(ActorUsername), 'Simple', '') // make sure user type is okay
+    | project-rename
+        DvcHostname=Computer
+        ,
+        EventOriginalUid=msgEventRecordID
+        ,
+        ActingProcessName =msgImage
+        ,
+        ActingProcessId=msgProcessId
+        ,
+        ActingProcessGuid=msgProcessGuid
+        ,
+        TargetFilePath =msgTargetFileName
+        ,
+        TargetFileCreationTime =msgCreationUtcTime
     // ------  Alias
-  | extend
-      Process=ActingProcessName
-      , FilePath=TargetFilePath
-      , Dvc = DvcHostname
-      , User = ActorUsername
-  | project-away SyslogMessage
+    | extend
+        Process=ActingProcessName
+        ,
+        FilePath=TargetFilePath
+        ,
+        Dvc = DvcHostname
+        ,
+        User = ActorUsername
+    | project-away SyslogMessage
+  };
+  parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      eventtype_in=eventtype_in,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      actorusername_has_any=actorusername_has_any,
+      targetfilepath_has_any=targetfilepath_has_any,
+      srcfilepath_has_any=srcfilepath_has_any,
+      hashes_has_any=hashes_has_any,
+      dvchostname_has_any=dvchostname_has_any,
+      disabled=disabled
+  )

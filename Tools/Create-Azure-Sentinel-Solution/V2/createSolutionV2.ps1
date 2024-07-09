@@ -1,5 +1,6 @@
 Import-Module powershell-yaml
 
+Write-Host 'It is recommended to use createSolutionV3.ps1 file for solution packaging'
 $jsonConversionDepth = 50
 $path = "$PSScriptRoot\input"
 $mainTemplateArtifact = [PSCustomObject]@{
@@ -22,28 +23,42 @@ function handleEmptyInstructionProperties ($inputObj) {
     } { $obj }
     $outputObj
 }
-function removePropertiesRecursively ($resourceObj) {
+function removePropertiesRecursively ($resourceObj, $isWorkbook = $false) {
     foreach ($prop in $resourceObj.PsObject.Properties) {
         $key = $prop.Name
         $val = $prop.Value
         if ($null -eq $val) {
-            $resourceObj.$key = "[variables('blanks')]";
-                                            if (!$baseMainTemplate.variables.blanks) {
-                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
-                                }   
+            if ($isWorkbook)
+            {
+                $resourceObj.$key = ''
+            }
+            else
+            {
+                $resourceObj.$key = "[variables('blanks')]";
+                if (!$baseMainTemplate.variables.blanks) {
+                    $baseMainTemplate.variables | Add-Member -NotePropertyName "blanks" -NotePropertyValue "[replace('b', 'b', '')]"
+                }
+            }
         }
         elseif ($val -is [System.Object[]]) {
             if ($val.Count -eq 0) {
-                 #$resourceObj.PsObject.Properties.Remove($key)
-                 $resourceObj.$key = "[variables('TemplateEmptyArray')]";
-                                            if (!$baseMainTemplate.variables.TemplateEmptyArray) {
-                                    $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
-                                            }
-        }
+                if ($isWorkbook)
+                {
+                    $resourceObj.$key = @()
+                }
+                else
+                {
+                    #$resourceObj.PsObject.Properties.Remove($key)
+                    $resourceObj.$key = "[variables('TemplateEmptyArray')]";
+                    if (!$baseMainTemplate.variables.TemplateEmptyArray) {
+                        $baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
+                    }
+                }
+            }
             else {
                 foreach ($item in $val) {
                     $itemIndex = $val.IndexOf($item)
-                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex])
+                    $resourceObj.$key[$itemIndex] = $(removePropertiesRecursively $val[$itemIndex] $isWorkbook)
                 }
             }
         }
@@ -53,7 +68,7 @@ function removePropertiesRecursively ($resourceObj) {
                     $resourceObj.PsObject.Properties.Remove($key)
                 }
                 else {
-                    $resourceObj.$key = $(removePropertiesRecursively $val)
+                    $resourceObj.$key = $(removePropertiesRecursively $val $isWorkbook)
                     if ($($resourceObj.$key.PsObject.Properties).Count -eq 0) {
                         $resourceObj.PsObject.Properties.Remove($key)
                     }
@@ -281,7 +296,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
 						if($contentToImport.TemplateSpec) {
                             #Getting Workbook Metadata dependencies from Github
                             $workbookData = $null
-                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
                             try {
                                 Write-Host "Downloading $workbookFinalPath"
                                 $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
@@ -306,7 +321,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                             # Serialize workbook data
                             $serializedData = $data |  ConvertFrom-Json -Depth $jsonConversionDepth
                             # Remove empty braces
-                            $serializedData = $(removePropertiesRecursively $serializedData) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
+                            $serializedData = $(removePropertiesRecursively $serializedData $true) | ConvertTo-Json -Compress -Depth $jsonConversionDepth | Out-String
                         }
                         catch {
                             Write-Host "Failed to serialize $file" -ForegroundColor Red
@@ -344,7 +359,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                         if($contentToImport.TemplateSpec) {
                             #Getting Workbook Metadata dependencies from Github
                             $workbookData = $null
-                            $workbookFinalPath = $workbookMetadataPath + 'Tools/Create-Azure-Sentinel-Solution/V2/WorkbookMetadata/WorkbooksMetadata.json';
+                            $workbookFinalPath = $workbookMetadataPath + 'Workbooks/WorkbooksMetadata.json';
                             try {
                                 Write-Host "Downloading $workbookFinalPath"
                                 $workbookData = (New-Object System.Net.WebClient).DownloadString($workbookFinalPath)
@@ -973,22 +988,19 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 Write-Host $logicAppsPlaybookId;
                             }
 
-                            
-
                             $playbookResource =  $playbookResource
-                            $playbookResource = $(removePropertiesRecursively $playbookResource)
+                            $playbookResource = $(removePropertiesRecursively $playbookResource $false)
                             $playbookResource =  $(addInternalSuffixRecursively $playbookResource)
                             $playbookResource =  $(removeBlanksRecursively $playbookResource)
                             $playbookResources += $playbookResource;
                             $connectionCounter += 1
-
                         }
                         if(!$IsFunctionAppResource -and $rawData -like '*Microsoft.Web/sites*' )
                             {
                             if ($null -ne $playbookData -and $null -ne $playbookData.parameters){
                                         foreach($param in $playbookData.parameters.PsObject.Properties)
                                         {
-                                            if($functionAppList.ContainsKey($param.Value.defaultValue))
+                                            if($param.Value -match "defaultValue" -and $functionAppList.ContainsKey($param.Value.defaultValue))
                                             {
                                                 $playbookDependencies += [PSCustomObject] @{
                                                         kind = "AzureFunction";
@@ -1287,6 +1299,35 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 $existingFunctionApp = $false;
                                 $instructionArray = $templateSpecConnectorData.instructionSteps
                                 ($instructionArray | ForEach {if($_.description -and $_.description.IndexOf('[Deploy To Azure]') -gt 0){$existingFunctionApp = $true;}})
+
+                                if ($existingFunctionApp -eq $false)
+                                {
+                                    # check if only instructions object is present without any description
+                                    foreach ($item in $instructionArray) 
+                                    {
+                                        if ($null -eq $item.description -and $item.instructions.Count -gt 0)
+                                        {
+                                            foreach ($instructionItem in $item.instructions)
+                                            {
+                                                $parameterCount = $instructionItem.parameters.Count -gt 0
+                                                $parameterInstructionStepsCount = $instructionItem.parameters.instructionSteps.Count -gt 0
+
+                                                if ($parameterCount -and $parameterInstructionStepsCount)
+                                                {
+                                                    foreach ($desc in $instructionItem.parameters.instructionSteps)
+                                                    {
+                                                        if ($desc.description && $desc.description.IndexOf('Deploy To Azure') -gt 0)
+                                                        {
+                                                            $existingFunctionApp = $true
+                                                            break
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
                                 if($existingFunctionApp)
                                 {
                                     $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
@@ -1809,8 +1850,8 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                         displayName = "$($solutionName) Hunting Query template";
                                     }
                                 }
-                                if($baseAnalyticRuleTemplateSpec.properties.displayName.length -ge 64){
-                                    $baseAnalyticRuleTemplateSpec.properties.displayName = "$($solutionName) HQ template";
+                                if($baseHuntingQueryTemplateSpec.properties.displayName.length -ge 64){
+                                    $baseHuntingQueryTemplateSpec.properties.displayName = "$($solutionName) HQ template";
                                 }
 
                                 $baseMainTemplate.resources += $baseHuntingQueryTemplateSpec
@@ -2298,7 +2339,7 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
                                 apiVersion = "2022-01-01-preview";
                                 name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Parser-', last(split(variables('_parserId$parserCounter'),'/'))))]";
                                 dependsOn  =  @(
-                                    "[variables('_parserName$parserCounter')]"
+                                    "[variables('_parserId$parserCounter')]"
                                 );
                                 properties = [PSCustomObject]@{
                                     parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), variables('parserName$parserCounter'))]"
@@ -2648,5 +2689,5 @@ foreach ($inputFile in $(Get-ChildItem $path)) {
         Write-Output "Missing arm-ttk validations. Downloading module..."
         Invoke-Expression "$armTtkFolder/download-arm-ttk.ps1"
     }
-    Invoke-Expression "$armTtkFolder/run-arm-ttk-in-automation.ps1 '$solutionName'"
+    Invoke-Expression ". '$armTtkFolder/run-arm-ttk-in-automation.ps1' '$solutionName'"
 }

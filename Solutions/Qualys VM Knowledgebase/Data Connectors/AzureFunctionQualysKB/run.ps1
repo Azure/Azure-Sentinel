@@ -206,6 +206,7 @@ function QualysKB {
                     'Discovery_Additional_Info' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.ADDITIONAL_INFO
                     'Discovery_Auth_Type' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.AUTH_TYPE_LIST.AUTH_TYPE
                     'Discovery_Remote' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.REMOTE
+                    'THREAT_INTELLIGENCE' = $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].THREAT_INTELLIGENCE.THREAT_INTEL | Select-Object id, "#cdata-section" | ConvertTo-Json
                     }
 
                 $objs += $obj

@@ -100,12 +100,12 @@ Once deployment is complete, you will need to authorize each connection.
 ##  Components of this integration
 
  Connector
-* [OktaCustomConnector](https://github.com/Azure/Azure-Sentinel/master/Playbooks/Okta/OktaCustomConnector)
+* [OktaCustomConnector](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Okta%20Single%20Sign-On/Playbooks/OktaCustomConnector)
 
 Playbooks
-* [Okta-Response From Teams : Playbook to perform different actions on user on Okta and add user deatils to incident](https://github.com/Azure/Azure-Sentinel/master/Playbooks/Okta/OktaPlaybooks/Okta-EnrichIncidentWithUserDetails)
-* [Okta-Enrich incident with user details : Playbook to enrich incident with user deatils and user groupdetails ](https://github.com/Azure/Azure-Sentinel/master/Playbooks/Okta/OktaPlaybooks/Okta-EnrichIncidentWithUserDetails)
-* [Okta-PromptUser : Playbook to prompt risky user about the malicious activity](https://github.com/Azure/Azure-Sentinel/master/Playbooks/Okta/OktaPlaybooks/Okta-PromptUser)
+* [Okta-Response From Teams : Playbook to perform different actions on user on Okta and add user deatils to incident](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Okta%20Single%20Sign-On/Playbooks/OktaPlaybooks/Okta-EnrichIncidentWithUserDetails)
+* [Okta-Enrich incident with user details : Playbook to enrich incident with user deatils and user groupdetails ](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Okta%20Single%20Sign-On/Playbooks/OktaPlaybooks/Okta-EnrichIncidentWithUserDetails)
+* [Okta-PromptUser : Playbook to prompt risky user about the malicious activity](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Okta%20Single%20Sign-On/Playbooks/OktaPlaybooks/Okta-PromptUser)
 
 
 

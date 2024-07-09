@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for M365 Defender Device Logon Events
-  Version: '0.1.0'
-  LastUpdated: July 1, 2021
+  Version: '0.1.1'
+  LastUpdated: 21 Jul 2023
 Product:
   Name: M365 Defender for EndPoint
 Normalization:
@@ -15,6 +15,7 @@ References:
 Description: |
   This ASIM parser supports normalizing endpoint authentication events, collected by Microsoft 365 Defender for Endpoint, stored in the  DeviceLogonEvents table, to the ASIM Authentication schema.
 ParserName: ASimAuthenticationM365Defender
+EquivalentBuiltInParser: _ASim_Authentication_M365Defender
 ParserParams:
   - Name: disabled
     Type: bool
@@ -24,19 +25,19 @@ ParserQuery: |
     'InvalidUserNameOrPassword','No such user or password'
   ];
   let EventSubTypeLookup = datatable (EventOriginalType:string, EventSubType:string) [ 
-    'Interactive',                      'Interactive',
-    'Remote interactive (RDP) logons',  'RemoteInteractive',
-    'Network',                          'Remote',
     'Batch',                            'Service',
-    'Service',                          'Service',
-    'Unknown',                          '',
+    'CachedInteractive',                'Interactive',
+    'Interactive',                      'Interactive',
+    'Network',                          'Remote',
+    'Remote interactive (RDP) logons',  'RemoteInteractive',
     'RemoteInteractive',                'RemoteInteractive',
-    'CachedInteractive',                'Interactive'
+    'Service',                          'Service',
+    'Unknown',                          ''
   ];
   let EventResultLookup = datatable (ActionType:string, EventResult:string) [ 
-    'LogonSuccess', 'Success',
-    'LogonFailed', 'Failure',
-    'LogonAttempted', 'NA'
+    'LogonAttempted', 'NA',
+    'LogonFailed',    'Failure',
+    'LogonSuccess',   'Success'
   ];
   let parser = (
     disabled:bool=false
@@ -46,13 +47,13 @@ ParserQuery: |
         | where not(disabled)
         | where InitiatingProcessFolderPath startswith "/"
         | extend 
-              TargetDvcOs        = "Linux"
-            , ActorUsernameType  = "Simple"
-            , TargetUsernameType = "Simple"
+            ActorUsernameType  = "Simple",
+            TargetDvcOs        = "Linux",
+            TargetUsernameType = "Simple"
         | project-rename 
-              ActorUsername      = InitiatingProcessAccountName
-            , ActingProcessName  = InitiatingProcessFolderPath
-            , TargetUsername     = AccountName
+            ActingProcessName  = InitiatingProcessFolderPath,
+            ActorUsername      = InitiatingProcessAccountName,
+            TargetUsername     = AccountName
         | project-away 
             InitiatingProcessAccountSid, AccountDomain, InitiatingProcessAccountDomain, InitiatingProcessFileName, AccountSid
     };
@@ -61,31 +62,34 @@ ParserQuery: |
         | where not(disabled)
         | where InitiatingProcessFolderPath !startswith "/"
         | extend 
-              TargetDvcOs = "Windows"
-            , TargetUserIdType            = 'SID'
-            , ActorUserIdType             = 'SID'
-            , ActorUsername               = case (
-                isempty(InitiatingProcessAccountName), "",
-                isempty(InitiatingProcessAccountDomain), InitiatingProcessAccountName,
-                strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)
-            )
-            , TargetUsername              = iff (
+            ActingProcessName           = strcat (InitiatingProcessFolderPath,'\\',InitiatingProcessFileName),
+            ActorUserIdType             = 'SID',
+            ActorUsername               = case (
+              isempty(InitiatingProcessAccountName), "",
+              isempty(InitiatingProcessAccountDomain), InitiatingProcessAccountName,
+              strcat(InitiatingProcessAccountDomain, '\\', InitiatingProcessAccountName)
+            ),
+            ActorUsernameType           = iff (
+              InitiatingProcessAccountDomain == '','Simple',
+              'Windows'
+            ),
+            TargetDvcOs = "Windows",
+            TargetUserIdType            = 'SID',
+            TargetUsername              = iff (
                 isempty(AccountDomain), AccountName,
                 strcat(AccountDomain, '\\', AccountName)
-            )           
-            , TargetUsernameType          = iff (AccountDomain == '','Simple', 'Windows')
-            , ActorUsernameType           = iff (InitiatingProcessAccountDomain == '','Simple', 'Windows')
-            , ActingProcessName           = strcat (InitiatingProcessFolderPath,'\\',InitiatingProcessFileName)
+            ),
+            TargetUsernameType          = iff (AccountDomain == '','Simple', 'Windows')
         | project-rename 
-              ActorUserId        = InitiatingProcessAccountSid
-            , TargetUserId       = AccountSid
+            ActorUserId        = InitiatingProcessAccountSid,
+            TargetUserId       = AccountSid
         // -- Specific identifiers aliases
         | extend 
-              TargetUserSid         = TargetUserId
-            , ActorUserSid          = ActorUserId
-            , TargetWindowsUsername = TargetUsername
-            , ActorWindowsUsername  = ActorUsername
-            , ActorUserType         = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
+            TargetUserSid         = TargetUserId,
+            ActorUserSid          = ActorUserId,
+            TargetWindowsUsername = TargetUsername,
+            ActorWindowsUsername  = ActorUsername,
+            ActorUserType         = _ASIM_GetWindowsUserType (ActorUsername, ActorUserId)
         | extend 
             TargetUserType = iff(IsLocalAdmin, 
                 'Admin',
@@ -98,54 +102,53 @@ ParserQuery: |
       UnixDeviceLogonEvents (disabled=disabled)
     | project-away SourceSystem, TenantId, Timestamp, MachineGroup
     | project-rename 
-         EventOriginalResultDetails  = FailureReason 
-       , EventOriginalType           = LogonType
-       , EventUid                    = _ItemId
-       , LogonProtocol               = Protocol
-       , TargetDvcId                 = DeviceId
-       , SrcHostname                 = RemoteDeviceName
-       , ActingProcessCommandLine    = InitiatingProcessCommandLine
-       , ActingProcessCreationTime   = InitiatingProcessCreationTime
-       , ActingProcessMD5            = InitiatingProcessMD5
-       , ActingProcessSHA1           = InitiatingProcessSHA1 
-       , ActingProcessSHA256         = InitiatingProcessSHA256
-       , ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel
-       , ActingProcessTokenElevation = InitiatingProcessTokenElevation
-       , ParentProcessName           = InitiatingProcessParentFileName
-       , ParentProcessCreationTime   = InitiatingProcessParentCreationTime
-       //??, ActingProcessName           = InitiatingProcessFolderPath 
-       , ActorUserUpn                = InitiatingProcessAccountUpn
-       , ActorUserAadId              = InitiatingProcessAccountObjectId
-       , SrcPortNumber               = RemotePort
+        ActingProcessCommandLine    = InitiatingProcessCommandLine,
+        ActingProcessCreationTime   = InitiatingProcessCreationTime,
+        ActingProcessIntegrityLevel = InitiatingProcessIntegrityLevel,
+        ActingProcessMD5            = InitiatingProcessMD5,
+        ActingProcessSHA1           = InitiatingProcessSHA1 ,
+        ActingProcessSHA256         = InitiatingProcessSHA256,
+        ActingProcessTokenElevation = InitiatingProcessTokenElevation,
+        ActorUserAadId              = InitiatingProcessAccountObjectId,
+        ActorUserUpn                = InitiatingProcessAccountUpn,
+        EventOriginalResultDetails  = FailureReason,
+        EventOriginalType           = LogonType,
+        EventUid                    = _ItemId,
+        LogonProtocol               = Protocol,
+        ParentProcessCreationTime   = InitiatingProcessParentCreationTime,
+        ParentProcessName           = InitiatingProcessParentFileName,
+        SrcHostname                 = RemoteDeviceName,
+        SrcPortNumber               = RemotePort,
+        TargetDvcId                 = DeviceId
     | extend 
-         EventCount                  = int(1)
-       , EventStartTime              = TimeGenerated
-       , EventEndTime                = TimeGenerated
-       , EventSchemaVersion          = '0.1.3'
-       , EventType                   = 'Logon'
-       , EventVendor                 = 'Microsoft'
-       , EventProduct                = 'M365 Defender for EndPoint'
-       , EventSchema                 = 'Authentication'
-       , TargetDvcIdType             = 'MDEid'
-       , ActingProcessId             = tostring (InitiatingProcessId)
-       , ParentProcessId             = tostring (InitiatingProcessParentId)
-       , EventOriginalUid            = tostring (ReportId)
-       , TargetSessionId             = tostring (LogonId)
-       , SrcIpAddr                   = iff (RemoteIP == '-', '', RemoteIP)
+        ActingProcessId             = tostring (InitiatingProcessId),
+        EventCount                  = int(1),
+        EventEndTime                = TimeGenerated,
+        EventOriginalUid            = tostring (ReportId),
+        EventProduct                = 'M365 Defender for EndPoint',
+        EventSchema                 = 'Authentication',
+        EventSchemaVersion          = '0.1.3',
+        EventStartTime              = TimeGenerated,
+        EventType                   = 'Logon',
+        EventVendor                 = 'Microsoft',
+        ParentProcessId             = tostring (InitiatingProcessParentId),
+        SrcIpAddr                   = iff (RemoteIP == '-', '', RemoteIP),
+        TargetDvcIdType             = 'MDEid',
+        TargetSessionId             = tostring (LogonId)
     | extend
          Hash = coalesce(
-              ActingProcessSHA256
-            , ActingProcessSHA1
-            , ActingProcessMD5
+            ActingProcessMD5,
+            ActingProcessSHA1,
+            ActingProcessSHA256
          )
     | extend
-         HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5),Hash)])     
+        HashType = tostring(dynamic(["SHA256", "SHA1", "MD5"])[array_index_of(pack_array(ActingProcessSHA256, ActingProcessSHA1, ActingProcessMD5),Hash)])     
     | invoke _ASIM_ResolveFQDN('DeviceName')
     | project-rename 
-         TargetFQDN         = FQDN
-       , TargetHostname     = ExtractedHostname
-       , TargetDomainType   = DomainType
-       , TargetDomain       = Domain  
+        TargetDomain       = Domain, 
+        TargetDomainType   = DomainType,
+        TargetFQDN         = FQDN,
+        TargetHostname     = ExtractedHostname
     | project-away DeviceName
     | lookup EventResultDetailsLookup on EventOriginalResultDetails 
     | lookup EventSubTypeLookup on EventOriginalType
@@ -154,30 +157,30 @@ ParserQuery: |
          EventSeverity = iff (EventResult == "Success", "Informational", "Low")
     // -- Specific identifiers aliases
     | extend
-          TargetDvcMDEid        = TargetDvcId
-        , DvcMDEid              = TargetDvcId
+        DvcMDEid              = TargetDvcId,
+        TargetDvcMDEid        = TargetDvcId
     // --  Aliases
     | extend 
-         User          = TargetUsername 
-       , Prcess        = ActingProcessName
-       , IpAddr        = SrcIpAddr
-       , ActingAppName = ActingProcessName
-       , ActingAppType = "Process"
-       , Dvc           = coalesce (TargetFQDN, TargetHostname)
-       , Src           = coalesce (SrcIpAddr, SrcHostname)
-    // -- Alias Dvc to Target
-       , DvcFQDN       = TargetFQDN
-       , DvcHostname   = TargetHostname
-       , DvcDomain     = TargetDomain
-       , DvcDomainType = TargetDomainType
-       , DvcId         = TargetDvcId
-       , DvcIdType     = TargetDvcIdType
-       , DvcOs         = TargetDvcOs
+        ActingAppName = ActingProcessName,
+        ActingAppType = "Process",
+        Dvc           = coalesce (TargetFQDN, TargetHostname),
+        IpAddr        = SrcIpAddr,
+        Prcess        = ActingProcessName,
+        Src           = coalesce (SrcIpAddr, SrcHostname),
+        User          = TargetUsername,
+    // -- Alias Dvc to Target,
+        DvcDomain     = TargetDomain,
+        DvcDomainType = TargetDomainType,
+        DvcFQDN       = TargetFQDN,
+        DvcHostname   = TargetHostname,
+        DvcId         = TargetDvcId,
+        DvcIdType     = TargetDvcIdType,
+        DvcOs         = TargetDvcOs
     | extend 
-         LogonTarget   = Dvc
-       , Dst = Dvc
+        Dst         = Dvc,
+        LogonTarget = Dvc
     | project-away ReportId, LogonId, InitiatingProcessId, InitiatingProcessParentId, ActionType, InitiatingProcessFileSize, InitiatingProcessVersionInfoCompanyName, InitiatingProcessVersionInfoFileDescription, InitiatingProcessVersionInfoInternalFileName, InitiatingProcessVersionInfoOriginalFileName, InitiatingProcessVersionInfoProductName, InitiatingProcessVersionInfoProductVersion, AppGuardContainerId, RemoteIPType, IsLocalAdmin, RemoteIP
   };
   parser (
-    disabled = disabled
+      disabled = disabled
   )

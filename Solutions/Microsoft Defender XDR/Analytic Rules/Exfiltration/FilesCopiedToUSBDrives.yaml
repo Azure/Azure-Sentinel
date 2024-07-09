@@ -1,0 +1,66 @@
+id: 3ab04acf-e0e7-4f7c-8995-748ab4c848c2
+name: Files Copied to USB Drives
+description: | 
+  This query lists files copied to USB external drives with USB drive information based on FileCreated events associated with most recent USBDriveMount events befor file creations. But be aware that Advanced Hunting is not monitoring all the file types.
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceEvents
+      - DeviceFileEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1041
+query: |
+  let UsbDriveMount = DeviceEvents
+  | where ActionType=="UsbDriveMounted"
+  | extend ParsedFields=parse_json(AdditionalFields)
+  | project DeviceId, DeviceName, DriveLetter=ParsedFields.DriveLetter, MountTime=TimeGenerated,
+  ProductName=ParsedFields.ProductName,SerialNumber=ParsedFields.SerialNumber,Manufacturer=ParsedFields.Manufacturer
+  | order by DeviceId asc, MountTime desc;
+  let FileCreation = DeviceFileEvents
+  | where InitiatingProcessAccountName != "system"
+  | where ActionType == "FileCreated"
+  | where FolderPath !startswith "C:\\"
+  | where FolderPath !startswith "\\"
+  | project ReportId,DeviceId,InitiatingProcessAccountDomain,
+  InitiatingProcessAccountName,InitiatingProcessAccountUpn,
+  FileName, FolderPath, SHA256, TimeGenerated, SensitivityLabel, IsAzureInfoProtectionApplied
+  | order by DeviceId asc, TimeGenerated desc;
+  FileCreation | lookup kind=inner (UsbDriveMount) on DeviceId
+  | where FolderPath startswith DriveLetter
+  | where TimeGenerated >= MountTime
+  | partition hint.strategy=native by ReportId ( top 1 by MountTime )
+  | order by DeviceId asc, TimeGenerated desc
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+  | extend FileHashAlgorithm = 'SHA256'
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+      - identifier: Directory
+        columnName: FolderPath
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: FileHashAlgorithm
+      - identifier: Value
+        columnName: SHA256
+version: 1.0.0
+kind: Scheduled

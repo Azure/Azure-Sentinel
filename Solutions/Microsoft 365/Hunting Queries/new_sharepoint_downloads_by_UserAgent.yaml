@@ -15,7 +15,6 @@ tactics:
 relevantTechniques:
   - T1030
 query: |
-
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 14d;
@@ -34,13 +33,27 @@ query: |
   | where TimeGenerated between (starttime .. endtime)
   | where  RecordType == "SharePointFileOperation"
   | where Operation in ("FileDownloaded", "FileUploaded")
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities=count() by UserAgent
-  | join (HistoricalActivity) on UserAgent
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), RecentFileActivities=count() by UserAgent, UserId, ClientIP, Site_Url
+  | join kind=innerunique (HistoricalActivity) on UserAgent
   | project-away UserAgent1
-  | extend timestamp = StartTime, UserAgentCustomEntity = UserAgent
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  | extend IP_0_Address = ClientIP
+  | extend Account_0_Name = AccountName
+  | extend Account_0_UPNSuffix = AccountUPNSuffix
+  | extend URL_0_Url = Site_Url
 entityMappings:
-  - entityType: CloudLogonSession
+  - entityType: IP
     fieldMappings:
-      - identifier: UserAgent
-        columnName: UserAgent
-version: 2.0.0
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Site_Url
+version: 2.0.1

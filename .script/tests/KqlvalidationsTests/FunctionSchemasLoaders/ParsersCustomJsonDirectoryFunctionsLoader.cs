@@ -46,7 +46,8 @@ namespace Kqlvalidations.Tests.FunctionSchemasLoaders
         private IEnumerable<FunctionSchema> GetFunctions(Dictionary<string, List<Column>> schemaToResultColumnsMapping)
         {
             var parsersYamlFilesLoader = new ParsersYamlFilesLoader();
-            var parsersYamlFiles = parsersYamlFilesLoader.GetFilesNames();
+            var parsersYamlFiles = parsersYamlFilesLoader.GetFilesNames(true);
+
             return parsersYamlFiles.Select(fileName =>
             {
                 var schema = fileName.Split(Path.DirectorySeparatorChar)[^3];

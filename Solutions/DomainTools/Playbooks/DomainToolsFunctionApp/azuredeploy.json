@@ -1,13 +1,13 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-     "metadata": {
-        "title": "Extract Domain from URL", 
+    "metadata": {
+        "title": "Extract Domain from URL",
         "description": "Given a URL, this function will extract the proper domain.",
-        "lastUpdateTime": "2022-09-24T00:00:00.000Z", 
-        "tags": ["Utilities"], 
+        "lastUpdateTime": "2022-09-24T00:00:00.000Z",
+        "tags": [ "Utilities" ],
         "support": {
-            "tier": "community" 
+            "tier": "community"
         },
         "author": {
             "name": "Dan Nunes, DomainTools"
@@ -17,21 +17,26 @@
         "FunctionAppName": {
             "defaultValue": "DomainToolsFunctionApp",
             "type": "String"
+        },
+        "AppInsightsWorkspaceResourceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
+            }
         }
     },
     "variables": {
         "functionappName": "[concat(toLower(parameters('FunctionAppName')), uniqueString(resourceGroup().id))]",
-        "storageAccountName": "[concat(toLower(parameters('FunctionAppName')), uniqueString(resourceGroup().id))]",
+        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'storageacc')]",
         "storageAccountType": "Standard_LRS",
-        "storageAccountTier": "Standard",
-        "location": "[resourceGroup().location]"
+        "storageAccountTier": "Standard"
     },
     "resources": [
         {
             "type": "Microsoft.Web/serverfarms",
             "apiVersion": "2021-02-01",
             "name": "[variables('functionappName')]",
-            "location": "[variables('location')]",
+            "location": "[resourceGroup().location]",
             "sku": {
                 "name": "S1"
             },
@@ -44,7 +49,7 @@
             "type": "Microsoft.Storage/storageAccounts",
             "apiVersion": "2022-09-01",
             "name": "[variables('storageAccountName')]",
-            "location": "[variables('location')]",
+            "location": "[resourceGroup().location]",
             "sku": {
                 "name": "[variables('StorageAccountType')]",
                 "tier": "[variables('StorageAccountTier')]"
@@ -59,9 +64,10 @@
             "kind": "web",
             "properties": {
                 "Application_Type": "web",
-                "ApplicationId": "[variables('functionappName')]"
+                "ApplicationId": "[variables('functionappName')]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
             }
-        },    
+        },
         {
             "apiVersion": "2015-08-01",
             "type": "Microsoft.Web/sites",
@@ -89,7 +95,7 @@
                     "appSettings": [
                         {
                             "name": "AzureWebJobsStorage",
-                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('functionappName'))), '2022-09-01').keys[0].value)]"
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('storageAccountName'))), '2022-09-01').keys[0].value)]"
                         },
                         {
                             "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
@@ -102,7 +108,7 @@
                         {
                             "name": "WEBSITE_RUN_FROM_PACKAGE",
                             "value": "https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/DomainTools/Playbooks/DomainToolsFunctionApp/ExtractDomainFromUrl.zip?raw=true"
-                            
+
                         },
                         {
                             "name": "FUNCTIONS_EXTENSION_VERSION",

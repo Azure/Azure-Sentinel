@@ -1,0 +1,55 @@
+id: 0ef8dee1-eb94-44c8-b59b-2eb096a4b983
+name: S3 Bucket outbound Data transfer anomaly
+description: |
+    'Identifies S3 data transfer spikes using GetObject API, BytesTransferredOut, and KQL anomaly detection. Investigate sudden action frequency increases. Adjust scorethreshold to 3+ to reduce noise.'
+description_detailed: |
+  'Detects anomalous data transfer spikes in S3 bucket via GetObject API. Uses KQL anomaly detection for deviations. Investigate sensitive action frequency increases. Adjust scorethreshold to reduce noise. More on Logstash: https://github.com/Azure/Azure-Sentinel/wiki/Ingest-Custom-Logs-LogStash. AWS S3 API GetObject: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html. S3 LogStash Config and KQL Parser available on Azure GitHub.'
+requiredDataConnectors: []
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1020
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let timeframe = 1h;
+  let scorethreshold = 1.5;
+  // Preparing the time series data aggregated on BytesTransferredOut column in the form of multi-value array so that it can be used with time series anomaly function.
+  let TimeSeriesData=
+  AwsBucketAPILogs_CL
+  | where EventTime between (lookback..endtime)
+  | where EventName == "GetObject"
+  | make-series Total=sum(BytesTransferredOut) on EventTime from startofday(starttime) to startofday(endtime) step timeframe;
+  // Use the time series data prepared in previous step with time series aomaly function to generate baseline pattern and flag the outlier based on scorethreshold value.
+  let TimeSeriesAlerts = TimeSeriesData
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(Total, scorethreshold, -1, 'linefit')
+  | mv-expand Total to typeof(double), EventTime to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long)
+  | where anomalies > 0
+  | project EventTime, Total, baseline, anomalies, score;
+  // Joining the flagged outlier from the previous step with the original dataset to present contextual information during the anomalyhour to analysts to conduct investigation or informed decistions.
+  TimeSeriesAlerts
+  | join
+  (
+    AWSS3BucketAPILogParsed
+    | where EventTime between (startofday(lookback)..endofday(endtime))
+    | where EventName == "GetObject"
+    | summarize Total = sum(BytesTransferredOut), Files= makeset(Key) , max(EventTime) by bin(EventTime, 1h), EventSource,EventName, SourceIPAddress, UserIdentityType, UserIdentityArn, UserIdentityUserName, BucketName, Host, AuthenticationMethod, SessionMfaAuthenticated, SessionUserName
+  ) on EventTime
+  | project AnomalyTime = max_EventTime, SourceIPAddress, UserIdentityType,UserIdentityUserName,SessionUserName, BucketName, Host, AuthenticationMethod, Files, Total, baseline, anomalies, score
+  | extend timestamp = AnomalyTime, AccountCustomEntity = SessionUserName , HostCustomEntity = Host, IPCustomEntity = SourceIPAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0

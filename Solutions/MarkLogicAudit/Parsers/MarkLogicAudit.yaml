@@ -1,0 +1,65 @@
+id: f2b2c4e3-a65b-44ba-81e9-03a79fa0fa84
+Function:
+  Title: Parser for MarkLogicAudit
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: MarkLogicAudit
+FunctionAlias: MarkLogicAudit
+FunctionQuery: |
+    let EventData = MarkLogicAudit_CL
+    | extend EventVendor = 'MarkLogic',
+             EventProduct = 'MarkLogic Audit',
+             EventCount = 1;
+    let auditlog = EventData
+    | where RawData has 'event='
+    | mv-apply AdditionalFields = extract_all(@'(?P<key>[a-zA-Z]+)=(?P<value>[a-zA-Z0-9-_:/@.,#{}><" ]+)', dynamic(["key","value"]), RawData) on (
+        project packed1 = pack(tostring(AdditionalFields[0]), tostring(AdditionalFields[1]))
+        | summarize bag = make_bag(packed1)
+    )
+    | evaluate bag_unpack(bag)
+    | extend EventResult = case(success=true, 'Success', 'Failure')
+    | project-rename Change=change
+                    ,Database=database
+                    ,EventType=event
+                    ,Expr=expr
+                    ,File=file
+                    ,Function=function
+                    ,Roles=roles
+                    ,EventSubType=type
+                    ,UrlOriginal=uri
+                    ,ActorUsername=user
+    | project-away success
+                   ,RawData;
+    let acceslog = EventData
+    | where RawData matches regex @"\A(\d+\.\d+\.\d+\.\d+|[0-9a-f:]{39}|::1|::)"
+    | extend EventType = 'AccessLog'
+    | extend EventData = split(RawData, '"')
+    | extend SubEventData0 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[0])))), ' ')
+    | extend SubEventData1 = split(EventData[1], ' ')
+    | extend SubEventData2 = split(trim_start(@' ', (trim_end(@' ', tostring(EventData[2])))), ' ')
+    | extend SrcIpAddr = tostring(SubEventData0[0])
+    | extend ClientIdentity = SubEventData0[1]
+    | extend SrcUserName = SubEventData0[2]
+    | extend EventStartTime = todatetime(replace_regex(replace_regex(tostring(extract(@'\[(.*?)\]', 1, RawData)), @'(\d{2}\/\w{3}\/\d{4}):(\d{2}\:\d{2}\:\d{2})', @'\1 \2'), @'(\d{2})\/(\w{3})\/(\d{4})\s(\d{2}\:\d{2}\:\d{2})', @'\1-\2-\3 \4'))
+    | extend HttpRequestMethod = SubEventData1[0]
+    | extend UrlOriginal = SubEventData1[1]
+    | extend HttpVersion = SubEventData1[2]
+    | extend HttpStatusCode = SubEventData2[0]
+    | extend HttpResponseBodyBytes = SubEventData2[1]
+    | extend HttpReferrerOriginal = EventData[3]
+    | extend HttpUserAgentOriginal = EventData[5]
+    | project-away SubEventData0
+                   ,SubEventData1
+                   ,SubEventData2
+                   ,EventData
+                   ,RawData;
+    let errorlog = EventData
+    | where RawData matches regex @"\A\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\w+:"
+    | extend EventData = split(RawData, ' ')
+    | extend EventOriginalResult = extract(@'\A\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+\w+:\s(.*)', 1, RawData)
+    | extend EventStartTime=todatetime(strcat(EventData[0], ' ',  EventData[1]))
+            ,EventSeverity=replace_string(tostring(EventData[2]), ':', '')
+    | project-away EventData
+                 , RawData;
+    union isfuzzy=false auditlog, acceslog, errorlog

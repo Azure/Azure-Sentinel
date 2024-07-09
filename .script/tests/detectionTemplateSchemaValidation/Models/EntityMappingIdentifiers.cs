@@ -11,7 +11,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
                 EntityType.Account,
                 new EntityIdentifiers()
                 {
-                    Identifiers = new List<string>() { "Name", "FullName", "NTDomain", "DnsDomain", "UPNSuffix", "Sid", "AadTenantId", "AadUserId", "PUID", "IsDomainJoined", "DisplayName", "ObjectGuid" },
+                    Identifiers = new List<string>() { "Name", "FullName", "NTDomain", "DnsDomain", "UPNSuffix", "Sid", "AadTenantId", "AadUserId", "PUID", "IsDomainJoined", "DisplayName", "ObjectGuid","CloudAppAccountId" },
                     RequiredIdentifiers = new List<List<string>>()
                     {
                         new List<string>() { "FullName" },

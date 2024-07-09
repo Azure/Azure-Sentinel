@@ -1,0 +1,626 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Query Azure Resource Graph with HTTP input and output",
+        "description": "This playbook queries Azure Resource Graph and returns azure information related to the resource like Subscription, Resourcegroups, Tags and Management groups.",
+        "mainSteps": [
+            "Only Azure resource graph referenced resources are covered."
+        ],
+        "prerequisites": [
+            "1. Set service principal with Reader role to query resourcegraph.\n2. Set keyvault to store client id and secret.\n3. Pass those parameters at deployment time."
+        ],
+        "postDeployment": [
+            "None"
+        ],
+        "lastUpdateTime": "2023-04-01T10:00:00.000Z",
+        "entities": [],
+        "tags": [
+            "Enrichment",
+            "AzureResourceGraph"
+        ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "juju4"
+        },
+        "source": {
+            "kind": "Community"
+        },
+        "version": "1.0.0",
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Query Azure Resource Graph with HTTP input and output",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "resourceTags": {
+            "type": "object",
+            "defaultValue": {
+                "LogicAppsCategory": "security"
+            },
+            "metadata": {
+                "description": "The Azure tags to set on the resource."
+            }
+        },
+        "PlaybookName": {
+            "defaultValue": "Enrich-AzureResourceGraph",
+            "type": "string",
+            "metadata": {
+                "description": "The Playbook aka LogicApp name."
+            }
+        },
+        "KeyvaultName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "Vault name containing clientid and clientsecret for ResourceGraph"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        }
+    },
+    "variables": {
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "properties": {
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyvaultName')]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[parameters('location')]",
+            "tags": "[parameters('resourceTags')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "request": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "query": {
+                                            "type": "string"
+                                        },
+                                        "resourceName": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition": {
+                            "actions": {
+                                "Set_variable_arg_query_-_default": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "arg_query",
+                                        "value": "resources | where name == \"@{triggerBody()?['resourceName']}\" | join kind=inner (resourcecontainers | where type == 'microsoft.resources/subscriptions' | project subscriptionId, subscriptionName = name, subproperties = properties) on subscriptionId | project subscriptionName, resourceGroup, name, type, tags, subproperties"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_variable_arg_query_-_custom_query": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "arg_query",
+                                            "value": "@triggerBody()?['query']"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['query']",
+                                            "@null"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_status_code_not_200": {
+                            "actions": {
+                                "Set_variable_html_output_not_200": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "html_output",
+                                        "value": "Error (@{outputs('HTTP_Query_Azure_Resource_Graph')['statusCode']}): @{body('Parse_JSON_Query_Azure_Resource_Graph')?['error']?['innererror']?['innererror']} - innererror: @{body('Parse_JSON_Query_Azure_Resource_Graph')?['error']?['innererror']}"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_Query_Azure_Resource_Graph": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Create_HTML_table": {
+                                        "runAfter": {},
+                                        "type": "Table",
+                                        "inputs": {
+                                            "columns": [
+                                                {
+                                                    "header": "name",
+                                                    "value": "@item()?['name']"
+                                                },
+                                                {
+                                                    "header": "subscriptionName",
+                                                    "value": "@item()?['subscriptionName']"
+                                                },
+                                                {
+                                                    "header": "resourceGroup",
+                                                    "value": "@item()?['resourceGroup']"
+                                                },
+                                                {
+                                                    "header": "ipAddress",
+                                                    "value": "@item()?['ipAddress']"
+                                                },
+                                                {
+                                                    "header": "publicIpName",
+                                                    "value": "@item()?['publicIpName']"
+                                                },
+                                                {
+                                                    "header": "tags_businesscontact",
+                                                    "value": "@item()?['tags_businesscontact']"
+                                                },
+                                                {
+                                                    "header": "tags_engcontact",
+                                                    "value": "@item()?['tags_engcontact']"
+                                                },
+                                                {
+                                                    "header": "tags_contact",
+                                                    "value": "@item()?['tags_contact']"
+                                                }
+                                            ],
+                                            "format": "HTML",
+                                            "from": "@body('Parse_JSON_Query_Azure_Resource_Graph')?['data']"
+                                        }
+                                    },
+                                    "Set_variable_html_output_200": {
+                                        "runAfter": {
+                                            "Create_HTML_table": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "html_output",
+                                            "value": "@body('Create_HTML_table')"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@outputs('HTTP_Query_Azure_Resource_Graph')['statusCode']",
+                                                200
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_secret_azureresourcegraph-clientid": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('azureresourcegraph-clientid')}/value"
+                            }
+                        },
+                        "Get_secret_azureresourcegraph-clientsecret": {
+                            "runAfter": {
+                                "Get_secret_azureresourcegraph-clientid": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('azureresourcegraph-clientsecret')}/value"
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "HTTP_Azure_Login": {
+                            "runAfter": {
+                                "Get_secret_azureresourcegraph-clientsecret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": "resource=https://management.azure.com&grant_type=client_credentials&client_id=@{body('Get_secret_azureresourcegraph-clientid')?['value']}&client_secret=@{body('Get_secret_azureresourcegraph-clientsecret')?['value']}",
+                                "headers": {
+                                    "Content-Type": "application/x-www-form-urlencoded"
+                                },
+                                "method": "POST",
+                                "uri": "[concat('https://login.microsoftonline.com/', subscription().tenantId, '/oauth2/token')]"
+                            }
+                        },
+                        "HTTP_Query_Azure_Resource_Graph": {
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "managementGroups": [
+                                        "[subscription().tenantId]"
+                                    ],
+                                    "query": "@{variables('arg_query')}"
+                                },
+                                "headers": {
+                                    "Authorization": "Bearer @{body('Parse_JSON')?['access_token']}"
+                                },
+                                "method": "POST",
+                                "uri": "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2021-03-01"
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Initialize_variable_arg_query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "html_output",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_arg_query": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "arg_query",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP_Azure_Login": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_Azure_Login')",
+                                "schema": {
+                                    "properties": {
+                                        "access_token": {
+                                            "type": "string"
+                                        },
+                                        "expires_in": {
+                                            "type": "string"
+                                        },
+                                        "expires_on": {
+                                            "type": "string"
+                                        },
+                                        "ext_expires_in": {
+                                            "type": "string"
+                                        },
+                                        "not_before": {
+                                            "type": "string"
+                                        },
+                                        "resource": {
+                                            "type": "string"
+                                        },
+                                        "token_type": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "secureData": {
+                                    "properties": [
+                                        "inputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Parse_JSON_Query_Azure_Resource_Graph": {
+                            "runAfter": {
+                                "HTTP_Query_Azure_Resource_Graph": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP_Query_Azure_Resource_Graph')",
+                                "schema": {
+                                    "properties": {
+                                        "count": {
+                                            "type": "integer"
+                                        },
+                                        "data": {
+                                            "items": {
+                                                "properties": {
+                                                    "ipAddress": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "publicIPAllocationMethod": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "publicIpName": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "resourceGroup": {
+                                                        "type": "string"
+                                                    },
+                                                    "subproperties": {
+                                                        "properties": {
+                                                            "managedByTenants": {
+                                                                "type": "array"
+                                                            },
+                                                            "managementGroupAncestorsChain": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "displayName": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "displayName",
+                                                                        "name"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "state": {
+                                                                "type": "string"
+                                                            },
+                                                            "subscriptionPolicies": {
+                                                                "properties": {
+                                                                    "locationPlacementId": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "quotaId": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "spendingLimit": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "subscriptionName": {
+                                                        "type": "string"
+                                                    },
+                                                    "tags_businesscontact": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "tags_contact": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "tags_engcontact": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "type": {
+                                                        "type": "string"
+                                                    },
+                                                    "vmStatus": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "name"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "error": {
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string"
+                                                },
+                                                "correlationId": {
+                                                    "type": "string"
+                                                },
+                                                "innererror": {
+                                                    "properties": {
+                                                        "code": {
+                                                            "type": "string"
+                                                        },
+                                                        "innererror": {
+                                                            "properties": {
+                                                                "code": {
+                                                                    "type": "string"
+                                                                },
+                                                                "message": {
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "message": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "message": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "facets": {
+                                            "type": "array"
+                                        },
+                                        "resultTruncated": {
+                                            "type": "string"
+                                        },
+                                        "totalRecords": {
+                                            "type": "integer"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Response": {
+                            "runAfter": {
+                                "Condition_status_code_not_200": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Response",
+                            "inputs": {
+                                "body": {
+                                    "azureresourcegraph": "@body('Parse_JSON_Query_Azure_Resource_Graph')?['data']",
+                                    "azureresourcegraph_count": "@{body('Parse_JSON_Query_Azure_Resource_Graph')?['count']}",
+                                    "azureresourcegraph_query": "@{variables('arg_query')}",
+                                    "html_output": "@{variables('html_output')}",
+                                    "resourceName": "@{triggerBody()?['resourceName']}",
+                                    "status_code": "@outputs('HTTP_Query_Azure_Resource_Graph')['statusCode']"
+                                },
+                                "statusCode": 200
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/keyvault')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

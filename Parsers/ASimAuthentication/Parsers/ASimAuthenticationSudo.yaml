@@ -1,7 +1,7 @@
 Parser:
   Title: Authentication ASIM parser for Syslog sudo
-  Version: '0.1.1'
-  LastUpdated: November 21, 2022
+  Version: '0.1.2'
+  LastUpdated: 21 Jul 2023
 Product:
   Name: sudo
 Normalization:
@@ -15,38 +15,43 @@ References:
 Description: |
   This ASIM parser supports normalizing Syslog sudo sign in logs to the ASIM Authentication schema.
 ParserName: ASimAuthenticationSudo
+EquivalentBuiltInParser: _ASim_Authentication_Sudo
 ParserParams:
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
   let SudoSignInAuthorized=(disabled:bool=false){
-  Syslog | where not(disabled)
-    | where ProcessName == "sudo" and SyslogMessage has 'TTY=' and SyslogMessage has 'USER='and SyslogMessage has 'COMMAND='
+  Syslog 
+    | where not(disabled)
+    | where ProcessName == "sudo" and 
+        SyslogMessage has 'TTY=' and 
+        SyslogMessage has 'USER=' and
+        SyslogMessage has 'COMMAND='
     | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with (pair_delimiter=' ', kv_delimiter='=')
     | project-rename TargetUsername = USER
     | extend
-    EventVendor = 'sudo'
-    , EventProduct = 'sudo'
-    , EventCount = int(1)
-    , EventSchema = 'Authentication'
-    , EventSchemaVersion = '0.1.1'
-    , EventResult = 'Success'
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , EventType = 'Logon'
-    , DvcHostname = Computer
-    , ActorUsernameType = 'Simple'
-    , ActorUsername = extract(@'^(.*?):', 1, SyslogMessage)
-    , TargetUsernameType = 'Simple'
-    , EventResultDetails = 'Other'
-    , EventOriginalRestultDetails = 'Connection authorized'
+        EventVendor                 = 'sudo',
+        EventProduct                = 'sudo',
+        EventCount                  = int(1),
+        EventSchema                 = 'Authentication',
+        EventSchemaVersion          = '0.1.1',
+        EventResult                 = 'Success',
+        EventStartTime              = TimeGenerated,
+        EventEndTime                = TimeGenerated,
+        EventType                   = 'Logon',
+        DvcHostname                 = Computer,
+        ActorUsernameType           = 'Simple',
+        ActorUsername               = extract(@'^(.*?):', 1, SyslogMessage),
+        TargetUsernameType          = 'Simple',
+        EventResultDetails          = 'Other',
+        EventOriginalRestultDetails = 'Connection authorized'
   // ************************
   //      <Aliases>
   // ************************
-  | extend
-          User=TargetUsername
-        , Dvc=Computer
+    | extend
+        User  = TargetUsername,
+        Dvc   = Computer
   // ************************
   //      </Aliases>
   // ************************
@@ -56,52 +61,59 @@ ParserQuery: |
   Syslog | where not(disabled)
     | where ProcessName == "sudo" and (SyslogMessage has 'user NOT in sudoers' or SyslogMessage has 'incorrect password attempts')
     | parse-kv SyslogMessage as (TTY: string, PWD: string, USER: string, COMMAND: string) with  (pair_delimiter=' ', kv_delimiter='=')
-    | project-rename TargetUsername = USER
+    | project-rename 
+        EventUid       = _ItemId,
+        TargetUsername = USER
     | extend
-    EventVendor = 'sudo'
-    , EventProduct = 'sudo'
-    , EventCount = int(1)
-    , EventSchema = 'Authentication'
-    , EventSchemaVersion = '0.1.1'
-    , EventResult = 'Failure'
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , EventType = 'Logon'
-    , DvcHostname = Computer
-    , ActorUsernameType = 'Simple'
-    , ActorUsername = extract(@'^(.*?):', 1, SyslogMessage)
-    , TargetUsernameType = 'Simple'
-    , EventResultDetails = 'No such user or password'
-    , EventOriginalRestultDetails = 'User authentication failed'
+        ActorUsername               = extract(@'^(.*?):', 1, SyslogMessage),
+        ActorUsernameType           = 'Simple',
+        DvcHostname                 = Computer,
+        EventCount                  = int(1),
+        EventEndTime                = TimeGenerated,
+        EventOriginalRestultDetails = 'User authentication failed',
+        EventProduct                = 'sudo',
+        EventResult                 = 'Failure',
+        EventResultDetails          = 'No such user or password',
+        EventSchema                 = 'Authentication',
+        EventSchemaVersion          = '0.1.1',
+        EventStartTime              = TimeGenerated,
+        EventType                   = 'Logon',
+        EventVendor                 = 'sudo',
+        TargetUsernameType          = 'Simple'
     | project-away Computer, MG, SourceSystem, TenantId
     };
   let SudoDisconnect=(disabled:bool=false){
-  Syslog | where not(disabled)
-    | where ProcessName == "sudo" and SyslogMessage has 'session closed for user '
+    Syslog 
+    | where not(disabled)
+    | where ProcessName == "sudo" and 
+        SyslogMessage   has 'session closed for user '
     | parse SyslogMessage with * "for user " TargetUsername:string
     | extend
-    EventVendor = 'sudo'
-    , EventProduct = 'sudo'
-    , EventCount = int(1)
-    , EventSchema = 'Authentication'
-    , EventSchemaVersion = '0.1.1'
-    , EventResult = 'Success'
-    , EventStartTime = TimeGenerated
-    , EventEndTime = TimeGenerated
-    , EventType = 'Logoff'
-    , DvcHostname = Computer
-    , TargetUsernameType = 'Simple'
-    , EventResultDetails = 'Other'
-    , EventOriginalRestultDetails = 'User session closed'
+        DvcHostname                 = Computer,
+        EventCount                  = int(1),
+        EventEndTime                = TimeGenerated,
+        EventOriginalRestultDetails = 'User session closed',
+        EventProduct                = 'sudo',
+        EventResult                 = 'Success',
+        EventResultDetails          = 'Other',
+        EventSchema                 = 'Authentication',
+        EventSchemaVersion          = '0.1.1',
+        EventStartTime              = TimeGenerated,
+        EventType                   = 'Logoff',
+        EventVendor                 = 'sudo',
+        TargetUsernameType          = 'Simple'
   // ************************
   //      <Aliases>
   // ************************
   | extend
-          User=TargetUsername
-        , Dvc=Computer
+      Dvc   = Computer,
+      User  = TargetUsername
   // ************************
   //      </Aliases>
   // ************************
     | project-away Computer, MG, SourceSystem, TenantId
     };
-  union isfuzzy=false SudoSignInAuthorized(disabled), SudoAuthFailure1(disabled), SudoDisconnect(disabled)
+  union isfuzzy=false 
+    SudoSignInAuthorized(disabled = disabled), 
+    SudoAuthFailure1(disabled = disabled), 
+    SudoDisconnect(disabled = disabled)

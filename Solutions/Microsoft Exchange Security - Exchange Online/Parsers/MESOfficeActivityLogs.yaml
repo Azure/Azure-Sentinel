@@ -1,0 +1,62 @@
+id: 2be516a9-f8fd-4357-a839-cafcb5a6d73a
+Function:
+  Title: Parser for Office Activity Logs
+  Version: '1.0.0'
+  LastUpdated: '2024-02-25'
+Category: Microsoft Sentinel Parser
+FunctionName: MESOfficeActivityLogs
+FunctionAlias: MESOfficeActivityLogs
+FunctionQuery: |
+  // Version:         1.0.0
+  // Last Updated:    25/02/2024
+  //  
+  // DESCRIPTION:
+  // This parser is used to compare the data of a specific section of the Exchange Online Configuration. It will compare the data of a specific section between two dates and return the differences between them.
+  //
+  let CmdletCheck = externaldata (Cmdlet:string, UserOriented:string, RestrictToParameter:string, Parameters:string)[h"https://aka.ms/CmdletWatchlist"]with(format="csv",ignoreFirstRecord=true);
+  let SensitiveCmdlets = CmdletCheck | project tostring(Cmdlet) ;
+  let Check = (T:(*)) {
+      let fuzzyWatchlist = datatable(DisplayName:string, sAMAccountName:string, userPrincipalName:string) [
+          "NONE","NONE","NONE"];
+      let Watchlist = union isfuzzy=true withsource=TableName _GetWatchlist('ExchOnlineVIP'), fuzzyWatchlist  | project-away TableName;
+      let SearchUserDisplayName = T | join Watchlist on $left.TargetObject == $right.DisplayName | project TargetObject,SearchKey;
+      let SearchUserSAMAccountName = T | join Watchlist on $left.TargetObject == $right.sAMAccountName | project TargetObject,SearchKey;
+      let SearchUserUPN = T | join Watchlist on $left.TargetObject == $right.userPrincipalName | project TargetObject,SearchKey;
+      union isfuzzy=true withsource=TableName 
+          SearchUserDisplayName,
+          SearchUserSAMAccountName, 
+          SearchUserUPN
+      };
+  let EventList = OfficeActivity
+      | where RecordType == "ExchangeAdmin"
+      | where UserType <> "DcAdmin" and  UserKey !contains "NT AUTHORITY"
+      | extend CmdletName = Operation
+      | extend Param = replace_string(replace_string((replace_string(Parameters,'[{"Name":"','-')),'","Value":"',' : '),'"},{"Name":"',', -')
+      // | extend Param = replace_string((replace_string(Parameters,'","Value":"',' : ')),'"},{"Name":"',' -')
+      | extend Param = replace_string((replace_string(Param,'"},{"',' ; ')),'"}]','')
+      | extend Param = replace_string(Param,'\\\\','\\')
+      | extend TargetObject = tostring(split(split(Param,"-Identity : ")[1],' -')[0])
+      | extend TargetObject = replace_string(TargetObject,',','')
+      | extend TargetObject = iff(TargetObject=="",TargetObject="N/A",TargetObject);
+  let Office_Activity = (){
+  EventList
+      | join kind=leftouter (EventList | project TargetObject | invoke Check()) on TargetObject
+      | extend IsVIP = iif(SearchKey == "", false, true)
+      | join kind=leftouter  ( 
+          MESCheckOnlineVIP() ) on SearchKey
+      | extend CmdletNameJoin = tolower(CmdletName)
+      | join kind=leftouter  ( 
+          CmdletCheck
+      | extend CmdletNameJoin = tolower(Cmdlet)
+      ) on CmdletNameJoin
+      | extend Caller = UserId
+      | extend CmdletParameters = Param
+      | extend IsSenstiveCmdlet = iif( isnotempty(CmdletNameJoin1) , true, false) 
+      | extend IsRestrictedCmdLet = iif(IsSenstiveCmdlet == true, iif( RestrictToParameter == "Yes", true, false), dynamic(null))
+      | extend RestrictedParameters = iif(IsSenstiveCmdlet == true, split(tolower(Parameters1),';'), dynamic(null))
+      | extend ExtractedParameters = iif(IsSenstiveCmdlet == true,extract_all(@"\B(-\w+)", tolower(CmdletParameters)), dynamic(null))
+      | extend IsSenstiveCmdletParameters = iif(IsSenstiveCmdlet == true,iif( array_length(set_difference(ExtractedParameters,RestrictedParameters)) == array_length(ExtractedParameters), false, true ) , false)
+      | extend IsSensitive = iif( ( IsSenstiveCmdlet == true and IsRestrictedCmdLet == false ) or (IsSenstiveCmdlet == true and IsRestrictedCmdLet == true and IsSenstiveCmdletParameters == true ), true, false )
+      | project TimeGenerated,Caller,TargetObject,IsVIP,userPrincipalName,CmdletName,CmdletParameters,IsSenstiveCmdlet,IsRestrictedCmdLet,ExtractedParameters,RestrictedParameters,IsSenstiveCmdletParameters,IsSensitive,UserOriented
+  };
+  Office_Activity

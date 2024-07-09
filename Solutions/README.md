@@ -31,7 +31,7 @@ Use the following steps to create your content structure:
   * Analytic Rules – yaml file templates of analytic rules goes in this folder.
   * Hunting queries – yaml file templates of hunting queries goes in this folder.
   * Playbooks – json playbook and Azure Logic Apps custom connectors can go in this folder. 
-  * Parser – txt file for Kusto Functions or Parsers can go in this folder.
+  * Parser – yaml file for Kusto Functions or Parsers can go in this folder. Use [this](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CrowdStrike%20Falcon%20Endpoint%20Protection/Parsers/CrowdStrikeReplicatorV2.yaml) as reference.
   
   For example, see the folder structure for our [Cisco ISE solution](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cisco%20ISE).
 
@@ -88,6 +88,7 @@ If you or your company is a first-time app publisher on Azure Marketplace, [foll
 The following steps reference the Partner Center's more detailed documentation.
 
 1.	[Create an Azure application type offer](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer) and configure the offer setup details as per the relevant  guidance.
+> Ensure that the OfferID contains the keyword "sentinel". Consider using the format: `microsoft-sentinel-solution-<productname>`
 
 2.	[Configure](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-properties) the Offer properties.
 
@@ -107,7 +108,6 @@ The following steps reference the Partner Center's more detailed documentation.
 
 8.	After the validation passes, [publish the offer live](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish#publish-your-offer-live). This will trigger the certification process, which can take up to 3 business days. 
 
-**Note:** The Microsoft Sentinel team will need to modify your files so that your solution appears in the Microsoft Sentinel content hub. Therefore, before going live, email the  [Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with your solutions offer ID and your **Publisher ID** so that we can make the required changes.
 
 **Note:** You must make the offer public in order for it to show up in the Microsoft Sentinel content hub so that customers can find it.
 
@@ -135,6 +135,6 @@ Quite simply, it permits your Microsoft Sentinel solution to be deployed into Mi
 You are **not** joining the CSP program.  Each offer is individually enabled or disabled for deployability in CSP sourced subscriptions, and setting this flag for your Microsoft Sentinel solution does not affect any other offer in your Marketplace publishing account.
 
 #### What will happen if you do not enable “CSP opt-in” for your Microsoft Sentinel solution offer?
-If the customer, who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 
+If the customer who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 
 
 

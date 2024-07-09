@@ -28,28 +28,34 @@ query:  |
   imProcessCreate
   | where Process hassuffix 'solarwinds.businesslayerhost.exe'
   | where not(Process has_any (excludeProcs))
-  | extend
-      timestamp = TimeGenerated,
-      AccountCustomEntity = ActorUsername,
-      HostCustomEntity = User,
-      AlgorithmCustomEntity = "MD5",
-      FileHashCustomEntity = TargetProcessMD5 // Change to *hash* once implemented
+  | extend AccountName = tostring(split(ActorUsername, @'\')[1]), AccountNTDomain = tostring(split(ActorUsername, @'\')[0])
+  | extend HostName = tostring(split(Dvc, ".")[0]), DomainIndex = toint(indexof(Dvc, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Dvc, DomainIndex + 1), Dvc)
+  | project-away DomainIndex
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: ActorUsername
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Dvc
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
-        columnName: AlgorithmCustomEntity
+        columnName: AlgorithmType
       - identifier: Value
-        columnName: FileHashCustomEntity
-version: 1.1.3
+        columnName: TargetFileMD5
+version: 1.1.5
 kind: Scheduled
 metadata:
     source:

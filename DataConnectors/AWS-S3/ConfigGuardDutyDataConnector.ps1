@@ -33,7 +33,7 @@ function Get-RoleAndGuardDutyS3Policy
                 'AWS': '$RoleArn'
             },
             'Action': ['s3:GetObject'],
-            'Resource': 'arn:aws:s3:::$BucketName/*'
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*'
         },
 		{
             'Sid': 'Allow GuardDuty to use the getBucketLocation operation',
@@ -42,7 +42,7 @@ function Get-RoleAndGuardDutyS3Policy
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:GetBucketLocation',
-            'Resource': 'arn:aws:s3:::$BucketName'
+            'Resource': '$($AwsCloudResource):s3:::$BucketName'
         },
         {
             'Sid': 'Allow GuardDuty to upload objects to the bucket',
@@ -51,7 +51,7 @@ function Get-RoleAndGuardDutyS3Policy
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::$BucketName/*'
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*'
         },
         {
             'Sid': 'Deny unencrypted object uploads. This is optional',
@@ -60,7 +60,7 @@ function Get-RoleAndGuardDutyS3Policy
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::$BucketName/*',
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*',
             'Condition': {
                 'StringNotEquals': {
                     's3:x-amz-server-side-encryption': 'aws:kms'
@@ -74,7 +74,7 @@ function Get-RoleAndGuardDutyS3Policy
                 'Service': 'guardduty.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::$BucketName/*',
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*',
             'Condition': {
                 'StringNotEquals': {
                     's3:x-amz-server-side-encryption-aws-kms-key-id': '$KmsArn'
@@ -86,7 +86,7 @@ function Get-RoleAndGuardDutyS3Policy
             'Effect': 'Deny',
             'Principal': '*',
             'Action': 's3:*',
-            'Resource': 'arn:aws:s3:::$BucketName/*',
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*',
             'Condition': {
                 'Bool': {
                     'aws:SecureTransport': 'false'
@@ -199,8 +199,8 @@ function Set-GuardDutyPublishDestinationBucket
     $currentS3Destinations = $currentDestinationsObject.Destinations | Where-Object DestinationType -eq S3
     if ($null -eq $currentS3Destinations)
     {
-        Write-Log -Message "Executing: aws guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
-        aws --region $Region guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
+        Write-Log -Message "Executing: aws guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
+        aws --region $Region guardduty create-publishing-destination --detector-id $detectorId --destination-type S3 --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
     }
     else
     {
@@ -212,8 +212,8 @@ function Set-GuardDutyPublishDestinationBucket
         $guardDutyBucketConfirmation = Read-ValidatedHost -Prompt "Are you sure that you want to override the existing bucket destination? [y/n]"
         if ($guardDutyBucketConfirmation -eq 'y')
         {
-            Write-Log -Message "Executing: aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
-            aws --region $Region guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=arn:aws:s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
+            Write-Log -Message "Executing: aws guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null" -LogFileName $LogFileName -Severity Verbose
+            aws --region $Region guardduty update-publishing-destination --detector-id $detectorId --destination-id $currentS3Destinations.DestinationId --destination-properties DestinationArn=$($AwsCloudResource):s3:::$bucketName,KmsKeyArn=$kmsArn | Out-Null
         }
         else
         {
@@ -273,6 +273,8 @@ Write-Log -Message "Starting GuardDuty data connector configuration script" -Log
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable GuardDuty Logs, S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -LinePadding 2
 Write-ScriptNotes
 
+# Add an Identity Provider
+New-OidcProvider
 New-ArnRole
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
 $roleArnObject = aws iam get-role --role-name $roleName
