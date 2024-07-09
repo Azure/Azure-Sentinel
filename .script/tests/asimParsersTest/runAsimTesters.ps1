@@ -10,6 +10,8 @@ $reset = "`e[0m"
 
 # Parser exclusion file path
 $ParserExclusionsFilePath ="$($PSScriptRoot)/ExclusionListForASimTests.csv"
+# Sentinel repository URL
+$SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel.git"
 
 Class Parser {
     [string] $Name
@@ -26,8 +28,21 @@ Class Parser {
 }
 
 function run {
+    Write-Host "This is the script from PR."
+    # Check if upstream remote already exists
+    $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
+
+    if (-not $remoteExists) {
+        Write-Host "Adding upstream remote..."
+        Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+    }
+
+    # Fetch the latest changes from upstream repositories
+    Write-Host "Fetching latest changes from upstream..."
+    Invoke-Expression "git fetch upstream" *> $null
+
     # Get modified ASIM Parser files along with their status
-    $modifiedFilesStatus = Invoke-Expression "git diff --name-status origin/master -- $($PSScriptRoot)/../../../Parsers/"
+    $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
     # Split the output into lines
     $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
     # Initialize an empty array to store the file names and their status
