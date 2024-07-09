@@ -22,10 +22,10 @@ def main(mytimer: func.TimerRequest) -> None:
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
     
-    zf_client = get_zf_client()
+    zerofox = get_zf_client()
 
     results = get_cti_national_ids(
-        zf_client, created_after=query_from
+        zerofox, created_after=query_from
     )
 
     logging.debug("Trigger function retrieved results")
