@@ -24,7 +24,6 @@ class TransmitSecurityConnector:
         self.token_endpoint = token_endpoint
         self.client_id = client_id
         self.client_secret = client_secret
-        self.results_array = []
 
     def get_access_token(self):
         response = requests.post(
@@ -48,7 +47,7 @@ class TransmitSecurityConnector:
         }
         response = requests.get(endpoint, headers=headers)
         response.raise_for_status()
-        self.results_array.extend(response.json())
+        return response.json()
 
 
 def gen_chunks(data, chunksize=100):
@@ -67,7 +66,7 @@ class AzureSentinel:
         self.shared_key = shared_key
         self.customer_id = customer_id
         self.success_user_events = 0
-        self.success_admin_events= 0
+        self.success_admin_events = 0
         self.failed_user_events = 0
         self.failed_admin_events = 0
         self.chunksize = 10000
@@ -76,7 +75,6 @@ class AzureSentinel:
         for chunk in gen_chunks(data, chunksize=self.chunksize):
             body = json.dumps(chunk)
             self.post_data(body, len(chunk), table)
-        data.clear()
 
     def increase_counters(self, chunk_count, table, status):
         if table == "TransmitSecurityUserActivity" and status == "success":
@@ -141,8 +139,10 @@ def main(mytimer: func.TimerRequest) -> None:
         for endpoint, table in config:
             if endpoint:
                 logging.info(f"Processing events for {table}")
-                connector.fetch_events(token, endpoint)
-                azure_sentinel.post_results(connector.results_array, table)
+                events = connector.fetch_events(token, endpoint)
+                while events:
+                    azure_sentinel.post_results(events, table)
+                    events = connector.fetch_events(token, endpoint)
 
     except KeyError:
         logging.error("Environment variables not set")
