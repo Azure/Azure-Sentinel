@@ -34,7 +34,7 @@ else {
     $hasDataFolder = $path -like '*/data'
     if ($hasDataFolder) {
         # DATA FOLDER PRESENT
-        $dataFolderIndex = $path.IndexOf("/data", [StringComparison]"CurrentCultureIgnoreCase")
+        $dataFolderIndex = $path.LastIndexOf("/data", [StringComparison]"CurrentCultureIgnoreCase")
 
         if ($dataFolderIndex -le 0) {
             Write-Host "Given path is not from Solutions data folders. Please provide data file path from Solution"
@@ -68,11 +68,11 @@ Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName"
 $isPipelineRun = $false
 
 $commonFunctionsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/commonFunctions.ps1"
-$catelogAPIFilePath = $repositoryBasePath + ".script/package-automation/catelogAPI.ps1"
+$catalogAPIFilePath = $repositoryBasePath + ".script/package-automation/catalogAPI.ps1"
 $getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solution/common/get-ccp-details.ps1"
 
 . $commonFunctionsFilePath # load common functions
-. $catelogAPIFilePath # load catelog api functions
+. $catalogAPIFilePath # load catalog api functions
 . $getccpDetailsFilePath # load ccp functions
 
 try {
@@ -104,7 +104,7 @@ try {
         #================START: IDENTIFY PACKAGE VERSION=============
         $solutionOfferId = $baseMetadata.offerId
         $offerId = "$solutionOfferId"
-        $offerDetails = GetCatelogDetails $offerId
+        $offerDetails = GetCatalogDetails $offerId
         $userInputPackageVersion = $contentToImport.version
         $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
         if ($packageVersion -ne $contentToImport.version) {
@@ -165,7 +165,7 @@ try {
         Write-Host "isCCPConnector $isCCPConnector"
         $ccpConnectorCodeExecutionCounter = 1;
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
-            if ($objectProperties.Value -is [System.Array]) {
+            if ($objectProperties.Value -is [System.Array] -and $objectProperties.Name.ToLower() -ne 'dependentdomainsolutionids') {
                 foreach ($file in $objectProperties.Value) {
                     $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
                     $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")

@@ -67,8 +67,9 @@
             "label": "Collection time",
             "type": 2,
             "isRequired": true,
-            "query": "let _configurationEnv = split(iff(isnull({EnvironmentList}) or isempty({EnvironmentList}) or tolower({EnvironmentList}) == \"all\",\"All\",tostring({EnvironmentList})),',');\r\nESIExchangeOnlineConfig_CL\r\n| extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize Collection = max(Collection)\r\n| project Collection = \"lastdate\", Selected = true\r\n| join kind= fullouter  ( ESIExchangeOnlineConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| where TimeGenerated > ago(90d)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize by Collection\r\n) on Collection\r\n| project Value = iif(Selected,Collection,Collection1), Label = iif(Selected,\"Last Known date\",Collection1), Selected\r\n| sort by Selected, Value desc",
+            "query": "let _configurationEnv = split(iff(isnull({EnvironmentList}) or isempty({EnvironmentList}) or tolower({EnvironmentList}) == \"all\",\"All\",tostring({EnvironmentList})),',');\r\nESIExchangeOnlineConfig_CL\r\n| extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n| where ScopedEnvironment in (_configurationEnv)\r\n| extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n| summarize Collection = max(Collection)\r\n| project Collection = \"lastdate\", Selected = true\r\n| join kind= fullouter  ( ESIExchangeOnlineConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n    | where ScopedEnvironment in (_configurationEnv)\r\n    | where TimeGenerated > ago(90d)\r\n    | extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n    | summarize by Collection \r\n    | join kind= fullouter ( ESIExchangeOnlineConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n        | where ScopedEnvironment in (_configurationEnv)\r\n        | where TimeGenerated > ago(90d)\r\n        | extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n        | extend PreciseCollection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd HH:mm ')\r\n        | summarize by PreciseCollection, Collection \r\n        | join kind=leftouter (\r\n            ESIExchangeOnlineConfig_CL | extend ScopedEnvironment = iff(_configurationEnv contains \"All\", \"All\",ESIEnvironment_s) \r\n            | where ScopedEnvironment in (_configurationEnv)\r\n            | where TimeGenerated > ago(90d)\r\n            | extend Collection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd')\r\n            | extend PreciseCollection = format_datetime(todatetime(EntryDate_s), 'yyyy-MM-dd HH:mm')\r\n            | summarize by PreciseCollection, Collection \r\n            | summarize count() by Collection\r\n        ) on Collection\r\n    ) on Collection\r\n) on Collection\r\n| project Value = iif(Selected,Collection,iif(count_ > 1,PreciseCollection,Collection1)), Label = iif(Selected,\"Last Known date\",iif(count_ > 1,PreciseCollection,Collection1)), Selected\r\n| sort by Selected, Value desc",
             "typeSettings": {
+              "additionalResourceOptions": [],
               "showDefault": false
             },
             "queryType": 0,
@@ -81,7 +82,7 @@
             "label": "Show Help",
             "type": 10,
             "isRequired": true,
-            "query": "{\"version\":\"1.0.0\",\"content\":\"[\\r\\n { \\\"value\\\": \\\"Yes\\\", \\\"label\\\": \\\"Yes\\\"},\\r\\n {\\\"value\\\": \\\"No\\\", \\\"label\\\": \\\"No\\\", \\\"selected\\\":true }\\r\\n]\\r\\n\"}",
+            "query": "{\"version\":\"1.0.0\",\"content\":\"[\\r\\n { \\\"value\\\": \\\"Yes\\\", \\\"label\\\": \\\"Yes\\\"},\\r\\n {\\\"value\\\": \\\"No\\\", \\\"label\\\": \\\"No\\\", \\\"selected\\\":true }\\r\\n]\\r\\n\"}\r\n",
             "timeContext": {
               "durationMs": 2592000000
             },
@@ -133,24 +134,27 @@
                         "version": "KqlParameterItem/1.0",
                         "name": "RoleAssignee",
                         "type": 2,
-                        "query": "let DefMRA = externaldata (Name:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/standardMRAOnline.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"User\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| distinct RoleAssigneeName\r\n",
+                        "query": "let DefMRA = externaldata (Name:string)[h\"https://aka.ms/standardMRAOnline\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"User\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| distinct RoleAssigneeName\r\n",
                         "typeSettings": {
                           "showDefault": false
                         },
                         "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": null
                       },
                       {
                         "id": "cf5959fa-a833-4bb2-90bd-d4c90dca5506",
                         "version": "KqlParameterItem/1.0",
                         "name": "Role",
                         "type": 2,
-                        "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| extend Role=tostring (CmdletResultValue.Role)\r\n| distinct Role\r\n| sort by Role asc",
+                        "query": "let DefMRA = externaldata (Name:string)[h\"https://aka.ms/standardMRAOnline\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"User\"\r\n| project CmdletResultValue\r\n| extend Role=tostring (CmdletResultValue.Role)\r\n| distinct Role\r\n| sort by Role asc",
                         "typeSettings": {
+                          "additionalResourceOptions": [],
                           "showDefault": false
                         },
                         "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": null
                       }
                     ],
                     "style": "pills",
@@ -163,7 +167,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let DefMRA = externaldata (Name:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/standardMRAOnline.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where  CmdletResultValue.RoleAssigneeName endswith  \"{RoleAssignee}\" \r\n| where  CmdletResultValue.Role contains \"{Role}\"\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"User\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend Role = tostring(CmdletResultValue.Role)\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)\r\n| extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)\r\n| extend RecipientWriteScope = CmdletResultValue.RecipientWriteScope\r\n| extend ConfigWriteScope = CmdletResultValue.ConfigWriteScope\r\n| extend Status= tostring(CmdletResultValue.Enabled)\r\n| project Name, Role, RoleAssigneeName,Status,CustomRecipientWriteScope,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope\r\n| sort by RoleAssigneeName asc\r\n",
+                    "query": "let DefMRA = externaldata (Name:string)[h\"https://aka.ms/standardMRAOnline\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where  CmdletResultValue.RoleAssigneeName endswith  \"{RoleAssignee}\" \r\n| where  CmdletResultValue.Role contains \"{Role}\"\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"User\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend Name = tostring(CmdletResultValue.Name)\r\n| extend Role = tostring(CmdletResultValue.Role)\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)\r\n| extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)\r\n| extend RecipientWriteScope = CmdletResultValue.RecipientWriteScope\r\n| extend ConfigWriteScope = CmdletResultValue.ConfigWriteScope\r\n| extend Status= tostring(CmdletResultValue.Enabled)\r\n| project Name, Role, RoleAssigneeName,Status,CustomRecipientWriteScope,CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope\r\n| sort by RoleAssigneeName asc\r\n",
                     "size": 3,
                     "showAnalytics": true,
                     "queryType": 0,
@@ -232,7 +236,6 @@
               "version": "NotebookGroup/1.0",
               "groupType": "editable",
               "title": "Explanations",
-              "expandable": true,
               "items": [
                 {
                   "type": 1,
@@ -242,6 +245,11 @@
                   "name": "text - 0"
                 }
               ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
             },
             "name": "group - 3"
           },
@@ -269,24 +277,27 @@
                         "version": "KqlParameterItem/1.0",
                         "name": "RoleAssignee",
                         "type": 2,
-                        "query": "let DefMRA = externaldata (Name:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/standardMRAOnline.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"RoleGroup\"  and CmdletResultValue.RoleAssigneeName !contains \"RIM-MailboxAdmins\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| distinct RoleAssigneeName",
+                        "query": "let DefMRA = externaldata (Name:string)[h\"https://aka.ms/standardMRAOnline\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"RoleGroup\"  and CmdletResultValue.RoleAssigneeName !contains \"RIM-MailboxAdmins\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| distinct RoleAssigneeName",
                         "typeSettings": {
                           "showDefault": false
                         },
                         "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": null
                       },
                       {
                         "id": "f5511a2b-9bf6-48ae-a968-2d1f879c8bfa",
                         "version": "KqlParameterItem/1.0",
                         "name": "Role",
                         "type": 2,
-                        "query": "ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| extend Role=tostring (CmdletResultValue.Role)\r\n| distinct Role\r\n| sort by Role asc",
+                        "query": "let DefMRA = externaldata (Name:string)[h\"https://aka.ms/standardMRAOnline\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"RoleGroup\"  and CmdletResultValue.RoleAssigneeName !contains \"RIM-MailboxAdmins\"\r\n| project CmdletResultValue\r\n| extend Role=tostring (CmdletResultValue.Role)\r\n| distinct Role\r\n| sort by Role asc",
                         "typeSettings": {
+                          "additionalResourceOptions": [],
                           "showDefault": false
                         },
                         "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": "MR-CustMailRecipients"
                       }
                     ],
                     "style": "pills",
@@ -299,7 +310,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "let DefMRA = externaldata (Name:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/standardMRAOnline.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nlet RoleG = ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n   | project RoleAssigneeName=tostring(CmdletResultValue.Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where  CmdletResultValue.RoleAssigneeName endswith  \"{RoleAssignee}\" \r\n| where  CmdletResultValue.Role contains \"{Role}\"\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"RoleGroup\"  and CmdletResultValue.RoleAssigneeName !contains \"RIM-MailboxAdmins\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend ManagementRoleAssignment = tostring(CmdletResultValue.Name)\r\n| extend Role = tostring(CmdletResultValue.Role)\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend Status= tostring(CmdletResultValue.Enabled)\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)\r\n| extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)\r\n| extend RecipientWriteScope = CmdletResultValue.RecipientWriteScope\r\n| extend ConfigWriteScope = CmdletResultValue.ConfigWriteScope\r\n|lookup RoleG on RoleAssigneeName \r\n| project-away CmdletResultValue\r\n| sort by RoleAssigneeName asc",
+                    "query": "let DefMRA = externaldata (Name:string)[h\"https://aka.ms/standardMRAOnline\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nlet RoleG = ExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n   | project RoleAssigneeName=tostring(CmdletResultValue.Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where  CmdletResultValue.RoleAssigneeName endswith  \"{RoleAssignee}\" \r\n| where  CmdletResultValue.Role contains \"{Role}\"\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"RoleGroup\"  and CmdletResultValue.RoleAssigneeName !contains \"RIM-MailboxAdmins\" and CmdletResultValue.Name !contains \"Deleg\"\r\n| project CmdletResultValue\r\n| extend ManagementRoleAssignment = tostring(CmdletResultValue.Name)\r\n| extend Role = tostring(CmdletResultValue.Role)\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend Status= tostring(CmdletResultValue.Enabled)\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)\r\n| extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)\r\n| extend RecipientWriteScope = CmdletResultValue.RecipientWriteScope\r\n| extend ConfigWriteScope = CmdletResultValue.ConfigWriteScope\r\n|lookup RoleG on RoleAssigneeName \r\n| project-away CmdletResultValue\r\n| sort by RoleAssigneeName asc",
                     "size": 3,
                     "showAnalytics": true,
                     "showExportToExcel": true,
@@ -337,7 +348,6 @@
               "version": "NotebookGroup/1.0",
               "groupType": "editable",
               "title": "Explanations",
-              "expandable": true,
               "items": [
                 {
                   "type": 1,
@@ -347,6 +357,11 @@
                   "name": "text - 0"
                 }
               ]
+            },
+            "conditionalVisibility": {
+              "parameterName": "Help",
+              "comparison": "isEqualTo",
+              "value": "Yes"
             },
             "name": "group - 4"
           }
@@ -358,182 +373,6 @@
         "value": "RBACDelegation"
       },
       "name": "Custom Delegation",
-      "styleSettings": {
-        "showBorder": true
-      }
-    },
-    {
-      "type": 12,
-      "content": {
-        "version": "NotebookGroup/1.0",
-        "groupType": "editable",
-        "title": "Information for Role Assignee",
-        "items": [
-          {
-            "type": 12,
-            "content": {
-              "version": "NotebookGroup/1.0",
-              "groupType": "editable",
-              "title": "Information for Role Assignee User account",
-              "items": [
-                {
-                  "type": 1,
-                  "content": {
-                    "json": "Detailed Information on User account Role Assignee"
-                  },
-                  "name": "text - 0"
-                },
-                {
-                  "type": 9,
-                  "content": {
-                    "version": "KqlParameterItem/1.0",
-                    "parameters": [
-                      {
-                        "id": "27e4c2e9-d113-4bf9-808f-0f8f68b5152e",
-                        "version": "KqlParameterItem/1.0",
-                        "name": "RoleAssignee",
-                        "type": 2,
-                        "isRequired": true,
-                        "query": "let DefMRA = externaldata (Name:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/standardMRAOnline.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"User\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| distinct RoleAssigneeName",
-                        "typeSettings": {
-                          "showDefault": false
-                        },
-                        "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
-                      }
-                    ],
-                    "style": "pills",
-                    "queryType": 0,
-                    "resourceType": "microsoft.operationalinsights/workspaces"
-                  },
-                  "name": "parameters - 1"
-                },
-                {
-                  "type": 3,
-                  "content": {
-                    "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"DirectRoleAssignments\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.SamAccountName contains \"{RoleAssignee}\"\r\n| project CmdletResultValue\r\n| extend Account = tostring(CmdletResultValue.SamAccountName)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| project-away  CmdletResultValue\r\n| sort by Account asc",
-                    "size": 3,
-                    "showAnalytics": true,
-                    "color": "green",
-                    "showExportToExcel": true,
-                    "queryType": 0,
-                    "resourceType": "microsoft.operationalinsights/workspaces"
-                  },
-                  "name": "query - 2",
-                  "styleSettings": {
-                    "showBorder": true
-                  }
-                }
-              ]
-            },
-            "name": "Information for Role Assignee User account"
-          },
-          {
-            "type": 12,
-            "content": {
-              "version": "NotebookGroup/1.0",
-              "groupType": "editable",
-              "title": "Explanations",
-              "expandable": true,
-              "items": [
-                {
-                  "type": 1,
-                  "content": {
-                    "json": "This section displays detailed information for user account found with non standard delegation :\r\n  - Last logon\r\n  - Last Password changed\r\n  - Account enabled"
-                  },
-                  "name": "text - 0"
-                }
-              ]
-            },
-            "name": "group - 2"
-          },
-          {
-            "type": 12,
-            "content": {
-              "version": "NotebookGroup/1.0",
-              "groupType": "editable",
-              "title": "Information for Role Assignee group",
-              "items": [
-                {
-                  "type": 1,
-                  "content": {
-                    "json": "Detailed information for Group delegation"
-                  },
-                  "name": "text - 0"
-                },
-                {
-                  "type": 9,
-                  "content": {
-                    "version": "KqlParameterItem/1.0",
-                    "parameters": [
-                      {
-                        "id": "75c3cdf3-d0c3-46c3-83ae-429979774234",
-                        "version": "KqlParameterItem/1.0",
-                        "name": "RoleAssignee",
-                        "type": 2,
-                        "isRequired": true,
-                        "query": "let DefMRA = externaldata (Name:string)[h\"https://raw.githubusercontent.com/nlepagnez/ESI-PublicContent/main/Operations/Watchlists/standardMRAOnline.csv\"]with(format=\"csv\",ignoreFirstRecord=true)| summarize make_list(Name);\r\nExchangeConfiguration(SpecificSectionList=\"MRA\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Name !in (DefMRA) and CmdletResultValue.RoleAssigneeType == \"RoleGroup\"  and CmdletResultValue.RoleAssigneeName !contains \"RIM-MailboxAdmins\"\r\n| project CmdletResultValue\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| distinct RoleAssigneeName",
-                        "typeSettings": {
-                          "showDefault": false
-                        },
-                        "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
-                      }
-                    ],
-                    "style": "pills",
-                    "queryType": 0,
-                    "resourceType": "microsoft.operationalinsights/workspaces"
-                  },
-                  "name": "parameters - 1"
-                },
-                {
-                  "type": 3,
-                  "content": {
-                    "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"ExGroup\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Parentgroup contains \"{RoleAssignee}\"\r\n| where CmdletResultValue.Level != 0\r\n| project CmdletResultValue\r\n| extend Level_ = tostring(CmdletResultValue.Level)\r\n| extend Parentgroup = tostring(CmdletResultValue.Parentgroup)\r\n| extend MemberPath = tostring(CmdletResultValue.MemberPath)\r\n| extend LastLogon = CmdletResultValue.LastLogonString\r\n| extend LastPwdSet = CmdletResultValue.LastPwdSetString\r\n| extend Enabled = tostring(CmdletResultValue.Enabled)\r\n| extend DN = tostring(CmdletResultValue.DN)\r\n| project-away  CmdletResultValue\r\n| sort by Parentgroup asc",
-                    "size": 3,
-                    "showAnalytics": true,
-                    "showExportToExcel": true,
-                    "queryType": 0,
-                    "resourceType": "microsoft.operationalinsights/workspaces"
-                  },
-                  "name": "query - 2",
-                  "styleSettings": {
-                    "showBorder": true
-                  }
-                }
-              ]
-            },
-            "name": "Information for Role Assignee group"
-          },
-          {
-            "type": 12,
-            "content": {
-              "version": "NotebookGroup/1.0",
-              "groupType": "editable",
-              "title": "Explanations",
-              "expandable": true,
-              "items": [
-                {
-                  "type": 1,
-                  "content": {
-                    "json": "This section displays detailed information for user account present in the found groups with non standard delegation :\r\n  - Last logon\r\n  - Last Password changed\r\n  - Account enabled"
-                  },
-                  "name": "text - 0"
-                }
-              ]
-            },
-            "name": "group - 3"
-          }
-        ]
-      },
-      "conditionalVisibility": {
-        "parameterName": "selected",
-        "comparison": "isEqualTo",
-        "value": "RBACDelegation"
-      },
-      "name": "Information for Role Assignee",
       "styleSettings": {
         "showBorder": true
       }
@@ -742,7 +581,7 @@
                   "content": {
                     "version": "KqlItem/1.0",
                     "query": "ExchangeConfiguration(SpecificSectionList=\"MRCustom\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| extend Identity = CmdletResultValue.Name\r\n| extend ParentRole =split(tostring(CmdletResultValue.Parent),\"\\\\\")[1]\r\n| project Identity, ParentRole, WhenCreated, WhenChanged",
-                    "size": 0,
+                    "size": 3,
                     "showAnalytics": true,
                     "timeContext": {
                       "durationMs": 86400000
@@ -832,7 +671,7 @@
                   "content": {
                     "version": "KqlItem/1.0",
                     "query": "let MRcustomRoles = (ExchangeConfiguration(SpecificSectionList=\"MRCustom\", SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| project Role = tostring(CmdletResultValue.Name));\r\nExchangeConfiguration(SpecificSectionList=\"MRA\", SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| extend Role = tostring(CmdletResultValue.Role)\r\n| extend RoleAssigneeName = tostring(CmdletResultValue.RoleAssigneeName)\r\n| extend Status= tostring(CmdletResultValue.Enabled)\r\n| extend CustomRecipientWriteScope = tostring(CmdletResultValue.CustomRecipientWriteScope)\r\n| extend CustomConfigWriteScope = tostring(CmdletResultValue.CustomConfigWriteScope)\r\n| extend CustomResourceScope = tostring(CmdletResultValue.CustomResourceScope)\r\n| extend RecipientWriteScope = CmdletResultValue.RecipientWriteScope\r\n| extend ConfigWriteScope = CmdletResultValue.ConfigWriteScope\r\n| project RoleAssigneeName, Role, Status,CustomRecipientWriteScope, CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,WhenCreated, WhenChanged\r\n| join kind=inner (MRcustomRoles) on Role\r\n| project  RoleAssigneeName, Role, Status,CustomRecipientWriteScope, CustomConfigWriteScope,CustomResourceScope,RecipientWriteScope,ConfigWriteScope,WhenCreated, WhenChanged",
-                    "size": 0,
+                    "size": 3,
                     "showAnalytics": true,
                     "timeContext": {
                       "durationMs": 86400000
@@ -880,7 +719,8 @@
                           "durationMs": 86400000
                         },
                         "queryType": 0,
-                        "resourceType": "microsoft.operationalinsights/workspaces"
+                        "resourceType": "microsoft.operationalinsights/workspaces",
+                        "value": "MR-CustPF"
                       }
                     ],
                     "style": "pills",
@@ -893,7 +733,7 @@
                   "type": 3,
                   "content": {
                     "version": "KqlItem/1.0",
-                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRCustomDetails\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where (replace_string(replace_string(tostring(split(CmdletResultValue.Role.DistinguishedName,\",\",0)),\"[\\\"CN=\",\"\"),\"\\\"]\",\"\")) contains \"{CustomRole}\"\r\n| extend CustomRoleName = replace_string(replace_string(tostring(split(CmdletResultValue.Role.DistinguishedName,\",\",0)),\"[\\\"CN=\",\"\"),\"\\\"]\",\"\")\r\n| extend CmdletName = CmdletResultValue.Name\r\n| extend Parameters = CmdletResultValue.Parameters\r\n| project CmdletName,Parameters",
+                    "query": "ExchangeConfiguration(SpecificSectionList=\"MRCustomDetails\",SpecificConfigurationDate=\"{DateOfConfiguration:value}\",SpecificConfigurationEnv={EnvironmentList},Target = \"Online\")\r\n| where CmdletResultValue.Role contains \"{CustomRole}\"\r\n| extend CmdletName = CmdletResultValue.Name\r\n| extend Parameters = CmdletResultValue.Parameters\r\n| project CmdletName,Parameters",
                     "size": 1,
                     "showAnalytics": true,
                     "timeContext": {

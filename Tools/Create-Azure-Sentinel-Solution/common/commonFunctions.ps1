@@ -340,9 +340,9 @@ function getParserDetails($solutionName,$yaml,$isyaml)
             $parserTemplate = $templateContent.resources | Where-Object { $_.type -eq $parserResourceType.templateSpecParserType -or $_.type -eq $parserResourceType.workspaceType }
 
             if ($null -ne $parserTemplate) {
-                if($null -ne $parserTemplate.resources)
+                if($null -ne $parserTemplate)
                 {
-                    $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
+                    $parserTemplate = $parserTemplate | Where-Object {$null -ne $_.properties.category -and $_.type -like "*savedSearches*" }
                 }
 
                 $parserTemplate = $parserTemplate | Where-Object {$_.properties.functionAlias -eq $(getFileNameFromPath $file)}
@@ -351,6 +351,28 @@ function getParserDetails($solutionName,$yaml,$isyaml)
                     $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
                     $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
                     $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
+
+                    $parserNameValue = $parserTemplate.name
+
+                    if ($parserNameValue -like "*concat(parameters('workspace')*") {
+                        $splitParserObjectName = $parserNameValue -split ","
+                        $parserActualName = $splitParserObjectName[2].Replace("'", "").Replace(")]", "")
+                        $parserDisplayDetails.name = $parserActualName
+                    }
+
+                    if ($parserNameValue -like "*variables('parserObject*") {
+                        $splitParserObjectName = $parserNameValue -split "parserObject"
+                        $lastSingleQuoteIndex = $splitParserObjectName[1].LastIndexOf("'");
+                        $parserCountValue = $splitParserObjectName[1].Substring(0, $lastSingleQuoteIndex)
+
+                        $parserActualName = $templateVariables."parserObject$parserCountValue"."_parserName$parserCountValue"
+
+                        $replaceConcatValue = $parserActualName.LastIndexOf(",'") + 2
+                        $lastIndexOfQuotation = $parserActualName.LastIndexOf("'")
+                        $finalizedParserName = $parserActualName.Substring($replaceConcatValue, $lastIndexOfQuotation - $replaceConcatValue)
+
+                        $parserDisplayDetails.name = $finalizedParserName;
+                    }
 
                     $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
                     if ($suppressedOutput -and $matches[1]) {
@@ -575,13 +597,32 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             $newMetadata.Properties | Add-Member -Name 'support' -Type NoteProperty -value $supportDetails;
         }
         
-        if ($global:DependencyCriteria.Count -gt 0) {
-            $dependencies = [PSCustomObject]@{
-                operator = "AND";
-                criteria = $global:DependencyCriteria;
-            };
-    
-            $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+        $hasDependentDomainSolutionIdsProp = [bool]($contentToImport.PSobject.Properties.Name.ToLower() -match "dependentdomainsolutionids")
+        if ($hasDependentDomainSolutionIdsProp -and $contentToImport.dependentDomainSolutionIds.Length -gt 0) {
+            if ($global:DependencyCriteria.Count -gt 0) {
+                # add solution dependencies
+                foreach($sid in $contentToImport.dependentDomainSolutionIds){
+                    $global:DependencyCriteria += [PSCustomObject]@{
+                        kind = "Solution";
+                        contentId = "$sid";
+                    };
+                }
+
+                $dependencies = [PSCustomObject]@{
+                    criteria = $global:DependencyCriteria;
+                };
+
+                $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+            }
+        } else {
+            if ($global:DependencyCriteria.Count -gt 0) {
+                $dependencies = [PSCustomObject]@{
+                    operator = "AND";
+                    criteria = $global:DependencyCriteria;
+                };
+        
+                $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+            }
         }
 
         if ($json.firstPublishDate -and $json.firstPublishDate -ne "") 
@@ -1861,7 +1902,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                             {
                                                 foreach ($desc in $instructionItem.parameters.instructionSteps)
                                                 {
-                                                    if ($desc.description && $desc.description.IndexOf('Deploy To Azure') -gt 0)
+                                                    if ($desc.description -and $desc.description.IndexOf('Deploy To Azure') -gt 0)
                                                     {
                                                         $existingFunctionApp = $true
                                                         break
@@ -2976,6 +3017,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     {
         if ($contentToImport.Description) {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", $contentToImport.Description
+            
+            $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionName}}", [URI]::EscapeDataString($solutionName)
         }
         else {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", ""
@@ -3170,7 +3213,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                 $dict.Add('huntingOperationalInsightsWorkspacesApiVersion', '2021-06-01')
                 $dict.Add('parserOperationalInsightsWorkspacesApiVersion', '2020-08-01')
                 $dict.Add('savedSearchesApiVersion', '2022-10-01')
-                $dict.Add('alertRuleApiVersion', '2022-04-01-preview')
+                $dict.Add('alertRuleApiVersion', '2023-02-01-preview')
                 $dict.Add('commonResourceMetadataApiVersion', '2022-01-01-preview')
                 $dict.Add('insightsWorkbookApiVersion', '2021-08-01')
             }
@@ -3350,7 +3393,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
                 "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
-                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
+                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
                 contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
                 kind      = "Parser";
                 version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
@@ -3445,7 +3488,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
                 "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
-                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
+                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
                 contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
                 kind      = "Parser";
                 version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
@@ -3514,10 +3557,9 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     }
     
     $displayDetails = getParserDetails $global:solutionId $yaml $isyaml
-    $parserName = $fileName + " Data Parser"
-    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($parserName)')]"
+    $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($displayDetails.name)')]"
 
-    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($parserName)')]"
+    $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
 
     $functionAlias = ($null -ne $yaml -and $yaml.Count -gt 0) ? $yaml.FunctionName : "$($displayDetails.functionAlias)"
     $parserContentIdValue = "$($functionAlias)-Parser"
