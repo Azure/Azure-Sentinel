@@ -16,14 +16,17 @@ import csv
 DUMMY_VALUE = "\'!not_REAL_vAlUe\'"
 MAX_FILTERING_PARAMETERS = 2
 # Workspace ID for the Log Analytics workspace where the ASim filtering tests will be performed.
-WORKSPACE_ID = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
+#WORKSPACE_ID = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
 # CyberSOC
-#WORKSPACE_ID = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
+WORKSPACE_ID = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
 # Timespan for the parser query
 TIME_SPAN_IN_DAYS = 7
 
 # exclusion_file_path refers to the CSV file path containing a list of parsers. Despite failing tests, these parsers will not cause the overall workflow to fail
 exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
+
+# Sentinel Repo URL
+SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 
 # Negative value as it is cannot be a port number and less likely to be an ID of some event. Also, the absolute value is greater than the maximal possible port number.
 INT_DUMMY_VALUE = -967799
@@ -232,7 +235,18 @@ def read_exclusion_list_from_csv():
 def main():
     # Get modified ASIM Parser files along with their status
     current_directory = os.path.dirname(os.path.abspath(__file__))
-    GetModifiedFiles = f"git diff --name-only origin/master {current_directory}/../../../Parsers/"
+
+    # Add upstream remote if not already present
+    git_remote_command = "git remote"
+    remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
+    if 'upstream' not in remote_result.stdout.split():
+        git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
+        subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    # Fetch from upstream
+    git_fetch_upstream_command = "git fetch upstream"
+    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+
+    GetModifiedFiles = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
     try:
         modified_files = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
     except subprocess.CalledProcessError as e:

@@ -9,9 +9,11 @@ from urllib.parse import urlparse
 from tabulate import tabulate
 
 # Constants
-SENTINEL_REPO_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
+SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
 SAMPLE_DATA_PATH = '/Sample%20Data/ASIM/'
 parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
+# Sentinel Repo URL
+SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 SCHEMA_INFO = [
     {"SchemaName": "AuditEvent", "SchemaVersion": "0.1", "SchemaTitle":"ASIM Audit Event Schema", "SchemaLink": "https://aka.ms/ASimAuditEventDoc"},
     {"SchemaName": "Authentication", "SchemaVersion": "0.1.3","SchemaTitle":"ASIM Authentication Schema","SchemaLink": "https://aka.ms/ASimAuthenticationDoc"},
@@ -42,7 +44,7 @@ def run():
     current_directory = os.path.dirname(os.path.abspath(__file__))
     modified_files = get_modified_files(current_directory)
     commit_number = get_current_commit_number()
-    sample_data_url = f'{SENTINEL_REPO_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
+    sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
     parser_yaml_files = filter_yaml_files(modified_files)
     print(f"{GREEN}Following files were found to be modified:{RESET}")
     for file in parser_yaml_files:
@@ -64,9 +66,9 @@ def run():
              else :
                  # Skip the vim parser file as the corresponding ASim parser file is present and vim files will be tested with ASim files in upcoming steps.
                  continue 
-        asim_parser_url = f'{SENTINEL_REPO_URL}/{commit_number}/{parser}'
+        asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{parser}'
         print(f'{YELLOW}Constructed parser raw url:  {asim_parser_url}{RESET}') # uncomment for debugging
-        asim_union_parser_url = f'{SENTINEL_REPO_URL}/{commit_number}/Parsers/ASim{schema_name}/Parsers/ASim{schema_name}.yaml'
+        asim_union_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/Parsers/ASim{schema_name}/Parsers/ASim{schema_name}.yaml'
         print(f'{YELLOW}Constructed union parser raw url:  {asim_union_parser_url}{RESET}') # uncomment for debugging
         asim_parser = read_github_yaml(asim_parser_url)
         asim_union_parser = read_github_yaml(asim_union_parser_url)
@@ -280,7 +282,17 @@ def filter_yaml_files(modified_files):
     return [line for line in modified_files if line.endswith('.yaml')]
 
 def get_modified_files(current_directory):
-    cmd = f"git diff --name-only origin/master {current_directory}/../../../Parsers/"
+
+    # Add upstream remote if not already present
+    git_remote_command = "git remote"
+    remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
+    if 'upstream' not in remote_result.stdout.split():
+        git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
+        subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    # Fetch from upstream
+    git_fetch_upstream_command = "git fetch upstream"
+    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    cmd = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
     try:
         return subprocess.check_output(cmd, shell=True).decode().split("\n")
     except subprocess.CalledProcessError as e:

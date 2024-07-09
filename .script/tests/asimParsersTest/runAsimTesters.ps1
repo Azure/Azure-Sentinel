@@ -1,5 +1,5 @@
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
+$global:workspaceId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
 
 # ANSI escape code for green text
 $green = "`e[32m"
@@ -11,7 +11,7 @@ $reset = "`e[0m"
 # Parser exclusion file path
 $ParserExclusionsFilePath ="$($PSScriptRoot)/ExclusionListForASimTests.csv"
 # Sentinel repository URL
-$SentinelRepoUrl = "https://github.com/vakohl/vakohlASIMRepoTest2.git"
+$SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel.git"
 
 Class Parser {
     [string] $Name
@@ -28,11 +28,16 @@ Class Parser {
 }
 
 function run {
-    Write-Host "This is the script from PR."
-    # Add the upstream repository
-    Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+    # Write-Host "This is the script from PR."
+    # Check if upstream remote already exists
+    $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
 
-    # # Fetch the latest changes from upstream repositories
+    if (-not $remoteExists) {
+        Write-Host "Adding upstream remote..."
+        Invoke-Expression "git remote add upstream $SentinelRepoUrl"
+    }
+
+    # Fetch the latest changes from upstream repositories
     Write-Host "Fetching latest changes from upstream..."
     Invoke-Expression "git fetch upstream"
 
