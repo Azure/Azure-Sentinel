@@ -1,5 +1,5 @@
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-$global:workspaceId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
+$global:workspaceId = "8ecf8077-cf51-4820-aadd-14040956f35d"
 
 # ANSI escape code for green text
 $green = "`e[32m"
@@ -39,7 +39,7 @@ function run {
 
     # Fetch the latest changes from upstream repositories
     Write-Host "Fetching latest changes from upstream..."
-    Invoke-Expression "git fetch upstream" | Out-Null
+    Invoke-Expression "git fetch upstream" *> $null
 
     # Get modified ASIM Parser files along with their status
     $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
