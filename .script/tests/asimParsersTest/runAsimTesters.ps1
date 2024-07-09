@@ -39,7 +39,7 @@ function run {
 
     # Fetch the latest changes from upstream repositories
     Write-Host "Fetching latest changes from upstream..."
-    Invoke-Expression "git fetch upstream"
+    Invoke-Expression "git fetch upstream" | Out-Null
 
     # Get modified ASIM Parser files along with their status
     $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
