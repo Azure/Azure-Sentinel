@@ -28,7 +28,7 @@ Class Parser {
 }
 
 function run {
-    # Write-Host "This is the script from PR."
+    Write-Host "This is the script from PR."
     # Check if upstream remote already exists
     $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
 
