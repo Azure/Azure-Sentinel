@@ -7,7 +7,7 @@ from connections.sentinel import SentinelConnector
 from connections.zerofox import ZeroFoxClient
 
 
-def main(mytimer: func.TimerRequest) -> None:
+def main(mytimer: func.TimerRequest, context) -> None:
     now = datetime.now(timezone.utc)
     utc_timestamp = (
         now.isoformat()
@@ -22,10 +22,10 @@ def main(mytimer: func.TimerRequest) -> None:
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
 
-    zf_client = get_zf_client()
+    zerofox = get_zf_client()
 
     results = get_cti_advanced_dark_web(
-        zf_client, created_after=query_from)
+        zerofox, created_after=query_from)
 
     logging.debug("Trigger function retrieved results")
 
@@ -33,7 +33,10 @@ def main(mytimer: func.TimerRequest) -> None:
     log_type = "ZeroFox_CTI_advanced_dark_web"
 
     sentinel_client = SentinelConnector(
-        customer_id=customer_id, shared_key=shared_key, log_type=log_type
+        customer_id=customer_id,
+        shared_key=shared_key,
+        log_type=log_type,
+        context=context
     )
 
     for result in results:

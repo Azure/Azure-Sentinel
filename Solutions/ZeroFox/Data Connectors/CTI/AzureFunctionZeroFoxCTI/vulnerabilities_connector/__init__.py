@@ -24,10 +24,10 @@ def main(mytimer: func.TimerRequest) -> None:
 
     logging.info(f"Querying ZeroFox since {query_from}")
 
-    zf_client = get_zf_client()
+    zerofox = get_zf_client()
 
     results = get_cti_vulnerabilities(
-        zf_client, created_after=query_from
+        zerofox, created_after=query_from
     )
 
     logging.debug("Trigger function retrieved results")

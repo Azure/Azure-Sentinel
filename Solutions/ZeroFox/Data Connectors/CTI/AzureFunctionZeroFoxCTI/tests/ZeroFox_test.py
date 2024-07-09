@@ -15,7 +15,7 @@ URL = "https://api.zerofox.com"
 class TestZeroFoxCTI():
     @responses.activate
     def test_cti_generator_is_provided(self):
-        zf_client = ZeroFoxClient(user=USER, token=TOKEN)
+        zerofox = ZeroFoxClient(user=USER, token=TOKEN)
         self.build_cti_responses()
 
         output = zf_client.cti_request(method="GET", url_suffix=ENDPOINT)

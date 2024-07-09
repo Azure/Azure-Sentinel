@@ -14,6 +14,7 @@ class SentinelConnector:
         customer_id,
         shared_key,
         log_type,
+        context = None,
         queue_size=200,
         bulks_number=10,
         queue_size_bytes=25 * (2**20),
@@ -29,6 +30,7 @@ class SentinelConnector:
         self._bulks_list = []
         self.successfull_sent_events_number = 0
         self.failed_sent_events_number = 0
+        self.context = context
 
     def send(self, event):
         self._queue.append(event)
@@ -38,12 +40,8 @@ class SentinelConnector:
 
     def flush(self, force=True):
         self._bulks_list.append(self._queue)
-        if force:
+        if force or len(self._bulks_list) >= self.bulks_number:
             self._flush_bulks()
-        else:
-            if len(self._bulks_list) >= self.bulks_number:
-                self._flush_bulks()
-
         self._queue = []
 
     def _flush_bulks(self):
@@ -60,6 +58,7 @@ class SentinelConnector:
                                 self.shared_key,
                                 q,
                                 self.log_type,
+                                self.context,
                             ),
                         )
                     )
@@ -73,7 +72,7 @@ class SentinelConnector:
         self._bulks_list = []
 
     def __enter__(self):
-        pass
+        return self
 
     def __exit__(self, type, value, traceback):
         self.flush()
@@ -108,7 +107,9 @@ class SentinelConnector:
         authorization = f"SharedKey {customer_id}:{encoded_hash}"
         return authorization
 
-    def _post_data(self, customer_id, shared_key, body, log_type):
+    def _post_data(self, customer_id, shared_key, body, log_type, context):
+        if context:
+            context.thread_local_storage.invocation_id = context.invocation_id
         events_number = len(body)
         body = json.dumps(body)
         method = "POST"
