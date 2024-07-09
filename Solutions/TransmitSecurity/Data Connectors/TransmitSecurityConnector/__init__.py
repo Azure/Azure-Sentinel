@@ -7,9 +7,10 @@ import hmac
 import requests
 import os
 import azure.functions as func
+from typing import List, Dict, Optional
 
 
-def build_signature(date, content_length, method, content_type, resource, shared_key, customer_id):
+def build_signature(date: str, content_length: int, method: str, content_type: str, resource: str, shared_key: str, customer_id: str) -> str:
     x_headers = f'x-ms-date:{date}'
     string_to_hash = f"{method}\n{content_length}\n{content_type}\n{x_headers}\n{resource}"
     bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
@@ -20,12 +21,12 @@ def build_signature(date, content_length, method, content_type, resource, shared
 
 
 class TransmitSecurityConnector:
-    def __init__(self, token_endpoint, client_id, client_secret):
+    def __init__(self, token_endpoint: str, client_id: str, client_secret: str):
         self.token_endpoint = token_endpoint
         self.client_id = client_id
         self.client_secret = client_secret
 
-    def get_access_token(self):
+    def get_access_token(self) -> str:
         response = requests.post(
             self.token_endpoint,
             data={
@@ -40,7 +41,7 @@ class TransmitSecurityConnector:
         response.raise_for_status()
         return response.json()["access_token"]
 
-    def fetch_events(self, token, endpoint):
+    def fetch_events(self, token: str, endpoint: str) -> List[Dict]:
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
@@ -50,7 +51,7 @@ class TransmitSecurityConnector:
         return response.json()
 
 
-def gen_chunks(data, chunksize=100):
+def gen_chunks(data: List[Dict], chunksize: int = 100) -> List[Dict]:
     chunk = []
     for index, item in enumerate(data):
         if index % chunksize == 0 and index > 0:
@@ -61,7 +62,7 @@ def gen_chunks(data, chunksize=100):
 
 
 class AzureSentinel:
-    def __init__(self, log_analytics_uri, shared_key, customer_id):
+    def __init__(self, log_analytics_uri: str, shared_key: str, customer_id: str):
         self.log_analytics_uri = log_analytics_uri
         self.shared_key = shared_key
         self.customer_id = customer_id
@@ -71,12 +72,12 @@ class AzureSentinel:
         self.failed_admin_events = 0
         self.chunksize = 10000
 
-    def post_results(self, data, table):
+    def post_results(self, data: List[Dict], table: str):
         for chunk in gen_chunks(data, chunksize=self.chunksize):
             body = json.dumps(chunk)
             self.post_data(body, len(chunk), table)
 
-    def increase_counters(self, chunk_count, table, status):
+    def increase_counters(self, chunk_count: int, table: str, status: str):
         if table == "TransmitSecurityUserActivity" and status == "success":
             self.success_user_events += chunk_count
         elif table == "TransmitSecurityAdminActivity" and status == "success":
@@ -86,7 +87,7 @@ class AzureSentinel:
         elif table == "TransmitSecurityAdminActivity" and status == "fail":
             self.failed_admin_events += chunk_count
 
-    def post_data(self, body, chunk_count, table):
+    def post_data(self, body: str, chunk_count: int, table: str):
         method = 'POST'
         content_type = 'application/json'
         resource = '/api/logs'
@@ -119,17 +120,17 @@ def main(mytimer: func.TimerRequest) -> None:
     try:
         user_activity_endpoint = os.getenv('TransmitSecurityUserActivityEndpoint', None)
         admin_activity_endpoint = os.getenv('TransmitSecurityAdminActivityEndpoint', None)
-        token_endpoint = os.environ['TransmitSecurityTokenEndpoint']
-        client_id = os.environ['TransmitSecurityClientID']
-        client_secret = os.environ['TransmitSecurityClientSecret']
+        token_endpoint = os.getenv('TransmitSecurityTokenEndpoint', '')
+        client_id = os.getenv('TransmitSecurityClientID', '')
+        client_secret = os.getenv('TransmitSecurityClientSecret', '')
         user_activity_tbl_name = "TransmitSecurityUserActivity"
         admin_activity_tbl_name = "TransmitSecurityAdminActivity"
-        customer_id = os.environ['WorkspaceID']
-        shared_key = os.environ['WorkspaceKey']
+        customer_id = os.getenv('WorkspaceID', '')
+        shared_key = os.getenv('WorkspaceKey', '')
         log_analytics_uri = os.getenv('logAnalyticsUri', f'https://{customer_id}.ods.opinsights.azure.com')
 
         if not user_activity_endpoint and not admin_activity_endpoint:
-            raise KeyError("One of the endpoints is required to be set.")
+            raise ValueError("One of the endpoints is required to be set.")
     
         connector = TransmitSecurityConnector(token_endpoint, client_id, client_secret)
         azure_sentinel = AzureSentinel(log_analytics_uri, shared_key, customer_id)
@@ -144,11 +145,14 @@ def main(mytimer: func.TimerRequest) -> None:
                     azure_sentinel.post_results(events, table)
                     events = connector.fetch_events(token, endpoint)
 
-    except KeyError:
-        logging.error("Environment variables not set")
+    except ValueError as ve:
+        logging.error(f"Configuration error: {ve}")
+        raise
+    except requests.RequestException as re:
+        logging.error(f"Request error: {re}")
         raise
     except Exception as e:
-        logging.error(f"Error: {e}")
+        logging.error(f"Unexpected error: {e}")
         raise
 
     logging.info(f"Events processed successfully - Admin: {azure_sentinel.success_admin_events}, User: {azure_sentinel.success_user_events}")
