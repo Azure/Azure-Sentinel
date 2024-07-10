@@ -95,7 +95,7 @@ def create_parameters_string(parser_file):
 # Creating a string of the values in the list with commas between them
 # Example: for a list: ['ab', 'cd', 'ef'] the output will be: "'ab','cd','ef'"
 def create_values_string(values_list):
-    joined_string = ','.join([f"'{val}'" for val in values_list])
+    joined_string = ','.join([f"@'{val}'" for val in values_list])
     return joined_string
     
 
