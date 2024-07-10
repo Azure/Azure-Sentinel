@@ -21,12 +21,10 @@ def main(mytimer: func.TimerRequest, context) -> None:
 
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
+    logging.info(f"Querying ZeroFox since {query_from}")
 
     zerofox = get_zf_client()
 
-    logging.debug("Trigger function retrieved results")
-
-    # The log type is the name of the event that is being submitted
     log_type = "ZeroFox_CTI_ransomware"
 
     sentinel = SentinelConnector(
@@ -44,12 +42,12 @@ def main(mytimer: func.TimerRequest, context) -> None:
         for result in results:
             sentinel.send(result)
 
-        if sentinel.failed_sent_events_number:
-            logging.error(
+    if sentinel.failed_sent_events_number:
+        logging.error(
                 f"Failed to send {sentinel.failed_sent_events_number} events"
             )
-
-    logging.info(f"Python timer trigger function ran at {utc_timestamp}")
+    logging.info(f"Connector {log_type} ran at {utc_timestamp}, \
+                  sending {sentinel.successfull_sent_events_number} events to Sentinel.")
 
 
 def get_zf_client():
