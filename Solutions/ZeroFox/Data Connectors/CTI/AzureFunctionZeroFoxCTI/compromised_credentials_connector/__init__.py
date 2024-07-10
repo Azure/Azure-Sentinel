@@ -7,7 +7,7 @@ from connections.sentinel import SentinelConnector
 from connections.zerofox import ZeroFoxClient
 
 
-def main(mytimer: func.TimerRequest) -> None:
+def main(mytimer: func.TimerRequest, context) -> None:
     now = datetime.now(timezone.utc)
     utc_timestamp = (
         now.isoformat()
@@ -21,27 +21,32 @@ def main(mytimer: func.TimerRequest) -> None:
 
     query_from = max(
         mytimer.schedule_status["Last"], (now - timedelta(days=1)).isoformat())
+    logging.info(f"Querying ZeroFox since {query_from}")
 
     zerofox = get_zf_client()
 
-    results = get_cti_compromised_credentials(
-        zerofox, created_after=query_from
-    )
-
-    logging.debug("Trigger function retrieved results")
-
-    # The log type is the name of the event that is being submitted
     log_type = "ZeroFox_CTI_compromised_credentials"
 
-    sentinel_client = SentinelConnector(
-        customer_id=customer_id, shared_key=shared_key, log_type=log_type
+    sentinel = SentinelConnector(
+        customer_id=customer_id,
+        shared_key=shared_key,
+        log_type=log_type,
+        context=context
     )
 
-    for result in results:
-        sentinel_client.send(result)
+    with sentinel:
+        results = get_cti_compromised_credentials(
+            zerofox, created_after=query_from
+        )
+        for result in results:
+            sentinel.send(result)
 
-    logging.info(f"Python timer trigger function ran at {utc_timestamp}")
-
+    if sentinel.failed_sent_events_number:
+        logging.error(
+            f"Failed to send {sentinel.failed_sent_events_number} events"
+        )
+    logging.info(f"Connector {log_type} ran at {utc_timestamp}, \
+                  sending {sentinel.successfull_sent_events_number} events to Sentinel.")
 
 def get_zf_client():
     user = os.environ.get("ZeroFoxUsername")
