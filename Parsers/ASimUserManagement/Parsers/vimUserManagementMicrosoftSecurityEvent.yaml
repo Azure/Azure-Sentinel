@@ -1,7 +1,7 @@
 Parser:
   Title: User Management ASIM parser for Microsoft Security Event logs
-  Version: '0.1.1'
-  LastUpdated: Mar 07, 2024
+  Version: '0.2.1'
+  LastUpdated: May 29, 2024
 Product:
   Name: Microsoft
 Normalization:
@@ -15,7 +15,7 @@ References:
 - Title: Audit User Account Management
   Link: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/audit-user-account-management
 Description: |
-  This ASIM parser supports normalizing Microsoft Security Event logs delivered using AMA to the ASIM UserManagement normalized schema.
+  This ASIM parser supports normalizing Microsoft Security Event logs ingested in 'SecurityEvent' table delivered using AMA to the ASIM UserManagement normalized schema.
 ParserName: vimUserManagementMicrosoftSecurityEvent
 EquivalentBuiltInParser: _Im_UserManagement_MicrosoftSecurityEvent
 ParserParams:
@@ -101,39 +101,6 @@ ParserQuery: |
           | summarize make_set(EventID)
       );
       union (
-          WindowsEvent
-          | where not(disabled)
-          | where (isnull(starttime) or TimeGenerated >= starttime) 
-                and (isnull(endtime) or TimeGenerated <= endtime)
-          | where EventID in(UserEventID)
-          | where (array_length(targetusername_has_any) == 0 or (EventData has_any (targetusername_has_any))) and 
-              (array_length(actorusername_has_any) == 0 or (EventData has_any (actorusername_has_any))) and
-              (array_length(srcipaddr_has_any_prefix) == 0)
-          | extend
-              ActorOriginalUserType = tostring(EventData.AccountType),
-              ActorSessionId = tostring(EventData.SubjectLogonId),
-              ActorUserId = tostring(EventData.SubjectUserSid),
-              NewTargetUserName = tostring(EventData.NewTargetUserName),
-              OldTargetUserName = tostring(EventData.OldTargetUserName),
-              SubjectDomainName = tostring(EventData.SubjectDomainName),
-              SubjectUserName = tostring(EventData.SubjectUserName),
-              TargetDomain = tostring(EventData.TargetDomainName),
-              TargetUserId = tostring(EventData.TargetSid),
-              TargetUsername = tostring(EventData.TargetUserName),
-              EventMessage = tostring(EventData.Activity)
-          | where (array_length(targetusername_has_any) == 0 or (TargetDomain has_any (targetusername_has_any)) or (TargetUsername has_any (targetusername_has_any)) or (strcat(TargetDomain,"\\",TargetUsername) has_any (targetusername_has_any))) and
-              (array_length(actorusername_has_any) == 0 or (SubjectDomainName has_any (actorusername_has_any)) or (SubjectUserName has_any (actorusername_has_any)) or ( strcat(SubjectDomainName,"\\",SubjectUserName) has_any (actorusername_has_any)))
-          | project-rename
-              NewPropertyValue = NewTargetUserName,
-              PreviousPropertyValue = OldTargetUserName
-          | extend 
-              TargetUsername = coalesce(TargetUsername, PreviousPropertyValue)
-          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue, EventMessage
-          | extend
-              TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
-              TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
-          | project-away TargetDomain
-      ),(
           SecurityEvent
           | where not(disabled)
           | where (isnull(starttime) or TimeGenerated >= starttime) 
@@ -166,38 +133,6 @@ ParserQuery: |
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
           | project-away TargetDomain
-      ),(
-          WindowsEvent
-          | where not(disabled)
-          | where (isnull(starttime) or TimeGenerated >= starttime) 
-                and (isnull(endtime) or TimeGenerated <= endtime)          
-          | where EventID in(GroupEventID)
-          | where (array_length(targetusername_has_any) == 0 or (EventData has_any (targetusername_has_any))) and 
-              (array_length(actorusername_has_any) == 0 or (EventData has_any (actorusername_has_any))) and
-              (array_length(srcipaddr_has_any_prefix) == 0)
-          | extend 
-              ActorOriginalUserType = tostring(EventData.AccountType),
-              ActorSessionId = tostring(EventData.SubjectLogonId),
-              ActorUserId = tostring(EventData.SubjectUserSid),
-              GroupDomain = tostring(EventData.TargetDomainName),
-              GroupId = tostring(EventData.TargetSid),
-              GroupName = tostring(EventData.TargetUserName),
-              MemberName = tostring(EventData.MemberName),
-              MemberSid = tostring(EventData.MemberSid),
-              NewTargetUserName = tostring(EventData.NewTargetUserName),
-              OldTargetUserName = tostring(EventData.OldTargetUserName),
-              SubjectDomainName = tostring(EventData.SubjectDomainName),
-              SubjectUserName = tostring(EventData.SubjectUserName),
-              EventMessage = tostring(EventData.Activity)
-          | where (array_length(targetusername_has_any) == 0 or (NewTargetUserName has_any (targetusername_has_any)) or (OldTargetUserName has_any (targetusername_has_any))) and
-              (array_length(actorusername_has_any) == 0 or (SubjectUserName has_any (actorusername_has_any)))
-          | extend 
-              GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName)),
-              TargetUserId = MemberSid,
-              TargetUsername = MemberName
-          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, EventMessage
-          | extend 
-              GroupIdType = iif(isnotempty(GroupId), "SID","")
       ),(
           SecurityEvent
           | where not(disabled)

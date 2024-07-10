@@ -1,7 +1,7 @@
 Parser:
   Title: User Management ASIM parser for Microsoft Security Event logs
   Version: '0.2.1'
-  LastUpdated: 28 May, 2024
+  LastUpdated: May 29, 2024
 Product:
   Name: Microsoft
 Normalization:
@@ -15,9 +15,9 @@ References:
 - Title: Audit User Account Management
   Link: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/audit-user-account-management
 Description: |
-  This ASIM parser supports normalizing Microsoft Security Event logs ingested in 'SecurityEvent' table delivered using AMA to the ASIM UserManagement normalized schema.
-  ParserName: ASimUserManagementMicrosoftSecurityEvent
-EquivalentBuiltInParser: _ASim_UserManagement_MicrosoftSecurityEvent
+  This ASIM parser supports normalizing Microsoft Security Event logs ingested in 'WindowsEvent' table delivered using AMA to the ASIM UserManagement normalized schema.
+ParserName: ASimUserManagementMicrosoftWindowsEvent
+EquivalentBuiltInParser: _ASim_UserManagement_MicrosoftWindowsEvent
 ParserParams:
   - Name: disabled
     Type: bool
@@ -75,94 +75,54 @@ ParserQuery: |
           | summarize make_set(EventID)
       );
       union (
-          SecurityEvent
+          WindowsEvent
           | where not(disabled)
           | where EventID in(UserEventID)
-          | project-rename 
-              ActorOriginalUserType = AccountType,
-              ActorSessionId = SubjectLogonId,
-              ActorUserId = SubjectUserSid,
-              TargetDomain = TargetDomainName,
-              TargetUserId = TargetSid,
-              TargetUsername = TargetUserName,
-              EventMessage = Activity
-          | parse-kv EventData as 
-              (
-                  OldTargetUserName:string,
-                  NewTargetUserName:string
-              ) 
-              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+          | extend
+              ActorOriginalUserType = tostring(EventData.AccountType),
+              ActorSessionId = tostring(EventData.SubjectLogonId),
+              ActorUserId = tostring(EventData.SubjectUserSid),
+              NewTargetUserName = tostring(EventData.NewTargetUserName),
+              OldTargetUserName = tostring(EventData.OldTargetUserName),
+              SubjectDomainName = tostring(EventData.SubjectDomainName),
+              SubjectUserName = tostring(EventData.SubjectUserName),
+              TargetDomain = tostring(EventData.TargetDomainName),
+              TargetUserId = tostring(EventData.TargetSid),
+              TargetUsername = tostring(EventData.TargetUserName),
+              EventMessage = tostring(EventData.Activity)
           | project-rename
               NewPropertyValue = NewTargetUserName,
               PreviousPropertyValue = OldTargetUserName
           | extend 
               TargetUsername = coalesce(TargetUsername, PreviousPropertyValue)
-          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue, SourceComputerId, EventMessage
+          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue, EventMessage
           | extend
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
           | project-away TargetDomain
       ),(
-          SecurityEvent
+          WindowsEvent
           | where not(disabled)
-          | where not (EventID in (4744, 4748, 4749, 4753, 4759, 4763))
           | where EventID in(GroupEventID)
-          | project-rename 
-              ActorOriginalUserType = AccountType,
-              ActorSessionId = SubjectLogonId,
-              ActorUserId = SubjectUserSid,
-              GroupDomain = TargetDomainName,
-              GroupId = TargetSid,
-              GroupName = TargetUserName,
-              EventMessage = Activity
-          | extend GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName))
-          | parse-kv EventData as 
-              (
-                  MemberName:string,
-                  MemberSid:string
-              ) 
-              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-          | project-rename 
-              TargetUserId = MemberSid,
-              TargetUsername = MemberName
-          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, SourceComputerId, EventMessage
           | extend 
-              GroupIdType = iif(isnotempty(GroupId), "SID","")
-      ),(
-          SecurityEvent
-          | where not(disabled)
-          | where EventID in (4744, 4748, 4749, 4753, 4759, 4763)
-          | parse-kv EventData as 
-            (
-                TargetUserName:string,
-                TargetDomainName:string,
-                TargetSid:string,
-                SubjectUserSid:string,
-                AccountType:string,
-                SubjectLogonId:string,
-                SubjectDomainName:string,
-                SubjectUserName:string
-            ) 
-            with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-          | project-rename 
-              ActorOriginalUserType = AccountType,
-              ActorSessionId = SubjectLogonId,
-              ActorUserId = SubjectUserSid,
-              GroupDomain = TargetDomainName,
-              GroupId = TargetSid,
-              GroupName = TargetUserName,
-              EventMessage = Activity
-          | extend GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName))
-          | parse-kv EventData as 
-              (
-                  MemberName:string,
-                  MemberSid:string
-              ) 
-              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-          | project-rename 
+              ActorOriginalUserType = tostring(EventData.AccountType),
+              ActorSessionId = tostring(EventData.SubjectLogonId),
+              ActorUserId = tostring(EventData.SubjectUserSid),
+              GroupDomain = tostring(EventData.TargetDomainName),
+              GroupId = tostring(EventData.TargetSid),
+              GroupName = tostring(EventData.TargetUserName),
+              MemberName = tostring(EventData.MemberName),
+              MemberSid = tostring(EventData.MemberSid),
+              NewTargetUserName = tostring(EventData.NewTargetUserName),
+              OldTargetUserName = tostring(EventData.OldTargetUserName),
+              SubjectDomainName = tostring(EventData.SubjectDomainName),
+              SubjectUserName = tostring(EventData.SubjectUserName),
+              EventMessage = tostring(EventData.Activity)
+          | extend 
+              GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName)),
               TargetUserId = MemberSid,
               TargetUsername = MemberName
-          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, SourceComputerId, EventMessage
+          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, EventMessage
           | extend 
               GroupIdType = iif(isnotempty(GroupId), "SID","")
       )
@@ -170,9 +130,7 @@ ParserQuery: |
   | extend UpdatedPropertyName = EventSubType
   | invoke _ASIM_ResolveDvcFQDN ("Computer")
   | lookup UserTypeLookup on ActorOriginalUserType
-  | extend 
-      DvcId = coalesce(_ResourceId, SourceComputerId),
-      EventOriginalType = tostring(EventID)
+  | extend  EventOriginalType = tostring(EventID)
   | project-rename 
       EventUid = _ItemId
   | extend 
@@ -190,7 +148,7 @@ ParserQuery: |
       EventStartTime = TimeGenerated,
       EventVendor = 'Microsoft',
       Hostname = DvcHostname
-  | project-away Subject*, Computer, _ResourceId, SourceComputerId,EventID
+  | project-away Subject*, Computer, _ResourceId,EventID
   | extend
       ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
       ActorUserType = _ASIM_GetUserType(ActorUsername,ActorUserId),
@@ -199,6 +157,4 @@ ParserQuery: |
       TargetUserType = _ASIM_GetUserType(TargetUsername,TargetUserId),
       User = ActorUsername
   };
-    parser (
-        disabled                 = disabled
-    )
+    parser (disabled = disabled)
