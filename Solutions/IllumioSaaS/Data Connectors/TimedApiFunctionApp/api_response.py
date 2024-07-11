@@ -123,7 +123,8 @@ def main(mytimer: func.TimerRequest) -> None:
                          "vens_by_os": vens_by_os,
                          "vens_by_enforcement_mode": vens_by_enf_mode,
                          "vens_by_status": vens_by_status,                        
-                         "vens_by_sync_state": vens_by_sync_state
+                         "vens_by_sync_state": vens_by_sync_state,
+                         "pce_fqdn": PCE_FQDN
                          })
        
     logging.info("[TimedApi] Summary of workload api response that will be stored in log analytics table is {}".format(api_response))
