@@ -1,6 +1,11 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 3.2.2       | 13-03-2024                     | Updated **Analytic Rule** ExplicitMFADeny                                                                                                                                  |
+| 3.2.7       | 12-06-2024                     | Fixed the bugs from **Analytic Rules**        																																		|
+| 3.2.6       | 06-06-2024                     | Successful logon from IP and failure from a different IP fixes       																												        |
+| 3.2.5       | 28-05-2024                     | Updated Entity mappings and changed description in **Analytic Rule**         																												|
+| 3.2.4       | 21-03-2024                     | Used the make-series operator instead of Make_list          																																|
+| 3.2.3       | 13-03-2024                     | Removed uses of BlastRadius from query section of **Hunting Queries** where it was used incorrectly																						|
+| 3.2.2       | 13-03-2024                     | Updated **Analytic Rule** ExplicitMFADeny                                                                                                                                  				|
 | 3.2.1       | 16-02-2024                     | Fixed entity mapping of **Analytic Rule** NRT_NewAppOrServicePrincipalCredential.yaml                                                                                                      |
 | 3.2.0       | 05-02-2024                     | 1 **Analytic Rule** added PossibleSignInfromAzureBackdoor NRT_NewAppOrServicePrincipalCredential                                                                                           |
 | 3.0.11      | 17-01-2024                     | 1 **Analytic Rule** Fixed wrong capitalization for identifier ResourceId                                                                                                                   |
