@@ -31,9 +31,8 @@ class ZeroFoxClient:
             timeout=timeout,
             ok_code=200,
         )
+        yield response["results"]
 
-        for result in response["results"]:
-            yield result
         while response["next"]:
             response = self._http_request(
                 method="GET",
@@ -42,8 +41,7 @@ class ZeroFoxClient:
                 ok_code=200,
                 url=response["next"],
             )
-            for result in response["results"]:
-                yield result
+            yield response["results"]
 
     def _http_request(
         self,
@@ -61,7 +59,8 @@ class ZeroFoxClient:
             **kwargs,
         )
         if response.status_code != ok_code:
-            logging.error(f"Failed to {method} {url}. Response: {response.text}")
+            logging.error(
+                f"Failed to {method} {url}. Response: {response.text}")
             raise ApiResponseException(method, url=url, res=response)
         if response.status_code == requests.codes["no_content"]:
             return None
@@ -88,7 +87,7 @@ class ZeroFoxClient:
 
     def _get_cti_request_header(self):
         token: str = self.get_cti_authorization_token()
-        logging.debug(f"Access token retrieved")
+        logging.debug("Access token retrieved")
         return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",

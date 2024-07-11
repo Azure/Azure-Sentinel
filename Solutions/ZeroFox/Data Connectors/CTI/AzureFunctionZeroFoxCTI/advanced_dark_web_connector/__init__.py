@@ -2,12 +2,13 @@ import logging
 import os
 from datetime import datetime, timezone, timedelta
 
+import aiohttp
 import azure.functions as func
 from connections.sentinel import SentinelConnector
 from connections.zerofox import ZeroFoxClient
 
 
-def main(mytimer: func.TimerRequest, context) -> None:
+async def main(mytimer: func.TimerRequest) -> None:
     now = datetime.now(timezone.utc)
     utc_timestamp = (
         now.isoformat()
@@ -27,19 +28,19 @@ def main(mytimer: func.TimerRequest, context) -> None:
 
     log_type = "ZeroFox_CTI_advanced_dark_web"
 
-    sentinel = SentinelConnector(
-        customer_id=customer_id,
-        shared_key=shared_key,
-        log_type=log_type,
-        context=context
-    )
-
-    with sentinel:
-        results = get_cti_advanced_dark_web(
-            zerofox, created_after=query_from
+    async with aiohttp.ClientSession() as session:
+        sentinel = SentinelConnector(
+            session=session,
+            customer_id=customer_id,
+            shared_key=shared_key,
+            log_type=log_type,
+        )
+        async with sentinel:
+            batches = get_cti_advanced_dark_web(
+                zerofox, created_after=query_from
             )
-        for result in results:
-            sentinel.send(result)
+            for batch in batches:
+                await sentinel.send(batch)
 
     if sentinel.failed_sent_events_number:
         logging.error(
@@ -47,6 +48,7 @@ def main(mytimer: func.TimerRequest, context) -> None:
         )
     logging.info(f"Connector {log_type} ran at {utc_timestamp}, \
                   sending {sentinel.successfull_sent_events_number} events to Sentinel.")
+
 
 def get_zf_client():
     user = os.environ.get("ZeroFoxUsername")
