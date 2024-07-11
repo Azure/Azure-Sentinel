@@ -18,7 +18,7 @@ MAX_FILTERING_PARAMETERS = 2
 # Workspace ID for the Log Analytics workspace where the ASim filtering tests will be performed.
 #WORKSPACE_ID = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
 # CyberSOC
-WORKSPACE_ID = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
+WORKSPACE_ID = "8ecf8077-cf51-4820-aadd-14040956f35d"
 # Timespan for the parser query
 TIME_SPAN_IN_DAYS = 7
 
@@ -26,7 +26,7 @@ TIME_SPAN_IN_DAYS = 7
 exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
 
 # Sentinel Repo URL
-SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
+SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel.git"
 
 # Negative value as it is cannot be a port number and less likely to be an ID of some event. Also, the absolute value is greater than the maximal possible port number.
 INT_DUMMY_VALUE = -967799
@@ -47,8 +47,8 @@ start_time = end_time - timedelta(days = TIME_SPAN_IN_DAYS)
 
 def attempt_to_connect():
     try:
-            credential = DefaultAzureCredential()
-            #credential = InteractiveBrowserCredential() # Uncomment this line if you want to use the interactive browser credential for testing purposes
+            #credential = DefaultAzureCredential()
+            credential = InteractiveBrowserCredential() # Uncomment this line if you want to use the interactive browser credential for testing purposes
             client = LogsQueryClient(credential)
             empty_query = ""
             response = client.query_workspace(
@@ -97,7 +97,7 @@ def create_parameters_string(parser_file):
 # Creating a string of the values in the list with commas between them
 # Example: for a list: ['ab', 'cd', 'ef'] the output will be: "'ab','cd','ef'"
 def create_values_string(values_list):
-    joined_string = ','.join([f"'{val}'" for val in values_list])
+    joined_string = ','.join([f"@'{val}'" for val in values_list])
     return joined_string
     
 
@@ -240,11 +240,11 @@ def main():
     git_remote_command = "git remote"
     remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
     if 'upstream' not in remote_result.stdout.split():
-        git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
+        git_add_upstream_command = f"git remote add upstream {SentinelRepoUrl}"
         subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
     # Fetch from upstream
     git_fetch_upstream_command = "git fetch upstream"
-    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True)#, check=True)
 
     GetModifiedFiles = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
     try:
