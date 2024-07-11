@@ -4,6 +4,7 @@ from base64 import b64encode
 import azure.functions as func
 import polars as pl
 import json
+import aiohttp
 from .. import constants
 from ..sentinel_connector import AzureSentinelConnectorAsync
 
@@ -95,7 +96,7 @@ def getVensBySyncState(data):
         logging.error("getVensBySyncState error: {e}")
         return {}                                                  
 
-def main(mytimer: func.TimerRequest) -> None:
+async def main(mytimer: func.TimerRequest) -> None:
     logging.debug("url to be exercised is {} ".format(URL))
 
     response = requests.request("GET", URL, headers=headers, data={})
@@ -129,6 +130,6 @@ def main(mytimer: func.TimerRequest) -> None:
        
     logging.info("[TimedApi] Summary of workload api response that will be stored in log analytics table is {}".format(api_response))
     
-    with requests.Session() as session:
+    async with aiohttp.ClientSession() as session:
         sentinel = AzureSentinelConnectorAsync(session, DCE_ENDPOINT, DCR_ID, WORKLOADS_API_LOGS_CUSTOM_TABLE, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID, queue_size=1)    
-        sentinel.send(api_response)
+        await sentinel.send(api_response)
