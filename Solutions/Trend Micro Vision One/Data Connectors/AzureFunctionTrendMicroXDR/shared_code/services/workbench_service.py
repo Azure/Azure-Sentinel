@@ -100,7 +100,7 @@ def get_workbench_list_v3(
     if not query_custom_workbench:
         tmv1_filters.append("modelType eq 'preset'")
     if not query_aggressive_workbench:
-        tmv1_filters.append("not (modelId eq 'e3c131c3-aba0-40de-8eeb-1549ffc02cd1')")
+        tmv1_filters.append("not (modelId eq 'e3c131c3-aba0-40de-8eeb-1549ffc02cd1') not (modelId eq '5b1dba8d-774e-43df-9a65-2c45523d4d69')")
     tmv1_filter = " and ".join(tmv1_filters)
 
     query_params = {
