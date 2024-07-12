@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM filtering parser for Microsoft Windows Firewall
-  Version: '0.4'
-  LastUpdated: May 1st 2023
+  Version: '0.5.1'
+  LastUpdated: June 4 2024
 Product:
   Name: Windows Firewall
 Normalization:
@@ -13,7 +13,7 @@ References:
 - Title: ASIM
   Link: https:/aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports filtering and normalizing Microsoft Windows Firewall Events (WindowsEvent and SecurityEvent tables) to the ASIM Network Session schema. Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
+  This ASIM parser supports normalizing Microsoft Windows Firewall Events (WindowsEvent and SecurityEvent tables) logs ingested in 'WindowsEvent' table to the ASIM Network Session schema. Event IDs which are parsed as part of this parser: 5150, 5151, 5152, 5153, 5154, 5155, 5156, 5167, 5158, 5159
 ParserName: vimNetworkSessionMicrosoftWindowsEventFirewall
 EquivalentBuiltInParser: _Im_NetworkSession_MicrosoftWindowsEventFirewall
 ParserParams:
@@ -91,181 +91,13 @@ ParserQuery: |
     '%%14594', 'Forward',false,
     '%%14595', 'Bidirectional', false,
     '%%14609', 'Listen', false];
-  ///////////////////////////////////////////////////////
-  // this query extract data fields from EventData column from SecurityEvent table
-  ///////////////////////////////////////////////////////
-  let WindowsFirewall_SecurityEvent=
-    (starttime:datetime=datetime(null)
-    , endtime:datetime=datetime(null)
-    , srcipaddr_has_any_prefix:dynamic=dynamic([])
-    , dstipaddr_has_any_prefix:dynamic=dynamic([])
-    , ipaddr_has_any_prefix:dynamic=dynamic([])
-    , dstportnumber:int=int(null)
-    , hostname_has_any:dynamic=dynamic([])
-    , dvcaction:dynamic=dynamic([])
-    , eventresult:string='*'
-    , disabled:bool=false
-      )
-      {    
-      let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-      let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
-      let ip_any =set_union(srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix);
-      let SecurityEventProjected =
-        SecurityEvent
-        | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Type
-      ;
-      // Event IDs between (5151 .. 5159)
-      // will be extracting Event specific fields from 'EventData' field
-      let SecurityEvent_5152 = 
-        SecurityEventProjected 
-        | where (isnull(starttime) or TimeGenerated>=starttime)
-          and  (isnull(endtime) or TimeGenerated<=endtime)
-        | where not(disabled)
-        | where EventID==5152
-        // ***************  Prefilterring *****************************************************************
-        |where  (isnull(dstportnumber) or EventData has tostring(dstportnumber) ) 
-          and  (array_length(ip_any)==0 
-                or has_any_ipv4_prefix(EventData ,ip_any)
-                ) 
-          and (array_length(dvcaction)==0 or (dvcaction=='Deny') ) 
-          and (array_length(hostname_has_any)==0 )
-          and (eventresult=='*' or eventresult=='Failure')
-          // *************** / Prefilterring *****************************************************************
-        | extend EventResult =  "Failure"
-          | parse EventData with * 
-              '<Data Name="ProcessId">'ProcessId:string'</Data>'
-              '\x0d\x0a  <Data Name="Application">'Application'</Data>'
-              '\x0d\x0a  <Data Name="Direction">'DirectionCode'</Data>'
-              '\x0d\x0a  <Data Name="SourceAddress">'SrcIpAddr:string'</Data>'
-              '\x0d\x0a  <Data Name="SourcePort">'SrcPortNumber:int'</Data>'
-              '\x0d\x0a  <Data Name="DestAddress">'DstIpAddr'</Data>'
-              '\x0d\x0a  <Data Name="DestPort">'DstPortNumber:int'</Data>'
-              '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-              '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-              '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'*
-          | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any)
-          , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
-          | extend ASimMatchingIpAddr = case(
-            array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
-            , temp_isSrcMatch, "SrcIpAddr"
-            , temp_isDstMatch, "DstIpAddr"
-            , "No match"
-            )
-          | where ASimMatchingIpAddr != "No match"
-          | project-away temp_*, EventData
-        ;
-      let SecurityEvent_5154_5155_5158_5159 =
-      SecurityEventProjected 
-        | where (isnull(starttime) or TimeGenerated>=starttime)
-            and  (isnull(endtime) or TimeGenerated<=endtime)
-          | where not(disabled)
-          | where EventID in (5154, 5155, 5158, 5159)
-          // ***************  Prefilterring *****************************************************************
-          |where   (array_length(dstipaddr_has_any_prefix)==0 ) 
-            and  (array_length(hostname_has_any)==0 ) 
-            and  (isnull(dstportnumber) ) 
-            and  (array_length(ip_any)==0 
-                  or has_any_ipv4_prefix(EventData ,ip_any)
-                ) 
-            and (array_length(dvcaction)==0 
-                or (dvcaction=='Allow' and EventID in  (5154,5158))  
-                or (dvcaction=='Deny'  and EventID !in (5154,5158))
-                ) 
-          | extend EventResult = iff(EventID in (5154, 5158), "Success", "Failure")
-          | where (eventresult=='*' or EventResult==eventresult)
-          // *************** / Prefilterring *****************************************************************
-          | parse EventData with * '<Data Name="ProcessId">'ProcessId:string'</Data>' 
-              '\x0d\x0a  <Data Name="Application">'Application:string'</Data>'
-              '\x0d\x0a  <Data Name="SourceAddress">'SrcIpAddr:string'</Data>'
-              '\x0d\x0a  <Data Name="SourcePort">'SrcPortNumber:int'</Data>'
-              '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-              '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-              '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'*
-          | extend DirectionCode = "%%14609"
-          | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any)
-            , temp_isDstMatch=false
-          | extend ASimMatchingIpAddr = case(
-              array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-            , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
-            , temp_isSrcMatch, "SrcIpAddr"
-            , temp_isDstMatch, "DstIpAddr"
-            , "No match"
-            )
-          | where ASimMatchingIpAddr != "No match"
-          | project-away temp_* , EventData
-          ;
-      let SecurityEvent_5156_5157 =
-          SecurityEventProjected 
-          | where (isnull(starttime) or TimeGenerated>=starttime)
-            and  (isnull(endtime) or TimeGenerated<=endtime)
-          | where not(disabled)
-          | where EventID in (5156, 5157)
-           | extend EventResult = iff(EventID == 5156, "Success", "Failure")
-          // ***************  Prefilterring *****************************************************************
-          | where (isnull(starttime) or TimeGenerated>=starttime)
-            and  (isnull(endtime) or TimeGenerated<=endtime)
-                        and  (array_length(ip_any)==0 
-                  or has_any_ipv4_prefix(EventData ,ip_any)
-                ) 
-            and  (isnull(dstportnumber) or EventData has tostring(dstportnumber) ) 
-            and (array_length(dvcaction)==0 
-                or (dvcaction=='Allow' and EventID == 5156)  
-                or (dvcaction=='Deny'  and EventID <> 5156)
-                )
-            and (array_length(hostname_has_any)==0 )
-            and (eventresult=='*' or EventResult==eventresult) 
-          // *************** / Prefilterring *****************************************************************
-          | parse EventData with * '<Data Name="ProcessID">'ProcessId:string'</Data>'
-              '\x0d\x0a  <Data Name="Application">'Application:string'</Data>'
-              '\x0d\x0a  <Data Name="Direction">'DirectionCode:string'</Data>'
-              '\x0d\x0a  <Data Name="SourceAddress">'SrcIpAddr:string'</Data>'
-              '\x0d\x0a  <Data Name="SourcePort">'SrcPortNumber:int'</Data>'
-              '\x0d\x0a  <Data Name="DestAddress">'DstIpAddr:string'</Data>'
-              '\x0d\x0a  <Data Name="DestPort">'DstPortNumber:int'</Data>'
-              '\x0d\x0a  <Data Name="Protocol">'Protocol:int'</Data>'
-              '\x0d\x0a  <Data Name="FilterRTID">'NetworkRuleNumber:int'</Data>'
-              '\x0d\x0a  <Data Name="LayerName">'LayerCode'</Data>'
-              '\x0d\x0a  <Data Name="LayerRTID">'LayerRTID'</Data>'
-              '\x0d\x0a  <Data Name="RemoteUserID">'RemoteUserID:string'</Data>'
-              '\x0d\x0a  <Data Name="RemoteMachineID">'RemoteMachineID:string'</Data>'*
-              | project-away EventData
-              | extend temp_isSrcMatch=has_any_ipv4_prefix(SrcIpAddr,src_or_any)
-               , temp_isDstMatch=has_any_ipv4_prefix(DstIpAddr,dst_or_any)
-              | extend ASimMatchingIpAddr = case(
-              array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
-              , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
-              , temp_isSrcMatch, "SrcIpAddr"
-              , temp_isDstMatch, "DstIpAddr"
-              , "No match"
-              )
-             | where ASimMatchingIpAddr != "No match"
-             | project-away temp_*
-          ;
-      union SecurityEvent_5154_5155_5158_5159, SecurityEvent_5156_5157, SecurityEvent_5152
-      | lookup Directions on DirectionCode
-      | project-rename DvcHostname = Computer
-      | extend
-            SrcAppName = iff(isOutBound, Application, ""),
-            DstAppName = iff(not(isOutBound), Application, ""),
-            SrcDvcId = iff(isOutBound, RemoteMachineID, ""),
-            DstDvcId = iff(not(isOutBound), RemoteMachineID, ""),
-            SrcProcessId =  iff(isOutBound, tostring(ProcessId), ""),
-            DstProcessId =  iff(not(isOutBound), tostring(ProcessId), ""),
-            DstUserId = iff(isOutBound, RemoteUserID, ""),
-            SrcUserId = iff(not(isOutBound), RemoteUserID, ""),
-            DstHostname = iff(isOutBound, "", DvcHostname),
-            SrcHostname = iff(isOutBound, DvcHostname, "")
-          | project-away Application, RemoteMachineID, ProcessId, RemoteUserID
-            // *************** Postfilterring *****************************************************************
-          | where  (isnull(dstportnumber) or DstPortNumber == dstportnumber )
-          // *************** / Postfilterring *****************************************************************
-      };
   //////////////////////////////////////////////////////
   // this query extract the data from WindowsEvent table
   //////////////////////////////////////////////////////
+  let parser = (starttime:datetime=datetime(null), endtime:datetime=datetime(null)
+  , srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]),dstportnumber:int=int(null)
+  , hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]),eventresult:string='*', disabled:bool=false
+   ) {
   let WindowsFirewall_WindowsEvent=(starttime:datetime=datetime(null), endtime:datetime=datetime(null)
   , srcipaddr_has_any_prefix:dynamic=dynamic([]), dstipaddr_has_any_prefix:dynamic=dynamic([]), ipaddr_has_any_prefix:dynamic=dynamic([]),dstportnumber:int=int(null)
   , hostname_has_any:dynamic=dynamic([]), dvcaction:dynamic=dynamic([]),eventresult:string='*', disabled:bool=false
@@ -280,7 +112,7 @@ ParserQuery: |
       |where not(disabled)
       | where EventID between (5150 .. 5159)
       | extend EventResult = iff(EventID in (5154, 5156, 5158), "Success", "Failure")
-      // ***************  Prefilterring *****************************************************************
+      // ***************  Prefilterring *******************
       | where  (isnull(dstportnumber) or EventData has tostring(dstportnumber)) 
               and (array_length(ip_any)==0 
                       or has_any_ipv4_prefix(EventData,ip_any)
@@ -323,14 +155,10 @@ ParserQuery: |
                       DstHostname = iff(isOutBound, "", DvcHostname),
                       SrcHostname = iff(isOutBound, DvcHostname, "")
             | project-away EventData
-          // *************** Postfilterring *****************************************************************
-          | where  (isnull(dstportnumber) or DstPortNumber == dstportnumber ) 
-          // *************** / Postfilterring *****************************************************************
+            | where  (isnull(dstportnumber) or DstPortNumber == dstportnumber ) 
         };
   // Main query -> outputs both schemas as one normalized table
-  union isfuzzy=true
-    WindowsFirewall_SecurityEvent  (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
-    , WindowsFirewall_WindowsEvent (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
+  WindowsFirewall_WindowsEvent (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)
       | extend 
               DvcAction = iff(EventID in (5154, 5156, 5158), "Allow", "Deny"),
               DvcOs = 'Windows',
@@ -361,4 +189,6 @@ ParserQuery: |
           SrcDvcIdType = iff (SrcDvcId != "", "SID", "")
       | lookup LayerCodeTable on LayerCode
       | lookup ProtocolTable on Protocol
-      | project-away LayerCode, DirectionCode, Protocol, isOutBound, LayerName, EventID, LayerRTID
+      | project-away LayerCode, DirectionCode, Protocol, isOutBound, LayerName, EventID,_ResourceId,_SubscriptionId
+      };
+      parser(starttime = datetime(null),endtime = datetime(null),srcipaddr_has_any_prefix = dynamic([]),dstipaddr_has_any_prefix = dynamic([]),ipaddr_has_any_prefix = dynamic([]),dstportnumber = int(null),hostname_has_any = dynamic([]),dvcaction = dynamic([]),eventresult = '*',disabled = false)

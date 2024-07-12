@@ -1,5 +1,7 @@
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
+#$global:workspaceId = "8ecf8077-cf51-4820-aadd-14040956f35d"
 $global:workspaceId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
+$global:subscriptionId="d1d8779d-38d7-4f06-91db-9cbc8de0176f"
 
 # ANSI escape code for green text
 $green = "`e[32m"
@@ -28,6 +30,7 @@ Class Parser {
 }
 
 function run {
+    $subscription = Select-AzSubscription -SubscriptionId $global:subscriptionId
     Write-Host "This is the script from PR."
     # Check if upstream remote already exists
     $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
