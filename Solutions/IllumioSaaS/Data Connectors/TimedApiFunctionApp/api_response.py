@@ -108,7 +108,7 @@ async def main(mytimer: func.TimerRequest) -> None:
         return
         
     response = json.loads(response.text)
-    df = pl.json_normalize(response)
+    df = pl.json_normalize(response, infer_schema_length = None)
     
     vens_by_version = getVensByVersion(df)
     vens_by_managed = getVensByManaged(df)

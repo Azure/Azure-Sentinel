@@ -17,7 +17,7 @@ PCE_FQDN = os.environ['PCE_FQDN']
 PORT = int(os.environ.get('PCE_PORT', 443))
 ORG_ID = os.environ['ORG_ID']
 MAX_WORKLOADS = os.environ.get('MAX_WORKLOADS', 100000)
-LOGS_TO_CONSUME = os.environ.get('LogTypes', 'All')
+LOGS_TO_CONSUME = os.environ.get('logTypes', 'All')
 
 #Azure config
 AZURE_TENANT_ID = os.environ['AZURE_TENANT_ID']
