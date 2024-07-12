@@ -54,9 +54,10 @@ def process_body_obj(body):
     # Check if the message is from SNS
     try:
         record = None
-        if body.get('Message'):
+        if body.get('Type'):
             # Extract the actual SQS message from the SNS message
-            record = json.loads(body['Message']['Records'][0])        
+            record = json.loads(body['Message'])
+            record = record['Records'][0]
         else:
             # Assume the message is directly from SQS
             record = body['Records'][0]        
