@@ -148,6 +148,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.CrowdStrikeFalconIOC;
   }
+  else if (dataTypes[0].name.includes("WizIssues"))
+  {
+    return ConnectorCategory.Wiz;
+  }
   return "";
 } 
 let fileTypeSuffixes = ["json"];
