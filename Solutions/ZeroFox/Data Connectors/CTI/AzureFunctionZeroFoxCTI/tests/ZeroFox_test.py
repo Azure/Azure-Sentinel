@@ -1,8 +1,9 @@
+import itertools
 from itertools import zip_longest
 
 import responses
-from responses import matchers
 from connections.zerofox import ZeroFoxClient
+from responses import matchers
 
 USER = "user"
 TOKEN = "token"
@@ -13,14 +14,16 @@ URL = "https://api.zerofox.com"
 
 
 class TestZeroFoxCTI():
+    
     @responses.activate
     def test_cti_generator_is_provided(self):
         zerofox = ZeroFoxClient(user=USER, token=TOKEN)
         self.build_cti_responses()
 
-        output = zf_client.cti_request(method="GET", url_suffix=ENDPOINT)
+        output = zerofox.cti_request(method="GET", url_suffix=ENDPOINT)
         expected = (dict(index=f"r{i}") for i in range(4))
-        all_match = all(a == b for a, b in zip_longest(output, expected))
+        flattened_output = itertools.chain.from_iterable(output)
+        all_match = all(a == b for a, b in zip_longest(flattened_output, expected))
         assert all_match
 
     def build_cti_responses(self):
