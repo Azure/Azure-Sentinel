@@ -1,6 +1,6 @@
 # Workspace ID for the Log Analytics workspace where the ASim schema and data tests will be conducted
-#$global:workspaceId = "8ecf8077-cf51-4820-aadd-14040956f35d"
-$global:workspaceId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
+$global:workspaceId = "8ecf8077-cf51-4820-aadd-14040956f35d"
+#$global:workspaceId = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
 $global:subscriptionId="d1d8779d-38d7-4f06-91db-9cbc8de0176f"
 
 # ANSI escape code for green text
@@ -101,7 +101,7 @@ function testSchema([string] $ParserFile) {
         Write-Host "${yellow}The parser '$functionName' is a union parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
-        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
+        testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers\ASim", ""), $parsersAsObject.ParserParams))
     }
 }
 

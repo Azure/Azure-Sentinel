@@ -18,9 +18,9 @@ MAX_FILTERING_PARAMETERS = 2
 # Workspace ID for the Log Analytics workspace where the ASim filtering tests will be performed.
 #WORKSPACE_ID = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
 # eco-connector
-WORKSPACE_ID = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
+#WORKSPACE_ID = "059f037c-1b3b-42b1-bb90-e340e8c3142c"
 # CyberSOC
-#WORKSPACE_ID = "8ecf8077-cf51-4820-aadd-14040956f35d"
+WORKSPACE_ID = "8ecf8077-cf51-4820-aadd-14040956f35d"
 # Timespan for the parser query
 TIME_SPAN_IN_DAYS = 7
 
