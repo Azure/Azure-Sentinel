@@ -148,6 +148,10 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.CrowdStrikeFalconIOC;
   }
+  else if (dataTypes[0].name.includes("WizIssues"))
+  {
+    return ConnectorCategory.Wiz;
+  }
   else if (dataTypes[0].name.includes("vectra_isession"))
   {
     return ConnectorCategory.VectraStreamAma;
