@@ -1,0 +1,298 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Infoblox-Get-Service-Name",
+        "description": "This playbook will fetch the data from 'Services' API and ingest it into custom table",
+        "prerequisites": [
+            "1. User must have a valid Infoblox API Key"
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize connection.",
+            "1. Go to your logic app -> API connections -> Select connection resource",
+            "2. Go to General -> edit API connection",
+            "3. Provide Workspace Id and Workspace Key of Log Analytics Workspace where Table will be created",
+            "3. Click Save"
+        ],
+        "entities": [],
+        "tags": [ "Infoblox", "Service Name" ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Infoblox"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Infoblox-Get-Service-Name",
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Please do not keep 'PlaybookName' parameter empty, else you will receive validation failure"
+            }
+        },
+        "Infoblox API Key": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter Infoblox API Key"
+            }
+        },
+        "Infoblox Base Url": {
+            "type": "string",
+            "defaultValue": "https://csp.infoblox.com",
+            "metadata": {
+                "description": "Enter baseurl for your Infoblox instance.(e.g. https://csp.infoblox.com)"
+            }
+        }
+    },
+    "variables": {
+        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "API Key": {
+                            "type": "String",
+                            "defaultValue": "[trim(parameters('Infoblox API Key'))]"
+                        },
+                        "BaseUrl": {
+                            "type": "String",
+                            "defaultValue": "[trim(parameters('Infoblox Base Url'))]"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Day",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Condition_To_Verify_API_Call_Is_Success_Or_Not": {
+                            "actions": {
+                                "Condition_For_Services_Result_Is_Available_Or_Not": {
+                                    "actions": {
+                                        "Terminate_Due_To_Empty_Results_List": {
+                                            "runAfter": {},
+                                            "type": "Terminate",
+                                            "inputs": {
+                                                "runError": {
+                                                    "message": "Empty Results From Services API"
+                                                },
+                                                "runStatus": "Failed"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON_For_Services_Data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Send_Data_Into_Log_Analytics_Workspace": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": "@{body('Parse_JSON_For_Services_Data')?['results']}",
+                                                    "headers": {
+                                                        "Log-Type": "@variables('Table Name')"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/api/logs"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@empty(body('Parse_JSON_For_Services_Data')?['results'])",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Parse_JSON_For_Services_Data": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_Request_To_Services_Endpoint')",
+                                        "schema": {
+                                            "results": [
+                                                {
+                                                    "configs": [
+                                                        {
+                                                            "current_version": "string",
+                                                            "host_id": "string",
+                                                            "id": "string",
+                                                            "service_id": "string",
+                                                            "upgraded_at": "string"
+                                                        }
+                                                    ],
+                                                    "created_at": "string",
+                                                    "desired_state": "string",
+                                                    "destinations": [],
+                                                    "id": "string",
+                                                    "name": "string",
+                                                    "pool_id": "string",
+                                                    "service_type": "string",
+                                                    "source_interfaces": [],
+                                                    "tags": {},
+                                                    "updated_at": "string"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP_Request_To_Services_Endpoint": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_Due_To_API_Failure": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "code": "@{outputs('HTTP_Request_To_Services_Endpoint')['statusCode']}",
+                                                "message": "Services API request failed with error message: @{body('HTTP_Request_To_Services_Endpoint')}"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('HTTP_Request_To_Services_Endpoint')['statusCode']",
+                                            200
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "HTTP_Request_To_Services_Endpoint": {
+                            "runAfter": {
+                                "Initialize_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "headers": {
+                                    "Authorization": "Token @{parameters('API Key')}"
+                                },
+                                "method": "GET",
+                                "uri": "@{variables('base_url')}/api/infra/v1/services"
+                            }
+                        },
+                        "Initialize_Base_URL": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "@parameters('BaseUrl')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Table_Name": {
+                            "runAfter": {
+                                "Initialize_Base_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Table Name",
+                                        "type": "string",
+                                        "value": "Service_Name_Info"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]",
+                                "connectionName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "Infoblox-Get-Service-Name",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureloganalyticsdatacollectorConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
+                }
+            }
+        }
+    ]
+}
