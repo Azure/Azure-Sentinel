@@ -34,12 +34,10 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
     @timer = Thread.new do
       loop do
         sleep @connectionAutoClose[:max_idal_time] / 2
-        if Time.now - @connectionAutoClose[:last_use] > @connectionAutoClose[:max_idal_time] && !@connectionAutoClose[:is_closed]
+        if is_connection_stale?
           @connectionAutoClose[:lock].synchronize do
-            if Time.now - @connectionAutoClose[:last_use] > @connectionAutoClose[:max_idal_time] && !@connectionAutoClose[:is_closed]
-              @connection.reset
-              @connectionAutoClose[:is_closed] = true
-              @logger.trace("Connection to Azure LogAnalytics was closed due to inactivity.");
+            if is_connection_stale?
+              reset_connection
             end
           end
         end
@@ -56,7 +54,11 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
 
     # Create REST request header
     
-    @connectionAutoClose[:lock].synchronize do      
+    @connectionAutoClose[:lock].synchronize do 
+      #close connection if its stale
+      if is_connection_stale?
+        reset_connection
+      end
       if @connectionAutoClose[:is_closed]
         open_connection
       end
@@ -83,6 +85,15 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
     @logger.trace("Connection to Azure LogAnalytics was opened.");
   end
 
+  def reset_connection
+    @connection.reset
+    @connectionAutoClose[:is_closed] = true    
+    @logger.trace("Connection to Azure LogAnalytics was closed due to inactivity.");
+  end
+
+  def is_connection_stale?
+    return Time.now - @connectionAutoClose[:last_use] > @connectionAutoClose[:max_idal_time] && !@connectionAutoClose[:is_closed]
+  end
   # Create a header for the given length 
   def get_header()
     # Getting an authorization token bearer (if the token is expired, the method will post a request to get a new authorization token)

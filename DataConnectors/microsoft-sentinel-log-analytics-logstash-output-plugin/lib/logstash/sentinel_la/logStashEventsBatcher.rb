@@ -79,6 +79,9 @@ class LogStashEventsBatcher
                         #force another retry even if the next iteration of the loop will be after the retransmission_timeout
                         force_retry = true
                     end               
+                rescue Excon::Error::Socket => ex
+                    @logger.trace("Exception: '#{ex.class.name}]#{ex} in posting data to #{api_name}. [amount_of_documents=#{amount_of_documents}]'")
+                    force_retry = true
                 rescue Exception => ex
                     @logger.trace("Exception in posting data to #{api_name}.[amount_of_documents=#{amount_of_documents} request payload=#{call_payload}]")       
                     @logger.error("Exception in posting data to #{api_name}. [Exception: '[#{ex.class.name}]#{ex}, amount of documents=#{amount_of_documents}]'")
