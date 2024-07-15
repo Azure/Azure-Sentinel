@@ -1,0 +1,645 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Cyware - support@cyware.com",
+    "comments": "Solution template for Cyware"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "email": "support@cyware.com",
+    "_email": "[variables('email')]",
+    "_solutionName": "Cyware",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "cywarelabsinc1709256751930.microsoft-sentinel-solution-cyware",
+    "_solutionId": "[variables('solutionId')]",
+    "huntingQueryObject1": {
+      "huntingQueryVersion1": "1.0.0",
+      "_huntingQuerycontentId1": "47559078-dc4c-4de3-96fe-270d4ca95446",
+      "huntingQueryTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('47559078-dc4c-4de3-96fe-270d4ca95446')))]"
+    },
+    "huntingQueryObject2": {
+      "huntingQueryVersion2": "1.0.0",
+      "_huntingQuerycontentId2": "61c99147-b749-4164-80b1-c4bfa4efa704",
+      "huntingQueryTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('61c99147-b749-4164-80b1-c4bfa4efa704')))]"
+    },
+    "huntingQueryObject3": {
+      "huntingQueryVersion3": "1.0.0",
+      "_huntingQuerycontentId3": "deb99c6f-1903-455b-bb2c-0036614110bc",
+      "huntingQueryTemplateSpecName3": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-hq-',uniquestring('deb99c6f-1903-455b-bb2c-0036614110bc')))]"
+    },
+    "Send_Incident_To_Cyware_Orchestrate": "Send_Incident_To_Cyware_Orchestrate",
+    "_Send_Incident_To_Cyware_Orchestrate": "[variables('Send_Incident_To_Cyware_Orchestrate')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "Send_Incident_To_Cyware_Orchestrate",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1'))))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject1').huntingQueryTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "DetectingSuspiciousPowerShellCommandExecutions_HuntingQueries Hunting Query with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2022-10-01",
+              "name": "Cyware_Hunting_Query_1",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Detecting Suspicious PowerShell Command Executions",
+                "category": "Hunting Queries",
+                "query": "DeviceProcessEvents\n| where ProcessCommandLine has \"powershell.exe\"\n// Add a placeholder column to facilitate the join\n| extend dummyKey = 1\n| join kind=inner (\n    _GetWatchlist('CTIX')\n    | where isnotempty(SearchKey)\n    // Add the same placeholder column here\n    | extend dummyKey = 1\n) on dummyKey\n// Now, filter the joined results using the contains operator\n| where ProcessCommandLine contains SearchKey\n| project TimeGenerated, DeviceName, InitiatingProcessCommandLine, ProcessCommandLine, SearchKey, LastUpdatedTimeUTC\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Query identifies users denied registration for multiple webinars or recordings but successfully registered for at least one event. Threshold variable adjusts number of events user needs to be rejected from."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "Execution"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1059"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1),'/'))))]",
+              "properties": {
+                "description": "Cyware Hunting Query 1",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject1')._huntingQuerycontentId1)]",
+                "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject1').huntingQueryVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyware",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Cyware",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cyware",
+                  "email": "support@cyware.com",
+                  "tier": "Partner"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+        "contentKind": "HuntingQuery",
+        "displayName": "Detecting Suspicious PowerShell Command Executions",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject1')._huntingQuerycontentId1,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject2').huntingQueryTemplateSpecName2]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "MatchCywareIntelWatchlistItemsWithCommonLogs_HuntingQueries Hunting Query with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject2').huntingQueryVersion2]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2022-10-01",
+              "name": "Cyware_Hunting_Query_2",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Match Cyware Intel Watchlist Items With Common Logs",
+                "category": "Hunting Queries",
+                "query": "CommonSecurityLog\n| join kind=inner (_GetWatchlist('CTIX')\n    | where isnotempty(SearchKey)\n) on $left.DestinationIP == $right.SearchKey\n| project TimeGenerated, SourceIP, DestinationIP, DestinationHostName, Activity, ApplicationProtocol, SearchKey=SearchKey, LastUpdatedTimeUTC\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Query to match common security log identifiers with IOCs held by the Cyware Intel watchlist that is created automatically by Cyware"
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "CommandAndControl,Execution"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T0853,T0863"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject2')._huntingQuerycontentId2),'/'))))]",
+              "properties": {
+                "description": "Cyware Hunting Query 2",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject2')._huntingQuerycontentId2)]",
+                "contentId": "[variables('huntingQueryObject2')._huntingQuerycontentId2]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject2').huntingQueryVersion2]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyware",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Cyware",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cyware",
+                  "email": "support@cyware.com",
+                  "tier": "Partner"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject2')._huntingQuerycontentId2]",
+        "contentKind": "HuntingQuery",
+        "displayName": "Match Cyware Intel Watchlist Items With Common Logs",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject2')._huntingQuerycontentId2,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('huntingQueryObject3').huntingQueryTemplateSpecName3]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "UnusualNetworkConnectionsToRareExternalDomains_HuntingQueries Hunting Query with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('huntingQueryObject3').huntingQueryVersion3]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/savedSearches",
+              "apiVersion": "2022-10-01",
+              "name": "Cyware_Hunting_Query_3",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "eTag": "*",
+                "displayName": "Detecting Suspicious PowerShell Command Executions",
+                "category": "Hunting Queries",
+                "query": "DeviceNetworkEvents\n| join kind=inner (\n    _GetWatchlist('CTIX')\n    | where isnotempty(SearchKey)\n) on $left.RemoteUrl == $right.SearchKey\n| project TimeGenerated, RemoteUrl, DeviceName, SearchKey=SearchKey, LastUpdatedTimeUTC\n",
+                "version": 2,
+                "tags": [
+                  {
+                    "name": "description",
+                    "value": "Spot connections to rarely accessed external domains that are present in your watchlist, which could signify data exfiltration attempts or C2 communication."
+                  },
+                  {
+                    "name": "tactics",
+                    "value": "CommandAndControl"
+                  },
+                  {
+                    "name": "techniques",
+                    "value": "T1102"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('HuntingQuery-', last(split(resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject3')._huntingQuerycontentId3),'/'))))]",
+              "properties": {
+                "description": "Cyware Hunting Query 3",
+                "parentId": "[resourceId('Microsoft.OperationalInsights/savedSearches', variables('huntingQueryObject3')._huntingQuerycontentId3)]",
+                "contentId": "[variables('huntingQueryObject3')._huntingQuerycontentId3]",
+                "kind": "HuntingQuery",
+                "version": "[variables('huntingQueryObject3').huntingQueryVersion3]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyware",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Cyware",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cyware",
+                  "email": "support@cyware.com",
+                  "tier": "Partner"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('huntingQueryObject3')._huntingQuerycontentId3]",
+        "contentKind": "HuntingQuery",
+        "displayName": "Detecting Suspicious PowerShell Command Executions",
+        "contentProductId": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.0')))]",
+        "id": "[concat(take(variables('_solutionId'),50),'-','hq','-', uniqueString(concat(variables('_solutionId'),'-','HuntingQuery','-',variables('huntingQueryObject3')._huntingQuerycontentId3,'-', '1.0.0')))]",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "description": "Send-Incident-To-Cyware-Orchestrate Playbook with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "PlaybookName": {
+              "defaultValue": "Send-Incident-To-Cyware-Orchestrate",
+              "type": "string"
+            },
+            "COWebHookURL": {
+              "type": "String",
+              "metadata": {
+                "description": "Enter value for COWebHookURL"
+              }
+            }
+          },
+          "variables": {
+            "MicrosoftSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+            "_connection-2": "[[variables('connection-2')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    },
+                    "COWebHookURL": {
+                      "defaultValue": "[[parameters('COWebHookURL')]",
+                      "type": "String"
+                    }
+                  },
+                  "triggers": {
+                    "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "path": "/incident-creation"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "HTTP": {
+                      "runAfter": {
+                        "Parse_JSON": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "body": "@triggerBody()",
+                        "method": "POST",
+                        "uri": " @{parameters('COWebHookURL')}"
+                      }
+                    },
+                    "Parse_JSON": {
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@triggerBody()",
+                        "schema": {
+                          "properties": {
+                            "properties": {
+                              "properties": {
+                                "body": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "description": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "firstActivityTimeUtc": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "incidentNumber": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "severity": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "title": {
+                                  "properties": {
+                                    "type": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                }
+                              },
+                              "type": "object"
+                            },
+                            "type": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                        "connectionName": "[[variables('MicrosoftSentinelConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "name": "[[parameters('PlaybookName')]",
+              "type": "Microsoft.Logic/workflows",
+              "location": "[[variables('workspace-location-inline')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "tags": {
+                "hidden-SentinelTemplateName": "Send-Incident-To-Cyware-Orchestrate",
+                "hidden-SentinelTemplateVersion": "1.0",
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              },
+              "apiVersion": "2017-07-01",
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('MicrosoftSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
+              "properties": {
+                "displayName": "[[variables('MicrosoftSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                  "id": "[[variables('_connection-2')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Cyware",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Cyware",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "name": "Cyware",
+                  "email": "support@cyware.com",
+                  "tier": "Partner"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "Send Microsoft Sentinel Incident To Cyware Orchestrate",
+            "description": "Send Microsoft Sentinel Incident To Cyware Orchestrate",
+            "prerequisites": "To use the Logic App, you will need a valid webhook URL from Cyware Orchestrate as detailed in the [documentation](https://techdocs.cyware.com/en/299672-359051-configure-webhooks.html)",
+            "postDeployment": [
+              "After deployment, open the playbook to configure all connections and press save. Then also configure the required tags to trigger the playbook on Cyware Orchestrate as detailed [here](https://techdocs.cyware.com/en/299672-359051-configure-webhooks.html#299672-359051-configure-webhooks)"
+            ],
+            "lastUpdateTime": "2024-06-18T00:00:00Z",
+            "tags": [
+              "Threat Hunting"
+            ],
+            "releaseNotes": {
+              "version": "1.0",
+              "title": "[variables('blanks')]",
+              "notes": [
+                "Initial version"
+              ]
+            }
+          }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_playbookContentId1')]",
+        "contentKind": "Playbook",
+        "displayName": "Send-Incident-To-Cyware-Orchestrate",
+        "contentProductId": "[variables('_playbookcontentProductId1')]",
+        "id": "[variables('_playbookcontentProductId1')]",
+        "version": "[variables('playbookVersion1')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Cyware",
+        "publisherDisplayName": "Cyware",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Cyware/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The Cyware solution for Microsoft Sentinel allows users to integrate Cyware and Microsoft Sentinel. Users can send events from Microsoft Sentinel to Cyware for further analysis. This solution also enables users to implement hunting queries that match events that are sent to Microsoft Sentinel from Cyware's Intel Exchange</p>\n<p><strong>Hunting Queries:</strong> 3, <strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/cyware-logo.svg\" width=\"75px\" height=\"75px\">",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Cyware",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Cyware",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Cyware",
+          "email": "support@cyware.com",
+          "tier": "Partner"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject1')._huntingQuerycontentId1]",
+              "version": "[variables('huntingQueryObject1').huntingQueryVersion1]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject2')._huntingQuerycontentId2]",
+              "version": "[variables('huntingQueryObject2').huntingQueryVersion2]"
+            },
+            {
+              "kind": "HuntingQuery",
+              "contentId": "[variables('huntingQueryObject3')._huntingQuerycontentId3]",
+              "version": "[variables('huntingQueryObject3').huntingQueryVersion3]"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Send_Incident_To_Cyware_Orchestrate')]",
+              "version": "[variables('playbookVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-03-18",
+        "lastPublishDate": "2024-03-18",
+        "providers": [
+          "Cyware"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}
