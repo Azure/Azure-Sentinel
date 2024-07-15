@@ -46,16 +46,18 @@ class SentinelConnector:
         if not data:
             return
         split_data = self._split_big_request(data)
-        await asyncio.gather(*[
-            self._post_data(
-                session=self.session,
-                customer_id=self.customer_id,
-                shared_key=self.shared_key,
-                body=d,
-                log_type=self.log_type
-            )
-            for d in split_data
-        ])
+        await asyncio.gather(
+            *[
+                self._post_data(
+                    session=self.session,
+                    customer_id=self.customer_id,
+                    shared_key=self.shared_key,
+                    body=d,
+                    log_type=self.log_type,
+                )
+                for d in split_data
+            ]
+        )
 
     async def __aenter__(self):
         return self
@@ -88,20 +90,20 @@ class SentinelConnector:
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
         encoded_hash = base64.b64encode(
-            hmac.new(decoded_key, bytes_to_hash,
-                     digestmod=hashlib.sha256).digest()
+            hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()
         ).decode()
         authorization = f"SharedKey {customer_id}:{encoded_hash}"
         return authorization
 
-    async def _post_data(self, session: aiohttp.ClientSession, customer_id, shared_key, body, log_type):
+    async def _post_data(
+        self, session: aiohttp.ClientSession, customer_id, shared_key, body, log_type
+    ):
         events_number = len(body)
         body = json.dumps(body)
         method = "POST"
         content_type = "application/json"
         resource = "/api/logs"
-        rfc1123date = datetime.now(timezone.utc).strftime(
-            "%a, %d %b %Y %H:%M:%S GMT")
+        rfc1123date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
         content_length = len(body)
         signature = self._build_signature(
             customer_id,
@@ -122,7 +124,7 @@ class SentinelConnector:
         }
 
         async with session.post(uri, data=body, headers=headers) as response:
-            if (200 <= response.status <= 299):
+            if 200 <= response.status <= 299:
                 logging.info(
                     f"{events_number} events have been successfully sent to Microsoft Sentinel"
                 )
