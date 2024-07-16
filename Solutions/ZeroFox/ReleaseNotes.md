@@ -2,4 +2,4 @@
 |---------------|----------------------------------|---------------------------------------------------------------------------------------------------------------|
 | 3.0.0         | 04-08-2023                       | Added **Data Connectors** for ZeroFox's Alerts and CTI feeds                                                  |
 | 3.0.1         | 30-04-2024                       | Fixed Solution Metadata for deployment                                                                        |
-| 3.1.1         | 11-07-2024                       | Updated ZeroFox connector to generate result batches and implemented async Sentinel connector logic           |
+| 3.1.0         | 11-07-2024                       | Updated ZeroFox connector to generate result batches and implemented async Sentinel connector logic           |

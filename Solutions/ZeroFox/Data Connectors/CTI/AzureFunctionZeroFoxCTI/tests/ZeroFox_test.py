@@ -13,8 +13,8 @@ SECOND_PAGE_URL = "https://second_page"
 URL = "https://api.zerofox.com"
 
 
-class TestZeroFoxCTI():
-    
+class TestZeroFoxCTI:
+
     @responses.activate
     def test_cti_generator_is_provided(self):
         zerofox = ZeroFoxClient(user=USER, token=TOKEN)
@@ -30,8 +30,8 @@ class TestZeroFoxCTI():
         """Prepare mock responses for queries through the requests package."""
         responses.post(
             url=f"{URL}/auth/token/",
-            match=[matchers.urlencoded_params_matcher(
-                dict(username=USER, password=TOKEN))
+            match=[
+                matchers.urlencoded_params_matcher(dict(username=USER, password=TOKEN))
             ],
             json=dict(access=CTI_TOKEN),
         )
@@ -43,18 +43,17 @@ class TestZeroFoxCTI():
         }
 
         endpoint_first_page_json = dict(
-            next=SECOND_PAGE_URL, results=[
-                dict(index=f"r{i}") for i in range(2)]
+            next=SECOND_PAGE_URL, results=[dict(index=f"r{i}") for i in range(2)]
         )
         responses.get(
-            url=f"{URL}/cti/{ENDPOINT}", headers=cti_header,
-            json=endpoint_first_page_json
+            url=f"{URL}/cti/{ENDPOINT}",
+            headers=cti_header,
+            json=endpoint_first_page_json,
         )
 
         endpoint_second_page_json = dict(
             next=None, results=[dict(index=f"r{i}") for i in range(2, 4)]
         )
         responses.get(
-            url=SECOND_PAGE_URL, headers=cti_header,
-            json=endpoint_second_page_json
+            url=SECOND_PAGE_URL, headers=cti_header, json=endpoint_second_page_json
         )

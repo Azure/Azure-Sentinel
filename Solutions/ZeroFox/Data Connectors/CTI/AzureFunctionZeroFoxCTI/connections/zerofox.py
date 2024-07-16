@@ -3,6 +3,7 @@ from typing import Dict
 import requests
 
 from connections.exceptions import ApiResponseException
+
 TIMEOUT = 30
 
 
@@ -59,8 +60,7 @@ class ZeroFoxClient:
             **kwargs,
         )
         if response.status_code != ok_code:
-            logging.error(
-                f"Failed to {method} {url}. Response: {response.text}")
+            logging.error(f"Failed to {method} {url}. Response: {response.text}")
             raise ApiResponseException(method, url=url, res=response)
         if response.status_code == requests.codes["no_content"]:
             return None
