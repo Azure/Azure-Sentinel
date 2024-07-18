@@ -1,7 +1,7 @@
 Parser:
   Title: ASIM Authentication parser for Barracuda CEF
   Version: '0.2.2'
-  LastUpdated: May 16 2024
+  LastUpdated: Jun 18, 2024
 Product:
   Name: Barracuda CEF
 Normalization:
@@ -11,7 +11,7 @@ References:
 - Title: ASIM Authentication Schema
   Link: https://aka.ms/ASimAuthenticationDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Logs type Description in Barracuda CEF
   Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
 Description: |
@@ -50,30 +50,6 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let barracudaSchema = datatable(
-    LogType_s: string,
-    UnitName_s: string,
-    EventName_s: string,
-    DeviceReceiptTime_s: string,
-    HostIP_s: string,
-    host_s: string,
-    LoginIP_s: string,
-    Severity_s: string,
-    LoginPort_d: real,
-    AdminName_s: string,
-    EventMessage_s: string,
-    TimeTaken_d: real,
-    TenantId: string,
-    Message: string,
-    SourceSystem: string,
-    _ResourceId: string,
-    RawData: string,
-    Computer: string,
-    MG: string,
-    ManagementGroupName: string,
-    SourceIP: string,
-    TimeGenerated: datetime
-    )[];
     let SeverityLookup = datatable (severity: int, EventSeverity: string)
         [
         0, "High", 
@@ -122,12 +98,12 @@ ParserQuery: |
         let BarracudaCEF = 
             CommonSecurityLog
             | where not(disabled)
+            | where (isnull(starttime) or TimeGenerated >= starttime)
+                and (isnull(endtime) or TimeGenerated <= endtime)
                 and DeviceVendor startswith "Barracuda"
                 and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
             | where DeviceEventCategory == "AUDIT"
                 and (toupper(ProcessName) in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
-            | where (isnull(starttime) or TimeGenerated >= starttime)
-                and (isnull(endtime) or TimeGenerated <= endtime)
                 and ((array_length(username_has_any) == 0) or (DestinationUserName has_any (username_has_any)))
                 and (array_length(targetappname_has_any) == 0) // TargetAppName not available in source
                 and ((array_length(srcipaddr_has_any_prefix) == 0) or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix))
