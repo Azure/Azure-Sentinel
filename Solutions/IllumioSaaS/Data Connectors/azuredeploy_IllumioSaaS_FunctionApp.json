@@ -1,0 +1,761 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "loganalyticsworkspace": {
+      "type": "String"
+    },
+    "loganalyticsworkspace-subscription": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter the subscription id of log analytics workspace"
+      }
+    },
+    "loganalyticsworkspace-resourceGroup": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter the name of the resource group linked with log analytics workspace"
+      }
+    },
+    "AzureSentinelWorkspaceId": {
+      "type": "String"
+    },
+    "Data collection endpoint": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter the name of the data collection endpoint to be created"
+      }
+    },
+    "Data collection rule": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter the name of the data collection rule to be created"
+      }
+    },
+    "WorkspaceResourceID": {
+      "type": "String",
+      "metadata": {
+        "description": "Enter the workspace resource id"
+      }
+    },
+    "function-name": {
+      "type": "String"
+    },
+    "AWS_Key": {
+      "type": "String"
+    },
+    "AWS_Secret": {
+      "type": "securestring"
+    },
+    "AWS_Region_Name": {
+      "type": "String"
+    },
+    "AWS_SQS_URL": {
+      "type": "String"
+    },
+    "AADTenantId": {
+      "type": "String"
+    },
+    "AADApplicationId": {
+      "type": "String"
+    },
+    "AADApplicationSecret": {
+      "type": "securestring"
+    },
+    "Schedule": {
+      "defaultValue": "0 */5 * * * *",
+      "type": "String"
+    },
+    "location": {
+      "type": "String"
+    },
+    "LogTypes": {
+      "type": "String"
+    },
+    "tagsByResource": {
+      "type": "Object"
+    }
+  },
+  "variables": {
+    "loganalyticsworkspace": "[parameters('loganalyticsworkspace')]",
+    "loganalyticsworkspace-location": "[parameters('location')]",
+    "loganalyticsworkspace-subscription": "[parameters('loganalyticsworkspace-subscription')]",
+    "loganalyticsworkspace-resourceGroup": "[parameters('loganalyticsworkspace-resourceGroup')]",
+    "Data collection endpoint": "[parameters('Data collection endpoint')]",
+    "Data collection rule": "[parameters('Data collection rule')]",
+    "custom-table-auditable-events": "Illumio_Auditable_Events_CL",
+    "custom-table-flow-events": "Illumio_Flow_Events_CL",
+    "FunctionName": "[parameters('function-name')]",
+    "storageAccountName": "[format('{0}azfunctions', uniqueString(resourceGroup().id))]",
+    "StorageSuffix": "[environment().suffixes.storage]",
+    "functionapp-hosting-plan": "Consumption",
+    "AWS_Key": "[parameters('AWS_Key')]",
+    "AWS_Secret": "[parameters('AWS_Secret')]",
+    "AWS_Region_Name": "[parameters('AWS_Region_Name')]",
+    "AWS_SQS_URL": "[parameters('AWS_SQS_URL')]",
+    "AADTenantId": "[parameters('AADTenantId')]",
+    "AADApplicationId": "[parameters('AADApplicationId')]",
+    "AADApplicationSecret": "[parameters('AADApplicationSecret')]",
+    "schedule": "[parameters('Schedule')]",
+    "hostingPlan": "[concat(parameters('function-name'), uniqueString(resourceGroup().id))]",
+    "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('AzureSentinelWorkspaceId')), '.ods.opinsights'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(variables('loganalyticsworkspace'),'/',variables('custom-table-auditable-events'))]",
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.OperationalInsights/workspaces'), parameters('tagsByResource')['Microsoft.OperationalInsights/workspaces'], json('{}')) ]",
+      "properties": {
+        "plan": "Analytics",
+        "schema": {
+          "name": "[variables('custom-table-auditable-events')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime",
+              "isDefaultDisplay": true,
+              "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+            },
+            {
+              "name": "href",
+              "type": "string"
+            },
+            {
+              "name": "pce_fqdn",
+              "type": "string"
+            },
+            {
+              "name": "created_by",
+              "type": "dynamic"
+            },
+            {
+              "name": "event_type",
+              "type": "string"
+            },
+            {
+              "name": "status",
+              "type": "string"
+            },
+            {
+              "name": "severity",
+              "type": "string"
+            },
+            {
+              "name": "action",
+              "type": "dynamic"
+            },
+            {
+              "name": "resource_changes",
+              "type": "dynamic"
+            },
+            {
+              "name": "notifications",
+              "type": "dynamic"
+            },
+            {
+              "name": "version",
+              "type": "int"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[concat(variables('loganalyticsworkspace'),'/',variables('custom-table-flow-events'))]",
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.OperationalInsights/workspaces'), parameters('tagsByResource')['Microsoft.OperationalInsights/workspaces'], json('{}')) ]",
+      "properties": {
+        "plan": "Analytics",
+        "schema": {
+          "name": "[variables('custom-table-flow-events')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "datetime",
+              "isDefaultDisplay": true,
+              "description": "The timestamp (UTC) reflecting the time in which the event was generated."
+            },
+            {
+              "name": "dst_dbi",
+              "type": "int"
+            },
+            {
+              "name": "dst_dbo",
+              "type": "int"
+            },
+            {
+              "name": "dst_tbi",
+              "type": "int"
+            },
+            {
+              "name": "dst_tbo",
+              "type": "int"
+            },
+            {
+              "name": "ddms",
+              "type": "int"
+            },
+            {
+              "name": "tdms",
+              "type": "int"
+            },
+            {
+              "name": "pn",
+              "type": "string"
+            },
+            {
+              "name": "un",
+              "type": "string"
+            },
+            {
+              "name": "src_ip",
+              "type": "string"
+            },
+            {
+              "name": "dst_ip",
+              "type": "string"
+            },
+            {
+              "name": "class",
+              "type": "string"
+            },
+            {
+              "name": "proto",
+              "type": "int"
+            },
+            {
+              "name": "dst_port",
+              "type": "int"
+            },
+            {
+              "name": "flow_count",
+              "type": "int"
+            },
+            {
+              "name": "dir",
+              "type": "string"
+            },
+            {
+              "name": "org_id",
+              "type": "int"
+            },
+            {
+              "name": "state",
+              "type": "string"
+            },
+            {
+              "name": "pd_qualifier",
+              "type": "int"
+            },
+            {
+              "name": "pd",
+              "type": "int"
+            },
+            {
+              "name": "src_hostname",
+              "type": "string"
+            },
+            {
+              "name": "src_href",
+              "type": "string"
+            },
+            {
+              "name": "dst_hostname",
+              "type": "string"
+            },
+            {
+              "name": "dst_href",
+              "type": "string"
+            },
+            {
+              "name": "network",
+              "type": "string"
+            },
+            {
+              "name": "src_labels",
+              "type": "dynamic"
+            },
+            {
+              "name": "dst_labels",
+              "type": "dynamic"
+            },
+            {
+              "name": "interval_sec",
+              "type": "int"
+            },
+            {
+              "name": "pce_fqdn",
+              "type": "string"
+            },
+            {
+              "name": "version",
+              "type": "int"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2022-06-01",
+      "name": "[variables('Data collection endpoint')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables',parameters('loganalyticsworkspace'), 'Illumio_Auditable_Events_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables',parameters('loganalyticsworkspace'), 'Illumio_Flow_Events_CL')]"
+      ],
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/dataCollectionEndpoints'), parameters('tagsByResource')['Microsoft.Insights/dataCollectionEndpoints'], json('{}')) ]",
+      "properties": {
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[parameters('Data collection rule')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables',parameters('loganalyticsworkspace'), 'Illumio_Auditable_Events_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables',parameters('loganalyticsworkspace'), 'Illumio_Flow_Events_CL')]",
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('Data collection endpoint'))]"
+      ],
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/dataCollectionRules'), parameters('tagsByResource')['Microsoft.Insights/dataCollectionRules'], json('{}')) ]",
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId(variables('loganalyticsworkspace-subscription'), variables('loganalyticsworkspace-resourceGroup'), 'Microsoft.Insights/dataCollectionEndpoints', variables('Data collection endpoint'))]",
+        "streamDeclarations": {
+          "[concat('Custom-',variables('custom-table-auditable-events'))]": {
+            "columns": [
+              {
+                "name": "href",
+                "type": "string"
+              },
+              {
+                "name": "timestamp",
+                "type": "datetime"
+              },
+              {
+                "name": "pce_fqdn",
+                "type": "string"
+              },
+              {
+                "name": "created_by",
+                "type": "dynamic"
+              },
+              {
+                "name": "event_type",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "severity",
+                "type": "string"
+              },
+              {
+                "name": "action",
+                "type": "dynamic"
+              },
+              {
+                "name": "resource_changes",
+                "type": "dynamic"
+              },
+              {
+                "name": "notifications",
+                "type": "dynamic"
+              },
+              {
+                "name": "version",
+                "type": "int"
+              }
+            ]
+          },
+          "[concat('Custom-',variables('custom-table-flow-events'))]": {
+            "columns": [
+              {
+                "name": "dst_dbi",
+                "type": "int"
+              },
+              {
+                "name": "dst_dbo",
+                "type": "int"
+              },
+              {
+                "name": "dst_tbi",
+                "type": "int"
+              },
+              {
+                "name": "dst_tbo",
+                "type": "int"
+              },
+              {
+                "name": "ddms",
+                "type": "int"
+              },
+              {
+                "name": "tdms",
+                "type": "int"
+              },
+              {
+                "name": "pn",
+                "type": "string"
+              },
+              {
+                "name": "un",
+                "type": "string"
+              },
+              {
+                "name": "src_ip",
+                "type": "string"
+              },
+              {
+                "name": "dst_ip",
+                "type": "string"
+              },
+              {
+                "name": "class",
+                "type": "string"
+              },
+              {
+                "name": "proto",
+                "type": "int"
+              },
+              {
+                "name": "dst_port",
+                "type": "int"
+              },
+              {
+                "name": "count",
+                "type": "int"
+              },
+              {
+                "name": "dir",
+                "type": "string"
+              },
+              {
+                "name": "org_id",
+                "type": "int"
+              },
+              {
+                "name": "timestamp",
+                "type": "datetime"
+              },
+              {
+                "name": "state",
+                "type": "string"
+              },
+              {
+                "name": "pd_qualifier",
+                "type": "int"
+              },
+              {
+                "name": "pd",
+                "type": "int"
+              },
+              {
+                "name": "src_hostname",
+                "type": "string"
+              },
+              {
+                "name": "src_href",
+                "type": "string"
+              },
+              {
+                "name": "dst_hostname",
+                "type": "string"
+              },
+              {
+                "name": "dst_href",
+                "type": "string"
+              },
+              {
+                "name": "network",
+                "type": "string"
+              },
+              {
+                "name": "src_labels",
+                "type": "dynamic"
+              },
+              {
+                "name": "dst_labels",
+                "type": "dynamic"
+              },
+              {
+                "name": "interval_sec",
+                "type": "int"
+              },
+              {
+                "name": "pce_fqdn",
+                "type": "string"
+              },
+              {
+                "name": "version",
+                "type": "int"
+              }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            {
+              "name": "la-data-destination",
+              "workspaceResourceId": "[parameters('workspaceResourceId')]"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "[concat('Custom-',variables('custom-table-auditable-events'))]"
+            ],
+            "destinations": [
+              "la-data-destination"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(timestamp) | project-away timestamp \n\n",
+            "outputStream": "[concat('Custom-',variables('custom-table-auditable-events'))]"
+          },
+          {
+            "streams": [
+              "[concat('Custom-',variables('custom-table-flow-events'))]"
+            ],
+            "destinations": [
+              "la-data-destination"
+            ],
+            "transformKql": "source\n| extend TimeGenerated = todatetime(timestamp)\n| project-rename flow_count=['count']\n | project-away timestamp\n\n",
+            "outputStream": "[concat('Custom-',variables('custom-table-flow-events'))]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-04-01",
+      "name": "[variables('StorageAccountName')]",
+      "location": "[parameters('location')]",
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Storage/storageAccounts'), parameters('tagsByResource')['Microsoft.Storage/storageAccounts'], json('{}')) ]",
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "defaultAction": "Allow"
+        },
+        "supportsHttpsTrafficOnly": true,
+        "encryption": {
+          "services": {
+            "file": {
+              "keyType": "Account",
+              "enabled": true
+            },
+            "blob": {
+              "keyType": "Account",
+              "enabled": true
+            }
+          },
+          "keySource": "Microsoft.Storage"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('hostingPlan')]",
+      "location": "[parameters('location')]",
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Web/serverfarms'), parameters('tagsByResource')['Microsoft.Web/serverfarms'], json('{}')) ]",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic"
+      },
+      "kind": "functionapp,linux",
+      "properties": {
+        "name": "[variables('hostingPlan')]",
+        "workerSize": "0",
+        "workerSizeId": "0",
+        "numberOfWorkers": "1",
+        "reserved": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2023-04-01",
+      "name": "[concat(variables('StorageAccountName'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+      ],
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "properties": {
+        "deleteRetentionPolicy": {
+          "enabled": false
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices",
+      "apiVersion": "2023-04-01",
+      "name": "[concat(variables('StorageAccountName'), '/default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName'))]"
+      ],
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      }
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[parameters('function-name')]",
+      "location": "[variables('loganalyticsworkspace-location')]",
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Insights/components'), parameters('tagsByResource')['Microsoft.Insights/components'], json('{}')) ]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "ApplicationId": "[parameters('function-name')]",
+        "WorkspaceResourceId": "[parameters('WorkspaceResourceID')]"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2022-09-01",
+      "name": "[concat('illumio-', parameters('function-name'))]",
+      "location": "[variables('loganalyticsworkspace-location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlan'))]",
+        "[resourceId('Microsoft.Insights/components', parameters('function-name'))]"
+      ],
+      "tags": "[ if(contains(parameters('tagsByResource'), 'Microsoft.Web/sites'), parameters('tagsByResource')['Microsoft.Web/sites'], json('{}')) ]",
+      "kind": "functionapp,linux",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "name": "[concat('illumio-', parameters('function-name'))]",
+        "httpsOnly": true,
+        "clientAffinityEnabled": false,
+        "alwaysOn": true,
+        "reserved": true,
+        "publicNetworkAccess": "Enabled",
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlan'))]",
+        "siteConfig": {
+          "linuxFxVersion": "python|3.11",
+          "appSettings": [
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "https://aka.ms/sentinel-illuminoSaas-website-run-from-package"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "python"
+            },
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2020-02-02').InstrumentationKey]"
+            },
+            {
+              "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+              "value": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2020-02-02').ConnectionString]"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlan'))]",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('StorageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageAccountName')), '2023-04-01').keys[0].value, ';EndpointSuffix=',toLower(variables('StorageSuffix')))]"
+            },
+            {
+              "name": "AWS_KEY",
+              "value": "[variables('AWS_Key')]"
+            },
+            {
+              "name": "AWS_SECRET",
+              "value": "[variables('AWS_Secret')]"
+            },
+            {
+              "name": "AWS_REGION_NAME",
+              "value": "[variables('AWS_Region_Name')]"
+            },
+            {
+              "name": "QUEUE_URL",
+              "value": "[variables('AWS_SQS_URL')]"
+            },
+            {
+              "name": "MAX_QUEUE_MESSAGES_MAIN_QUEUE",
+              "value": "[if(equals(variables('functionapp-hosting-plan'),'Consumption'),100,150)]"
+            },
+            {
+              "name": "AzureWebJobs.Replicator.Disabled",
+              "value": "1"
+            },
+            {
+              "name": "MAX_SCRIPT_EXEC_TIME_MINUTES",
+              "value": "10"
+            },
+            {
+              "name": "LOG_ANALYTICS_URI",
+              "value": "[variables('LogAnaltyicsUri')]"
+            },
+            {
+              "name": "AZURE_TENANT_ID",
+              "value": "[variables('AADTenantId')]"
+            },
+            {
+              "name": "AZURE_CLIENT_ID",
+              "value": "[variables('AADApplicationId')]"
+            },
+            {
+              "name": "AZURE_CLIENT_SECRET",
+              "value": "[variables('AADApplicationSecret')]"
+            },
+            {
+              "name": "DCE_INGESTION_ENDPOINT",
+              "value": "[reference(variables('Data collection endpoint'), '2022-06-01').logsIngestion.endpoint]"
+            },
+            {
+              "name": "NORMALIZATION_DCR_ID",
+              "value": "[reference(variables('Data collection rule'), '2022-06-01').immutableId]"
+            },
+            {
+              "name": "Schedule",
+              "value": "[variables('schedule')]"
+            },
+            {
+              "name": "WORKSPACE_ID",
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('loganalyticsworkspace')), '2022-10-01').customerId]"
+            },
+            {
+              "name": "FLOW_LOGS_CUSTOM_TABLE",
+              "value": "[concat('Custom-',variables('custom-table-flow-events'))]"
+            },
+            {
+              "name": "AUDIT_LOGS_CUSTOM_TABLE",
+              "value": "[concat('Custom-',variables('custom-table-auditable-events'))]"
+            },
+            {
+              "name": "LogTypes",
+              "value": "[parameters('LogTypes')]"
+            }
+          ],
+          "cors": {
+            "allowedOrigins": [
+              "https://portal.azure.com"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}

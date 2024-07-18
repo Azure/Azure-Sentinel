@@ -1,0 +1,36 @@
+id: a3a09840-1022-4267-b9e1-d6c9799ed38a
+name: Account MFA Modifications
+description: |
+  'Identifies modifications to user's MFA settings. An attacker could use access to modify MFA settings to bypass MFA requirements or maintain persistence.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1556.006
+query: |
+  AuditLogs
+  | where Category =~ "UserManagement" 
+  | where OperationName in~ ("Admin registered security info", "Admin updated security info", "Admin deleted security info", "User registered security info", "User changed default security info", "User deleted security info","User registered all required security info","User started security info registration") 
+  | extend InitiatorUPN = tolower(tostring(InitiatedBy.user.userPrincipalName))
+  | extend FromIP = tostring(InitiatedBy.user.ipAddress) 
+  | extend TargetUPN = tostring(TargetResources[0].userPrincipalName)
+  | extend InitiatorID = tostring(InitiatedBy.user.id)
+  | summarize ModifiedAccounts = make_set(TargetUPN, 100), Start = min(TimeGenerated), End = max(TimeGenerated), Actions = make_set(OperationName, 10) by InitiatorID, InitiatorUPN, FromIP
+  | extend InitiatorName = tostring(split(InitiatorUPN, "@")[0]), InitiatorSuffix = tostring(split(InitiatorUPN, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatorID
+      - identifier: Name
+        columnName: InitiatorName
+      - identifier: UPNSuffix
+        columnName: InitiatorSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: FromIP

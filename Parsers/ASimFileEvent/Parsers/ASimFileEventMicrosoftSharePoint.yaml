@@ -1,0 +1,147 @@
+Parser:
+  Title: File Activity ASIM parser for Sharepoint and OneDrive for business
+  Version: '0.3.1'
+  LastUpdated: Nov 02 2023
+Product:
+  Name: Microsoft SharePoint
+Normalization:
+  Schema: FileEvent
+  Version: '0.2.1'
+References:
+- Title: ASIM File Event Schema
+  Link: https://aka.ms/ASimFileEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Office 365 Management Activity API schema
+  Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
+Description: This ASIM parser supports normalizing Sharepoint and OneDrive for business events, stored in the OfficeActivity table, to the ASIM file activity schema.
+ParserName: ASimFileEventMicrosoftSharePoint
+EquivalentBuiltInParser: _ASim_FileEvent_MicrosoftSharePoint
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let _ASIM_ResolveActorUsername = (T:(*), UsernameField: string) { 
+      T
+      | extend ActorUsername = column_ifexists(UsernameField,"")
+      | extend windows = ActorUsername has '\\'
+      | extend 
+          ActorUsernameType = iff (windows, "Windows", "UPN"),
+          ActorUserUpn =  iff (windows, "", ActorUsername),
+          ActorWindowsUsername = iff (windows, ActorUsername, "")
+  };
+    let operations = datatable (Operation:string, EventType:string, EventSubType:string) [
+      "FileUploaded", "FileCreated", "Upload",
+      "FileAccessedExtended", "FileAccessed", "Extended",
+      "FileRecycled", "FileDeleted", "Recycle",
+      "FileDeleted", "FileDeleted", "",
+      "FileAccessed", "FileAccessed", "",
+      "FolderCreated", "FolderCreated", "",
+      "FilePreviewed", "FileAccessed", "Preview",
+      "FileDownloaded", "FileAccessed", "Download",
+      "FileSyncDownloadedFull", "FileAccessed", "Download",
+      "FolderModified", "FolderModified", "",
+      "FileModifiedExtended", "FolderModified", "Extended",
+      "FileModified", "FolderModified", "",
+      "FileVersionsAllDeleted", "FolderDeleted", "Versions",
+      "FileSyncUploadedFull", "FileCreated", "Upload",
+      "FileSensitivityLabelApplied", "FileAttributesUpdated", "",
+      "FileSensitivityLabelChanged", "FileAttributesUpdated", "",
+      "FileSensitivityLabelRemoved", "FileAttributesUpdated", "",
+      "SiteDeleted", "FolderDeleted", "Site",
+      "FileRenamed", "FileRenamed", "",
+      "FileMoved", "FileMoved", "",
+      "FileCopied", "FileCopied", "",
+      "FolderCopied", "FolderCopied", "",
+      "FolderMoved", "FolderMoved", "",
+      "FolderRenamed", "FolderRenamed", "",
+      "FolderRecycled", "FolderDeleted", "Recycle",
+      "FolderDeleted", "FolderDeleted", "",
+      "FileCheckedIn", "FileCreatedOrModified", "Checkin",
+      "FileCheckedOut", "FileAccessed", "Checkout"
+    ];
+    let multiple_file_operations = dynamic([
+      "FileRenamed",
+      "FileMoved",
+      "FileCopied",
+      "FolderCopied",
+      "FolderMoved",
+      "FolderRenamed"
+    ]);
+    let parser=(disabled:bool=false){
+      let OfficeActivityProjected = 
+          OfficeActivity
+          | where not(disabled)
+          | where RecordType == "SharePointFileOperation" and Operation != "FileMalwareDetected"
+          | project Operation, OrganizationId, OrganizationName, SourceRecordId, OfficeWorkload, UserId, ClientIP, UserAgent, Start_Time, TimeGenerated, Type, OfficeObjectId, SourceFileName, SourceFileExtension, DestinationFileName, DestinationFileExtension, Site_Url, DestinationRelativeUrl, UserKey, MachineDomainInfo, MachineId; // ,_ItemId 
+      let SingleFileOperationEvents = 
+          OfficeActivityProjected
+          | where Operation !in (multiple_file_operations)
+          | project-rename 
+              TargetFilePath = OfficeObjectId,
+              TargetFileName = SourceFileName,
+              TargetFileExtension = SourceFileExtension
+          | extend 
+              TargetFilePathType = "URL"
+          | project-away DestinationFileName, DestinationFileExtension, DestinationRelativeUrl
+      ;
+      // single in dest: SiteDeleted
+      let MultipleFileOperationsEvents = 
+          OfficeActivityProjected
+          | where Operation in (multiple_file_operations)
+          | project-rename 
+              SrcFilePath = OfficeObjectId,
+              TargetFileName = DestinationFileName,
+              TargetFileExtension = DestinationFileExtension,
+              SrcFileName = SourceFileName,
+              SrcFileExtension = SourceFileExtension
+          | extend 
+              TargetFilePath = strcat (Site_Url, DestinationRelativeUrl, "/", TargetFileName),
+              TargetFilePathType = "URL",
+              SrcFilePathType = "URL"
+          | project-away DestinationRelativeUrl
+      ;
+      union SingleFileOperationEvents, MultipleFileOperationsEvents
+      | lookup operations on Operation
+      | invoke _ASIM_ResolveActorUsername('UserId')
+      | project-away UserId
+      | project-rename 
+          EventOriginalType = Operation,
+          ActorScopeId = OrganizationId,
+          ActorScope = OrganizationName,
+          EventOriginalUid = SourceRecordId,
+          EventProduct = OfficeWorkload,
+          ActorUserId = UserKey,
+          HttpUserAgent = UserAgent,
+          SrcIpAddr = ClientIP,
+          EventStartTime = Start_Time,
+          // EvetUid = _ItemId,
+          TargetUrl = Site_Url,
+          SrcDvcId = MachineId,
+          SrcDvcScopeId = MachineDomainInfo
+      | extend
+          EventCount = int(1),
+          EventStartTime = TimeGenerated, 
+          EventEndTime = TimeGenerated,
+          EventResult = "Success",
+          EventVendor = 'Microsoft',
+          EventSchemaVersion = '0.2.1',
+          EventSchema = "FileEvent",
+          ActorUserIdType = 'Other',
+          SrcDvcIdType = 'Other',
+          TargetAppName = EventProduct,
+          TargetAppType = 'SaaS application',
+          Dvc = strcat ('Microsoft ', EventProduct)
+      // Aliases
+      | extend 
+          User = ActorUsername,
+          FilePath = TargetFilePath,
+          FileName = TargetFileName,
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          Url = TargetUrl,
+          Dvc = EventProduct,
+          Application = EventProduct
+  };
+  parser (disabled=disabled)

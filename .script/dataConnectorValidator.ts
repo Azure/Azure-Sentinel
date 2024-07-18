@@ -60,17 +60,33 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.SysLog;
   }
+  else if (dataTypes[0].name.includes("SecurityAlert(ASC)"))
+  {
+    return ConnectorCategory.SecurityAlertASC;
+  }
   else if (dataTypes[0].name.includes("ThreatIntelligenceIndicator"))
   {
     return ConnectorCategory.ThreatIntelligenceIndicator;
+  }
+  else if (dataTypes[0].name.includes("PowerBIActivity"))
+  {
+    return ConnectorCategory.PowerBIActivity;
   }
   else if (dataTypes[0].name.includes("MicrosoftPurviewInformationProtection"))
   {
     return ConnectorCategory.MicrosoftPurviewInformationProtection;
   }
+  else if (dataTypes[0].name.includes("AzureActivity"))
+  {
+    return ConnectorCategory.AzureActivity;
+  }
   else if (dataTypes[0].name.includes("Event"))
   {
     return ConnectorCategory.Event;
+  }
+  else if (dataTypes[0].name.includes("SecurityAlert(OATP)"))
+  {
+    return ConnectorCategory.SecurityAlertOATP;
   }
   else if (dataTypes[0].name.includes("AzureDevOpsAuditing"))
   {
@@ -96,9 +112,52 @@ function getConnectorCategory(dataTypes : any, instructionSteps:[])
   {
     return ConnectorCategory.Dynamics365Activity;
   }
+  else if (dataTypes[0].name.includes("CrowdstrikeReplicatorV2"))
+  {
+    return ConnectorCategory.CrowdstrikeReplicatorV2;
+  }
+  else if (dataTypes[0].name.includes("BloodHoundEnterprise"))
+  {
+    return ConnectorCategory.BloodHoundEnterprise;
+  }
+  else if (dataTypes[0].name.includes("AwsS3"))
+  {
+    return ConnectorCategory.AwsS3;
+  }
+  else if (dataTypes[0].name.includes("AWS"))
+  {
+    return ConnectorCategory.AWS;
+  }
+  else if (dataTypes[0].name.includes("Corelight"))
+  {
+    return ConnectorCategory.Corelight;
+  }
+  else if (dataTypes[0].name.includes("SigninLogs"))
+  {
+    return ConnectorCategory.AzureActiveDirectory;
+  }
+  else if (dataTypes[0].name.includes("corelight_bacnet"))
+  {
+    return ConnectorCategory.CorelightConnectorExporter;
+  }
+  else if (dataTypes[0].name.includes("SecurityIncident"))
+  {
+    return ConnectorCategory.CybleThreatIntel;
+  }
+  else if (dataTypes[0].name.includes("IndicatorsOfCompromise"))
+  {
+    return ConnectorCategory.CrowdStrikeFalconIOC;
+  }
+  else if (dataTypes[0].name.includes("WizIssues"))
+  {
+    return ConnectorCategory.Wiz;
+  }
+  else if (dataTypes[0].name.includes("vectra_isession"))
+  {
+    return ConnectorCategory.VectraStreamAma;
+  }
   return "";
-}
-
+} 
 let fileTypeSuffixes = ["json"];
 let filePathFolderPrefixes = ["DataConnectors","Solutions"];
 let fileKinds = ["Added", "Modified"];

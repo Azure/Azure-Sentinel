@@ -1,7 +1,7 @@
 Parser:
   Title: Process Create Event ASIM parser for WEF Security Events 
-  Version: '1.0.2'
-  LastUpdated: Sep 1 2022
+  Version: '0.3'
+  LastUpdated: May 1st 2023
 Product:
   Name: Security Events
 Normalization:
@@ -21,13 +21,6 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-    let ASIM_GetWindowsUserType = (username:string, sid:string) { 
-        case ( 
-            username endswith "$" or sid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", 
-            isempty(username) or sid in ("S-1-0-0"), "", 
-            "Regular"
-        )
-    };
     let ASIM_GetFilenamePart = (path:string) { tostring(split(path,@'\')[-1]) };
     let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { 
         T 
@@ -73,22 +66,26 @@ ParserQuery: |
         DvcOs = 'Windows'
     | extend 
         ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), 
-        ActorUserId = tostring(EventData.SubjectUserSid),
-        ActorUserIdType = "SID",
+        ActorUserId = tostring(EventData.SubjectUserSid)
+    | extend
+        ActorUserIdType = iff (ActorUserId <> "S-1-0-0", "SID", ""),
+        ActorUserId = iff (ActorUserId <> "S-1-0-0", ActorUserId, ""),    
         ActorUsernameType = "Windows",
         username = tostring(EventData.TargetUserName)
     | extend
         TargetUsername = iff(username == "-", ActorUsername, strcat(EventData.SubjectDomainName, @'\', username)),
-        TargetUserId = iff(username == "-", ActorUserId, tostring(EventData.TargetUserSid)),
-        TargetUserIdType = "SID",
+        TargetUserId = iff(username == "-", ActorUserId, tostring(EventData.TargetUserSid))
+    | extend
+        TargetUserIdType = iff (TargetUserId <> "S-1-0-0", "SID", ""),
+        TargetUserId = iff (TargetUserId <> "S-1-0-0", TargetUserId, ""), 
         TargetUsernameType = "Windows"
     | project-away
         username
     | extend 
         TargetUserSid = TargetUserId,
         ActorUserSid = ActorUserId,
-        ActorUserType = ASIM_GetWindowsUserType(ActorUsername, ActorUserId),
-        TargetUserType = ASIM_GetWindowsUserType(TargetUsername, TargetUserId)
+        ActorUserType = _ASIM_GetWindowsUserType(ActorUsername, ActorUserId),
+        TargetUserType = _ASIM_GetWindowsUserType(TargetUsername, TargetUserId)
     | extend
         ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
         TargetUserSessionId = tostring(toint(EventData.TargetLogonId)),    

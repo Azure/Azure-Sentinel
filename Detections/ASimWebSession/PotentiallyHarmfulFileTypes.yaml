@@ -1,8 +1,7 @@
 id: 09c49590-4e9d-4da9-a34d-17222d0c9e7e
 name: A client made a web request to a potentially harmful file (ASIM Web Session schema)
 description: |
-  'This rule identifies a web request to a URL that holds a file type, including .ps1, .bat, .vbs, and .scr that can be harmful if downloaded. This rule uses the [Advanced Security Information Model (ASIM)](https://aka.ms/AboutASIM) and supports any web session source that complies with ASIM. To use this Analytics Rule, deploy the Advanced Security Information Model (ASIM).
-   This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'
+  'This rule identifies a web request to a URL that holds a file type, including .ps1, .bat, .vbs, and .scr that can be harmful if downloaded. This analytic rule uses [ASIM](https://aka.ms/AboutASIM) and supports any built-in or custom source that supports the ASIM WebSession schema (ASIM WebSession Schema)'
 severity: Medium
 tags:
   - ParentAlert: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/CiscoUmbrella/CiscoUmbrellaRequestBlocklistedFileType.yaml
@@ -16,45 +15,64 @@ requiredDataConnectors:
   - connectorId: Zscaler
     dataTypes:
       - CommonSecurityLog
-
 queryFrequency: 10m
 queryPeriod: 10m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
+relevantTechniques:
+  - T1189
 query: |
-  let default_file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']);
-  let custom_file_ext_blocklist=toscalar(_GetWatchlist('RiskyFileTypes') | extend Extension=column_ifexists("Extension","") | where isnotempty(Extension) | summarize make_set(Extension));
+  let default_file_ext_blocklist = dynamic(['.ps1', '.vbs', '.bat', '.scr']); // Update this list as per your requirement
+  let custom_file_ext_blocklist=toscalar(_GetWatchlist('RiskyFileTypes')
+    | extend Extension=column_ifexists("Extension", "")
+    | where isnotempty(Extension)
+    | summarize make_set(Extension)); // If you have an extensive list, you can also create a Watchlist that includes the file extensions you want to detect
   let file_ext_blocklist = array_concat(default_file_ext_blocklist, custom_file_ext_blocklist);
-  _Im_WebSession(url_has_any=file_ext_blocklist, eventresult='Success')
-  | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]),'/')[-1])
-  | extend requestedFileExt=extract(@(\.\w+)$,1,requestedFileName, typeof(string))
+  _Im_WebSession(starttime=ago(10min), url_has_any=file_ext_blocklist, eventresult='Success')
+  | extend requestedFileName=tostring(split(tostring(parse_url(Url)["Path"]), '/')[-1])
+  | extend requestedFileExtension=extract(@'(\.\w+)$', 1, requestedFileName, typeof(string))
   | where requestedFileExtension in (file_ext_blocklist)
-  | summarize LastAttemptTime=max(TimeGenerated), NumFailedAttempts=count() by SrcIpAddr, requestedFileName, Url
-  | extend IPCustomEntity = SrcIpAddr, UrlCustomEntity=Url
-
+  | summarize
+    EventStartTime=min(TimeGenerated),
+    EventEndTime=max(TimeGenerated),
+    EventCount=count()
+    by SrcIpAddr, SrcUsername, SrcHostname, requestedFileName, Url
+  | extend
+    Name = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 0)[0]), SrcUsername),
+    UPNSuffix = iif(SrcUsername contains "@", tostring(split(SrcUsername, '@', 1)[0]), "")
 alertDetailsOverride:
-  alertDisplayNameFormat: Client {{SrcIpAddr}} accessed a URL with potentially harmful extension {{requestedFileExt}}
-  alertDescriptionFormat: The client at address {{SrcIpAddr}} accessed the URL {{Url}} that has the extension {{requestedFileExt}}. Downloading a file with this extension may be harmful and may indicate malicious activity.
+  alertDisplayNameFormat: Client {{SrcIpAddr}} accessed a URL with potentially harmful extension {{requestedFileExtension}}
+  alertDescriptionFormat: The client at address {{SrcIpAddr}} accessed the URL {{Url}} that has the extension {{requestedFileExtension}}. Downloading a file with this extension may be harmful and may indicate malicious activity.
 customDetails:
-  requestedFileName: requestedFileName
-  requestedFileExt: requestedFileExt
+  requestedFileExt: requestedFileExtension
   Username: SrcUsername
-
+  SrcHostname: SrcHostname
 eventGroupingSettings:
   aggregationKind: AlertPerResult
-  
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
+        columnName: SrcIpAddr
   - entityType: URL
     fieldMappings:
       - identifier: Url
-        columnName: UrlCustomEntity
-version: 1.1.1
+        columnName: Url
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: requestedFileName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: SrcUsername
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.1.3
 kind: Scheduled
 metadata:
     source:

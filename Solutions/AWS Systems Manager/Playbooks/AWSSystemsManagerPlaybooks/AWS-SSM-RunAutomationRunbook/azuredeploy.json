@@ -1,0 +1,731 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AWS Systems Manager - Run Automation Runbook",
+        "description": "When a new sentinel incident is created, this playbook gets triggered and runs the specified AWS Systems Manager Automation Runbook. The playbook will wait for the runbook execution to complete and then update the incident with the runbook execution status.",
+        "prerequisites": [
+            "1. Prior to the deployment of this playbook, AWS Systems Manager Functions App Custom Connector needs to be deployed under the same subscription.",
+            "2. Refer to [AWS Systems Manager Functions App Custom Connector](../../CustomConnector/AWS_SSM_FunctionAppConnector/readme.md) documentation for deployment instructions."
+        ],
+        "postDeployment": [
+            "1. Authorize each connection.",
+            "2. Assign Microsoft Sentinel Responder Role to Playbook.",
+            "3. Update Function App Settings with AWS Credentials.",
+            "4. Check readme.md for detailed instructions."
+        ],
+        "prerequisitesDeployTemplateFile": "../../CustomConnector/AWS_SSM_FunctionAppConnector/azuredeploy.json",
+        "lastUpdateTime": "2023-05-30T12:00:00.000Z",
+        "entities": [
+        ],
+        "tags": [
+            "AWS",
+            "Systems Manager"
+        ],
+        "support": {
+            "tier": "Microsoft"
+        },
+        "author": {
+            "name": "Microsoft"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AWS-SSM-RunAutomationRunbook",
+            "type": "string"
+        },
+        "RunbookName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the Runbook Name"
+            }
+        },
+        "RunbookParameters": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Runbook Parameters in JSON format."
+            }
+        },
+        "FunctionsAppName": {
+            "defaultValue": "awsssm",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "FunctionsAppName": "[concat(parameters('FunctionsAppName'), uniqueString(resourceGroup().id))]",
+        "AWSSSMFuntionsAppId": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/', variables('FunctionsAppName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {
+                            },
+                            "type": "Object"
+                        },
+                        "RunbookName": {
+                            "defaultValue": "[parameters('RunbookName')]",
+                            "type": "string"
+                        },
+                        "RunbookParameters": {
+                            "defaultValue": "[parameters('RunbookParameters')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "Condition_to_check_if_execution_is_successful": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "Set_variable_-_IncidentComment_on_error": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ],
+                                "Set_variable_-_IncidentComment_on_error2": [
+                                    "Succeeded",
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "\u003cp\u003e@{variables('IncidentComment')}\u003c/p\u003e"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "Condition_to_check_if_execution_is_successful": {
+                            "actions": {
+                                "Set_variable_-_ExecutionStatus": {
+                                    "runAfter": {
+                                        "Set_variable_-_IsExecutionComplete": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "ExecutionStatus",
+                                        "value": "@body('Parse_JSON_-_GetAutomationExecution')?['AutomationExecution']?['AutomationExecutionStatus']"
+                                    }
+                                },
+                                "Set_variable_-_IncidentComment_on_success": {
+                                    "runAfter": {
+                                        "Set_variable_-_ExecutionStatus": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "IncidentComment",
+                                        "value": "Runbook \u003cstrong\u003e@{parameters('RunbookName')}\u003c/strong\u003e execution complete.\nExecution ID: \u003cstrong\u003e@{body('Parse_JSON_StartAutomationExecution')?['AutomationExecutionId']}\u003c/strong\u003e\n"
+                                    }
+                                },
+                                "Set_variable_-_IsExecutionComplete": {
+                                    "runAfter": {
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "IsExecutionComplete",
+                                        "value": "@true"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON_-_GetAutomationExecution": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Wait_Until_Execution_is_complete": {
+                                        "actions": {
+                                            "Condition_to_check_runbook_execution_status": {
+                                                "actions": {
+                                                    "Append_to_IncidentComment": {
+                                                        "runAfter": {
+                                                            "Reset_variable_-_IsExecutionComplete": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToStringVariable",
+                                                        "inputs": {
+                                                            "name": "IncidentComment",
+                                                            "value": "Runbook \u003cstrong\u003e@{parameters('RunbookName')}\u003c/strong\u003e execution \u003cstrong\u003e@{variables('ExecutionStatus')}\u003c/strong\u003e.\nExecution ID: \u003cstrong\u003e@{body('Parse_JSON_StartAutomationExecution')?['AutomationExecutionId']}\u003c/strong\u003e\n"
+                                                        }
+                                                    },
+                                                    "Reset_variable_-_IsExecutionComplete": {
+                                                        "runAfter": {
+                                                        },
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "IsExecutionComplete",
+                                                            "value": "@true"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Reset_variable_-_ExecutionStatus": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "expression": {
+                                                    "or": [
+                                                        {
+                                                            "equals": [
+                                                                "@variables('ExecutionStatus')",
+                                                                "Cancelled"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "equals": [
+                                                                "@variables('ExecutionStatus')",
+                                                                "Failed"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "equals": [
+                                                                "@variables('ExecutionStatus')",
+                                                                "TimedOut"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "equals": [
+                                                                "@variables('IsExecutionComplete')",
+                                                                "Success"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            },
+                                            "GetAutomationExecution_status": {
+                                                "runAfter": {
+                                                    "Sleep_for_10_more_seconds": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Function",
+                                                "inputs": {
+                                                    "body": {
+                                                        "AutomationExecutionId": "@body('Parse_JSON_StartAutomationExecution')?['AutomationExecutionId']"
+                                                    },
+                                                    "function": {
+                                                        "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/GetAutomationExecution')]"
+                                                    }
+                                                }
+                                            },
+                                            "Parse_JSON_-_GetAutomationExecution_status": {
+                                                "runAfter": {
+                                                    "GetAutomationExecution_status": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('GetAutomationExecution_status')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "AutomationExecution": {
+                                                                "properties": {
+                                                                    "AutomationExecutionId": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "AutomationExecutionStatus": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "DocumentName": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "DocumentVersion": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "ExecutedBy": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "ExecutionEndTime": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "ExecutionStartTime": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Mode": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "Outputs": {
+                                                                        "properties": {
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "Parameters": {
+                                                                        "properties": {
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "ResolvedTargets": {
+                                                                        "properties": {
+                                                                            "ParameterValues": {
+                                                                                "type": "array"
+                                                                            },
+                                                                            "Truncated": {
+                                                                                "type": "boolean"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "StepExecutions": {
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "Action": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "ExecutionEndTime": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "ExecutionStartTime": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "Inputs": {
+                                                                                    "properties": {
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "OverriddenParameters": {
+                                                                                    "properties": {
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "StepExecutionId": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "StepName": {
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "StepStatus": {
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "StepName",
+                                                                                "Action",
+                                                                                "ExecutionStartTime",
+                                                                                "ExecutionEndTime",
+                                                                                "StepStatus",
+                                                                                "Inputs",
+                                                                                "StepExecutionId",
+                                                                                "OverriddenParameters"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "StepExecutionsTruncated": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "Targets": {
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "Reset_variable_-_ExecutionStatus": {
+                                                "runAfter": {
+                                                    "Parse_JSON_-_GetAutomationExecution_status": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "ExecutionStatus",
+                                                    "value": "@body('Parse_JSON_-_GetAutomationExecution_status')?['AutomationExecution']?['AutomationExecutionStatus']"
+                                                }
+                                            },
+                                            "Sleep_for_10_more_seconds": {
+                                                "runAfter": {
+                                                },
+                                                "type": "Wait",
+                                                "inputs": {
+                                                    "interval": {
+                                                        "count": 10,
+                                                        "unit": "Second"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "runAfter": {
+                                        },
+                                        "expression": "@equals(variables('IsExecutionComplete'), true)",
+                                        "limit": {
+                                            "count": 15,
+                                            "timeout": "PT1M"
+                                        },
+                                        "type": "Until"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Parse_JSON_-_GetAutomationExecution')?['AutomationExecution']?['AutomationExecutionStatus']",
+                                            "Success"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "GetAutomationExecution": {
+                            "runAfter": {
+                                "Wait_for_10_seconds_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": {
+                                    "AutomationExecutionId": "@body('Parse_JSON_StartAutomationExecution')?['AutomationExecutionId']"
+                                },
+                                "function": {
+                                    "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/GetAutomationExecution')]"
+                                }
+                            }
+                        },
+                        "Initialize_variable_-_ExecutionStatus": {
+                            "runAfter": {
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ExecutionStatus",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_IncidentComment": {
+                            "runAfter": {
+                                "Initialize_variable_-_IsExecutionComplete": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IncidentComment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_IsExecutionComplete": {
+                            "runAfter": {
+                                "Initialize_variable_-_ExecutionStatus": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IsExecutionComplete",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_-_GetAutomationExecution": {
+                            "runAfter": {
+                                "GetAutomationExecution": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('GetAutomationExecution')",
+                                "schema": {
+                                    "properties": {
+                                        "AutomationExecution": {
+                                            "properties": {
+                                                "AutomationExecutionId": {
+                                                    "type": "string"
+                                                },
+                                                "AutomationExecutionStatus": {
+                                                    "type": "string"
+                                                },
+                                                "DocumentName": {
+                                                    "type": "string"
+                                                },
+                                                "DocumentVersion": {
+                                                    "type": "string"
+                                                },
+                                                "ExecutedBy": {
+                                                    "type": "string"
+                                                },
+                                                "ExecutionEndTime": {
+                                                    "type": "string"
+                                                },
+                                                "ExecutionStartTime": {
+                                                    "type": "string"
+                                                },
+                                                "Mode": {
+                                                    "type": "string"
+                                                },
+                                                "Outputs": {
+                                                    "properties": {
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "Parameters": {
+                                                    "properties": {
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "ResolvedTargets": {
+                                                    "properties": {
+                                                        "ParameterValues": {
+                                                            "type": "array"
+                                                        },
+                                                        "Truncated": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "StepExecutions": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "Action": {
+                                                                "type": "string"
+                                                            },
+                                                            "ExecutionEndTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "ExecutionStartTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "Inputs": {
+                                                                "properties": {
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "OverriddenParameters": {
+                                                                "properties": {
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "StepExecutionId": {
+                                                                "type": "string"
+                                                            },
+                                                            "StepName": {
+                                                                "type": "string"
+                                                            },
+                                                            "StepStatus": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "StepName",
+                                                            "Action",
+                                                            "ExecutionStartTime",
+                                                            "ExecutionEndTime",
+                                                            "StepStatus",
+                                                            "Inputs",
+                                                            "StepExecutionId",
+                                                            "OverriddenParameters"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "StepExecutionsTruncated": {
+                                                    "type": "boolean"
+                                                },
+                                                "Targets": {
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_JSON_StartAutomationExecution": {
+                            "runAfter": {
+                                "StartAutomationExecution": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('StartAutomationExecution')",
+                                "schema": {
+                                    "properties": {
+                                        "AutomationExecutionId": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Set_variable_-_IncidentComment_on_error": {
+                            "runAfter": {
+                                "StartAutomationExecution": [
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "IncidentComment",
+                                "value": "Issue with the StartAutomationExecution step in Runbook\u003cstrong\u003e@{parameters('RunbookName')}\u003c/strong\u003e execution. Check the Playbook for more details.\n"
+                            }
+                        },
+                        "Set_variable_-_IncidentComment_on_error2": {
+                            "runAfter": {
+                                "GetAutomationExecution": [
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "IncidentComment",
+                                "value": "Issue with the GetAutomationExecution step in Runbook\u003cstrong\u003e@{parameters('RunbookName')}\u003c/strong\u003e execution. Check the Playbook for more details.\n"
+                            }
+                        },
+                        "StartAutomationExecution": {
+                            "runAfter": {
+                                "Initialize_variable_-_IncidentComment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": {
+                                    "DocumentName": "@{parameters('RunbookName')}",
+                                    "Parameters": "@json(parameters('RunbookParameters'))"
+                                },
+                                "function": {
+                                    "id": "[concat(variables('AWSSSMFuntionsAppId'), '/functions/StartAutomationExecution')]"
+                                }
+                            }
+                        },
+                        "Wait_for_10_seconds_": {
+                            "runAfter": {
+                                "Parse_JSON_StartAutomationExecution": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Wait",
+                            "inputs": {
+                                "interval": {
+                                    "count": 10,
+                                    "unit": "Second"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "tags": {
+                "hidden-SentinelTemplateName": "AWS-SSM-RunAutomationRunbook",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {
+                },
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

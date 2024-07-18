@@ -25,14 +25,14 @@ query: |
   let GlobalAdminsRemoved = AuditLogs 
   | where TimeGenerated > ago(timeframe) 
   | where Category =~ "RoleManagement" 
-  | where AADOperationType in ("Unassign", "RemoveEligibleRole") 
+  | where AADOperationType in~ ("Unassign", "RemoveEligibleRole") 
   | where ActivityDisplayName has_any ("Remove member from role", "Remove eligible member from role") 
   | mv-expand TargetResources 
   | mv-expand TargetResources.modifiedProperties 
   | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) 
   | where displayName_ =~ "Role.DisplayName" 
   | extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.oldValue))) 
-  | where RoleName == "Global Administrator" // Add other Privileged role if applicable 
+  | where RoleName =~ "Global Administrator" // Add other Privileged role if applicable 
   | extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) 
   | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) 
   | where Initiator != "MS-PIM"  // Filtering PIM events 
@@ -41,31 +41,32 @@ query: |
   let GlobalAdminsAdded = AuditLogs 
   | where TimeGenerated > ago(lookback) 
   | where Category =~ "RoleManagement" 
-  | where AADOperationType in ("Assign", "AssignEligibleRole") 
-  | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role") and Result == "success" 
+  | where AADOperationType in~ ("Assign", "AssignEligibleRole") 
+  | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role") and Result =~ "success" 
   | mv-expand TargetResources 
   | mv-expand TargetResources.modifiedProperties 
   | extend displayName_ = tostring(TargetResources_modifiedProperties.displayName) 
   | where displayName_ =~ "Role.DisplayName" 
   | extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue))) 
-  | where RoleName == "Global Administrator" // Add other Privileged role if applicable 
+  | where RoleName =~ "Global Administrator" // Add other Privileged role if applicable 
   | extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName) 
   | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)) 
   | where Initiator != "MS-PIM"  // Filtering PIM events 
   | extend Target = tostring(TargetResources.userPrincipalName) 
-  | summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result 
-  | extend AccountCustomEntity = Target; 
+  | summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result; 
   GlobalAdminsAdded 
   | join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator 
   | where AddedGlobalAdminTime < RemovedGlobalAdminTime 
   | extend NoofAdminsRemoved = array_length(TargetAdmins) 
   | where NoofAdminsRemoved > 1
-  | project AddedGlobalAdminTime, Initiator, Target, AccountCustomEntity, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved
-
+  | project AddedGlobalAdminTime, Initiator, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved
+  | extend Name=split(Target, "@")[0], UPNSuffix=split(Target, "@")[1]
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
-version: 1.0.0
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.1
 kind: Scheduled

@@ -1,6 +1,8 @@
 id: 39156a1d-c9e3-439e-967b-be7dcba918d9
 name: Base64 encoded IPv4 address in request url
 description: |
+    'This query detects Base64-encoded IPv4 addresses in outbound request URLs. It uses pre-computed base64 offsets for IPv4 sequences, eliminating the need for decoding. After identifying a candidate,the query extracts the plaintext IPv4 address pattern.'
+description-detailed: |
   'This hunting query will detect when a Base64 IPv4 address is seen in a outbound request URL. This query uses pre-computed base64 offsets for IPv4 sequences allowing detection
   of an IPv4 address under base64 without the need to decode. After identifying a candidate this query will decode the base64 into an array of longs where a regex will extract
   the ip candidate into plaintext. Finally the query will extract the plaintext IPv4 address pattern from the IP candidate.'
@@ -39,7 +41,7 @@ query: |
   | extend extracted_encoded_ip_candidate = extract_all(ipv4_encoded_identification_regex, RequestURL)
   // We could have more than one candidate, expand them out
   | mv-expand extracted_encoded_ip_candidate to typeof(string)
-  | summarize Start=min(TimeGenerated), End=max(TimeGenerated), make_set(RequestURL) by extracted_encoded_ip_candidate
+  | summarize Start=min(TimeGenerated), End=max(TimeGenerated), make_set(RequestURL,100) by extracted_encoded_ip_candidate
   // Pad if we need to
   | extend extracted_encoded_ip_candidate = iff(strlen(extracted_encoded_ip_candidate) % 2 == 0, extracted_encoded_ip_candidate, strcat(extracted_encoded_ip_candidate, "="))
   // Now decode the candidate to a long array, we cannot go straight to string as it cannot handle non-UTF8, we need to strip that first
@@ -48,7 +50,7 @@ query: |
   | extend hex_extracted = extract_all(ipv4_decoded_hex_extract, extracted_encoded_ip_candidate)
   // Expand, it's still possible that we might have more than 1 IP
   | mv-expand hex_extracted
-  // Now we should have a clean string. We need to put it back into a dynamic array to convert back to a string.
+  // Now we should have a clean string. We need to put it back into a dynamic array for converting back to a string
   | extend hex_extracted = trim_end(",", tostring(hex_extracted))
   | extend hex_extracted = strcat("[",hex_extracted,"]")
   | extend hex_extracted = todynamic(hex_extracted)
@@ -61,10 +63,11 @@ query: |
   // If it's not an IP, throw it out
   | where isnotnull(ipmatch)
   | mv-expand ipmatch to typeof(string)
-  | extend timestamp = Start, IPCustomEntity = ipmatch
+  | extend timestamp = Start
+  | extend IP_0_Address = ipmatch
 entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: ipmatch
-version: 1.0.0
+version: 1.0.1

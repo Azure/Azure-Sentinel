@@ -50,7 +50,7 @@ class StateManagerAsync:
             date = parse_date(s)
             if date < current_time - datetime.timedelta(days=7):
                 logging.info(f'The last saved time was long ago, trying to get events for the last week.')
-                date = current_time - datetime.timedelta(days=7)
+                #date = current_time - datetime.timedelta(days=7)
         except Exception:
             date = end_time - datetime.timedelta(minutes=int(shift_start_time))
             logging.info(f'There is no last time point, trying to get events for recent time.')

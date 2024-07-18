@@ -1,0 +1,213 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Send Unhealthy Azure Arc Resource Alert",
+        "description":  " Sentinel logic app designed to send an email alert when an unhealthy Azure Arc resource is detected. The logic app is implemented using Azure Logic Apps and utilizes Azure Monitor Logs and Office 365 connectors for its functionality.",
+        "prerequisites":  ["Office 365 Account"],
+        "postDeployment":  [
+            "Follow Post-deployment steps from the playbook readme file."
+        ],
+        "prerequisitesDeployTemplateFile":  "../../Playbooks/Send-UnhealthyAzureArcResourceAlert/azuredeploy.json",
+        "lastUpdateTime":  "2023-07-16T12:00:00.000Z",
+        "entities":  [],
+        "tags":  [],
+        "support":  {
+            "tier":  "community"
+        },
+        "author":  {
+            "name":  "Laraib khan"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Send-UnhealthyAzureArcResourceAlert",
+            "type":  "string"
+        }
+    },
+    "variables":  {
+        "AzuremonitorlogsConnectionName":  "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "Office365ConnectionName":  "[concat('Office365-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Recurrence":  {
+                            "recurrence":  {
+                                "frequency":  "Day",
+                                "interval":  1,
+                                "timeZone":  "W. Europe Standard Time"
+                            },
+                            "evaluatedRecurrence":  {
+                                "frequency":  "Day",
+                                "interval":  1,
+                                "timeZone":  "W. Europe Standard Time"
+                            },
+                            "type":  "Recurrence"
+                        }
+                    },
+                    "actions":  {
+                        "For_each":  {
+                            "foreach":  "@body('Run_query_and_list_results')?['value']",
+                            "actions":  {
+                                "Send_an_email_(V2)":  {
+                                    "runAfter":  {
+                                        "Set_variable":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "body":  {
+                                            "Body":  "\u003cp\u003e@{variables('BeautifyJSON')}\u003c/p\u003e",
+                                            "Importance":  "Normal",
+                                            "Subject":  "AzureArc Resource Status Changed to Unhealthy",
+                                            "To":  ""
+                                        },
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['office365']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "post",
+                                        "path":  "/v2/Mail"
+                                    }
+                                },
+                                "Set_variable":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "BeautifyJSON",
+                                        "value":  "\u003chtml\u003e\n\u003chead\u003e\n\u003cmeta charset=\"UTF-8\"\u003e\n\u003ctitle\u003eAlert Details\u003c/title\u003e\n\u003cstyle\u003e\nhr {\nborder: 0;\nborder-top: 1px solid #ccc;\nmargin: 10px 0;\n}\nstrong {\nfont-weight: bold;\n}\n\u003c/style\u003e\n\u003c/head\u003e\n\u003cbody\u003e\n\u003ch1\u003eFired: Arc-enabled servers health alert on @{items('For_each')?['ServerName']} ( microsoft.hybridcompute/machines ) at @{items('For_each')?['StartTime']}\u003c/h1\u003e\n\u003ch2\u003eSummary\u003c/h2\u003e\n\u003chr\u003e\n\u003cp\u003e\u003cstrong\u003eLevel:\u003c/strong\u003e\u003c/p\u003e@{items('For_each')?['Level']}\n\u003cp\u003e\u003cstrong\u003eProvider:\u003c/strong\u003e\u003c/p\u003e@{items('For_each')?['CategoryValue']}\n\u003cp\u003e\u003cstrong\u003eResource Group:\u003c/strong\u003e\u003c/p\u003e@{items('For_each')?['ResourceGroup']}\u003cp\u003e\u003cstrong\u003eServer Name:\u003c/strong\u003e\u003c/p\u003e@{items('For_each')?['ServerName']}\n\u003cp\u003e\u003cstrong\u003eStart Time:\u003c/strong\u003e\u003c/p\u003e@{items('For_each')?['StartTime']}\n\u003cp\u003e\u003cstrong\u003eStatus:\u003c/strong\u003e\u003c/p\u003e@{items('For_each')?['ActivityStatusValue']}\n\u003cp\u003e\u003cstrong\u003eSubscription ID:\u003c/strong\u003e\u003c/p\u003e@{items('For_each')?['SubscriptionId']}\n\u003cp\u003e\u003cstrong\u003eTotal Minutes Offline:\u003c/strong\u003e\u003c/p\u003e@{items('For_each')?['TotalMinutes_Offline']}\n\u003chr\u003e\n\u003c/body\u003e\n\u003c/html\u003e\n"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Run_query_and_list_results":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Initialize_variable":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "BeautifyJSON",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Run_query_and_list_results":  {
+                            "runAfter":  {
+                                "Initialize_variable":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "let ThresholdTime = 30;\nAzureActivity\n| where TimeGenerated \u003e ago(1d)\n| where CategoryValue == \"ResourceHealth\"\n| where parse_json(Properties).currentHealthStatus == \"Unavailable\"\n| where ActivityStatusValue == \"Active\"\n| extend ResourceType = Properties_d.resourceProviderValue\n| where ResourceType == \"MICROSOFT.HYBRIDCOMPUTE\"\n| extend StartTime = TimeGenerated\n| extend ServerName = Properties_d.resource\n| join kind=leftouter (AzureActivity\n | where ActivityStatusValue == \"Resolved\"\n | extend ResourceType = Properties_d.resourceProviderValue\n | where ResourceType == \"MICROSOFT.HYBRIDCOMPUTE\"\n | extend EndTime = TimeGenerated\n) on CorrelationId\n| extend Minutes_OfflineTillResolve = datetime_diff('minute',EndTime,StartTime)\n| project ServerName,StartTime,EndTime,CorrelationId,Minutes_OfflineTillResolve, Level, ActivityStatusValue1, ResourceGroup, OperationNameValue, SubscriptionId, ResourceProvider, Type, CategoryValue, ActivityStatusValue\n| extend TotalMinutes_Offline = datetime_diff('minute',now(),StartTime)\n| where TotalMinutes_Offline \u003e= ThresholdTime and ActivityStatusValue1 !has \"Resolved\"",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/queryData",
+                                "queries":  {
+                                    "resourcegroups":  "",
+                                    "resourcename":  "",
+                                    "resourcetype":  "",
+                                    "subscriptions":  "",
+                                    "timerange":  ""
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuremonitorlogs":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName":  "[variables('AzuremonitorlogsConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "office365":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName":  "[variables('Office365ConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "Owner":  "MS-SOC",
+                "hidden-SentinelTemplateName":  "Send-UnhealthyAzureArcResourceAlert",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzuremonitorlogsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('Office365ConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('Office365ConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                }
+            }
+        }
+    ]
+}

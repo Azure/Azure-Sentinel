@@ -1,125 +1,216 @@
 Parser:
-  Title: File event ASIM parser for Sysmon
-  Version: '0.4'
-  LastUpdated: Jan 3 2023
+  Title: File event ASIM filtering parser for Windows Sysmon
+  Version: "0.4.1"
+  LastUpdated: Nov 14 2023
 Product:
   Name: Windows Sysmon
 Normalization:
   Schema: FileEvent
-  Version: '0.2.1'
+  Version: "0.2.1"
 References:
-- Title: ASIM File Event Schema
-  Link: https://aka.ms/ASimFileEventDoc
-- Title: ASIM
-  Link: https://aka.ms/AboutASIM
+  - Title: ASIM File Event Schema
+    Link: https://aka.ms/ASimFileEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
 Description: This ASIM parser supports normalizing Sysmon event 11, 23, and 26, stored in either the Event or WindowsEvent tables, to the ASIM file event schema.
 ParserName: vimFileEventMicrosoftSysmon
+EquivalentBuiltInParser: _Im_FileEvent_MicrosoftSysmon
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: actorusername_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcfilepath_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hashes_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-   let parser = (disabled:bool=false) {
-      // -- Event parser
-      let EventParser = () {
-          Event
-          | where not(disabled)
-          | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Source, Type // , _ItemId 
-          | where Source == "Microsoft-Windows-Sysmon" and EventID in (11,23,26)
-          | project-away Source
-          | parse-kv EventData as (
-                RuleName:string,
-                UtcTime:datetime, 
-                ProcessGuid:string,
-                ProcessId:string,
-                Image:string,
-                User:string,
-                TargetFilename:string,
-                Hashes:string,
-                CreationUtcTime:datetime
+  let parser = (
+    starttime: datetime=datetime(null),
+    endtime: datetime=datetime(null),
+    eventtype_in: dynamic=dynamic([]),
+    srcipaddr_has_any_prefix: dynamic=dynamic([]),
+    actorusername_has_any: dynamic=dynamic([]),
+    targetfilepath_has_any: dynamic=dynamic([]),
+    srcfilepath_has_any: dynamic=dynamic([]),
+    hashes_has_any: dynamic=dynamic([]),
+    dvchostname_has_any: dynamic=dynamic([]),
+    disabled: bool=false
+    ) {
+    // -- Event parser
+    let EventParser = () {
+    Event
+        | where not(disabled)
+        | where (isnull(starttime) or TimeGenerated >= starttime) 
+            and (isnull(endtime) or TimeGenerated <= endtime)
+        | project
+            EventID,
+            EventData,
+            Computer,
+            TimeGenerated,
+            _ResourceId,
+            _SubscriptionId,
+            Source,
+            Type // , _ItemId 
+        | where Source == "Microsoft-Windows-Sysmon" and EventID in (11, 23, 26)
+        | project-away Source
+        // pre-filtering
+        | where ((array_length(eventtype_in) == 0 or (iff (EventID == 11, 'FileCreated', 'FileDeleted') in~ (eventtype_in)))) and
+            (array_length(srcipaddr_has_any_prefix) == 0) and
+            ((array_length(srcfilepath_has_any) == 0)) and
+            ((array_length(dvchostname_has_any) == 0) or Computer has_any (dvchostname_has_any))
+        | parse-kv EventData as (
+            RuleName: string,
+            UtcTime: datetime, 
+            ProcessGuid: string,
+            ProcessId: string,
+            Image: string,
+            User: string,
+            TargetFilename: string,
+            Hashes: string,
+            CreationUtcTime: datetime
             )
             with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-          | project-rename 
-                ActingProcessGuid = ProcessGuid,
-                ActingProcessId = ProcessId,
-                ActorUsername = User,
-                ActingProcessName = Image,
-                TargetFileCreationTime=CreationUtcTime,
-                TargetFilePath=TargetFilename,
-                EventStartTime=UtcTime
-          | project-away EventData
-       };
-       //
-       // -- WindowsEvent parser
-       let WindowsEventParser=(){
-         WindowsEvent 
-         | where not(disabled)
-         | project EventID, EventData, Computer, TimeGenerated, _ResourceId, _SubscriptionId, Provider, Type // , _ItemId 
-         | where Provider == "Microsoft-Windows-Sysmon" and EventID in (11,23,26)
-         | project-away Provider
-         | extend 
-             TargetFileCreationTime=todatetime(EventData.CreationUtcTime),
-             TargetFilePath=tostring(EventData.TargetFilename),
-             ActingProcessName = tostring(EventData.Image),
-             ActingProcessId = tostring(EventData.ProcessId),
-             ActingProcessGuid = tostring(EventData.ProcessGuid),
-             ActorUsername = tostring(EventData.User),
-             EventStartTime = todatetime(EventData.UtcTime),
-             RuleName = tostring(EventData.RuleName),
-             Hashes = tostring(EventData.Hashes)
+        | project-rename 
+            ActingProcessGuid = ProcessGuid,
+            ActingProcessId = ProcessId,
+            ActorUsername = User,
+            ActingProcessName = Image,
+            TargetFileCreationTime=CreationUtcTime,
+            TargetFilePath=TargetFilename,
+            EventStartTime=UtcTime
+        // Filter for ActorUsername and TargetFilePath
+        | where ((array_length(actorusername_has_any) == 0) or (ActorUsername has_any (actorusername_has_any))) and 
+            ((array_length(targetfilepath_has_any) == 0) or (TargetFilePath has_any (targetfilepath_has_any)))
+        | project-away EventData
+  };
+      //
+      // -- WindowsEvent parser
+      let WindowsEventParser=() {
+      WindowsEvent 
+          | where not(disabled)
+          | where (isnull(starttime) or TimeGenerated >= starttime) 
+              and (isnull(endtime) or TimeGenerated <= endtime)
+          | project
+              EventID,
+              EventData,
+              Computer,
+              TimeGenerated,
+              _ResourceId,
+              _SubscriptionId,
+              Provider,
+              Type // , _ItemId 
+          | where Provider == "Microsoft-Windows-Sysmon" and EventID in (11, 23, 26)
+          | project-away Provider
+          // pre-filtering
+          | where ((array_length(eventtype_in) == 0 or (iff (EventID == 11, 'FileCreated', 'FileDeleted') in~ (eventtype_in)))) and
+              (array_length(srcipaddr_has_any_prefix) == 0) and
+              ((array_length(actorusername_has_any) == 0) or (tostring(EventData.User) has_any (actorusername_has_any))) and
+              ((array_length(targetfilepath_has_any) == 0) or (tostring(EventData.TargetFilename) has_any (targetfilepath_has_any))) and
+              ((array_length(srcfilepath_has_any) == 0)) and
+              ((array_length(dvchostname_has_any) == 0) or Computer has_any (dvchostname_has_any))
+          | extend 
+              TargetFileCreationTime=todatetime(EventData.CreationUtcTime),
+              TargetFilePath=tostring(EventData.TargetFilename),
+              ActingProcessName = tostring(EventData.Image),
+              ActingProcessId = tostring(EventData.ProcessId),
+              ActingProcessGuid = tostring(EventData.ProcessGuid),
+              ActorUsername = tostring(EventData.User),
+              EventStartTime = todatetime(EventData.UtcTime),
+              RuleName = tostring(EventData.RuleName),
+              Hashes = tostring(EventData.Hashes)
           | parse ActingProcessGuid with "{" ActingProcessGuid "}"
           | project-away EventData
-       };
-       union isfuzzy=true 
-           WindowsEventParser,
-           EventParser 
-       | project-rename
-           DvcHostname = Computer,
-           //EventUid = _ItemId,
-           DvcScopeId = _SubscriptionId,
-           DvcId = _ResourceId
-       | extend
-           EventType=iff (EventID == 11, 'FileCreated', 'FileDeleted'),
-           EventProduct = 'Sysmon',
-           EventVendor = 'Microsoft',
-           EventSchema = 'FileEvent',
-           EventSchemaVersion = '0.2.1',
-           EventResult = 'Success',
-           EventSeverity = 'Informational',
-           DvcOs='Windows',
-           TargetFilePathType = 'Windows',
-           DvcIdType = iff (DvcId != "", "AzureResourceId", ""),
-           EventCount = int(1),
-           EventEndTime = EventStartTime,
-           EventOriginalType = tostring(EventID),
-           TargetFileName = tostring(split(TargetFilePath,'\\')[-1]),
-           ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
-           RuleName = iff (RuleName == "-", "", RuleName)
-        | parse-kv Hashes as (
-            MD5:string,
-            SHA1:string,
-            IMPHASH:string,
-            SHA256:string
-        )
-        | project-rename
-            TargetFileMD5 = MD5,
-            TargetFileSHA1 = SHA1,
-            TargetFileIMPHASH = IMPHASH,
-            TargetFileSHA256 = SHA256
-        | extend
-           Hash=coalesce(TargetFileSHA256, TargetFileSHA1, TargetFileMD5, TargetFileIMPHASH)
-        | extend
-           HashType = tostring(dynamic(["SHA256", "SHA1", "MD5", "IMPHASH"])[array_index_of(pack_array(TargetFileSHA256, TargetFileSHA1, TargetFileMD5,TargetFileIMPHASH),Hash)])
-        // -- Typed entity identifiers
-        | extend
-           ActorWindowsUsername = ActorUsername
-        // -- Aliases
-        | extend
-           Process = ActingProcessName,
-           Dvc = DvcHostname,
-           FilePath = TargetFilePath,
-           FileName = TargetFileName,
-           User = ActorUsername
-        | project-away EventID, Hashes
-    };
-    parser(disabled=disabled) 
+  };
+      union isfuzzy=true 
+          WindowsEventParser,
+          EventParser 
+      | project-rename
+          DvcHostname = Computer,
+          //EventUid = _ItemId,
+          DvcScopeId = _SubscriptionId,
+          DvcId = _ResourceId
+      | extend
+          EventType=iff (EventID == 11, 'FileCreated', 'FileDeleted'),
+          EventProduct = 'Sysmon',
+          EventVendor = 'Microsoft',
+          EventSchema = 'FileEvent',
+          EventSchemaVersion = '0.2.1',
+          EventResult = 'Success',
+          EventSeverity = 'Informational',
+          DvcOs='Windows',
+          TargetFilePathType = 'Windows',
+          DvcIdType = iff (DvcId != "", "AzureResourceId", ""),
+          EventCount = int(1),
+          EventEndTime = EventStartTime,
+          EventOriginalType = tostring(EventID),
+          TargetFileName = tostring(split(TargetFilePath, '\\')[-1]),
+          ActorUsernameType = iff(isnotempty(ActorUsername), 'Windows', ''),
+          RuleName = iff (RuleName == "-", "", RuleName)
+      | parse-kv Hashes as (
+          MD5: string,
+          SHA1: string,
+          IMPHASH: string,
+          SHA256: string
+          )
+      | project-rename
+          TargetFileMD5 = MD5,
+          TargetFileSHA1 = SHA1,
+          TargetFileIMPHASH = IMPHASH,
+          TargetFileSHA256 = SHA256
+      // Filter for hash
+      | where (array_length(hashes_has_any) == 0)
+          or (TargetFileMD5 has_any (hashes_has_any))
+          or (TargetFileSHA1 has_any (hashes_has_any))
+          or (TargetFileIMPHASH has_any (hashes_has_any))
+          or (TargetFileSHA256 has_any (hashes_has_any))
+      | extend
+          Hash=coalesce(TargetFileSHA256, TargetFileSHA1, TargetFileMD5, TargetFileIMPHASH)
+      | extend
+          HashType = tostring(dynamic(["SHA256", "SHA1", "MD5", "IMPHASH"])[array_index_of(pack_array(TargetFileSHA256, TargetFileSHA1, TargetFileMD5, TargetFileIMPHASH), Hash)])
+      // -- Typed entity identifiers
+      | extend
+          ActorWindowsUsername = ActorUsername
+      // -- Aliases
+      | extend
+          Process = ActingProcessName,
+          Dvc = DvcHostname,
+          FilePath = TargetFilePath,
+          FileName = TargetFileName,
+          User = ActorUsername
+      | project-away EventID, Hashes
+  };
+  parser (
+      starttime=starttime, 
+      endtime=endtime, 
+      eventtype_in=eventtype_in,
+      srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+      actorusername_has_any=actorusername_has_any,
+      targetfilepath_has_any=targetfilepath_has_any,
+      srcfilepath_has_any=srcfilepath_has_any,
+      hashes_has_any=hashes_has_any,
+      dvchostname_has_any=dvchostname_has_any,
+      disabled=disabled
+  )

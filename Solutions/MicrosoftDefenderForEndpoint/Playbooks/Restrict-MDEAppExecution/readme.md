@@ -36,7 +36,7 @@ New-AzureAdServiceAppRoleAssignment -ObjectId $MI.ObjectId -PrincipalId $MI.Obje
 
 ## Screenshots
 **Incident Trigger**
-![Incident Trigger](./Restrict-MDEAppExecution/Restrict-MDEAppExecution-incident-trigger/images/designerLight.png)
+![Incident Trigger](./Restrict-MDEAppExecution-incident-trigger/images/designerLight.png)
 
 **Alert Trigger**
-![Alert Trigger](./Restrict-MDEAppExecution/Restrict-MDEAppExecution-alert-trigger/images/Restrict-MDEAppExecution_alert.png)
+![Alert Trigger](./Restrict-MDEAppExecution-alert-trigger/images/Restrict-MDEAppExecution_alert.png)

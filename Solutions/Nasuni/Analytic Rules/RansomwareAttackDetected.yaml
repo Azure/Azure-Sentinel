@@ -1,0 +1,50 @@
+id: 6c8770fb-c854-403e-a64d-0293ba344d5f
+name: Ransomware Attack Detected
+description: 'Identifies ransomware attacks detected by the Ransomware Protection service running on a Nasuni Edge Appliance.'
+kind: Scheduled
+severity: High
+requiredDataConnectors:
+  - connectorId: NasuniEdgeAppliance
+    datatypes: 
+      - Syslog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Impact
+relevantTechniques:
+  - T1486
+query: |-
+  Syslog
+  | project TimeGenerated, Computer, SyslogMessage
+  | where SyslogMessage has "The Filer has detected a new ransomware attack"
+  | extend pattern = substring(SyslogMessage, indexof(SyslogMessage, "(")+1, indexof(SyslogMessage, ")") - indexof(SyslogMessage,"(")-1)
+  | extend volume_name = substring(SyslogMessage, indexof(SyslogMessage, "volume")+7, indexof(SyslogMessage,". Visit") - (indexof(SyslogMessage, "volume")+7))
+  | sort by TimeGenerated desc
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertnameFormat: 'Nasuni: Ransomware Attack Detected'
+  alertDescriptionFormat: Ransomware attack detected by Nasuni at {{TimeGenerated}}.
+  alertDynamicProperties:
+  - alertProperty: RemediationSteps
+    value: SyslogMessage
+customDetails:
+  VolumeName: volume_name
+entityMappings:
+- entityType: Malware
+  fieldMappings:
+  - identifier: Name
+    columnName: pattern
+suppressionDuration: 5h
+suppressionEnabled: false
+version: 1.0.1

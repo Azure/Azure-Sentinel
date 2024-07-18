@@ -17,53 +17,61 @@ tactics:
 relevantTechniques:
   - T1484
 query: |
-    let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
-      let createPolicy = "CreatePolicy";
-      let timeframe = 1d;
-      let lookback = 14d;
-      // Creating Master table with all the events to use with materialize for better performance
-      let EventInfo = AWSCloudTrail
-      | where TimeGenerated >= ago(lookback)
-      | where EventName in (EventNameList) or EventName == createPolicy;
-      //Checking for Policy creation event with Full Admin Privileges since lookback period.
-      let FullAdminPolicyEvents =  materialize(  EventInfo
-      | where TimeGenerated >= ago(lookback)
-      | where EventName == createPolicy
-      | extend PolicyName = tostring(parse_json(RequestParameters).policyName)
-      | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement
-      | mvexpand Statement
-      | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)
-      | extend Action = tostring(Action)
-      | where Effect =~ "Allow" and ((((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "ec2:*") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "ec2:RunInstances") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "ec2:Run*")) or (Action contains "ec2:*") or (Action contains "ec2:ListInstances" and Action contains "ec2:StartInstance" and Action contains "ec2:ModifyInstanceAttribute") or (Action contains "ec2:List*" and Action contains "ec2:Start*" and Action contains "ec2:Modify*")) and Resource == "*" and Condition == ""
-      | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, UserIdentityUserName
-      | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
-      | project-rename StartTime = TimeGenerated  );
-      let PolicyAttach = materialize(  EventInfo
-      | where TimeGenerated >= ago(timeframe)
-      | where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)
-      | extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),"/")[1])
-      | summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, UserIdentityUserName = iff(isnotempty(UserIdentityUserName),   UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1])), PolicyName
-      | extend AttachEvent = pack("StartTime", StartTime, "EndTime", EndTime, "EventName", EventName, "UserIdentityType",   UserIdentityType, "UserIdentityArn", UserIdentityArn, "SourceIpAddress", SourceIpAddress, "UserIdentityUserName", UserIdentityUserName)
-      | project EventSource, PolicyName, AttachEvent, AttachEventCount
-      );
-      // Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.
-      // These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.
-      FullAdminPolicyEvents
-      | join kind=leftouter
-      (
-          PolicyAttach
-      )
-      on PolicyName
-      | project-away PolicyName1
-      | extend timestamp = StartTime, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+  let EventNameList = dynamic(["AttachUserPolicy","AttachRolePolicy","AttachGroupPolicy"]);
+  let createPolicy =  dynamic(["CreatePolicy", "CreatePolicyVersion"]);
+  let timeframe = 1d;
+  let lookback = 14d;
+  // Creating Master table with all the events to use with materialize for better performance
+  let EventInfo = AWSCloudTrail
+  | where TimeGenerated >= ago(lookback)
+  | where EventName in (EventNameList) or EventName in (createPolicy)
+  | extend UserIdentityArn = iif(isempty(UserIdentityArn), tostring(parse_json(Resources)[0].ARN), UserIdentityArn)
+  | extend UserName = tostring(split(UserIdentityArn, '/')[-1])
+  | extend AccountName = case( UserIdentityPrincipalid == "Anonymous", "Anonymous", isempty(UserIdentityUserName), UserName, UserIdentityUserName)
+  | extend AccountName = iif(AccountName contains "@", tostring(split(AccountName, '@', 0)[0]), AccountName),
+    AccountUPNSuffix = iif(AccountName contains "@", tostring(split(AccountName, '@', 1)[0]), "");
+  //Checking for Policy creation event with Full Admin Privileges since lookback period.
+  let FullAdminPolicyEvents =  materialize(  EventInfo
+  | where TimeGenerated >= ago(lookback)
+  | where EventName in (createPolicy)
+  | extend PolicyName = tostring(parse_json(RequestParameters).policyName)
+  | extend Statement = parse_json(tostring((parse_json(RequestParameters).policyDocument))).Statement
+  | mvexpand Statement
+  | extend Action = parse_json(Statement).Action , Effect = tostring(parse_json(Statement).Effect), Resource = tostring(parse_json(Statement).Resource), Condition = tostring(parse_json(Statement).Condition)
+  | extend Action = tostring(Action)
+  | where Effect =~ "Allow" and ((((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "ec2:*") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "ec2:RunInstances") or ((Action contains "iam:*" or Action contains "iam:PassRole") and Action contains "ec2:Run*")) or (Action contains "ec2:*") or (Action contains "ec2:ListInstances" and Action contains "ec2:StartInstance" and Action contains "ec2:ModifyInstanceAttribute") or (Action contains "ec2:List*" and Action contains "ec2:Start*" and Action contains "ec2:Modify*")) and Resource == "*" and Condition == ""
+  | distinct TimeGenerated, EventName, PolicyName, SourceIpAddress, UserIdentityArn, RecipientAccountId, AccountName, AccountUPNSuffix
+  | project-rename StartTime = TimeGenerated  );
+  let PolicyAttach = materialize(  EventInfo
+  | where TimeGenerated >= ago(timeframe)
+  | where EventName in (EventNameList) and isempty(ErrorCode) and isempty(ErrorMessage)
+  | extend PolicyName = tostring(split(tostring(parse_json(RequestParameters).policyArn),"/")[1])
+  | summarize AttachEventCount=count(), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by EventSource, EventName,   UserIdentityType , UserIdentityArn, SourceIpAddress, RecipientAccountId, AccountName, AccountUPNSuffix, PolicyName
+  | extend AttachEvent = pack("StartTime", StartTime, "EndTime", EndTime, "EventName", EventName, "UserIdentityType",   UserIdentityType,  "AccountName", AccountName, "AccountUPNSuffix", AccountUPNSuffix, "RecipientAccountId", RecipientAccountId, "UserIdentityArn", UserIdentityArn, "SourceIpAddress", SourceIpAddress)
+  | project EventSource, PolicyName, AttachEvent, RecipientAccountId, AccountName, AccountUPNSuffix, AttachEventCount
+  );
+  // Joining the list of PolicyNames and checking if it has been attached to any Roles/Users/Groups.
+  // These Roles/Users/Groups will be Privileged and can be used by adversaries as pivot point for privilege escalation via multiple ways.
+  FullAdminPolicyEvents
+  | join kind=leftouter
+  (
+      PolicyAttach
+  )
+  on PolicyName
+  | project-away PolicyName1
+  | extend timestamp = StartTime
 entityMappings:
   - entityType: Account
     fieldMappings:
-      - identifier: FullName
-        columnName: AccountCustomEntity
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: CloudAppAccountId
+        columnName: RecipientAccountId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.1
+        columnName: SourceIpAddress
+version: 1.0.3
 kind: Scheduled

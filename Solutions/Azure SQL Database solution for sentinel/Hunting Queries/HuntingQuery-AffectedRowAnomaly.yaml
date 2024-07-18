@@ -4,7 +4,10 @@ description: |
   'This hunting query will detect SQL queries that have affected an unusual number of rows for the given user and application combination.
   It will calculate the prevalence for each row count impacted to find instances where a large number of rows is anomalously affected.
   This hunting query is designed to detect SQL mass-deletion and mass-read events.'
-requiredDataConnectors: []
+requiredDataConnectors:
+  - connectorId: AzureSql
+    dataTypes:
+      - AzureDiagnostics
 tactics:
   - InitialAccess
 relevantTechniques:
@@ -12,7 +15,6 @@ relevantTechniques:
 tags:
   - SQL
 query: |
-
   let timeRange = 14d;
   let threshold = 1; //Less than this % will be displayed
   //Count the total number of queries a user+client has accesses
@@ -46,12 +48,19 @@ query: |
   ) on joinKey
   | extend prevalence = round(toreal(count_) / toreal(count_1) * 100, 2)
   | where prevalence <= threshold
+  | extend Name = tostring(split(PrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(PrincipalName, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend CloudApplication_0_Name = ApplicationName
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: PrincipalName
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
   - entityType: CloudApplication
     fieldMappings:
       - identifier: Name
         columnName: ApplicationName
+version: 1.0.1

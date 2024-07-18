@@ -13,7 +13,6 @@ requiredDataConnectors:
 tactics:
   - Execution
 query: |
-
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = totimespan((endtime-starttime)*7);
@@ -58,7 +57,7 @@ query: |
   | project TimeGenerated, Computer, Account, Process, ProcessPath, NormalizedProcessPath = replace(@'\d', '#', NormalizedProcessPath)
   ;
   let freqs = normalizedProcessPath
-  | summarize makelist(Computer), makelist(Account), makelist(ProcessPath), frequency=count() by NormalizedProcessPath, Process
+  | summarize make_list(Computer, 1000), make_list(Account, 1000), make_list(ProcessPath, 1000), frequency=count() by NormalizedProcessPath, Process
   | join kind= leftouter (
   normalizedProcessPath
   | summarize StartTimeUtc=min(TimeGenerated), EndTimeUtc=max(TimeGenerated) by NormalizedProcessPath, Process
@@ -66,5 +65,25 @@ query: |
   freqs
   | where frequency <= toscalar( freqs | serialize | project frequency | summarize percentiles(frequency, 5))
   | order by frequency asc
-  | mvexpand Computer = list_Computer, Account = list_Account, ProcessPath = list_ProcessPath
+  | mv-expand Computer = list_Computer, Account = list_Account, ProcessPath = list_ProcessPath
   | project StartTimeUtc, EndTimeUtc, frequency, Process, NormalizedProcessPath, tostring(ProcessPath), tostring(Computer), tostring(Account)
+  | extend NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = split(Computer, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain 
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain 
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1

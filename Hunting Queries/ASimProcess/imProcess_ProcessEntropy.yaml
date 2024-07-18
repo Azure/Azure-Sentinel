@@ -12,7 +12,6 @@ requiredDataConnectors: []
 tactics:
   - Execution
 query: |
-
   // exclude when over # of machines have the process
   let excludeThreshold = 10;
   // exclude when more than percent (default 10%)
@@ -25,10 +24,14 @@ query: |
   let maxLimit = 6*24;
   let removeHigh = imProcessCreate 
   | where TimeGenerated >= ago(1d)
+  | extend TargetProcessFilePath = TargetProcessName
   | summarize count() by TargetProcessFilePath = tolower(TargetProcessFilePath) | where count_ > maxLimit
-  | summarize make_set(TargetProcessFilePath);
+  | summarize make_set(TargetProcessFilePath, 200);
   let SecEvents = imProcessCreate
   | where TimeGenerated >= ago(1d)
+  | extend TargetProcessFilePath = TargetProcessName
+  | extend ActingProcessFileName = ActingProcessName
+  | extend TargetProcessFileName = TargetProcessFileProduct
   | where tolower(TargetProcessFilePath) !in~ (removeHigh)
   // removing common items that may still show up in small environments, add here if you have additional exclusions 
   | where TargetProcessFilePath !has ':\\Windows\\System32\\conhost.exe' and ActingProcessFileName !has ':\\Windows\\System32\\conhost.exe' 
@@ -45,7 +48,7 @@ query: |
   | where TargetProcessFilePath !has ':\\Windows\\servicing\\trustedinstaller.exe' 
   | where ActingProcessFileName !has ':\\Program Files\\Microsoft Dependency Agent\\bin\\MicrosoftDependencyAgent.exe' 
   | where ActingProcessFileName !has ':\\Program Files (x86)\\Microsoft\\EdgeUpdate\\MicrosoftEdgeUpdate.exe'
-  | project TimeGenerated, EventID, DvcHostname, ActorUserId, Account, AccountType, TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, _ResourceId, DvcId, EventVendor, EventProduct;
+  | project TimeGenerated, EventOriginalUid, DvcHostname, ActorUserId, User, TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, _ResourceId, DvcId, EventVendor, EventProduct;
   let Exclude = SecEvents 
   | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ExcludeCompCount = dcount(DvcHostname), ExcludeProcCount = count() by TargetProcessFileName 
   // Removing general limit for noise in one day 
@@ -115,10 +118,29 @@ query: |
   Results 
   | join kind= inner ( 
   SecEvents
-  | project TimeGenerated, EventID, DvcHostname, ActorUserId, Account, AccountType, TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, _ResourceId, DvcId , EventVendor, EventProduct
+  | project TimeGenerated, EventOriginalUid, DvcHostname, ActorUserId, TargetProcessFileName, User, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, _ResourceId, DvcId , EventVendor, EventProduct
   ) on DvcHostname, TargetProcessFileName 
-  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResultCount = count() by EventID, DvcHostname, ActorUserId, Account, AccountType, Weight, ProcessEntropy,  
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ResultCount = count() by EventOriginalUid, User, DvcHostname, ActorUserId, Weight, ProcessEntropy,  
   TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, DvcId , EventVendor, EventProduct
-  | project-reorder StartTime, EndTime, ResultCount, EventID, EventVendor, EventProduct, DvcHostname, ActorUserId, Account, AccountType, Weight, ProcessEntropy,TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, DvcId
+  | project-reorder StartTime, EndTime, ResultCount, EventOriginalUid, EventVendor, EventProduct, DvcHostname, User, ActorUserId, Weight, ProcessEntropy,TargetProcessFileName, TargetProcessFilePath, TargetProcessCommandLine, ActingProcessFileName, AllHostsProcessCount, ProcessCountOnHost, DistinctHostsProcessCount, _ResourceId, DvcId
   | sort by Weight asc, ProcessEntropy asc, TargetProcessFilePath asc 
-  | extend timestamp = StartTime, HostCustomEntity = DvcHostname, AccountCustomEntity = Account
+  | extend timestamp = StartTime, NTDomain = tostring(split(Account,'\\',0)[0]), Name = tostring(split(Account,'\\',1)[0])
+  | extend HostName = tostring(split(DvcHostname, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DvcHostname, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.0

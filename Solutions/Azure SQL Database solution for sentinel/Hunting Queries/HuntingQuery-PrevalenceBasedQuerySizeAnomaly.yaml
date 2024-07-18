@@ -2,7 +2,10 @@ id: 2a21303e-be48-404f-a6f6-883a6acfe5ad
 name: Prevalence Based SQL Query Size Anomaly
 description: |
   'Applications using SQL will generally make repeated similar requests for data as users interact with the application, this hunting query will find instances where an unusual number of tokens have been seen grouped on the client application and username. The query will calculate the prevalence for the token sizes based on historical activity from grouped application and user and show instances where an unusual number of tokens were observed. This query is designed to be run against application and username combinations that are used by SQL applications, such as content management systems (Wordpress, Joomla, TYPO3, etc.).'
-requiredDataConnectors: []
+requiredDataConnectors:
+  - connectorId: AzureSql
+    dataTypes:
+      - AzureDiagnostics
 tactics:
   - InitialAccess
 relevantTechniques:
@@ -10,7 +13,6 @@ relevantTechniques:
 tags:
   - SQL
 query: |
-
   let timeRange = 14d;
   //How frequently the query averages data for an average execution time
   let timeSliceSize = 1h;
@@ -42,7 +44,7 @@ query: |
   | extend parameters = countof(Statement, "=")
   //Splitting on space provides a good estimate to the tokens in the query
   | extend tokens = array_length(split(Statement, " "))
-  | summarize count(), make_set(parameters), make_list(TimeGenerated), make_list(ClientIp), dcount(ClientIp), min(TimeGenerated), max(TimeGenerated), make_list(Statement) by tokens, PrincipalName, ApplicationName
+  | summarize count(), make_set(parameters, 10000), make_list(TimeGenerated, 10000), make_list(ClientIp, 10000), dcount(ClientIp), min(TimeGenerated), max(TimeGenerated), make_list(Statement, 10000) by tokens, PrincipalName, ApplicationName
   | extend key = strcat(PrincipalName, ApplicationName)
   | join kind=leftouter (total) on key
   | extend prevalence = toreal(count_) / toreal(count_1) * 100
@@ -61,24 +63,19 @@ query: |
   //Optional; The maximum number of days the anomaly activity spanned
   //| where Days <= dayThreshold
   | project min_TimeGenerated, max_TimeGenerated, Days, prevalence, count_, set_parameters, tokens, dcount_ClientIp, ApplicationName, PrincipalName, list_Statement
+  | extend Name = tostring(split(PrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(PrincipalName, '@', 1)[0])
+  | extend Account_0_Name = Name
+  | extend Account_0_UPNSuffix = UPNSuffix
+  | extend CloudApplication_0_Name = ApplicationName
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
-        columnName: PrincipalName
-  - entityType: IP
-    fieldMappings:
-      - identifier: Address
-        columnName: ClientIp
-  - entityType: Host
-    fieldMappings:
-      - identifier: HostName
-        columnName: HostName
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix 
   - entityType: CloudApplication
     fieldMappings:
       - identifier: Name
         columnName: ApplicationName
-  - entityType: Azure resource
-    fieldMappings:
-      - identifier: ResourceId
-        columnName: ResourceId
+version: 1.0.1

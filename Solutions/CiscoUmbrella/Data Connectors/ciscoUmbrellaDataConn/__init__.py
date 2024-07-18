@@ -14,12 +14,14 @@ import hmac
 import base64
 from threading import Thread
 from io import StringIO
-
+from .state_manager import StateManager
+from dateutil.parser import parse as parse_datetime
 import azure.functions as func
 import re
 
 
-TIME_INTERVAL_MINUTES = 10
+
+MAX_SCRIPT_EXEC_TIME_MINUTES = 10
 
 DIVIDE_TO_MULTIPLE_TABLES = True
 
@@ -32,6 +34,7 @@ aws_s3_bucket = os.environ.get('S3Bucket')
 aws_access_key_id = os.environ.get('AWSAccessKeyId')
 aws_secret_acces_key = os.environ.get('AWSSecretAccessKey')
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
+FILE_SHARE_CONN_STRING = os.environ['AzureWebJobsStorage']
 
 if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):    
     logAnalyticsUri = 'https://' + sentinel_customer_id + '.ods.opinsights.azure.com'
@@ -47,9 +50,23 @@ def main(mytimer: func.TimerRequest) -> None:
         logging.info('The timer is past due!')
 
     logging.info('Starting program')
-
+    
+    script_start_time = int(time.time())
+    state_manager_cu = StateManager(FILE_SHARE_CONN_STRING, file_path='cisco_umbrella')
+    
+    ts_from = state_manager_cu.get()
+    ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+    if ts_from is not None:
+        if (datetime.datetime.utcnow() - datetime.timedelta(days=3)) > datetime.datetime.strptime(ts_from,"%Y-%m-%dT%H:%M:%S.%fZ"):
+            ts_from = parse_date_from(ts_from)
+            ts_to = ts_from +  datetime.timedelta(days=1)
+        else:
+            ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+    ts_from = parse_date_from(ts_from)
+    ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
+        
     cli = UmbrellaClient(aws_access_key_id, aws_secret_acces_key, aws_s3_bucket)
-    ts_from, ts_to = cli.get_time_interval()
+    
     logging.info('Searching files last modified from {} to {}'.format(ts_from, ts_to))
     obj_list = cli.get_files_list(ts_from, ts_to)
 
@@ -62,54 +79,73 @@ def main(mytimer: func.TimerRequest) -> None:
     successfull_sent_events_number = 0
 
     if DIVIDE_TO_MULTIPLE_TABLES:
-        dns_files = []
-        proxy_files = []
-        ip_files = []
-        cdfw_files = []
-        for obj in obj_list:
+        sentinel_dict = {
+        'dns': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10),
+        'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
+        'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
+        'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10),
+        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
+                        }
+        last_ts = None
+        for obj in sorted(obj_list, key=lambda k: k['LastModified']):
             key = obj.get('Key', '')
             if 'dnslogs' in key.lower():
-                dns_files.append(obj)
+                sentinel = sentinel_dict['dns']
             elif 'proxylogs' in key.lower():
-                proxy_files.append(obj)
+                sentinel = sentinel_dict['proxy']
             elif 'iplogs' in key.lower():
-                ip_files.append(obj)
+                sentinel = sentinel_dict['ip']
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
-                cdfw_files.append(obj)
-
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_dns', queue_size=10000, bulks_number=10)
-        with sentinel:
-            for obj in dns_files:
+                sentinel = sentinel_dict['cloudfirewall']
+            elif 'firewalllogs' in key.lower():
+                sentinel = sentinel_dict['firewall']    
+            else:
+                # skip files of unknown types
+                continue
+            with sentinel:
                 cli.process_file(obj, dest=sentinel)
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
+                last_ts = obj['LastModified']
+                if last_ts:
+                    state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        break
+                else:
+                    state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        break
+        if last_ts:
+            state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+        else:
+            state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
 
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10)
-        with sentinel:
-            for obj in proxy_files:
-                cli.process_file(obj, dest=sentinel)
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
+        failed_sent_events_number = sum([sentinel.failed_sent_events_number for sentinel in sentinel_dict.values()])
+        successfull_sent_events_number = sum([sentinel.successfull_sent_events_number for sentinel in sentinel_dict.values()])
 
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10)
-        with sentinel:
-            for obj in ip_files:
-                cli.process_file(obj, dest=sentinel)
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
-
-        sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10)
-        with sentinel:
-            for obj in cdfw_files:
-                cli.process_file(obj, dest=sentinel)
-        failed_sent_events_number += sentinel.failed_sent_events_number
-        successfull_sent_events_number += sentinel.successfull_sent_events_number
 
     else:
         sentinel = AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type, queue_size=10000, bulks_number=10)
         with sentinel:
-            for obj in obj_list:
+            for obj in sorted(obj_list, key=lambda k: k['LastModified']):
                 cli.process_file(obj, dest=sentinel)
+                last_ts = obj['LastModified']
+                if last_ts:
+                    state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        return
+                else:
+                    state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))
+                    if check_if_script_runs_too_long(script_start_time):
+                        logging.info(f'Script is running too long. Stop processing new events. Finish script.')
+                        return
+            
+            if last_ts:
+                state_manager_cu.post(datetime.datetime.strftime(last_ts, '%Y-%m-%dT%H:%M:%S.%fZ'))
+            else:
+                state_manager_cu.post(datetime.datetime.strftime(ts_to, '%Y-%m-%dT%H:%M:%S.%fZ'))   
+                
         failed_sent_events_number += sentinel.failed_sent_events_number
         successfull_sent_events_number += sentinel.successfull_sent_events_number
 
@@ -126,6 +162,23 @@ def convert_list_to_csv_line(ls):
     return line.getvalue()
 
 
+def check_if_script_runs_too_long(script_start_time: int) -> bool:
+        now = int(time.time())
+        duration = now - script_start_time
+        max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.80)
+        return duration > max_duration
+
+
+def parse_date_from(date_from: str) -> datetime.datetime:
+    try:
+        date_from = parse_datetime(date_from)+ datetime.timedelta(milliseconds=1)
+    except:
+        pass
+    if not isinstance(date_from, datetime.datetime):
+        date_from = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - datetime.timedelta(minutes=10)
+    return date_from
+
+    
 class UmbrellaClient:
 
     def __init__(self, aws_access_key_id, aws_secret_acces_key, aws_s3_bucket):
@@ -167,13 +220,6 @@ class UmbrellaClient:
             aws_s3_bucket = aws_s3_bucket[:-1]
         return aws_s3_bucket
 
-    def get_time_interval(self):
-        ts_from = datetime.datetime.utcnow() - datetime.timedelta(minutes=TIME_INTERVAL_MINUTES + 1)
-        ts_to = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
-        ts_from = ts_from.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
-        ts_to = ts_to.replace(tzinfo=datetime.timezone.utc, second=0, microsecond=0)
-        return ts_from, ts_to
-
     def _make_objects_list_request(self, marker='', prefix=''):
         response = self.s3.list_objects(
             Bucket=self.aws_s3_bucket,
@@ -192,7 +238,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'iplogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -206,12 +252,12 @@ class UmbrellaClient:
                     if ts_to > file_obj['LastModified'] >= ts_from:
                         files.append(file_obj)
 
-                if response['IsTruncated'] is True:
+                if response['IsTruncated'] is True and ts_to > file_obj['LastModified']:
                     marker = response['Contents'][-1]['Key']
                 else:
                     break
-
-        return self.sort_files_by_date(files)
+                
+        return files
 
     def download_obj(self, key):
         logging.info('Started downloading {}'.format(key))
@@ -425,9 +471,31 @@ class UmbrellaClient:
                 event['EventType'] = 'cloudfirewalllogs'
                 yield event
 
-    @staticmethod
-    def sort_files_by_date(ls):
-        return sorted(ls, key=lambda k: k['LastModified'])
+    def parse_csv_fw(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
+                if len(row) >= 14:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'originId': row[1],
+                        'Identity': row[2],
+                        'Identity Type': row[3],
+                        'Direction': row[4],
+                        'ipProtocol': row[5],
+                        'packetSize': row[6],
+                        'sourceIp': row[7],
+                        'sourcePort': row[8],
+                        'destinationIp': row[9],
+                        'destinationPort': row[10],
+                        'dataCenter': row[11],
+                        'ruleId': row[12],
+                        'verdict': row[13]
+                    }
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event['EventType'] = 'firewalllogs'
+                yield event
 
     def process_file(self, obj, dest):
         t0 = time.time()
@@ -446,6 +514,8 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_ip
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
+            elif 'firewalllogs' in key.lower():
+                parser_func =  self.parse_csv_fw
 
             if parser_func:
                 file_events = 0
@@ -538,10 +608,10 @@ class AzureSentinelConnector:
 
         response = requests.post(uri, data=body, headers=headers)
         if (response.status_code >= 200 and response.status_code <= 299):
-            logging.info('{} events have been successfully sent to Azure Sentinel'.format(events_number))
+            logging.info('{} events have been successfully sent to Microsoft Sentinel'.format(events_number))
             self.successfull_sent_events_number += events_number
         else:
-            logging.error("Error during sending events to Azure Sentinel. Response code: {}".format(response.status_code))
+            logging.error("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status_code))
             self.failed_sent_events_number += events_number
 
     def _check_size(self, queue):
