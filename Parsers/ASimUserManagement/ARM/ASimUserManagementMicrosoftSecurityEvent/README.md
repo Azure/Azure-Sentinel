@@ -1,6 +1,6 @@
-# Microsoft ASIM UserManagement Normalization Parser
+# Microsoft Security Event ASIM UserManagement Normalization Parser
 
-ARM template for ASIM UserManagement schema parser for Microsoft.
+ARM template for ASIM UserManagement schema parser for Microsoft Security Event.
 
 This ASIM parser supports normalizing Microsoft Security Event logs ingested in 'SecurityEvent' table delivered using AMA to the ASIM UserManagement normalized schema.
 
