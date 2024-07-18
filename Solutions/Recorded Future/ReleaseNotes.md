@@ -2,6 +2,7 @@
 |-------------|--------------------------------|---------------------------------------------|
 | 3.2.6       |  08-03-2024                     | Added incident creation to RecordedFuture-Alert-Importer **Playbook**.<br/> Update concurrency in RecordedFuture-IOC_Enrichment **Playbook**  |
 | 3.2.5       |  24-06-2024                    | Added missing AMA **Data Connector** reference in **Analytic rules**  |
+| 3.2.5       |  08-03-2024                     | Added incident creation to RecordedFuture-Alert-Importer **Playbook**.<br/> Update concurrency in RecordedFuture-IOC_Enrichment **Playbook**  |
 | 3.2.4       |  08-03-2024                     | Change default Recurrence for pulling data in Fix parse json in RecordedFuture-ThreatMap-Importer **Playbook**.<br/> Update solution description, referencing release notes.  |
 | 3.2.3       |  27-02-2024                     | Fix parsing in RecordedFuture-PlaybookAlert-Importer **Playbook**.<br/> Added Recorded Future AI Summary to Alert **workbook**.<br/> Added Statues to playbook alert Workbook. |
 | 3.2.1       |  08-02-2024                     | Fix parse json in RecordedFuture-Alert-Importer **Playbook**.<br/> Fixed broken links in readme.md |
