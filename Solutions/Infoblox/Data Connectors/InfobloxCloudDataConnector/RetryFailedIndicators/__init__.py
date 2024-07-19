@@ -3,7 +3,7 @@ import datetime
 import time
 from ..SharedCode.logger import applogger
 import azure.functions as func
-from .retry_failed_indicators import RetryFailedIndicators
+from .retry_failed_indicators import InfobloxRetryFailedIndicators
 
 
 def main(mytimer: func.TimerRequest) -> None:
@@ -11,7 +11,7 @@ def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
 
     start = time.time()
-    retry_obj = RetryFailedIndicators(int(start))
+    retry_obj = InfobloxRetryFailedIndicators(int(start))
     retry_obj.get_failed_indicators_and_retry()
 
     if mytimer.past_due:
