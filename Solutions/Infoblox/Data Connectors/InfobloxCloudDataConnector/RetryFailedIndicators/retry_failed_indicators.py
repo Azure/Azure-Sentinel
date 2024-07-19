@@ -9,7 +9,7 @@ from ..SharedCode.state_manager import StateManager
 import inspect
 
 
-class RetryFailedIndicators(Utils):
+class InfobloxRetryFailedIndicators(Utils):
     """Class for retrying failed indicators."""
 
     def __init__(self, start):
