@@ -58,8 +58,8 @@ class Proofpoint_api:
         ) - datetime.timedelta(minutes=time_delay_minutes)
         self.before_time = before_time.strftime("%Y-%m-%dT%H:59:59.999999")
         self.after_time = before_time.strftime("%Y-%m-%dT%H:00:00.000000")
-        logging.info('Before time is {}'.format(before_time))
-        logging.info('After time is {}'.format(after_time))
+        logging.info('Before time is {}'.format(self.before_time))
+        logging.info('After time is {}'.format(self.after_time))
 
     def set_websocket_conn(self, event_type):
         max_retries = 3
