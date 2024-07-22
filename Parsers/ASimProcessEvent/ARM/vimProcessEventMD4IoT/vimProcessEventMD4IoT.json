@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessEventMD4IoT",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Create Event ASIM parser for Microsoft Defender for IoT",
+            "category": "ASIM",
+            "FunctionAlias": "vimProcessEventMD4IoT",
+            "query": "let ProcessEvents_MD4IoT=()\n{\n  SecurityIoTRawEvent \n  | where RawEventName == \"Process\" \n  // --------------------------------------------------------------------------------------\n    | where\n    (isnull(starttime)   or TimeGenerated >= starttime )\n    and (isnull(endtime) or TimeGenerated <= endtime )\n    and not(disabled)\n    and (array_length(dvcipaddr_has_any_prefix)==0)\n    and (array_length(actingprocess_has_any)==0 ) \n    and (array_length(parentprocess_has_any)==0)  \n    and (eventtype=='*' or eventtype=='ProcessCreated')\n    and (array_length(commandline_has_any)==0 or EventDetails has_any (commandline_has_any)) \n    and (array_length(commandline_has_all)==0 or EventDetails has_all (commandline_has_all)) \n    and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(EventDetails, commandline_has_any_ip_prefix) ) \n    and (array_length(targetprocess_has_any)==0 or EventDetails has_any (targetprocess_has_any)) \n    and (targetusername=='*' or EventDetails has targetusername)  \n    and (array_length(dvcname_has_any)==0 or DeviceId has_any (dvcname_has_any))   \n  // --------------------------------------------------------------------------------------\n  | extend\n    EventDetails = todynamic(EventDetails)\n  | extend // required for postfilterring\n    TargetProcessCommandLine = coalesce (tostring(EventDetails.Commandline), tostring(EventDetails.Executable)), \n    TargetProcessName = coalesce (tostring(EventDetails.Executable), split(EventDetails.Commandline,\" \")[0]),\n    DvcOs = iif (EventDetails.MessageSource == \"Linux\", \"Linux\", \"Windows\") // Intermediate fix\n  | extend \n    TargetUsername = iff (DvcOs == \"Windows\", tostring(EventDetails.UserName), \"\")\n  // --------------------------------------------------------------------------------------\n  | where (array_length(commandline_has_any)==0 or TargetProcessCommandLine has_any (commandline_has_any)) \n    and (array_length(commandline_has_all)==0 or TargetProcessCommandLine has_all (commandline_has_all)) \n    and (array_length(commandline_has_any_ip_prefix)==0 or has_any_ipv4_prefix(TargetProcessCommandLine, commandline_has_any_ip_prefix) ) \n    and (array_length(targetprocess_has_any)==0 or TargetProcessName has_any (targetprocess_has_any)) \n    and (targetusername=='*' or TargetUsername has targetusername)  \n  // --------------------------------------------------------------------------------------\n  | extend\n    EventOriginalUid = tostring(EventDetails.OriginalEventId), \n    EventCount = toint(EventDetails.HitCount), \n    EventProduct = 'Azure Defender for IoT', \n    EventVendor = 'Microsoft', \n    EventSchemaVersion = '0.1.0', \n    EventSchema = 'ProcessEvent',\n    EventStartTime = todatetime(EventDetails.TimestampUTC), \n    EventEndTime = todatetime(TimeGenerated), \n    EventType = iff (EventDetails.EventType == 'EXIT', 'ProcessTerminate', 'ProcessCreated'), \n    EventSubType = tostring(EventDetails.EventType),\n    EventResult = 'Success', \n    TargetProcessId = tostring(EventDetails.ProcessId), \n    TargetUsernameType = iif (DvcOs == \"Windows\", \"Windows\", \"Simple\"), \n    ActingProcessId = iff (DvcOs == \"Windows\", tostring(EventDetails.ParentProcessId), \"\") \n  | project-rename\n      DvcHostname = DeviceId,\n      EventProductVersion = AgentVersion, // Not available in Windows\n    _ResourceId = AssociatedResourceId, \n    _SubscriptionId = AzureSubscriptionId \n  | extend \n      // -- aliases\n    User = TargetUsername, \n    CommandLine = TargetProcessCommandLine, \n    Process = TargetProcessName, \n    Dvc = DvcHostname \n  };\n  ProcessEvents_MD4IoT\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),commandline_has_any:dynamic=dynamic([]),commandline_has_all:dynamic=dynamic([]),commandline_has_any_ip_prefix:dynamic=dynamic([]),actingprocess_has_any:dynamic=dynamic([]),targetprocess_has_any:dynamic=dynamic([]),parentprocess_has_any:dynamic=dynamic([]),targetusername:string='*',dvcipaddr_has_any_prefix:dynamic=dynamic([]),dvcname_has_any:dynamic=dynamic([]),eventtype:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
