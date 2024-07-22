@@ -597,13 +597,32 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             $newMetadata.Properties | Add-Member -Name 'support' -Type NoteProperty -value $supportDetails;
         }
         
-        if ($global:DependencyCriteria.Count -gt 0) {
-            $dependencies = [PSCustomObject]@{
-                operator = "AND";
-                criteria = $global:DependencyCriteria;
-            };
-    
-            $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+        $hasDependentDomainSolutionIdsProp = [bool]($contentToImport.PSobject.Properties.Name.ToLower() -match "dependentdomainsolutionids")
+        if ($hasDependentDomainSolutionIdsProp -and $contentToImport.dependentDomainSolutionIds.Length -gt 0) {
+            if ($global:DependencyCriteria.Count -gt 0) {
+                # add solution dependencies
+                foreach($sid in $contentToImport.dependentDomainSolutionIds){
+                    $global:DependencyCriteria += [PSCustomObject]@{
+                        kind = "Solution";
+                        contentId = "$sid";
+                    };
+                }
+
+                $dependencies = [PSCustomObject]@{
+                    criteria = $global:DependencyCriteria;
+                };
+
+                $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+            }
+        } else {
+            if ($global:DependencyCriteria.Count -gt 0) {
+                $dependencies = [PSCustomObject]@{
+                    operator = "AND";
+                    criteria = $global:DependencyCriteria;
+                };
+        
+                $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+            }
         }
 
         if ($json.firstPublishDate -and $json.firstPublishDate -ne "") 

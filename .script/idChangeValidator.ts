@@ -12,9 +12,9 @@ const git: SimpleGit = gitP(workingDir);
 
 export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
-    var skipValidationCheckFilePath = workingDir + "/.script/tests/idChangeValidatorTest/SkipIdValidationsTemplates.json";
+    const skipValidationCheckFilePath = workingDir + "/.script/tests/idChangeValidatorTest/SkipIdValidationsTemplates.json";
     console.log("skipValidationCheckFilePath: " + skipValidationCheckFilePath);
-    var skipIdsFile = JSON.parse(readFileSync(skipValidationCheckFilePath, 'utf8'));
+    const skipIdsFile = JSON.parse(readFileSync(skipValidationCheckFilePath, 'utf8'));
     console.log(skipIdsFile + " " + typeof (skipIdsFile));
 
     if (filePath.includes("Detections") || filePath.includes("Analytic Rules")) {
@@ -27,10 +27,10 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
             return ExitCode.ERROR;
         }
 
-        let options = [pr.targetBranch, pr.sourceBranch, filePath];
-        let diffSummary = await git.diff(options);
-        let idPosition = diffSummary.search(templateIdRegex);
-        let idHasChanged = idPosition > 0;
+        const options = [pr.targetBranch, pr.sourceBranch, filePath];
+        const diffSummary = await git.diff(options);
+        const idPosition = diffSummary.search(templateIdRegex);
+        const idHasChanged = idPosition > 0;
 
         if (idHasChanged) {
 
@@ -39,8 +39,8 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
 
             const regex = RegExp('[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}', 'g');
             let array1;
-            var oldId: string = "";
-            var newId: string = "";
+            let oldId: string = "";
+            let newId: string = "";
 
             while ((array1 = regex.exec(diffSummary)) !== null) {
                 if (oldId == "") {
@@ -55,7 +55,9 @@ export async function IsIdHasChanged(filePath: string): Promise<ExitCode> {
                 console.log(filePath + " is skipped from this validation.");
                 return ExitCode.SUCCESS;
             } else {
-                throw new Error();
+                if (oldId !== newId) {
+                    throw new Error();
+                }
             }
         }
     }
