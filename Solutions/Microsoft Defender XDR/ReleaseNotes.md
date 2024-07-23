@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                    |
 |-------------|--------------------------------|---------------------------------------------------------------------------------------|
+| 3.0.8       | 10-06-2024                     | Added missing AMA **Data Connector** reference in **Analytic rules**				   | 
+| 3.0.7       | 29-05-2024                     | Updated **Analytic Rule** PossiblePhishingwithCSL&NetworkSession.yaml				   | 
 | 3.0.6       | 13-05-2024                     | Updated queried to use Signinlogs table                               				   | 
 | 3.0.5       | 06-05-2024                     | To correct erroneous entity mapping                                 				   |  
 | 3.0.4       | 08-04-2024                     | Added in FullName and IPAddress mappings where needed                                 |  

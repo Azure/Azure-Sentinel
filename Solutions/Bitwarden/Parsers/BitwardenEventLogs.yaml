@@ -1,0 +1,129 @@
+id: 515d95cb-90f9-49b6-9056-327b2df08d37
+Function:
+  Title: Bitwarden Event Logs
+  Version: '1.0.0'
+  LastUpdated: '2024-05-12'
+Category: Microsoft Sentinel Parser
+FunctionName: BitwardenEventLogs
+FunctionAlias: BitwardenEventLogs
+FunctionQuery: |
+  let deviceTypeNames = dynamic({
+      "0": "Android",
+      "1": "iOS",
+      "2": "Chrome Extension",
+      "3": "Firefox Extension",
+      "4": "Opera Extension",
+      "5": "Edge Extension",
+      "6": "Windows Desktop",
+      "7": "MacOs Desktop",
+      "8": "Linux Desktop",
+      "9": "Chrome Browser",
+      "10": "Firefox Browser",
+      "11": "Opera Browser",
+      "12": "Edge Browser",
+      "13": "IE Browser",
+      "14": "Unknown Browser",
+      "15": "Android Amazon",
+      "16": "UWP",
+      "17": "Safari Browser",
+      "18": "Vivaldi Browser",
+      "19": "Vivaldi Extension",
+      "20": "Safari Extension",
+      "21": "SDK",
+      "22": "Server",
+      "23": "Windows CLI",
+      "24": "MacOs CLI",
+      "25": "Linux CLI"
+  });
+  let eventTypeNames = dynamic({
+    "1000": "User_LoggedIn",
+    "1001": "User_ChangedPassword",
+    "1002": "User_Updated2fa",
+    "1003": "User_Disabled2fa",
+    "1004": "User_Recovered2fa",
+    "1005": "User_FailedLogIn",
+    "1006": "User_FailedLogIn2fa",
+    "1007": "User_ClientExportedVault",
+    "1008": "User_UpdatedTempPassword",
+    "1009": "User_MigratedKeyToKeyConnector",
+    "1010": "User_RequestedDeviceApproval",
+    "1100": "Cipher_Created",
+    "1101": "Cipher_Updated",
+    "1102": "Cipher_Deleted",
+    "1103": "Cipher_AttachmentCreated",
+    "1104": "Cipher_AttachmentDeleted",
+    "1105": "Cipher_Shared",
+    "1106": "Cipher_UpdatedCollections",
+    "1107": "Cipher_ClientViewed",
+    "1108": "Cipher_ClientToggledPasswordVisible",
+    "1109": "Cipher_ClientToggledHiddenFieldVisible",
+    "1110": "Cipher_ClientToggledCardCodeVisible",
+    "1111": "Cipher_ClientCopiedPassword",
+    "1112": "Cipher_ClientCopiedHiddenField",
+    "1113": "Cipher_ClientCopiedCardCode",
+    "1114": "Cipher_ClientAutofilled",
+    "1115": "Cipher_SoftDeleted",
+    "1116": "Cipher_Restored",
+    "1117": "Cipher_ClientToggledCardNumberVisible",
+    "1300": "Collection_Created",
+    "1301": "Collection_Updated",
+    "1302": "Collection_Deleted",
+    "1400": "Group_Created",
+    "1401": "Group_Updated",
+    "1402": "Group_Deleted",
+    "1500": "OrganizationUser_Invited",
+    "1501": "OrganizationUser_Confirmed",
+    "1502": "OrganizationUser_Updated",
+    "1503": "OrganizationUser_Removed",
+    "1504": "OrganizationUser_UpdatedGroups",
+    "1505": "OrganizationUser_UnlinkedSso",
+    "1506": "OrganizationUser_ResetPassword_Enroll",
+    "1507": "OrganizationUser_ResetPassword_Withdraw",
+    "1508": "OrganizationUser_AdminResetPassword",
+    "1509": "OrganizationUser_ResetSsoLink",
+    "1510": "OrganizationUser_FirstSsoLogin",
+    "1511": "OrganizationUser_Revoked",
+    "1512": "OrganizationUser_Restored",
+    "1513": "OrganizationUser_ApprovedAuthRequest",
+    "1514": "OrganizationUser_RejectedAuthRequest",
+    "1600": "Organization_Updated",
+    "1601": "Organization_PurgedVault",
+    "1602": "Organization_ClientExportedVault",
+    "1603": "Organization_VaultAccessed",
+    "1604": "Organization_EnabledSso",
+    "1605": "Organization_DisabledSso",
+    "1606": "Organization_EnabledKeyConnector",
+    "1607": "Organization_DisabledKeyConnector",
+    "1608": "Organization_SponsorshipsSynced",
+    "1609": "Organization_CollectionManagement_Updated",
+    "1700": "Policy_Updated",
+    "1800": "ProviderUser_Invited",
+    "1801": "ProviderUser_Confirmed",
+    "1802": "ProviderUser_Updated",
+    "1803": "ProviderUser_Removed",
+    "1900": "ProviderOrganization_Created",
+    "1901": "ProviderOrganization_Added",
+    "1902": "ProviderOrganization_Removed",
+    "1903": "ProviderOrganization_VaultAccessed",
+    "2000": "OrganizationDomain_Added",
+    "2001": "OrganizationDomain_Removed",
+    "2002": "OrganizationDomain_Verified",
+    "2003": "OrganizationDomain_NotVerified",
+    "2100": "Secret_Retrieved"
+  });
+  BitwardenEventLogs_CL
+  | extend deviceName = tostring(deviceTypeNames[tostring(device)])
+  | extend eventTypeName = tostring(eventTypeNames[tostring(eventType)])
+  | join kind = leftouter (BitwardenMembers_CL 
+    | where userId != '' 
+    | distinct userId, name, email 
+    | project actingUserId2=userId, actingUserName=name, actingUserEmail=email) on $left.actingUserId == $right.actingUserId2
+  | project-away actingUserId2
+  | join kind = leftouter (BitwardenMembers_CL 
+    | distinct memberId, name, email 
+    | project memberId2=memberId, memberUserName=name, memberUserEmail=email) on $left.memberId == $right.memberId2
+  | project-away memberId2
+  | join kind = leftouter (BitwardenGroups_CL 
+    | distinct groupId, name 
+    | project groupId2=groupId, groupName=name) on $left.groupId == $right.groupId2
+  | project-away groupId2
