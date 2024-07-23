@@ -68,7 +68,8 @@ try
 					$objectProperties.Name.ToLower() -eq "metadata" -or
 					$objectProperties.Name.ToLower() -eq "templatespec" -or
 					$objectProperties.Name.ToLower() -eq "is1pconnector" -or
-					$objectProperties.Name.ToLower() -eq "createpackage")
+					$objectProperties.Name.ToLower() -eq "createpackage" -or
+					$objectProperties.Name.ToLower() -eq "dependentDomainSolutionIds")
 				{
 					continue;
 				}
