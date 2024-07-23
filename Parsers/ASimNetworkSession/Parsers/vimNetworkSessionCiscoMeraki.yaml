@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM filtering parser for Cisco Meraki
-  Version: '1.1.1'
-  LastUpdated: Mar 28 2024
+  Version: '1.1.2'
+  LastUpdated: Jul 15 2024
 Product:
   Name: Cisco Meraki
 Normalization:
@@ -170,6 +170,8 @@ ParserQuery: |
   let DvcActionLookup = datatable(pattern: string, DvcAction: string, EventResult: string)[
       "allow", "Allow", "Success",
       "deny", "Deny", "Failure",
+      "0", "Allow", "Success",
+      "1", "Deny", "Failure",
       "Blocked", "Deny", "Failure"
   ];
   let EventResultLookup = datatable(LogSubType: string, EventResult_type: string)[
@@ -231,6 +233,8 @@ ParserQuery: |
           | extend NetworkIcmpType = iff(isnotempty(NetworkIcmpCode), coalesce(NetworkIcmpType_lookup, NetworkIcmpType), "")
           | extend pattern = coalesce(trim("'", pattern1), trim("'", pattern2))
           | extend pattern = trim('"', pattern)
+          | extend direction = case(pattern has_any ('0','1'), 'ingress', pattern has_any ('allow','deny'), 'egress', 'unknown')
+          | lookup NetworkDirectionLookup on direction
           | lookup DvcActionLookup on pattern
           | lookup EventSeverityDvcActionLookup on DvcAction
           | extend
