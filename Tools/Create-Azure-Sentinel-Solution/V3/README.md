@@ -103,13 +103,12 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": true, // Default should be true
-  "Is1PConnector": false,
   "StaticDataConnectorIds": []
 }
 
 ```
 
-#### **Example of Input File: Solution_McAfeePO.json**
+#### **Example of Input File: Solution_CiscoUmbrella.json**
 
 ```json
 {
@@ -172,7 +171,6 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "SolutionMetadata.json",
   "TemplateSpec": true, // Default should be true
-  "Is1PConnector": false,
   "StaticDataConnectorIds": []
 }
 ```
