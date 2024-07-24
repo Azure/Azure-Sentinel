@@ -18,7 +18,7 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsManagement.Cont
                     //If the technique contains sub technique, we remove the sub technique and validate only the technique
                     string techniqueWithoutSubTechnique = technique.ExtractTechnique();
                     var correspondingTactics = KillChainTechniquesHelper.GetCorrespondingTactics(techniqueWithoutSubTechnique).AsAttackTactics();
-                    bool isTacticExists = correspondingTactics.Any((AttackTactic tactic) => ruleProperties?.Tactics?.Contains(tactic) ?? false);
+                    bool isTacticExists = correspondingTactics.All((AttackTactic tactic) => ruleProperties?.Tactics?.Contains(tactic) ?? false);
 
                     if (!isTacticExists || correspondingTactics.Count == 0)
                     {
