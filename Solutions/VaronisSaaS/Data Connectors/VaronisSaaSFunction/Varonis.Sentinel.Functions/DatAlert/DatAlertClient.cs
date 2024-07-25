@@ -30,6 +30,7 @@ namespace Varonis.Sentinel.Functions.DatAlert
         {
             var tokenJson = await GetAccessTokenAsync(_baseUri, _apikey).ConfigureAwait(false);
             var tokenInfo = CustomParser.ParseTokenInfo(tokenJson);
+            var maxAlerts = parameters.MaxAlertRetrieval;
 
             if (tokenInfo is null) 
             {
@@ -38,17 +39,18 @@ namespace Varonis.Sentinel.Functions.DatAlert
 
             var token = tokenInfo.Value.token;
 
-            _log.LogInformation($"Access token was received: {token.Substring(0, 5)}...");
+            _log.LogDebug($"Access token was received: {token.Substring(0, 5)}...");
 
             using var client = new HttpClient();
             client.BaseAddress = _baseUri;
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             client.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue { NoCache = true };
+            client.DefaultRequestHeaders.Add(Constants.IntegrationHeader, Constants.IntegrationType);
 
-            var severities = CustomParser.ParseArrayFromCSV(parameters.Severities);
-            var ruleIds = await GetRuleIdsAsync(client, parameters.ThreatModel)
+            var severities = CustomParser.ParseArrayFromCSV(parameters.AlertSeverity);
+            var ruleIds = await GetRuleIdsAsync(client, parameters.ThreatDetectionPolicies)
                 .ConfigureAwait(false);
-            var statuses = CustomParser.ParseArrayFromCSV(parameters.Status);
+            var statuses = CustomParser.ParseArrayFromCSV(parameters.AlertStatus);
 
             var searchQuery = new AlertSearchQueryBuilder()
                 .WithDateRange(parameters.Start, parameters.End, AlertAttributes.IngestTime)
@@ -65,7 +67,7 @@ namespace Varonis.Sentinel.Functions.DatAlert
             var rowLink = await GetSearchResultPath(client, payload)
                 .ConfigureAwait(false);
 
-            var result = await GetAlertItemsAsync(client, $"app/dataquery/api/search/{rowLink}")
+            var result = await GetAlertItemsAsync(client, $"app/dataquery/api/search/{rowLink}?from=0&to={maxAlerts}")
                 .ConfigureAwait(false);
 
             return result;
@@ -76,12 +78,12 @@ namespace Varonis.Sentinel.Functions.DatAlert
             using var client = new HttpClient { BaseAddress = baseUri  };
             var payload = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                { "grant_type", "varonis_custom" },
-                //{ "x-api-key", apikey }
+                { "grant_type", "varonis_custom" }
             });
             var content = await payload.ReadAsByteArrayAsync().ConfigureAwait(false);
             client.DefaultRequestHeaders.Add("x-api-key", apikey);
             client.DefaultRequestHeaders.Host = baseUri.Host;
+            client.DefaultRequestHeaders.Add(Constants.IntegrationHeader, Constants.IntegrationType);
             using var response = await client.PostAsync("api/authentication/api_keys/token", payload)
                 .ConfigureAwait(false);
 
