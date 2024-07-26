@@ -103,7 +103,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "{Name of Solution Metadata file}",
   "TemplateSpec": true, // Default should be true
-  "StaticDataConnectorIds": []
+  "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify. 
 }
 
 ```
@@ -171,7 +171,7 @@ eg: C:\Github\Azure-Sentinel\Solutions\Agari\Data
   "Version": "3.0.0", // Default version of 3.0.0. If you want create templateSpec package then change variable 'defaultPackageVersion' value in createSolutionV3.ps1 file 
   "Metadata": "SolutionMetadata.json",
   "TemplateSpec": true, // Default should be true
-  "StaticDataConnectorIds": []
+  "StaticDataConnectorIds": [] // Optional array property. Specify Static Data Connector Ids only. If Generic Data connector than no need to specify.
 }
 ```
 
