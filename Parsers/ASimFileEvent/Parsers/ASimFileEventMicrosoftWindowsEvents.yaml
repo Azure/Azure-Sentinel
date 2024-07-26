@@ -49,42 +49,44 @@ ParserQuery: |
     'S-1-5-18', 'Local System', 'Simple',
     'S-1-0-0', 'Nobody', 'Simple'
   ];
-  WindowsEvent
+  SecurityEvent
+  | where not(disabled)
   | where EventID == 4663 
-    and EventData.ObjectType == "File"
-    and EventData.ObjectName !startswith @"\Device\"
-  | extend ActorUserIdType="SID"
-  , TargetFilePathType="Windows Local"
-  , Type="URL"
-  , SubjectUserName = tostring(EventData.SubjectUserName)
-  , SubjectAccount = tostring(EventData.SubjectAccount)
-  | extend ActorUsername = iff (SubjectUserName == "-", SubjectUserName, SubjectAccount)
-  | project TimeGenerated
-    , EventID, AccessMask = tostring(EventData.AccessMask)
-    , ProcessName = tostring(EventData.ProcessName)
-    , SubjectUserSid = tostring(EventData.SubjectUserSid)
-    , AccountType = tostring(EventData.AccountType)
-    , Computer = tostring(EventData.Computer)
-    , ObjectName = tostring(EventData.ObjectName)
-    , ProcessId = tostring(EventData.ProcessId)
-    , SubjectUserName
-    , SubjectAccount
-    , SubjectLogonId = tostring(EventData.SubjectLogonId)
-    , HandleId = tostring(EventData.HandleId)
-    , EventEndTime = TimeGenerated
-    , EventProduct = 'Windows Events'
-    , EventResult = "Success"
-    , EventSchemaVersion = "0.2.1"
-    , EventSchema = "FileEvent"
+    and ObjectType == "File"
+    and ObjectName !startswith @"\Device\"
+  | project TimeGenerated, EventID, AccessMask, ProcessName, SubjectUserSid, AccountType, Computer, ObjectName, ProcessId, SubjectUserName, SubjectAccount, SubjectLogonId, HandleId
+  | lookup EventTypeLookup on AccessMask
+  | lookup UserTypeLookup on AccountType
+  | lookup KnownSIDs on $left.SubjectUserSid == $right.sid
+  | extend ActingProcessName = ProcessName
+    , ActorUsername = iff (SubjectUserName == "-", username, SubjectAccount)
+    , ActorUsernameType = iff(SubjectUserName == '-',type, 'Windows')
     , EventStartTime = TimeGenerated
-    , EventType = 'Windows Events'
-    , EventVendor = 'Microsoft'
-    , TargetFilePathType
-    , Type
-    , ActorUsernameType = iff(SubjectUserName == '-',Type, 'Windows')
+    , EventEndTime = TimeGenerated
+    , TargetFilePath = ObjectName
+    , TargetFilePathFormat = "Windows Local"
+    , ActingProcessId = tostring(toint(ProcessId))
+    , EventOriginalType = tostring(EventID)
+    , ActorUserIdType="SID"
+    , TargetFilePathType="Windows Local"
+    , Type=type
+  | project-away EventID, ProcessId, AccountType, username
+  | project-rename ActorUserId = SubjectUserSid
+    , DvcHostname = Computer
+    , Process = ProcessName
+    , FilePath = ObjectName
+    , ActorSessionId = SubjectLogonId
+    , FileSessionId = HandleId
+  | extend EventSchema = "FileEvent"
+    , EventSchemaVersion = "0.1.1"
+    , EventResult = "Success"
     , EventCount = int(1)
-    , ActorUsername
+    , EventVendor = 'Microsoft'
+    , EventProduct = 'Security Events'
+    , Dvc = DvcHostname
+    , ActorWindowsUsername = ActorUsername
     , User = ActorUsername
-    | project-away AccessMask,AccountType,Computer,EventID,HandleId,ObjectName,ProcessId,ProcessName,SubjectAccount,SubjectLogonId,SubjectUserName,SubjectUserSid
+    , ActorUserSid = ActorUserId
+    | project-away AccessMask,ActorWindowsUsername,FileSessionId,SubjectAccount,SubjectUserName,TargetFilePathFormat
   };
   Parser (disabled = disabled)
