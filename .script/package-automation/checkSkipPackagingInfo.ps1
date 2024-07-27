@@ -42,12 +42,20 @@ try
         else
         {
             # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
-            #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
             if ($isPRMerged) {
-                git fetch --depth=1 origin master
-                $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+                $masterMergeCommitId = git log --format="%H" --merges --grep="Merge pull request #$pullRequestNumber" master
+                $diff = git diff --diff-filter=d --name-only $masterMergeCommitId^ $masterMergeCommitId
             } else {
-                $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+                $masterMergeCommit = git show -s --format='%s' -1
+                Write-Host "masterMergeCommit $masterMergeCommit"
+                if ($masterMergeCommit -like "*Merge branch*") {
+                    Write-Host "Skipping as Master merge commit!"
+                    Write-Output "isPackagingRequired=$isPackagingRequired" >> $env:GITHUB_OUTPUT
+                    Write-Host "isPackagingRequired $isPackagingRequired"
+                    exit 0
+                } else {
+                    $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+                }
             }
             Write-Host "List of files changed in PR: $diff"
 

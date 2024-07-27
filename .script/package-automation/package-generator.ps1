@@ -171,6 +171,7 @@ try {
     }
 
     $solutionFolderPath = 'Solutions/' + $solutionName + "/"
+    git fetch origin
     $filesList = git ls-files | Where-Object { $_ -like "$solutionFolderPath*" }
     $dataFolderFiles = $filesList | Where-Object { $_ -like "*/Data/*" } | Where-Object { $_ -notlike '*system_generated_metadata.json' } | Where-Object { $_ -notlike '*testParameters.json' }
     if ($dataFolderFiles.Count -gt 0) {
@@ -936,8 +937,9 @@ try {
 
     $packageCreationPath = "" + $baseFolderPath + "Solutions/" + $solutionName + "/Package/"
     Write-Host "packageCreationPath $packageCreationPath"
-    if (Test-Path -Path "$packageCreationPath") {
-        $allFilesInCreatedPackage = Get-ChildItem "$packageCreationPath" 
+    $zipPackagePath = $packageCreationPath + $packageVersion + ".zip"
+    if (Test-Path -Path "$zipPackagePath") {
+        $allFilesInCreatedPackage = Get-ChildItem "$zipPackagePath" 
         $allFilesInCreatedPackageCount = $allFilesInCreatedPackage.Count
     } else {
         $allFilesInCreatedPackageCount = 0
@@ -953,6 +955,7 @@ try {
     $solutionBaseFolderPath = "Solutions/" + $solutionName + "/Package"
 
     if ($allFilesInCreatedPackageCount -gt 0) {
+        $uploadPackagePath = $packageCreationPath + $packageVersion + ".zip"
         Write-Output "isCreatePackage=$true" >> $env:GITHUB_OUTPUT
         Write-Output "solutionBaseFolderPath=$solutionBaseFolderPath" >> $env:GITHUB_OUTPUT
         Write-Output "packageCreationPath=$packageCreationPath" >> $env:GITHUB_OUTPUT
@@ -961,6 +964,7 @@ try {
         Write-Output "dataFileLink=$dataFileLink" >> $env:GITHUB_OUTPUT
         Write-Output "dataFolderPath=$dataFolderPath" >> $env:GITHUB_OUTPUT
         Write-Output "dataInputFileName=$dataFolderFile" >> $env:GITHUB_OUTPUT 
+        Write-Output "uploadPackagePath=$uploadPackagePath" >> $env:GITHUB_OUTPUT
 
         Write-Host "Package created successfully!"
     }
