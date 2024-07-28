@@ -1,128 +1,132 @@
 {
     "id": "CTERA",
-    "title": "CTERA Portal & Edge Filer",
+    "title": "CTERA Syslog",
     "publisher": "CTERA",
-    "descriptionMarkdown": "Syslog is an event logging protocol that is common to Linux. Applications will send messages that may be stored on the local machine or delivered to a Syslog collector. When the Agent for Linux is installed, it configures the local Syslog daemon to forward messages to the agent. The agent then sends the message to the workspace.\n\n[Learn more >](https://aka.ms/sysLogInfo)",
-    "additionalRequirementBanner": "This data connector depends on a parser based on a Kusto Function to work as expected [**enter the Kusto Function alias**](Link to Kusto Function on Azure Sentinel GitHub) which is deployed with the Azure Sentinel Solution.",
+    "description": "Ingest CTERA syslog data into Microsoft Sentinel"
+    "additionalRequirementBanner": "None ",
     "graphQueries": [
         {
-            "metricName": "Total data received",
-            "legend": "DATATYPE_NAME",
-            "baseQuery": "DATATYPE_NAME"
+            "metricName": "Total events received",
+            "legend": "CTERA Events",
+            "baseQuery": "Syslog | where Source == 'CTERA'"
         }
     ],
     "sampleQueries": [
-        {
-            "description" : "One-line title for your sample query 1",
-            "query": "Kusto Query 1"
-        }
-    ],
-    "dataTypes": [
-        {
-            "name": "Syslog (DATATYPE_NAME)",
-            "lastDataReceivedQuery": "DATATYPE_NAME\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
-        }
-    ],
-    "connectivityCriterias": [
-        {
-            "type": "IsConnectedQuery",
-            "value": [
-                "DATATYPE_NAME\n            | summarize LastLogReceived = max(TimeGenerated)\n            | project IsConnected = LastLogReceived > ago(30d)"
-            ]
-        }
-    ],
-    "availability": {
-        "status": 1,
-        "isPreview": true
-    },
-    "permissions": {
-        "resourceProvider": [
             {
-                "provider": "Microsoft.OperationalInsights/workspaces",
-                "permissionsDisplayText": "write permission is required.",
-                "providerDisplayName": "Workspace",
-                "scope": "Workspace",
-                "requiredPermissions": {
-                    "write": true,
-                    "delete": true
-                }
+              "description": "Query to find all denied operations.",
+              "query": "Syslog\n| where ProcessName == 'gw-audit'\n| extend\n   TenantName = extract(\"(\\\"vportal\\\":\\\"[^\\\"]*\\\")\", 1, SyslogMessage),\n   UserName = extract(\"(user=[^|]*)\", 1, SyslogMessage)\n| extend Permission = extract(\"(op=[^|]*)\", 1, SyslogMessage)\n| where Permission matches regex @\"(?i).*denied.*\"\n| summarize Count = count() by Permission"
+            },
+            {
+              "description": "Query to find all delete operations.",
+              "query": "Syslog\n| where ProcessName == 'gw-audit'\n| extend\n   TenantName = extract(\"(\\\"vportal\\\":\\\"[^\\\"]*\\\")\", 1, SyslogMessage),\n   UserName = extract(\"(user=[^|]*)\", 1, SyslogMessage)\n| extend Permission = extract(\"(op=[^|]*)\", 1, SyslogMessage)\n| where Permission == \"op=delete\"\n| summarize Count = count() by Permission"
+            },
+            {
+              "description": "Query to summarize operations by user.",
+              "query": "Syslog\n| where ProcessName == 'gw-audit'\n| extend\n   TenantName = extract(\"(\\\"vportal\\\":\\\"[^\\\"]*\\\")\", 1, SyslogMessage),\n   UserName = extract(\"(user=[^|]*)\", 1, SyslogMessage)\n| extend Permission = extract(\"(op=[^|]*)\", 1, SyslogMessage)\n| summarize Count = count() by UserName, Permission"
+            },
+            {
+              "description": "Query to summarize operations by a portal tenant.",
+              "query": "Syslog\n| where ProcessName == 'gw-audit'\n| extend\n   TenantName = extract(\"(\\\"vportal\\\":\\\"[^\\\"]*\\\")\", 1, SyslogMessage),\n   UserName = extract(\"(user=[^|]*)\", 1, SyslogMessage)\n| extend Permission = extract(\"(op=[^|]*)\", 1, SyslogMessage)\n| summarize Count = count() by TenantName, Permission"
+            },
+            {
+              "description": "Query to find operations performed by a specific user.",
+              "query": "Syslog\n| where ProcessName == 'gw-audit'\n| extend\n   TenantName = extract(\"(\\\"vportal\\\":\\\"[^\\\"]*\\\")\", 1, SyslogMessage),\n   UserName = extract(\"(user=[^|]*)\", 1, SyslogMessage)\n| extend Permission = extract(\"(op=[^|]*)\", 1, SyslogMessage)\n| where UserName == 'user=specific_user'\n| summarize Count = count() by Permission"
             }
-        ]
-    },
-    "instructionSteps": [
-        {
-            "title": "", 
-            "description": ">This data connector depends on a parser based on a Kusto Function to work as expected [**enter the Kusto Function alias**](Link to Kusto Function on Azure Sentinel GitHub) which is deployed with the Azure Sentinel Solution.",
-            "instructions": [ 
-            ]    
-        }, 
-        {
-            "title": "1. Install and onboard the agent for Linux",
-            "description": "Typically, you should install the agent on a different computer from the one on which the logs are generated.\n\n>  Syslog logs are collected only from **Linux** agents.",
-            "instructions": [
-                {
-                    "parameters": {
-                        "title": "Choose where to install the agent:",
-                        "instructionSteps": [
-                            {
-                                "title": "Install agent on Azure Linux Virtual Machine",
-                                "description": "Select the machine to install the agent on and then click **Connect**.",
-                                "instructions": [
-                                    {
-                                        "parameters": {
-                                            "linkType": "InstallAgentOnLinuxVirtualMachine"
-                                        },
-                                        "type": "InstallAgent"
-                                    }
-                                ]
-                            },
-                            {
-                                "title": "Install agent on a non-Azure Linux Machine",
-                                "description": "Download the agent on the relevant machine and follow the instructions.",
-                                "instructions": [
-                                    {
-                                        "parameters": {
-                                            "linkType": "InstallAgentOnLinuxNonAzure"
-                                        },
-                                        "type": "InstallAgent"
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    "type": "InstructionStepsGroup"
+          ],
+          "dataTypes": [
+            {
+              "name": "Syslog",
+              "lastDataReceivedQuery": "Syslog | where Source == 'CTERA' | summarize Time = max(TimeGenerated)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "IsConnectedQuery",
+              "value": "Syslog | where Source == 'CTERA' | summarize LastLogReceived = max(TimeGenerated) | project IsConnected = LastLogReceived > ago(15m)"
+            }
+          ],
+          "availability": {
+            "status": "Production"
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions on the workspace",
+                "providerDisplayName": "Workspace",
+                "requiredPermissions": {
+                  "action": [
+                    "Microsoft.OperationalInsights/workspaces/sharedKeys/read",
+                    "Microsoft.OperationalInsights/workspaces/read",
+                    "Microsoft.OperationalInsights/workspaces/write"
+                  ],
+                  "dataActions": []
                 }
+              }
             ]
-        },
-        {
-            "title": "2. Configure the logs to be collected",
-            "description": "Configure the facilities you want to collect and their severities.\n\n1.  Under workspace advanced settings **Configuration**, select **Data** and then **Syslog**.\n2.  Select **Apply below configuration to my machines** and select the facilities and severities.\n3.  Click **Save**.",
-            "instructions": [
+          },
+          "instructionSteps": [
+            {
+              "title": "Step 1: Connect CTERA Platform to Syslog",
+              "description": "Set up you CTERA portal syslog connection and Edge-Filer Syslog connector",
+              "instructions": [
                 {
-                    "parameters": {
-                        "linkType": "OpenSyslogSettings"
-                    },
-                    "type": "InstallAgent"
-                }
-            ]
-        }
-    ],
-    "metadata": {
-        "id": "Unique Identifier (GUID) used to identify dependencies and content from solutions or community.",
-        "version": "This is an optional field. Default and recommended format for kind value as **community or solutions** is string eg. \"1.0.0\" aligning with solutions which makes it easier to manage the content. Whereas, for kind value as **sourceRepository** the recommended format is numeric (eg. 1, 1.0,1.0.0, etc) aligning to ARM template best practices.",
-        "kind": "dataConnector",
-        "source": {
-            "kind": "source type of the content. Value must be one of these : localWorkspace | community | solution | sourceRepository",
-            "name": "Name of the content source. The repo name, solution name, LA workspace name etc."
-        },
-        "author": {
-            "name": "Name of the author. For localWorkspace it is automatically the workspace user"
-        },
-        "support": {
-            "tier": "Type of support for content item: microsoft | developer | community",
-            "name": "Name of support contact or company",
-            "email": "Optional: Email of support contact",
-            "link":"Optional: Link for support help, like to support page to open a ticket etc"
-        }
-    }
+					"parameters": 
+					{
+						"title": "CTERA Syslog Configuration",
+						"instructionSteps": [
+						{
+							"title": "Porta Syslog connection",
+							"description": "Connect CTERA Portal to syslog server, see intructions https://kb.ctera.com/v1/docs/en/managing-log-settings?highlight=logg "
+						},
+						{
+							"title": "Edge Filer Audit logs",
+							"description": "Enable Audit logs on the desired Edge-filers"
+						},
+						{
+							"title": "Edge-Filer Syslog Service",
+							"description": "Enable Edge-Filer Syslog service, see instructions https://kb.ctera.com/v1/docs/en/setting-up-the-edge-filer-syslog-service-2?highlight=Edge%20Filer%20Syslog"
+						},
+						]
+						}
+					}
+				]
+			},
+			{
+			     "title": "Step 2: Install Azure Monitor Agent (AMA) on Syslog Server",
+					  "description": "Install the Azure Monitor Agent (AMA) on your syslog server to enable data collection.",
+					  "instructions": [
+						{
+						  "parameters": {
+							"title": "Install Azure Monitor Agent",
+							"instructionSteps": [
+							  {
+								"title": "Log in to Azure Portal",
+								"description": "Use your Azure credentials to log in to the Azure Portal."
+							  },
+							  {
+								"title": "Navigate to Azure Arc",
+								"description": "In the Azure Portal, go to 'Azure Arc' and select your connected syslog server."
+							  },
+							  {
+								"title": "Select Extensions",
+								"description": "In the Azure Arc settings for your syslog server, navigate to the 'Extensions' section."
+							  },
+							  {
+								"title": "Add Extension",
+								"description": "Click on 'Add' and select 'Azure Monitor Agent' from the list of available extensions."
+							  },
+							  {
+								"title": "Install AMA",
+								"description": "Follow the prompts to install the Azure Monitor Agent on your syslog server. For detailed instructions, refer to the official documentation: [Install Azure Monitor Agent](https://learn.microsoft.com/en-us/azure/azure-monitor/agents/azure-monitor-agent-manage?tabs=azure-portal)"
+							  }
+							]
+						  }
+						}
+					  ]		
+				
+			}
+			
+	]
 }
+			
