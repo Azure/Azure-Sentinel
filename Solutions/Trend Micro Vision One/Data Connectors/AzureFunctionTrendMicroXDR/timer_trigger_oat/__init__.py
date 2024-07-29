@@ -1,4 +1,4 @@
-# ver: 1.2.1
+# ver: 1.2.2
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple

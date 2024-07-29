@@ -1,36 +1,34 @@
-import os
 import json
 from botocore.config import Config as BotoCoreConfig
 from aiobotocore.session import get_session
 from gzip_stream import AsyncGZIPDecompressedStream
 import re
-from .sentinel_connector import AzureSentinelConnectorAsync
 import aiohttp
 import logging
 import azure.functions as func
 import urllib.parse
+from .. import constants
+from ..sentinel_connector import AzureSentinelConnectorAsync
 
 # Azure config
-AZURE_TENANT_ID = os.environ['AZURE_TENANT_ID']
-AZURE_CLIENT_ID = os.environ['AZURE_CLIENT_ID']
-AZURE_CLIENT_SECRET = os.environ['AZURE_CLIENT_SECRET']
-NORMALIZED_DCE_ENDPOINT = os.environ['DCE_INGESTION_ENDPOINT']
-NORMALIZED_DCR_ID = os.environ['NORMALIZATION_DCR_ID']
-LOG_ANALYTICS_URI = os.environ['LOG_ANALYTICS_URI']
-WORKSPACE_ID = os.environ['WORKSPACE_ID']
-FLOW_LOGS_CUSTOM_TABLE = os.environ.get('FLOW_LOGS_CUSTOM_TABLE', 'Custom-Illumio-Audit-Events_CL')
-AUDIT_LOGS_CUSTOM_TABLE = os.environ.get('AUDIT_LOGS_CUSTOM_TABLE', 'Custom-Illumio--Events_CL')
-LOGS_TO_CONSUME = os.environ.get('LogTypes', 'All') # by default, ingest all
+AZURE_TENANT_ID = constants.AZURE_TENANT_ID
+AZURE_CLIENT_ID = constants.AZURE_CLIENT_ID
+AZURE_CLIENT_SECRET = constants.AZURE_CLIENT_SECRET
+DCE_ENDPOINT = constants.DCE_ENDPOINT
+DCR_ID = constants.DCR_ID
+LOG_ANALYTICS_URI = constants.LOG_ANALYTICS_URI
+WORKSPACE_ID = constants.WORKSPACE_ID
+FLOW_LOGS_CUSTOM_TABLE = constants.FLOW_LOGS_CUSTOM_TABLE
+AUDIT_LOGS_CUSTOM_TABLE = constants.AUDIT_LOGS_CUSTOM_TABLE
+LOGS_TO_CONSUME = constants.LOGS_TO_CONSUME
 
 # AWS config
-AWS_KEY = os.environ['AWS_KEY']
-AWS_SECRET = os.environ['AWS_SECRET']
-AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
-QUEUE_URL = os.environ['QUEUE_URL']
+AWS_KEY = constants.AWS_KEY
+AWS_SECRET = constants.AWS_SECRET
+AWS_REGION_NAME = constants.AWS_REGION_NAME
 VISIBILITY_TIMEOUT = 1800
-LINE_SEPARATOR = os.environ.get('lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
-MAX_SCRIPT_EXEC_TIME_MINUTES = int(os.environ.get('MAX_SCRIPT_EXEC_TIME_MINUTES', 10))
-MAX_CONCURRENT_PROCESSING_FILES = 100
+LINE_SEPARATOR = constants.LINE_SEPARATOR
+MAX_SCRIPT_EXEC_TIME_MINUTES = constants.MAX_SCRIPT_EXEC_TIME_MINUTES
 
 # Defining the S3 Client object based on AWS Credentials
 def _create_s3_client():
@@ -66,7 +64,7 @@ async def _generate_sentinel_connectors(session):
         stream_names.append(FLOW_LOGS_CUSTOM_TABLE)
 
     for stream in stream_names:
-        sentinel_connectors[stream] = AzureSentinelConnectorAsync(session, NORMALIZED_DCE_ENDPOINT, NORMALIZED_DCR_ID, stream, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)    
+        sentinel_connectors[stream] = AzureSentinelConnectorAsync(session, DCE_ENDPOINT, DCR_ID, stream, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)    
     
     return sentinel_connectors
 
@@ -75,6 +73,7 @@ async def main(msg: func.QueueMessage ):
     try:            
         total_events = 0
         accumulated_file_size = 0
+        sqs_ids_seen_so_far = 0
         # stores the connection objects that can be reused when uploading events to specific tables
         sentinel_connectors = {}
         # initialize sentinel_connectors
@@ -103,6 +102,7 @@ async def main(msg: func.QueueMessage ):
             if fileToBeFiltered(link):
                 continue
             
+            sqs_ids_seen_so_far += 1
             stream_name = AUDIT_LOGS_CUSTOM_TABLE if 'auditable' in link else FLOW_LOGS_CUSTOM_TABLE                        
 
             file_stats = {"Trigger":"Queue", "stream_name":stream_name, "Type":"file_stats", "link": link, "bucket": bucket, "sqs_message_id": messageId, "file_size_bytes": file_size}        
@@ -119,7 +119,7 @@ async def main(msg: func.QueueMessage ):
         # ensure data is flushed at the end in case queue limit of 4000 is not reached
         for connector in sentinel_connectors.keys():
             await sentinel_connectors[connector].flush()
-        event_stats = {"Trigger":"Queue", "Type":"event_stats", "total_events": total_events, "file_count": len(body), "aggregated_file_size": accumulated_file_size}
+        event_stats = {"Trigger":"Queue", "Type":"event_stats", "total_events": total_events, "sqs_ids_seen_so_far": sqs_ids_seen_so_far, "aggregated_file_size": accumulated_file_size}
         logging.info(json.dumps(event_stats))
 
 
