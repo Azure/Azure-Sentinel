@@ -1,225 +1,231 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "parameters": {
-      "location": {
-        "type": "string",
-        "defaultValue": "[resourceGroup().location]",
-        "metadata": {
-          "description": "Location for all resources."
-        }
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmName": {
+      "type": "string",
+      "defaultValue": "criblStreamVMNew",
+      "metadata": {
+        "description": "Name of the virtual machine"
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Admin username for the virtual machine"
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Admin password for the virtual machine"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    }
+  },
+  "variables": {
+    "networkInterfaceName": "[concat(parameters('vmName'), '-nic')]",
+    "virtualNetworkName": "[concat(parameters('vmName'), '-vnet')]",
+    "subnetName": "default",
+    "publicIPAddressName": "[concat(parameters('vmName'), '-pip')]",
+    "nsgName": "[concat(parameters('vmName'), '-nsg')]",
+    "vmSize": "Standard_DS2_v2"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('virtualNetworkName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('subnetName')]",
+            "properties": {
+              "addressPrefix": "10.0.0.0/24"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('nsgName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "SSH",
+            "properties": {
+              "priority": 1000,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefix": "*",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "22"
+            }
+          },
+          {
+            "name": "Port_9000",
+            "properties": {
+              "priority": 1100,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefix": "*",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "9000"
+            }
+          },
+          {
+            "name": "Port_4200",
+            "properties": {
+              "priority": 1200,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefix": "*",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "4200"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('publicIPAddressName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Basic"
       },
-      "vmSize": {
-        "type": "string",
-        "defaultValue": "Standard_DS1_v2",
-        "metadata": {
-          "description": "Size of the VM."
-        }
-      },
-      "adminUsername": {
-        "type": "string",
-        "metadata": {
-          "description": "Admin username for the VM."
-        }
-      },
-      "adminPassword": {
-        "type": "securestring",
-        "metadata": {
-          "description": "Admin password for the VM."
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('networkInterfaceName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]"
+              },
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('subnetName'))]"
+              }
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
         }
       }
     },
-    "resources": [
-      {
-        "type": "Microsoft.Network/publicIPAddresses",
-        "apiVersion": "2020-11-01",
-        "name": "myPublicIP",
-        "location": "[parameters('location')]",
-        "properties": {
-          "publicIPAllocationMethod": "Dynamic"
-        }
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2021-11-01",
+      "name": "[parameters('vmName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+      ],
+      "plan": {
+        "name": "criblstream",
+        "publisher": "criblinc1673975616879",
+        "product": "cribl_stream_vm"
       },
-      {
-        "type": "Microsoft.Network/loadBalancers",
-        "apiVersion": "2020-11-01",
-        "name": "myLoadBalancer",
-        "location": "[parameters('location')]",
-        "properties": {
-          "frontendIPConfigurations": [
-            {
-              "name": "LoadBalancerFrontEnd",
-              "properties": {
-                "publicIPAddress": {
-                  "id": "[resourceId('Microsoft.Network/publicIPAddresses', 'myPublicIP')]"
-                }
-              }
-            }
-          ],
-          "backendAddressPools": [
-            {
-              "name": "myBackendPool"
-            }
-          ],
-          "loadBalancingRules": [
-            {
-              "name": "LoadBalancingRule1",
-              "properties": {
-                "frontendIPConfiguration": {
-                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'myLoadBalancer'), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
-                },
-                "backendAddressPool": {
-                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'myLoadBalancer'), '/backendAddressPools/myBackendPool')]"
-                },
-                "protocol": "Tcp",
-                "frontendPort": 80,
-                "backendPort": 80,
-                "enableFloatingIP": false,
-                "idleTimeoutInMinutes": 4,
-                "loadDistribution": "Default",
-                "probe": {
-                  "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'myLoadBalancer'), '/probes/myProbe')]"
-                }
-              }
-            }
-          ],
-          "probes": [
-            {
-              "name": "myProbe",
-              "properties": {
-                "protocol": "Tcp",
-                "port": 80,
-                "intervalInSeconds": 5,
-                "numberOfProbes": 2
-              }
-            }
-          ]
-        }
-      },
-      {
-        "type": "Microsoft.Network/networkSecurityGroups",
-        "apiVersion": "2020-11-01",
-        "name": "myNetworkSecurityGroup",
-        "location": "[parameters('location')]",
-        "properties": {
-          "securityRules": [
-            {
-              "name": "AllowPort9000",
-              "properties": {
-                "protocol": "Tcp",
-                "sourcePortRange": "*",
-                "destinationPortRange": "9000",
-                "sourceAddressPrefix": "*",
-                "destinationAddressPrefix": "*",
-                "access": "Allow",
-                "priority": 1000,
-                "direction": "Inbound"
-              }
-            },
-            {
-              "name": "AllowPort4200",
-              "properties": {
-                "protocol": "Tcp",
-                "sourcePortRange": "*",
-                "destinationPortRange": "4200",
-                "sourceAddressPrefix": "*",
-                "destinationAddressPrefix": "*",
-                "access": "Allow",
-                "priority": 1001,
-                "direction": "Inbound"
-              }
-            }
-          ]
-        }
-      },
-      {
-        "type": "Microsoft.Network/virtualNetworks",
-        "apiVersion": "2020-11-01",
-        "name": "myVnet",
-        "location": "[parameters('location')]",
-        "properties": {
-          "addressSpace": {
-            "addressPrefixes": [
-              "10.0.0.0/16"
-            ]
-          },
-          "subnets": [
-            {
-              "name": "mySubnet",
-              "properties": {
-                "addressPrefix": "10.0.0.0/24",
-                "networkSecurityGroup": {
-                  "id": "[resourceId('Microsoft.Network/networkSecurityGroups', 'myNetworkSecurityGroup')]"
-                }
-              }
-            }
-          ]
-        }
-      },
-      {
-        "type": "Microsoft.Compute/virtualMachineScaleSets",
-        "apiVersion": "2020-12-01",
-        "name": "myVMSS",
-        "location": "[parameters('location')]",
-        "sku": {
-          "tier": "Standard",
-          "capacity": 2,
-          "name": "[parameters('vmSize')]"
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[variables('vmSize')]"
         },
-        "properties": {
-          "upgradePolicy": {
-            "mode": "Manual"
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "criblinc1673975616879",
+            "offer": "cribl_stream_vm",
+            "sku": "criblstream",
+            "version": "latest"
           },
-          "virtualMachineProfile": {
-            "storageProfile": {
-              "imageReference": {
-                "publisher": "cribl",
-                "offer": "cribl-stream",
-                "sku": "cribl-stream",
-                "version": "latest"
-              },
-              "osDisk": {
-                "createOption": "FromImage"
-              }
+          "osDisk": {
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
             },
-            "osProfile": {
-              "computerNamePrefix": "criblvm",
-              "adminUsername": "[parameters('adminUsername')]",
-              "adminPassword": "[parameters('adminPassword')]"
-            },
-            "networkProfile": {
-              "networkInterfaceConfigurations": [
-                {
-                  "name": "myNicConfig",
-                  "properties": {
-                    "primary": true,
-                    "ipConfigurations": [
-                      {
-                        "name": "myIPConfig",
-                        "properties": {
-                          "subnet": {
-                            "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'myVnet', 'mySubnet')]"
-                          },
-                          "loadBalancerBackendAddressPools": [
-                            {
-                              "id": "[concat(resourceId('Microsoft.Network/loadBalancers', 'myLoadBalancer'), '/backendAddressPools/myBackendPool')]"
-                            }
-                          ]
-                        }
-                      }
-                    ]
-                  }
-                }
-              ]
+            "diskSizeGB": 30
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
             }
-          },
-          "overprovision": true
+          ]
         }
       }
-    ],
-    "outputs": {
-      "adminUsername": {
-        "type": "string",
-        "value": "[parameters('adminUsername')]"
+    },
+    {
+      "type": "Microsoft.Insights/autoscalesettings",
+      "apiVersion": "2021-05-01-preview",
+      "name": "[concat(parameters('vmName'), '-autoscale')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      ],
+      "properties": {
+        "name": "[concat(parameters('vmName'), '-autoscale')]",
+        "targetResourceUri": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]",
+        "enabled": true,
+        "profiles": [
+          {
+            "name": "defaultProfile",
+            "capacity": {
+              "minimum": "1",
+              "maximum": "1",
+              "default": "1"
+            },
+            "rules": []
+          }
+        ]
       }
     }
+  ],
+  "outputs": {
+    "adminUsername": {
+      "type": "string",
+      "value": "[parameters('adminUsername')]"
+    }
   }
+}
