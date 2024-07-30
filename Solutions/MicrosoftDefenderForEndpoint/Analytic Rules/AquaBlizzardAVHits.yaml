@@ -27,21 +27,32 @@ query: |
   | where ThreatName_ has_any (AVHits)
   | extend Directory = tostring(parse_json(Entities)[0].Directory), SHA256 = tostring(parse_json(tostring(parse_json(Entities)[0].FileHashes))[2].Value), FileName = tostring(parse_json(Entities)[0].Name), Hostname = tostring(parse_json(Entities)[6].FQDN)| extend AccountName = tostring(parse_json(tostring(parse_json(Entities)[6].LoggedOnUsers))[0].AccountName)
   | project TimeGenerated, AlertName, ThreatName_, ProviderName, AlertSeverity, Description, RemediationSteps, ExtendedProperties, Entities, FileName,SHA256, Directory, Hostname, AccountName
-  | extend timestamp = TimeGenerated, HostCustomEntity = Hostname , AccountCustomEntity = AccountName,  FileHashCustomEntity = SHA256, FileHashType = "SHA256"
+  | extend FileHash = SHA256, FileHashType = "SHA256"
+  | extend Name = tostring(split(AccountName, "@")[0]), AccountUPNSuffix = tostring(split(AccountName, "@")[1])
+  | extend Host = tostring(split(Hostname, ".")[0]), DomainIndex = toint(indexof(Hostname, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Hostname, DomainIndex + 1), Hostname)
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: AccountName
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Hostname
+      - identifier: HostName
+        columnName: Name
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: FileHash
     fieldMappings:
       - identifier: Algorithm
         columnName: FileHashType
       - identifier: Value
-        columnName: FileHashCustomEntity
-version: 1.0.1
+        columnName: FileHash
+version: 1.0.2
 kind: Scheduled
