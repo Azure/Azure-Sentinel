@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimNetworkSessionAzureNSG",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM filtering parser for Azure NSG flows",
+            "category": "ASIM",
+            "FunctionAlias": "vimNetworkSessionAzureNSG",
+            "query": "let DvcActionLookup = datatable(FlowStatus_s:string, DvcAction:string, EventResult:string) [\n    'A', 'Allow', 'Success',\n    'D', 'Deny', 'Failure',\n];\nlet NetworkDirectionLookup = datatable(FlowDirection_s:string, NetworkDirection:string, isOutBound:bool) [\n    'I', 'Inbound', false,\n    'O', 'Outbound', true\n];\nlet NetworkProtocolLookup = datatable(L4Protocol_s:string, NetworkProtocol:string)[\n    'T', 'TCP',\n    'U', 'UDP'\n];\nlet parser = (\n      starttime:datetime=datetime(null), \n      endtime:datetime=datetime(null),\n      srcipaddr_has_any_prefix:dynamic=dynamic([]), \n      dstipaddr_has_any_prefix:dynamic=dynamic([]), \n      ipaddr_has_any_prefix:dynamic=dynamic([]),\n      dstportnumber:int=int(null), \n      hostname_has_any:dynamic=dynamic([]), \n      dvcaction:dynamic=dynamic([]), \n      eventresult:string='*', \n      disabled:bool=false)\n{\n  let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); \n  let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); \n  let prefilter = (T:(TimeGenerated:datetime, SrcIP_s:string, SrcPublicIPs_s:string, DestIP_s:string, DestPublicIPs_s:string, DestPort_d:real, FlowStatus_s:string, VM1_s:string, VM2_s:string)) { \n    T\n    | where\n      (isnull(dstportnumber) or dstportnumber == toint(DestPort_d)) \n    | extend dataSrcIPs = strcat(SrcIP_s,\" \",SrcPublicIPs_s),\n             dataDstIPs = strcat(DestIP_s,\" \",DestPublicIPs_s)\n    | extend temp_isSrcMatch=has_any_ipv4_prefix(dataSrcIPs,src_or_any)\n           , temp_isDstMatch=has_any_ipv4_prefix(dataDstIPs,dst_or_any)\n    | extend ASimMatchingIpAddr = case(\n          array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, \"-\" // match not requested: probably most common case\n          , (temp_isSrcMatch and temp_isDstMatch), \"Both\" // has to be checked before the individual \n          , temp_isSrcMatch, \"SrcIpAddr\"\n          , temp_isDstMatch, \"DstIpAddr\"\n          , \"No match\"\n        )\n    | where ASimMatchingIpAddr != \"No match\"\n    | extend temp_is_MatchSrcHostname = VM1_s has_any (hostname_has_any)\n            , temp_is_MatchDstHostname = VM2_s has_any (hostname_has_any)\n    | extend ASimMatchingHostname = case(array_length(hostname_has_any) == 0 ,\"-\",\n                                temp_is_MatchSrcHostname and temp_is_MatchDstHostname, \"Both\",\n                                temp_is_MatchSrcHostname, \"SrcHostname\",\n                                temp_is_MatchDstHostname, \"DstHostname\",\n                                \"No match\"\n                              )\n    | where ASimMatchingHostname != \"No match\"\n    | project-away temp_*\n    | lookup DvcActionLookup on FlowStatus_s\n    | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)\n    | where (eventresult=='*' or EventResult == eventresult)\n  }; // prefilter ends\n  let AzureNetworkAnalytics = \n    AzureNetworkAnalytics_CL\n    | where\n     (isnull(starttime) or TimeGenerated >= starttime)\n      and  (isnull(endtime) or TimeGenerated <= endtime)\n    | where not(disabled) and isnotempty(FlowType_s)\n    | lookup NetworkDirectionLookup on FlowDirection_s\n  ;\n  let AzureNetworkAnalyticsInbound =\n    AzureNetworkAnalytics\n    | where not(isOutBound)\n    | invoke prefilter()\n    | project-rename\n        DstMacAddr = MACAddress_s\n    | extend\n        DstBytes = tolong(OutboundBytes_d), // -- size fields seem not to be populated for inbound\n        DstPackets = tolong(OutboundPackets_d),\n        SrcBytes = tolong(InboundBytes_d),\n        SrcPackets = tolong(InboundPackets_d),\n        SrcInterfaceName = tostring(split(NIC_s, '/')[1]),\n        SrcGeoCountry = toupper(Country_s)\n    | extend hostelements=split(VM2_s,'/')\n    | extend \n        DstFQDN = strcat(hostelements[0], @\"\\\", hostelements[1]),\n        DstHostname = tostring(hostelements[1]),\n        DstDomain = tostring(hostelements[0]),\n        DstDomainType = \"ResourceGroup\"\n    | extend Hostname = DstHostname\n    | project-away hostelements, isOutBound\n  ;  \n  let AzureNetworkAnalyticsOutbound =\n    AzureNetworkAnalytics\n    | where isOutBound\n    | invoke prefilter()\n    | project-rename\n        SrcMacAddr = MACAddress_s\n    | extend\n        SrcBytes   = tolong(OutboundBytes_d), \n        SrcPackets = tolong(OutboundPackets_d),\n        DstBytes   = tolong(InboundBytes_d),\n        DstPackets = tolong(InboundPackets_d),\n        DstInterfaceName = tostring(split(NIC_s, '/')[1]),\n        DstGeoCountry = toupper(Country_s)\n    | extend hostelements=split(VM1_s,'/')\n    | extend \n        SrcFQDN = strcat(hostelements[0], @\"\\\", hostelements[1]),\n        SrcHostname = tostring(hostelements[1]),\n        SrcDomain = tostring(hostelements[0]),\n        SrcDomainType = \"ResourceGroup\"\n    | extend Hostname = SrcHostname\n    | project-away hostelements, isOutBound\n  ;\n  union AzureNetworkAnalyticsInbound, AzureNetworkAnalyticsOutbound\n  | project-rename\n      Dvc = NSGList_s,\n      DvcSubscriptionId = Subscription_g,\n      EventEndTime = FlowEndTime_t,\n      EventStartTime = FlowStartTime_t,\n      NetworkApplicationProtocol = L7Protocol_s,\n      NetworkRuleName = NSGRule_s,\n      NetworkSessionId = ConnectionName_s,\n      EventOriginalSubType = FlowType_s\n  | extend\n      DstPortNumber = toint(DestPort_d),\n      EventProduct = 'NSGFlow',\n      EventSchema = 'NetworkSession',\n      EventSchemaVersion='0.2.3',\n      EventSeverity = 'Informational', //??\n      EventType = 'Flow',\n      EventVendor = 'Microsoft',\n      EventCount = toint(AllowedInFlows_d+DeniedInFlows_d+AllowedOutFlows_d+DeniedOutFlows_d),\n      NetworkDuration = toint((((EventEndTime - datetime(1970-01-01)) / 1s) - ((EventStartTime - datetime(1970-01-01)) / 1s )) * 1000),\n      Rule = NetworkRuleName,\n      SessionId = NetworkSessionId\n  | extend \n      DstIpAddr = iff(isnotempty(DestIP_s),\n                      DestIP_s,\n                      split(DestPublicIPs_s, '|')[0]),\n      Duration = NetworkDuration,\n      NetworkBytes = tolong(DstBytes + SrcBytes),\n      NetworkPackets = tolong(DstPackets + SrcPackets),\n      SrcIpAddr = iff(isnotempty(SrcIP_s),\n                      SrcIP_s,\n                      split(SrcPublicIPs_s, '|')[0])\n  | extend\n      Dst = DstIpAddr,\n      IpAddr = SrcIpAddr,\n      Src = SrcIpAddr\n  | lookup NetworkProtocolLookup on L4Protocol_s\n  | project-keep\n      Src*,\n      Dst*,\n      Event*,\n      Dvc*,\n      Network*,\n      IpAddr,\n      Hostname,\n      Type,\n      Duration,\n      SessionId,\n      _ResourceId,\n      TimeGenerated,\n      ASim*\n  | project-away *_s\n};\nparser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),dstipaddr_has_any_prefix:dynamic=dynamic([]),ipaddr_has_any_prefix:dynamic=dynamic([]),dstportnumber:int=int(null),hostname_has_any:dynamic=dynamic([]),dvcaction:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}
