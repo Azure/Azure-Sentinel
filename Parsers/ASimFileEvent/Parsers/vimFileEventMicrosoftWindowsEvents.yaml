@@ -1,7 +1,7 @@
 Parser:
   Title: File Event ASIM filtering parser for Microsoft Windows Events
-  Version: "0.1.3"
-  LastUpdated: Oct 31, 2023
+  Version: "0.2.0"
+  LastUpdated: Jul 23, 2024
 Product:
   Name: Microsoft Windows Events
 Normalization:
@@ -13,7 +13,7 @@ References:
   - Title: ASIM
     Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
+  This ASIM parser supports normalizing Microsoft Windows Events (WindowsEvent and SecurityEvent tables) logs ingested in 'WindowsEvent' table to the ASIM File Event normalized schema. Event IDs which are parsed as part of this parser: 4663
 ParserName: vimFileEventMicrosoftWindowsEvents
 EquivalentBuiltInParser: _Im_FileEvent_MicrosoftWindowsEvents
 ParserParams:
@@ -98,11 +98,11 @@ ParserQuery: |
       'S-1-5-18', 'Local System', 'Simple',
       'S-1-0-0', 'Nobody', 'Simple'
   ];
-      union isfuzzy=false
-          (WindowsEvent
+      WindowsEvent
           | where EventID == 4663 
               and EventData.ObjectType == "File"
               and EventData.ObjectName !startswith @"\Device\"
+          | extend ActorUserIdType="SID", TargetFilePathType="Windows Local"
           | project
               TimeGenerated
               ,
@@ -128,34 +128,8 @@ ParserQuery: |
               SubjectLogonId = tostring(EventData.SubjectLogonId)
               ,
               HandleId = tostring(EventData.HandleId)
-          )
-          ,
-          (SecurityEvent
-          | where not(disabled)
-          | where (isnull(starttime) or TimeGenerated >= starttime) 
-              and (isnull(endtime) or TimeGenerated <= endtime)
-          | where EventID == 4663 
-              and ObjectType == "File"
-              and ObjectName !startswith @"\Device\"
-          | where (array_length(srcipaddr_has_any_prefix) == 0) and 
-              ((array_length(targetfilepath_has_any) == 0) or (ObjectName has_any (targetfilepath_has_any))) and 
-              (array_length(srcfilepath_has_any) == 0) and
-              (array_length(hashes_has_any) == 0) and 
-              (array_length(dvchostname_has_any) == 0 or Computer has_any (dvchostname_has_any))
-          | project
-              TimeGenerated,
-              EventID,
-              AccessMask,
-              ProcessName,
-              SubjectUserSid,
-              AccountType,
-              Computer,
-              ObjectName,
-              ProcessId,
-              SubjectUserName,
-              SubjectAccount,
-              SubjectLogonId,
-              HandleId)
+              ,
+              Type
       | lookup EventTypeLookup on AccessMask
       | where ((array_length(eventtype_in) == 0 or EventType in~ (eventtype_in)))
       | lookup UserTypeLookup on AccountType
@@ -179,7 +153,7 @@ ParserQuery: |
           ,
           EventOriginalType = tostring(EventID)
     | where (array_length(actorusername_has_any) == 0) or (ActorUsername has_any (actorusername_has_any))
-      | project-away EventID, ProcessId, AccountType, type, username
+      | project-away EventID, ProcessId, AccountType, username
       | project-rename
           ActorUserId = SubjectUserSid
           ,
@@ -212,6 +186,9 @@ ParserQuery: |
           User = ActorUsername
           ,
           ActorUserSid = ActorUserId
+          , ActorUserIdType="SID"
+          , TargetFilePathType="Windows Local"
+          | project-away AccessMask,ActorWindowsUsername,FileSessionId,SubjectAccount,SubjectUserName,TargetFilePathFormat,type
   };
   Parser (
       starttime=starttime, 
