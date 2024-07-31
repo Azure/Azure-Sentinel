@@ -1,0 +1,186 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspaceName": {
+            "type": "String",
+            "metadata": {
+                "description": "Specify the name of the Log Analytics workspace to use"
+            }
+        },
+        "workspaceLocation": {
+            "defaultValue": "eastus",
+            "type": "String",
+            "metadata": {
+                "description": "Specify the location of the Log Analytics workspace"
+            }
+        },
+        "dceName": {
+            "defaultValue": "CommonSecurityLog-DCE",
+            "type": "String",
+            "metadata": {
+                "description": "Specify the name of the Data Collection Endpoint to create."
+            }
+        },
+        "dcrName": {
+            "defaultValue": "CommonSecurityLog-DCR",
+            "type": "String",
+            "metadata": {
+                "description": "Specify the name of the new Data Collection Rule to create."
+            }
+        },
+        "tableName": {
+            "defaultValue": "CommonSecurityLog_CL",
+            "type": "String",
+            "metadata": {
+                "description": "Specify the name of the new Table to be created."
+            }
+        }
+    },
+    "variables": {
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "streamName": "[concat('Custom-LS-', parameters('tableName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-04-01",
+            "name": "[parameters('dceName')]",
+            "location": "[parameters('workspaceLocation')]",
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2023-01-01-preview",
+            "name": "[concat(parameters('workspaceName'), '/', parameters('tableName'))]",
+            "properties": {
+                "totalRetentionInDays": 365,
+                "plan": "Bronze",
+                "schema": {
+                    "name": "[parameters('tableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "DateTime"
+                        },
+                        {
+                            "name": "Activity",
+                            "type": "String"
+                        },
+                        {
+                            "name": "Message",
+                            "type": "String"
+                        },
+                        {
+                            "name": "DeviceVendor",
+                            "type": "String"
+                        },
+                        {
+                            "name": "CefVersion",
+                            "type": "String"
+                        },
+                        {
+                            "name": "DeviceProduct",
+                            "type": "String"
+                        },
+                        {
+                            "name": "DeviceVersion",
+                            "type": "String"
+                        },
+                        {
+                            "name": "DeviceEventClassID",
+                            "type": "String"
+                        },
+                        {
+                            "name": "LogSeverity",
+                            "type": "int"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": "[parameters('dcrName')]",
+            "location": "[parameters('workspaceLocation')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), parameters('tableName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dceName'))]",
+                "streamDeclarations": {
+                    "[variables('streamName')]": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "Activity",
+                                "type": "string"
+                            },
+                            {
+                                "name": "LogSeverity",
+                                "type": "int"
+                            },
+                            {
+                                "name": "CefVersion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "DeviceVendor",
+                                "type": "string"
+                            },
+                            {
+                                "name": "DeviceProduct",
+                                "type": "string"
+                            },
+                            {
+                                "name": "DeviceVersion",
+                                "type": "string"
+                            },
+                            {
+                                "name": "DeviceEventClassID",
+                                "type": "string"
+                            },
+                            {
+                                "name": "LogstashVersion",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "Message",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceId')]",
+                            "name": "a0a5da686d984599a9a204f41c87cf12"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('streamName')]"
+                        ],
+                        "destinations": [
+                            "a0a5da686d984599a9a204f41c87cf12"
+                        ],
+                        "outputStream": "[concat('Custom-', parameters('tableName'))]"
+                    }
+                ]
+            }
+        }
+    ]
+}
