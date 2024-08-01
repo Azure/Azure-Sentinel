@@ -2,7 +2,7 @@
 
 ## Summary
 
-This playbook resolves the assignment for an entity in Vectra and adds a note for the assignment when the status of an incident is changed to 'closed', and also it triages all active detections associated with the entity while applying the Sentinel incident ID as the triage label.
+This playbook resolves the assignment for an entity in Vectra and adds a note for the assignment when the status of an incident is changed to 'closed', and also it triages all active detections associated with the entity while applying the Microsoft Sentinel incident ID as the triage label.
 
 ### Prerequisites
 
