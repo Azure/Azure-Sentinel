@@ -44,6 +44,7 @@ try
             # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
             if ($isPRMerged) {
                 $masterMergeCommitId = git log --format="%H" --merges --grep="Merge pull request #$pullRequestNumber" master
+                Write-Host "masterMergeCommitId $masterMergeCommitId"
                 $diff = git diff --diff-filter=d --name-only $masterMergeCommitId^ $masterMergeCommitId
             } else {
                 $masterMergeCommit = git show -s --format='%s' -1
