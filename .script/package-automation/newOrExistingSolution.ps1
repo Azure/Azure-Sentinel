@@ -39,8 +39,13 @@ else {
         #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
         if ($isPRMerged) {
             $masterMergeCommitId = git log --format="%H" --merges --grep="Merge pull request #$pullRequestNumber" master
-            Write-Host "masterMergeCommitId $masterMergeCommitId"
-            $diff = git diff --diff-filter=d --name-only $masterMergeCommitId^ $masterMergeCommitId
+            if ($null -ne $masterMergeCommitId) {
+                Write-Host "masterMergeCommitId $masterMergeCommitId"
+                $diff = git diff --diff-filter=d --name-only $masterMergeCommitId^ $masterMergeCommitId
+            } else {
+                Write-Host "PR not merged into master!"
+                exit 0;
+            }
         } else {
             $masterMergeCommit = git show -s --format='%s' -1
             Write-Host "masterMergeCommit $masterMergeCommit"
