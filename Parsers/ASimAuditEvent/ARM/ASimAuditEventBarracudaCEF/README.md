@@ -2,7 +2,7 @@
 
 ARM template for ASIM AuditEvent schema parser for Barracuda WAF.
 
-This ASIM parser supports normalizing Barracuda WAF logs ingested in 'CommonSecurityLog' table to the ASIM Audit Event schema.
+This ASIM parser supports normalizing Barracuda WAF logs ingested in 'CommonSecurityLog' table to the ASIM Audit Event schema test.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
