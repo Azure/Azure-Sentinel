@@ -1,7 +1,7 @@
 Parser:
   Title: Audit Event ASIM parser for Barracuda WAF
-  Version: '0.1'
-  LastUpdated: Jun 13 2023
+  Version: '0.2.1'
+  LastUpdated: Jun 12, 2024
 Product:
   Name: Barracuda WAF
 Normalization:
@@ -15,7 +15,7 @@ References:
 - Title: Logs type Description in Barracuda WAF
   Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
 Description: |
-  This ASIM parser supports normalizing Barracuda WAF to the ASIM Audit Event schema.
+  This ASIM parser supports normalizing Barracuda WAF logs ingested in 'barracuda_CL' table to the ASIM Audit Event schema.
 ParserName: ASimAuditEventBarracudaWAF
 EquivalentBuiltInParser: _ASim_AuditEvent_BarracudaWAF
 ParserParams:
@@ -127,7 +127,7 @@ ParserQuery: |
               OldValue = OldValue_s,
               DvcHostname = host_s,
               ActorUsername = AdminName_s,
-              Object = ObjectName_s        
+              Object = ObjectName_s      
           | extend
               Src = SrcIpAddr,
               EventEndTime = EventStartTime,
@@ -154,95 +154,6 @@ ParserQuery: |
               TenantId,
               SourceSystem
           );
-      let BarracudaCEF = 
-          CommonSecurityLog
-          | where not(disabled)
-              and DeviceVendor startswith "Barracuda"
-              and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
-          | where DeviceEventCategory == "AUDIT" 
-              and (toupper(ProcessName) !in ("LOGIN", "LOGOUT", "UNSUCCESSFUL_LOGIN"))
-          | parse trim(@'[^\w(")]+', Message) with * "Reason=" Reason: string 
-          | extend Reason = trim('"', Reason)
-          | extend 
-              EventResultDetails = Reason,
-              severity = toint(LogSeverity)
-          | lookup SeverityLookup on severity
-          | lookup EventTypeLookup on $left.EventOutcome == $right.ChangeType_s
-          | lookup ObjectTypeLookup on $left.FileType == $right.ObjectType_s
-          | extend
-              EventResult = "Success", 
-              EventSchema = "AuditEvent",
-              EventSchemaVersion = "0.1.0",
-              EventVendor = "Barracuda",
-              EventProduct = "WAF",
-              EventCount = toint(1)
-          | extend
-              EventType = EventType_lookup,
-              Dvc = DeviceName, 
-              EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime) - tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
-              Operation = ProcessName,
-              DvcIpAddr = DeviceAddress,
-              NewValue = DeviceCustomString1,
-              SrcIpAddr = SourceIP,
-              EventMessage = Message,
-              OldValue = DeviceCustomString2,
-              DvcHostname = DeviceName,
-              ActorUsername = DestinationUserName,
-              Object = FileName,
-              ThreatConfidence = toint(ThreatConfidence)     
-          | extend
-              Src = SrcIpAddr,
-              EventEndTime = EventStartTime,
-              ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
-              ActorUserType = iff(isnotempty(ActorUsername), "Admin", ""),
-              User = ActorUsername,
-              Value = NewValue 
-          | extend
-              IpAddr = SrcIpAddr,
-              ValueType = iff(isnotempty(Value), "Other", "")
-          | project-away
-              EventType_lookup,
-              ThreatConfidence,
-              CommunicationDirection,
-              AdditionalExtensions,
-              Device*,
-              Source*,
-              Reason,
-              Destination*,
-              Activity,
-              LogSeverity,
-              ApplicationProtocol,
-              ProcessID,
-              ExtID,
-              Protocol,
-              ReceiptTime,
-              SimplifiedDeviceAction,
-              OriginalLogSeverity,
-              ProcessName,
-              EndTime,
-              ExternalID,
-              File*,
-              ReceivedBytes,
-              Message,
-              Old*,
-              EventOutcome,
-              Request*,
-              StartTime,
-              Field*,
-              Flex*,
-              Remote*,
-              Malicious*,
-              severity,
-              ThreatSeverity,
-              IndicatorThreatType,
-              ThreatDescription,
-              _ResourceId,
-              SentBytes,
-              ReportReferenceLink,
-              Computer,
-              TenantId;
-      union isfuzzy = true 
-          BarracudaCustom,
-          BarracudaCEF
+      BarracudaCustom
   };
   parser(disabled=disabled)
