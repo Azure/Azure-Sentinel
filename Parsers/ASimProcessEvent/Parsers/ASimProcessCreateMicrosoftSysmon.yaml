@@ -21,40 +21,40 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: | 
-  let parser = (disabled:bool = false) {
-    // this is the parser for sysmon from Event table
-    let parser_Event = (disabled:bool=false) {
-    Event 
-      | where not(disabled)
-      | where Source == "Microsoft-Windows-Sysmon" and EventID==1
-      | parse-kv EventData as (
-            ProcessGuid:string, 
-            ProcessId:string,
-            Image:string,
-            FileVersion:string,
-            Description:string,
-            Product:string,
-            Company:string,
-            OriginalFileName:string,
-            CommandLine:string,
-            CurrentDirectory:string,
-            User:string,
-            LogonGuid:string, 
-            LogonId:string,
-            IntegrityLevel:string,
-            Hashes:string,
-            ParentProcessGuid:string, 
-            ParentProcessId:string,
-            ParentImage:string,
-            ParentCommandLine:string,
-            ParentUser:string
-          ) 
-          with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-        | parse-kv Hashes as (MD5:string, SHA1:string, SHA256:string, IMPHASH:string) with (quote='"')
+  let parser = (disabled: bool = false) {
+      // this is the parser for sysmon from Event table
+      let parser_Event =
+        Event 
+        | where not(disabled)
+        | where Source == "Microsoft-Windows-Sysmon" and EventID == 1
+        | parse-kv EventData as (
+            ProcessGuid: string, 
+            ProcessId: string,
+            Image: string,
+            FileVersion: string,
+            Description: string,
+            Product: string,
+            Company: string,
+            OriginalFileName: string,
+            CommandLine: string,
+            CurrentDirectory: string,
+            User: string,
+            LogonGuid: string, 
+            LogonId: string,
+            IntegrityLevel: string,
+            Hashes: string,
+            ParentProcessGuid: string, 
+            ParentProcessId: string,
+            ParentImage: string,
+            ParentCommandLine: string,
+            ParentUser: string
+            ) 
+            with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+        | parse-kv Hashes as (MD5: string, SHA1: string, SHA256: string, IMPHASH: string) with (quote='"')
         | extend
             Hash = coalesce (SHA256, SHA1, IMPHASH, MD5, "")
         | extend
-            HashType = tostring(dynamic(["SHA256", "SHA1", "IMPHASH", "MD5"])[array_index_of(pack_array(SHA256, SHA1, IMPHASH, MD5),Hash)])
+            HashType = tostring(dynamic(["SHA256", "SHA1", "IMPHASH", "MD5"])[array_index_of(pack_array(SHA256, SHA1, IMPHASH, MD5), Hash)])
         | project-rename
             TargetProcessMD5 = MD5,
             TargetProcessSHA1 = SHA1,
@@ -84,16 +84,33 @@ ParserQuery: |
             ActingProcessName = ParentImage,
             ActorUsername = ParentUser
         | extend 
-            TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', ''),
-            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+            TargetUsernameType = iff(isnotempty(TargetUsername), 'Windows', ''),
+            ActorUsernameType = iff(isnotempty(ActorUsername), 'Windows', ''),
             EventProduct = "Sysmon",
             // aliases
             Process = TargetProcessName,
             Dvc = DvcHostname,
             EventUid = _ItemId
-        | project-away EventData, ParameterXml, AzureDeploymentID, EventCategory, EventID, EventLevel, EventLevelName, TenantId, EventLog, MG, ManagementGroupName, Message, Role, SourceSystem, Source, UserName, RenderedDescription,_ResourceId,_ItemId
-    };
-        parser_Event(disabled=disabled)
+        | project-away
+            EventData,
+            ParameterXml,
+            AzureDeploymentID,
+            EventCategory,
+            EventID,
+            EventLevel,
+            EventLevelName,
+            TenantId,
+            EventLog,
+            MG,
+            ManagementGroupName,
+            Message,
+            Role,
+            SourceSystem,
+            Source,
+            UserName,
+            RenderedDescription,
+            _ResourceId,
+            _ItemId
         | extend 
             EventType = "ProcessCreated",
             EventOriginalType = "1",
@@ -108,5 +125,7 @@ ParserQuery: |
             DvcOs = "Windows",
             TargetUsernameType = "Windows",
             ActorUsernameType = "Windows"
-    };
-    parser (disabled=disabled)
+    ;
+      parser_Event   
+  };
+  parser (disabled=disabled)
