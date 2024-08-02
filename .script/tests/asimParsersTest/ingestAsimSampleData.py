@@ -302,7 +302,8 @@ for file in parser_yaml_files:
         # create table 
         request_body, url_to_call , method_to_use = create_table(json.dumps(schema_result, indent=4),table_name)
         response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of table creation: {response_body.text}")
+        print(f"Response of table creation: {response_body.status_code}")
+        time.sleep(5)
         #Once table is created now creating DCR
         request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema_result, indent=4),table_name,"Custom")  
         response_body=hit_api(url_to_call,request_body,method_to_use)
@@ -347,4 +348,5 @@ for file in parser_yaml_files:
         senddtosentinel(immutable_id,data_result,stream_name,flag)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
-        continue
+        continue               
+
