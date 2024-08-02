@@ -73,21 +73,7 @@ ParserQuery: |
       disabled:bool=false
     ) {
         // this is the parser for sysmon from Event table
-        let parser_Event = (
-            starttime:datetime=datetime(null),
-            endtime:datetime=datetime(null),
-            commandline_has_any:dynamic=dynamic([]),
-            commandline_has_all:dynamic=dynamic([]),
-            commandline_has_any_ip_prefix:dynamic=dynamic([]),
-            actingprocess_has_any:dynamic=dynamic([]),
-            targetprocess_has_any:dynamic=dynamic([]),
-            parentprocess_has_any:dynamic=dynamic([]),
-            actorusername_has:string='*',
-            dvcipaddr_has_any_prefix:dynamic=dynamic([]),
-            dvchostname_has_any:dynamic=dynamic([]),
-            eventtype:string='*',
-            disabled:bool=false
-        ) {
+        let parser_Event =
             Event
             | where // pre-filtering
                 (isnull(starttime) or TimeGenerated >= starttime )
@@ -111,32 +97,6 @@ ParserQuery: |
                 User:string
               ) 
               with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-            | extend TargetUsername = User
-            | extend TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', '')
-            | parse-kv EventData as (
-            ProcessGuid:string, 
-            ProcessId:string,
-            Image:string,
-            FileVersion:string,
-            Description:string,
-            Product:string,
-            Company:string,
-            OriginalFileName:string,
-            CommandLine:string,
-            CurrentDirectory:string,
-            User:string,
-            LogonGuid:string, 
-            LogonId:string,
-            IntegrityLevel:string,
-            Hashes:string,
-            ParentProcessGuid:string, 
-            ParentProcessId:string,
-            ParentImage:string,
-            ParentCommandLine:string,
-            ParentUser:string
-          ) 
-            | extend TargetProcessCommandLine = CommandLine,
-            ActingProcessId = ParentProcessId
             | project-rename
                 ActorUsername = User,
                 DvcHostname = Computer,
@@ -149,8 +109,6 @@ ParserQuery: |
             | extend 
                 EventProduct = "Sysmon"
             | project-away EventData, ParameterXml, RenderedDescription, MG, ManagementGroupName, Message, AzureDeploymentID, SourceSystem, EventCategory, EventLevelName, EventLevel, EventLog, Role, TenantId, UserName, Source
-        };
-            parser_Event (starttime=starttime, endtime=endtime, commandline_has_any=commandline_has_any, commandline_has_all=commandline_has_all, commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,actingprocess_has_any=actingprocess_has_any, targetprocess_has_any=targetprocess_has_any, parentprocess_has_any=parentprocess_has_any, actorusername_has=actorusername_has, dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix, dvchostname_has_any=dvchostname_has_any, eventtype=eventtype, disabled=disabled)
         | extend  
             EventType = "ProcessTerminated",
             EventStartTime = todatetime(TimeGenerated),
@@ -168,6 +126,8 @@ ParserQuery: |
             Process = TargetProcessName,
             Dvc = DvcHostname
         | project-away EventID,_ResourceId
+    ;
+    parser_Event
     };
   parser (
       starttime=starttime, 

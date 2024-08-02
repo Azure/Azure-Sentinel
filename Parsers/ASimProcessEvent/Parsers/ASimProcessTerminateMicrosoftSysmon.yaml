@@ -6,7 +6,7 @@ Product:
   Name: Microsoft Windows Events Sysmon
 Normalization:
   Schema: ProcessEvent
-  Version: '0.1.0'
+  Version: '0.1.4'
 References:
 - Title: ASIM Process Schema
   Link: https://aka.ms/ASimProcessEventDoc
@@ -21,56 +21,45 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: | 
-    let parser = (disabled:bool = false) {
-        // this is the parser for sysmon from Event table
-        let parser_Event = (disabled:bool=false) {
-            Event 
-            | where not(disabled)
-            | where Source == "Microsoft-Windows-Sysmon" and EventID == 5
-            | parse-kv EventData as (
-                ProcessId:string,
-                ProcessGuid:string,
-                Image:string,
-                User:string
-              ) 
-              with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-            | extend TargetUsername = User
-            | extend TargetUsernameType = iff(isnotempty(TargetUsername),'Windows', '')
-            | parse-kv EventData as (
-            ProcessGuid:string, 
-            ProcessId:string,
-            Image:string,
-            FileVersion:string,
-            Description:string,
-            Product:string,
-            Company:string,
-            OriginalFileName:string,
-            CommandLine:string,
-            CurrentDirectory:string,
-            User:string,
-            LogonGuid:string, 
-            LogonId:string,
-            IntegrityLevel:string,
-            Hashes:string,
-            ParentProcessGuid:string, 
-            ParentProcessId:string,
-            ParentImage:string,
-            ParentCommandLine:string,
-            ParentUser:string
-          ) 
-            | extend TargetProcessCommandLine = CommandLine,
-            ActingProcessId = ParentProcessId
-            | project-rename
-                ActorUsername = User,
-                DvcHostname = Computer,
-                TargetProcessName = Image,
-                TargetProcessGuid = ProcessGuid,
-                TargetProcessId = ProcessId
-            | extend 
-                EventProduct = "Sysmon"
-            | project-away EventData, ParameterXml, RenderedDescription, MG, ManagementGroupName, Message, AzureDeploymentID, SourceSystem, EventCategory, EventLevelName, EventLevel, EventLog, Role, TenantId, UserName,Source,_ResourceId
-        };
-        parser_Event(disabled=disabled) 
+    let parser = (disabled: bool = false) {
+    // this is the parser for sysmon from Event table
+    let parser_Event =
+        Event 
+        | where not(disabled)
+        | where Source == "Microsoft-Windows-Sysmon" and EventID == 5
+        | parse-kv EventData as (
+            ProcessId: string,
+            ProcessGuid: string,
+            Image: string,
+            User: string
+            ) 
+            with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
+        | project-rename
+            ActorUsername = User,
+            DvcHostname = Computer,
+            TargetProcessName = Image,
+            TargetProcessGuid = ProcessGuid,
+            TargetProcessId = ProcessId
+        | extend 
+            EventProduct = "Sysmon"
+        | project-away
+            EventData,
+            ParameterXml,
+            RenderedDescription,
+            MG,
+            ManagementGroupName,
+            Message,
+            AzureDeploymentID,
+            SourceSystem,
+            EventCategory,
+            EventLevelName,
+            EventLevel,
+            EventLog,
+            Role,
+            TenantId,
+            UserName,
+            Source,
+            _ResourceId
         | extend  
             EventType = "ProcessTerminated",
             EventStartTime = todatetime(TimeGenerated),
@@ -82,11 +71,13 @@ ParserQuery: |
             EventOriginalType=tostring(EventID),
             EventResult = 'Success',
             DvcOs = "Windows",
-            ActorUsernameType = iff(isnotempty(ActorUsername),'Windows', ''),
+            ActorUsernameType = iff(isnotempty(ActorUsername), 'Windows', ''),
             // -- Aliases 
             User = ActorUsername,
             Process = TargetProcessName,
             Dvc = DvcHostname
         | project-away EventID
+    ;
+    parser_Event
     };
-    parser (disabled = disabled) 
+    parser (disabled = disabled)

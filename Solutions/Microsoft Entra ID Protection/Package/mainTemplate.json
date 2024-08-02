@@ -33,7 +33,7 @@
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
     "_solutionName": "Microsoft Entra ID Protection",
-    "_solutionVersion": "3.0.0",
+    "_solutionVersion": "3.0.1",
     "solutionId": "azuresentinel.azure-sentinel-solution-azureactivedirectoryip",
     "_solutionId": "[variables('solutionId')]",
     "uiConfigId1": "AzureActiveDirectoryIdentityProtection",
@@ -45,12 +45,13 @@
     "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1'))))]",
     "dataConnectorVersion1": "1.0.0",
     "_dataConnectorcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentId1'),'-', variables('dataConnectorVersion1'))))]",
-    "analyticRuleVersion1": "1.0.6",
-    "analyticRulecontentId1": "a3df4a32-4805-4c6d-8699-f3c888af2f67",
-    "_analyticRulecontentId1": "[variables('analyticRulecontentId1')]",
-    "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', variables('analyticRulecontentId1'))]",
-    "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring(variables('_analyticRulecontentId1'))))]",
-    "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-',variables('_analyticRulecontentId1'),'-', variables('analyticRuleVersion1'))))]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.8",
+      "_analyticRulecontentId1": "a3df4a32-4805-4c6d-8699-f3c888af2f67",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', 'a3df4a32-4805-4c6d-8699-f3c888af2f67')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('a3df4a32-4805-4c6d-8699-f3c888af2f67')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','a3df4a32-4805-4c6d-8699-f3c888af2f67','-', '1.0.8')))]"
+    },
     "Confirm-EntraIDRiskyUser-alert-trigger": "Confirm-EntraIDRiskyUser-alert-trigger",
     "_Confirm-EntraIDRiskyUser-alert-trigger": "[variables('Confirm-EntraIDRiskyUser-alert-trigger')]",
     "playbookVersion1": "1.0",
@@ -105,7 +106,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Microsoft Entra ID Protection data connector with template version 3.0.0",
+        "description": "Microsoft Entra ID Protection data connector with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('dataConnectorVersion1')]",
@@ -258,30 +259,30 @@
     {
       "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
       "apiVersion": "2023-04-01-preview",
-      "name": "[variables('analyticRuleTemplateSpecName1')]",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
       "location": "[parameters('workspace-location')]",
       "dependsOn": [
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "CorrelateIPC_Unfamiliar-Atypical_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "description": "CorrelateIPC_Unfamiliar-Atypical_AnalyticalRules Analytics Rule with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-          "contentVersion": "[variables('analyticRuleVersion1')]",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
           "parameters": {},
           "variables": {},
           "resources": [
             {
               "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
-              "name": "[variables('analyticRulecontentId1')]",
-              "apiVersion": "2022-04-01-preview",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
               "kind": "Scheduled",
               "location": "[parameters('workspace-location')]",
               "properties": {
                 "description": "The combination of an Unfamiliar sign-in properties alert and an Atypical travel alert about the same user within a +10m or -10m window is considered a high severity incident.",
                 "displayName": "Correlate Unfamiliar sign-in properties & atypical travel alerts",
                 "enabled": false,
-                "query": "// We can use this configuration TimeDeltaInMinutes if you want to chnage the time window that we try to match the alerts\nlet TimeDeltaInMinutes = 10;\nlet Alert_UnfamiliarSignInProps = \nSecurityAlert\n| where TimeGenerated > ago(1d)\n| where ProductName =~ \"Azure Active Directory Identity Protection\"\n| where AlertName =~ \"Unfamiliar sign-in properties\"\n| mv-expand Entity = todynamic(Entities)\n| where Entity.Type =~ \"account\"\n| extend AadTenantId = tostring(Entity.AadTenantId)\n| extend AadUserId = tostring(Entity.AadUserId)\n| join kind=inner (\nIdentityInfo\n| distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName\n| extend UserName = AccountDisplayName\n| extend UserAccount = AccountUPN\n| where isnotempty(AccountDisplayName) and isnotempty(UserAccount)\n| project AccountTenantId, AccountObjectId, UserAccount, UserName\n)\non\n$left.AadTenantId == $right.AccountTenantId,\n$left.AadUserId == $right.AccountObjectId\n| extend CompromisedEntity = iff(CompromisedEntity == \"N/A\" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)\n| extend Alert_UnfamiliarSignInProps_Time = TimeGenerated\n| extend Alert_UnfamiliarSignInProps_Name = AlertName\n| extend Alert_UnfamiliarSignInProps_Severity = AlertSeverity\n| project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, UserAccount, UserName\n;\nlet Alert_AtypicalTravels = \nSecurityAlert\n| where TimeGenerated > ago(1d)\n| where ProductName =~ \"Azure Active Directory Identity Protection\"\n| where AlertName =~ \"Atypical travel\"\n| mv-expand Entity = todynamic(Entities)\n| where Entity.Type =~ \"account\"\n| extend AadTenantId = tostring(Entity.AadTenantId)\n| extend AadUserId = tostring(Entity.AadUserId)\n| join kind=inner (\nIdentityInfo\n| distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName\n| extend UserName = AccountDisplayName\n| extend UserAccount = AccountUPN\n| where isnotempty(AccountDisplayName) and isnotempty(UserAccount)\n| project AccountTenantId, AccountObjectId, UserAccount, UserName\n)\non\n$left.AadTenantId == $right.AccountTenantId,\n$left.AadUserId == $right.AccountObjectId\n| extend CompromisedEntity = iff(CompromisedEntity == \"N/A\" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)\n| extend Alert_AtypicalTravels_Time = TimeGenerated\n| extend Alert_AtypicalTravels_Name = AlertName\n| extend Alert_AtypicalTravels_Severity = AlertSeverity\n| extend ExtendedProperties_json= parse_json(ExtendedProperties)\n| extend CurrentLocation = tostring(ExtendedProperties_json.[\"Current Location\"])\n| extend PreviousLocation = tostring(ExtendedProperties_json.[\"Previous Location\"])\n| extend CurrentIPAddress = tostring(ExtendedProperties_json.[\"Current IP Address\"])\n| extend PreviousIPAddress = tostring(ExtendedProperties_json.[\"Previous IP Address\"])\n| project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, CurrentIPAddress, PreviousIPAddress, CurrentLocation, PreviousLocation, UserAccount, UserName, CompromisedEntity\n;\nAlert_UnfamiliarSignInProps\n| join kind=inner Alert_AtypicalTravels on UserAccount\n| where abs(datetime_diff('minute', Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Time)) <= TimeDeltaInMinutes\n| extend TimeDelta = Alert_UnfamiliarSignInProps_Time - Alert_AtypicalTravels_Time\n| project UserAccount, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress, UserName\n| extend UserEmailName = split(UserAccount,'@')[0], UPNSuffix = split(UserAccount,'@')[1]\n",
+                "query": "// We can use this configuration TimeDeltaInMinutes if you want to chnage the time window that we try to match the alerts\nlet TimeDeltaInMinutes = 10;\nlet Alert_UnfamiliarSignInProps = \nSecurityAlert\n| where TimeGenerated > ago(1d)\n| where ProductName =~ \"Azure Active Directory Identity Protection\"\n| where AlertName =~ \"Unfamiliar sign-in properties\"\n| mv-expand Entity = todynamic(Entities)\n| where Entity.Type =~ \"account\"\n| extend AadTenantId = tostring(Entity.AadTenantId)\n| extend AadUserId = tostring(Entity.AadUserId)\n| join kind=inner (\nIdentityInfo\n| distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName\n| extend UserName = AccountDisplayName\n| extend UserAccount = AccountUPN\n| where isnotempty(AccountDisplayName) and isnotempty(UserAccount)\n| project AccountTenantId, AccountObjectId, UserAccount, UserName\n)\non\n$left.AadTenantId == $right.AccountTenantId,\n$left.AadUserId == $right.AccountObjectId\n| extend CompromisedEntity = iff(CompromisedEntity == \"N/A\" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)\n| extend Alert_UnfamiliarSignInProps_Time = TimeGenerated\n| extend Alert_UnfamiliarSignInProps_Name = AlertName\n| extend Alert_UnfamiliarSignInProps_Severity = AlertSeverity\n| project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, UserAccount, UserName\n;\nlet Alert_AtypicalTravels = \nSecurityAlert\n| where TimeGenerated > ago(1d)\n| where ProductName =~ \"Azure Active Directory Identity Protection\"\n| where AlertName =~ \"Atypical travel\"\n| mv-expand Entity = todynamic(Entities)\n| where Entity.Type =~ \"account\"\n| extend AadTenantId = tostring(Entity.AadTenantId)\n| extend AadUserId = tostring(Entity.AadUserId)\n| join kind=inner (\nIdentityInfo\n| distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName\n| extend UserName = AccountDisplayName\n| extend UserAccount = AccountUPN\n| where isnotempty(AccountDisplayName) and isnotempty(UserAccount)\n| project AccountTenantId, AccountObjectId, UserAccount, UserName\n)\non\n$left.AadTenantId == $right.AccountTenantId,\n$left.AadUserId == $right.AccountObjectId\n| extend CompromisedEntity = iff(CompromisedEntity == \"N/A\" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)\n| extend Alert_AtypicalTravels_Time = TimeGenerated\n| extend Alert_AtypicalTravels_Name = AlertName\n| extend Alert_AtypicalTravels_Severity = AlertSeverity\n| extend ExtendedProperties_json= parse_json(ExtendedProperties)\n| extend CurrentLocation = tostring(ExtendedProperties_json.[\"Current Location\"])\n| extend PreviousLocation = tostring(ExtendedProperties_json.[\"Previous Location\"])\n| extend CurrentIPAddress = tostring(ExtendedProperties_json.[\"Current IP Address\"])\n| extend PreviousIPAddress = tostring(ExtendedProperties_json.[\"Previous IP Address\"])\n| project AadTenantId, AadUserId, AccountTenantId, AccountObjectId, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, CurrentIPAddress, PreviousIPAddress, CurrentLocation, PreviousLocation, UserAccount, UserName, CompromisedEntity\n;\nAlert_UnfamiliarSignInProps\n| join kind=inner Alert_AtypicalTravels on UserAccount\n| where abs(datetime_diff('minute', Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Time)) <= TimeDeltaInMinutes\n| extend TimeDelta = Alert_UnfamiliarSignInProps_Time - Alert_AtypicalTravels_Time\n| project UserAccount, AadUserId, Alert_UnfamiliarSignInProps_Name, Alert_UnfamiliarSignInProps_Severity, Alert_UnfamiliarSignInProps_Time, Alert_AtypicalTravels_Name, Alert_AtypicalTravels_Severity, Alert_AtypicalTravels_Time, TimeDelta, CurrentLocation, PreviousLocation, CurrentIPAddress, PreviousIPAddress, UserName\n| extend UserEmailName = split(UserAccount,'@')[0], UPNSuffix = split(UserAccount,'@')[1]\n",
                 "queryFrequency": "P1D",
                 "queryPeriod": "P14D",
                 "severity": "High",
@@ -292,16 +293,16 @@
                 "status": "Available",
                 "requiredDataConnectors": [
                   {
-                    "connectorId": "AzureActiveDirectoryIdentityProtection",
                     "dataTypes": [
                       "SecurityAlert (IPC)"
-                    ]
+                    ],
+                    "connectorId": "AzureActiveDirectoryIdentityProtection"
                   },
                   {
-                    "connectorId": "BehaviorAnalytics",
                     "dataTypes": [
                       "IdentityInfo"
-                    ]
+                    ],
+                    "connectorId": "BehaviorAnalytics"
                   }
                 ],
                 "tactics": [
@@ -314,12 +315,16 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "UPNSuffix",
-                        "columnName": "UPNSuffix"
+                        "columnName": "UserAccount",
+                        "identifier": "FullName"
                       },
                       {
-                        "identifier": "Name",
-                        "columnName": "UserEmailName"
+                        "columnName": "UserEmailName",
+                        "identifier": "Name"
+                      },
+                      {
+                        "columnName": "UPNSuffix",
+                        "identifier": "UPNSuffix"
                       }
                     ],
                     "entityType": "Account"
@@ -327,8 +332,17 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "CurrentIPAddress"
+                        "columnName": "AadUserId",
+                        "identifier": "AadUserId"
+                      }
+                    ],
+                    "entityType": "Account"
+                  },
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "CurrentIPAddress",
+                        "identifier": "Address"
                       }
                     ],
                     "entityType": "IP"
@@ -336,38 +350,38 @@
                   {
                     "fieldMappings": [
                       {
-                        "identifier": "Address",
-                        "columnName": "PreviousIPAddress"
+                        "columnName": "PreviousIPAddress",
+                        "identifier": "Address"
                       }
                     ],
                     "entityType": "IP"
                   }
                 ],
                 "customDetails": {
-                  "Alert2_Severity": "Alert_AtypicalTravels_Severity",
-                  "Alert2_Time": "Alert_AtypicalTravels_Time",
-                  "CurrentLocation": "CurrentLocation",
-                  "CurrentIPAddress": "CurrentIPAddress",
-                  "Alert1_Time": "Alert_UnfamiliarSignInProps_Time",
-                  "TimeDelta": "TimeDelta",
-                  "Alert2_Name": "Alert_AtypicalTravels_Name",
-                  "Alert1_Severity": "Alert_UnfamiliarSignInProps_Severity",
-                  "PreviousLocation": "PreviousLocation",
                   "PreviousIPAddress": "PreviousIPAddress",
-                  "Alert1_Name": "Alert_UnfamiliarSignInProps_Name"
+                  "PreviousLocation": "PreviousLocation",
+                  "Alert1_Severity": "Alert_UnfamiliarSignInProps_Severity",
+                  "Alert2_Severity": "Alert_AtypicalTravels_Severity",
+                  "Alert1_Name": "Alert_UnfamiliarSignInProps_Name",
+                  "Alert2_Name": "Alert_AtypicalTravels_Name",
+                  "CurrentIPAddress": "CurrentIPAddress",
+                  "CurrentLocation": "CurrentLocation",
+                  "Alert2_Time": "Alert_AtypicalTravels_Time",
+                  "TimeDelta": "TimeDelta",
+                  "Alert1_Time": "Alert_UnfamiliarSignInProps_Time"
                 }
               }
             },
             {
               "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
               "apiVersion": "2022-01-01-preview",
-              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleId1'),'/'))))]",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
               "properties": {
                 "description": "Microsoft Entra ID Protection Analytics Rule 1",
-                "parentId": "[variables('analyticRuleId1')]",
-                "contentId": "[variables('_analyticRulecontentId1')]",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
                 "kind": "AnalyticsRule",
-                "version": "[variables('analyticRuleVersion1')]",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
                 "source": {
                   "kind": "Solution",
                   "name": "Microsoft Entra ID Protection",
@@ -392,12 +406,12 @@
         "packageName": "[variables('_solutionName')]",
         "packageId": "[variables('_solutionId')]",
         "contentSchemaVersion": "3.0.0",
-        "contentId": "[variables('_analyticRulecontentId1')]",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
         "contentKind": "AnalyticsRule",
         "displayName": "Correlate Unfamiliar sign-in properties & atypical travel alerts",
-        "contentProductId": "[variables('_analyticRulecontentProductId1')]",
-        "id": "[variables('_analyticRulecontentProductId1')]",
-        "version": "[variables('analyticRuleVersion1')]"
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
       }
     },
     {
@@ -409,7 +423,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Confirm-EntraIDRiskyUser-Alert Playbook with template version 3.0.0",
+        "description": "Confirm-EntraIDRiskyUser-Alert Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -713,7 +727,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Confirm-EntraIDRiskyUser-Incident Playbook with template version 3.0.0",
+        "description": "Confirm-EntraIDRiskyUser-Incident Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -1002,7 +1016,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Dismiss-EntraIDRiskyUser-UserAlert Playbook with template version 3.0.0",
+        "description": "Dismiss-EntraIDRiskyUser-UserAlert Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion3')]",
@@ -1312,7 +1326,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "Dismiss-EntraIDRiskyUser-UserIncident Playbook with template version 3.0.0",
+        "description": "Dismiss-EntraIDRiskyUser-UserIncident Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion4')]",
@@ -1601,7 +1615,7 @@
         "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "IdentityProtection-ResponseFromTeams Playbook with template version 3.0.0",
+        "description": "IdentityProtection-ResponseFromTeams Playbook with template version 3.0.1",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion5')]",
@@ -2270,12 +2284,12 @@
       "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "3.0.0",
+        "version": "3.0.1",
         "kind": "Solution",
         "contentSchemaVersion": "3.0.0",
         "displayName": "Microsoft Entra ID Protection",
         "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-        "descriptionHtml": "<p><strong>Note:</strong> <em>There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</em></p>\n<p>The <a href=\"https://docs.microsoft.com/azure/active-directory/identity-protection/overview-identity-protection\">Microsoft Entra ID Protection</a> solution for Microsoft Sentinel allows you to ingest Security alerts reported in Microsoft Entra ID Protection for risky users and events in Microsoft Entra ID.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1, <strong>Playbooks:</strong> 5</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Microsoft%20Entra%20ID%20Protection/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>The <a href=\"https://docs.microsoft.com/azure/active-directory/identity-protection/overview-identity-protection\">Microsoft Entra ID Protection</a> solution for Microsoft Sentinel allows you to ingest Security alerts reported in Microsoft Entra ID Protection for risky users and events in Microsoft Entra ID.</p>\n<p><strong>Data Connectors:</strong> 1, <strong>Analytic Rules:</strong> 1, <strong>Playbooks:</strong> 5</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
         "contentKind": "Solution",
         "contentProductId": "[variables('_solutioncontentProductId')]",
         "id": "[variables('_solutioncontentProductId')]",
@@ -2307,8 +2321,8 @@
             },
             {
               "kind": "AnalyticsRule",
-              "contentId": "[variables('analyticRulecontentId1')]",
-              "version": "[variables('analyticRuleVersion1')]"
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
             },
             {
               "kind": "Playbook",
