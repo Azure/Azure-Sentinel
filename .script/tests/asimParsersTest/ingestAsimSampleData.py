@@ -190,7 +190,7 @@ def create_dcr(schema,table,table_type):
 
 def get_access_token():
     credential = DefaultAzureCredential()
-    token = credential.get_token('https://management.azure.com/.default')
+    token = credential.get_token('https://management.azure.com/')
     return token.token
 
 def hit_api(url,request,method):
