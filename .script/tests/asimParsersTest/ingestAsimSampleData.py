@@ -11,6 +11,8 @@ from azure.core.exceptions import HttpResponseError
 import time
 import sys
 
+credential = DefaultAzureCredential()
+token = credential.get_token('https://management.azure.com/').token
 
 def get_modified_files(current_directory):
     # Add upstream remote if not already present
@@ -188,13 +190,10 @@ def create_dcr(schema,table,table_type):
     return request_object , url , method ,"Custom-dcringest"+str(prnumber)
 
 
-def get_access_token():
-    credential = DefaultAzureCredential()
-    token = credential.get_token('https://management.azure.com/')
-    return token.token
+
 
 def hit_api(url,request,method):
-    access_token = get_access_token()
+    access_token = token
     headers = {
     "Authorization": f"Bearer {access_token}",
     "Content-Type": "application/json"
