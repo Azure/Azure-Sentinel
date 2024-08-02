@@ -1031,6 +1031,10 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     }
 
                     if ($contentToImport.Metadata -or $isPipelineRun) {
+                        if ($fileName -like 'Playbooks/') {
+                            $fileName = $fileName.Replace("Playbooks/", '')
+                        }
+
                         $global:baseMainTemplate.variables | Add-Member -NotePropertyName $fileName -NotePropertyValue $fileName
                         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_$fileName" -NotePropertyValue "[variables('$fileName')]"
                     }
