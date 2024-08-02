@@ -11,9 +11,6 @@ from azure.core.exceptions import HttpResponseError
 import time
 import sys
 
-credential = DefaultAzureCredential()
-token = credential.get_token('https://management.azure.com/').token
-
 def get_modified_files(current_directory):
     # Add upstream remote if not already present
     git_remote_command = "git remote"
@@ -53,7 +50,10 @@ def filter_yaml_files(modified_files):
 
 def convert_schema_csv_to_json(csv_file):
     data = []
+    main_data=[]
+    output_dict=[]
     with open(csv_file, 'r',encoding='utf-8-sig') as file:
+        suffixes = ['_s', '_d','_b','_g']
         reader = csv.DictReader(file)
         for row in reader:
             if row['ColumnName'] in reserved_columns:
@@ -67,11 +67,16 @@ def convert_schema_csv_to_json(csv_file):
                 data.append({        
                 'name': row['ColumnName'].rsplit("_",1)[0],
                 'type': row['ColumnType'],
-                })           
-    return data
+                })
+        for item in data:
+            output_dict = {key[:-2] if any(key.endswith(suffix) for suffix in suffixes) else key: value 
+               for key, value in item.items()}
+            main_data.append(output_dict)                         
+    return main_data
 
 def convert_data_csv_to_json(csv_file):
     data = []
+    output_dict=[]
     with open(csv_file, 'r',encoding='utf-8-sig') as file:
         suffixes = ['_s', '_d','_b','_g']
         reader = csv.DictReader(file)
@@ -189,11 +194,13 @@ def create_dcr(schema,table,table_type):
     url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Insights/dataCollectionRules/{dcrname}?api-version=2022-06-01"
     return request_object , url , method ,"Custom-dcringest"+str(prnumber)
 
-
-
+def get_access_token():
+    credential = DefaultAzureCredential()
+    token = credential.get_token('https://management.azure.com/')
+    return token.token
 
 def hit_api(url,request,method):
-    access_token = token
+    access_token = get_access_token()
     headers = {
     "Authorization": f"Bearer {access_token}",
     "Content-Type": "application/json"
