@@ -50,16 +50,20 @@ function run {
     # Iterate over the lines
     foreach ($line in $modifiedFilesStatusLines) {
         # Split the line into status and file name
-        $status, $file = $line -split "\t", 2
+        $parts = $line -split "\t"
+        # Assigning the first part to $status and the last part to $file
+        $status = $parts[0]
+        $file = $parts[-1]  # -1 index refers to the last element
         # Check if the file is a YAML file
         if ($file -like "*.yaml") {
             # Add the file name and status to the array
             $global:modifiedFiles += New-Object PSObject -Property @{
                 Name = $file
-                Status = switch ($status) {
+                Status = switch -Regex ($status) {
                     "A" { "Added" }
                     "M" { "Modified" }
                     "D" { "Deleted" }
+                    "R" { "Renamed" }
                     default { "Unknown" }
                 }
             }

@@ -1,19 +1,19 @@
 Parser:
   Title: Network Session Event ASIM parser for Sysmon (Event 3)
-  Version: '0.1'
-  LastUpdated: Jan 11, 2023
+  Version: '0.2.0'
+  LastUpdated: Jul 19, 2024
 Product:
   Name: Windows Sysmon
 Normalization:
   Schema: NetworkSession
-  Version: '0.2.5'
+  Version: '0.2.6'
 References:
 - Title: ASIM Network Session Schema
   Link: https://aka.ms/ASimNetworkSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 Description: |
-  This ASIM parser supports normalizing Sysmon network session events (event 3) collected using the Event or WEF (WindowsEvent table) connectors to the ASIM Process Event normalized schema. 
+  This ASIM parser supports normalizing Sysmon network session events (event 3) collected logs ingested in 'Event' table to the ASIM Process Event normalized schema. 
 ParserName: ASimNetworkSessionMicrosoftSysmon
 EquivalentBuiltInParser: _ASim_NetworkSession_MicrosoftSysmon
 ParserParams:
@@ -22,7 +22,6 @@ ParserParams:
     Default: false
 ParserQuery: | 
   let parser = (disabled:bool = false) {
-  let Sysmon3_Event=(disabled:bool=false) {
         Event
         | where not(disabled)
         | where Source == "Microsoft-Windows-Sysmon" and EventID==3
@@ -61,40 +60,6 @@ ParserQuery: |
                 MG,
                 AzureDeploymentID,
                 Role
-      };
-  let Sysmon3_WindowsEvent=(disabled:bool=false){
-        WindowsEvent
-        | where not(disabled) 
-        | where Provider == "Microsoft-Windows-Sysmon" and EventID == 3
-        | extend
-                SourceIp = tostring(EventData.SourceIp),
-                DestinationIp = tostring(EventData.DestinationIp),
-                DstHostname = tostring(EventData.DestinationHostname),
-                SrcHostname = tostring(EventData.SrcHostname),
-                RuleName = tostring(EventData.RuleName),
-                UtcTime = todatetime(EventData.UtcTime),
-                ProcessId = tostring(EventData.ProcessId),
-                Image = tostring(EventData.Image),
-                User = tostring(EventData.User),
-                Protocol = tostring(EventData.Protocol),
-                Initiated = tobool(EventData.Initiated), // Initiated indicates the process initiated a connection (meaning outbound)
-                SourceIsIpv6 = tobool(EventData.SourceIsIpv6),
-                SourcePort = toint(EventData.SourcePort),
-                SourcePortName = tostring(EventData.SourcePortName),
-                DestinationIsIpv6 = tobool(EventData.DestinationIsIpv6),
-                DestinationPort = toint(EventData.DestinationPort),
-                DestinationPortName = tostring(EventData.DestinationPortName)
-        | parse EventData.ProcessGuid with "{" ProcessGuid "}"
-        | project-away EventData
-        | project-away
-                       Provider,
-                       Channel,
-                       Task,
-                       Data,
-                       RawEventData,
-                       EventOriginId
-      };
-  union isfuzzy=true Sysmon3_Event,Sysmon3_WindowsEvent
         | extend
                 AppName = tostring(split(Image, "\\")[-1])
         | extend
@@ -111,7 +76,8 @@ ParserQuery: |
                 DstProcessGuid = iff(Initiated, ProcessGuid, ""),
                 DstProcessName = iff(Initiated, tostring(Image), ""),
                 DstAppName = iff(Initiated, AppName, ""),
-                DstAppType = iff(Initiated, 'Process', "")
+                DstAppType = iff(Initiated, 'Process', ""),
+                EventUid = _ItemId
         | project-away  ProcessId, ProcessGuid, Image, AppName
         | project-rename 
                 EventStartTime = UtcTime,
@@ -174,6 +140,6 @@ ParserQuery: |
                 Source*,
                 EventID,
                 EventLevelName,
-                EventLevel
+                EventLevel,_ResourceId
       };
       parser (disabled)

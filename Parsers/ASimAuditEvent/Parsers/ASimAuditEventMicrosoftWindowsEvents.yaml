@@ -1,12 +1,12 @@
 Parser:
     Title: Audit Event ASIM parser for Microsoft Windows Events audit events
-    Version: "0.1.2"
-    LastUpdated: Dec 20 2022
+    Version: "0.2.1"
+    LastUpdated: Jun 7, 2024
 Product:
     Name: Microsoft Windows
 Normalization:
     Schema: AuditEvent
-    Version: "0.1.0"
+    Version: "0.1"
 References:
     - Title: ASIM Audit Event Schema
       Link: https://aka.ms/ASimAuditEventDoc
@@ -15,7 +15,7 @@ References:
     - Title: Office 365 Management Activity API schema
       Link: https://docs.microsoft.com/office/office-365-management-api/office-365-management-activity-api-schema#sharepoint-file-operations
 Description: |
-    This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) in the SecurityEvent, WindowsEvent and Event tables to the ASIM Audit Event schema.
+    This ASIM parser supports normalizing Microsoft Windows Events audit events (1102) logs ingested in 'WindowsEvent' table to the ASIM Audit Event schema.
 ParserName: ASimAuditEventMicrosoftWindowsEvents
 EquivalentBuiltInParser: _ASim_AuditEvent_MicrosoftWindowsEvents
 ParserParams:
@@ -75,42 +75,6 @@ ParserQuery: |
           let ParsedEvents =
               union
                   (
-                  union
-                      (
-                      // SecurityEvents
-                      SecurityEvent
-                      | where not(disabled)
-                      | where EventID in(ParsedEventIds)
-                      | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
-                      ),
-                      (
-                      // Event
-                      Event
-                      | where not(disabled)
-                      | where EventID in(ParsedEventIds)
-                      | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
-                      )
-                  | parse-kv EventData as 
-                      (
-                      SubjectUserSid: string,
-                      SubjectUserName: string,
-                      SubjectDomainName: string,
-                      SubjectLogonId: string,
-                      TaskName: string,
-                      TaskContent: string,
-                      TaskContentNew: string,
-                      ClientProcessId: string,
-                      DestinationDRA: string,
-                      SourceDRA: string,
-                      SourceAddr: string,
-                      ObjectDN: string,
-                      AttributeValue: string
-                      ) 
-                      with (regex=@'<Data Name="(\w+)">{?([^<]*?)}?</Data>')
-                  | project-away EventData
-                  ),
-                  // WindowsEvents
-                  (
                   WindowsEvent
                   | where not(disabled)
                   | where EventID in(ParsedEventIds)
@@ -131,21 +95,6 @@ ParserQuery: |
                       AttributeValue = tostring(EventData.AttributeValue)
                   | project-away EventData
                   ),
-                  //Section for SecurityEvent(1102)
-                  (
-                  SecurityEvent
-                  | where not(disabled)
-                  | where EventID in (AuditLogClearedEventID) and EventSourceName == "Microsoft-Windows-Eventlog"
-                  | project EventID, EventData, _ResourceId, TimeGenerated, Computer, Type, _ItemId
-                  | extend Parsed_EventData = parse_xml(EventData)
-                  | extend
-                      SubjectUserSid = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectUserSid),
-                      SubjectUserName = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectUserName),
-                      SubjectDomainName = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectDomainName),
-                      SubjectLogonId = tostring(Parsed_EventData.UserData.LogFileCleared.SubjectLogonId)
-                  | project-away EventData, Parsed_EventData
-                  ),
-                  // Section for WindowsEvent(1102)
                   (
                   WindowsEvent
                   | where not(disabled)

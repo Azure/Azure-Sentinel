@@ -455,6 +455,7 @@ namespace Kqlvalidations.Tests
 
             bool isQueryValid = !(from p in listOfDiagnostics
                                   where !p.Message.Contains("_GetWatchlist") //We do not validate the getWatchList, since the result schema is not known
+                                  || !p.Message.Contains("let forwarder_host_names") //We do not validate the static list of hostnames, used for syslog parsers
                                   select p).Any();
 
 

@@ -1,9 +1,9 @@
 Parser:
   Title: User Management ASIM parser for Microsoft Security Event logs
-  Version: '0.1.0'
-  LastUpdated: 16 Jul, 2023
+  Version: '0.2.0'
+  LastUpdated: Jun 15, 2024
 Product:
-  Name: Microsoft
+  Name: Microsoft Security Event
 Normalization:
   Schema: UserManagement
   Version: '0.1.1'
@@ -11,11 +11,11 @@ References:
 - Title: ASIM User Management Schema
   Link: https://aka.ms/ASimUserManagementDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Audit User Account Management
   Link: https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/audit-user-account-management
 Description: |
-  This ASIM parser supports normalizing Microsoft Security Event logs delivered using AMA to the ASIM UserManagement normalized schema.
+  This ASIM parser supports normalizing Microsoft Security Event logs ingested in 'SecurityEvent' table delivered using AMA to the ASIM UserManagement normalized schema.
 ParserName: ASimUserManagementMicrosoftSecurityEvent
 EquivalentBuiltInParser: _ASim_UserManagement_MicrosoftSecurityEvent
 ParserParams:
@@ -75,32 +75,6 @@ ParserQuery: |
           | summarize make_set(EventID)
       );
       union (
-          WindowsEvent
-          | where not(disabled)
-          | where EventID in(UserEventID)
-          | extend
-              ActorOriginalUserType = tostring(EventData.AccountType),
-              ActorSessionId = tostring(EventData.SubjectLogonId),
-              ActorUserId = tostring(EventData.SubjectUserSid),
-              NewTargetUserName = tostring(EventData.NewTargetUserName),
-              OldTargetUserName = tostring(EventData.OldTargetUserName),
-              SubjectDomainName = tostring(EventData.SubjectDomainName),
-              SubjectUserName = tostring(EventData.SubjectUserName),
-              TargetDomain = tostring(EventData.TargetDomainName),
-              TargetUserId = tostring(EventData.TargetSid),
-              TargetUsername = tostring(EventData.TargetUserName),
-              EventMessage = tostring(EventData.Activity)
-          | project-rename
-              NewPropertyValue = NewTargetUserName,
-              PreviousPropertyValue = OldTargetUserName
-          | extend 
-              TargetUsername = coalesce(TargetUsername, PreviousPropertyValue)
-          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, TargetDomain, TargetUserId, TargetUsername, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, NewPropertyValue, PreviousPropertyValue, EventMessage
-          | extend
-              TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
-              TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
-          | project-away TargetDomain
-      ),(
           SecurityEvent
           | where not(disabled)
           | where EventID in(UserEventID)
@@ -128,31 +102,6 @@ ParserQuery: |
               TargetUserIdType = iif(isnotempty(TargetUserId), "SID",""),
               TargetUsername = iff (TargetDomain == "", TargetUsername, strcat (TargetDomain, '\\', TargetUsername))
           | project-away TargetDomain
-      ),(
-          WindowsEvent
-          | where not(disabled)
-          | where EventID in(GroupEventID)
-          | extend 
-              ActorOriginalUserType = tostring(EventData.AccountType),
-              ActorSessionId = tostring(EventData.SubjectLogonId),
-              ActorUserId = tostring(EventData.SubjectUserSid),
-              GroupDomain = tostring(EventData.TargetDomainName),
-              GroupId = tostring(EventData.TargetSid),
-              GroupName = tostring(EventData.TargetUserName),
-              MemberName = tostring(EventData.MemberName),
-              MemberSid = tostring(EventData.MemberSid),
-              NewTargetUserName = tostring(EventData.NewTargetUserName),
-              OldTargetUserName = tostring(EventData.OldTargetUserName),
-              SubjectDomainName = tostring(EventData.SubjectDomainName),
-              SubjectUserName = tostring(EventData.SubjectUserName),
-              EventMessage = tostring(EventData.Activity)
-          | extend 
-              GroupName = iff (GroupDomain == "", GroupName, strcat (GroupDomain, "\\" ,GroupName)),
-              TargetUserId = MemberSid,
-              TargetUsername = MemberName
-          | project TimeGenerated, EventID, Computer, _ResourceId, _ItemId, GroupId, GroupName, ActorUserId, SubjectDomainName, SubjectUserName, ActorOriginalUserType, ActorSessionId, TargetUsername, TargetUserId, EventMessage
-          | extend 
-              GroupIdType = iif(isnotempty(GroupId), "SID","")
       ),(
           SecurityEvent
           | where not(disabled)
@@ -240,7 +189,8 @@ ParserQuery: |
       EventSeverity = "Informational",
       EventStartTime = TimeGenerated,
       EventVendor = 'Microsoft',
-      Hostname = DvcHostname
+      Hostname = DvcHostname, 
+      ActorUserIdType="SID"
   | project-away Subject*, Computer, _ResourceId, SourceComputerId,EventID
   | extend
       ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),

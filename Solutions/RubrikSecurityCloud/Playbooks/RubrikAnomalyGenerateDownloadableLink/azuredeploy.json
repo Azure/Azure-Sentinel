@@ -1,0 +1,1309 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Rubrik Anomaly Generate Downloadable Link",
+        "description": "This playbook will generate downloadable links according to objectType (VMware, Fileset or VolumeGroup) and add suspiciousFiles and downloadable links as an incident comment to enrich the anomaly.",
+        "prerequisites": [
+            "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
+            "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
+            "3. Obtain Teams GroupId and ChannelId",
+            "a. Create a Team with public channel.",
+            "b. Click on three dots (...) present on right side of the your newly created teams channel and Get link to the channel.",
+            "c. copy the text from the link between /channel and /, decode it using online url decoder and copy it to use as channelId.",
+            "d. copy the text of groupId parameter from link to use as groupId. ",
+            "4. Make sure that RubrikPollAsyncResult playbook is deployed before deploying RubrikAnomalyGenerateDownloadableLink playbook."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Go to your logic app -> API connections -> Select teams connection resource",
+            "2. Go to General -> edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**b. Assign Role to add comment in incident**",
+            "After authorizing each connection, assign role to this playbook.",
+            "1. Go to Log Analytics Workspace → <your workspace> → Access Control → Add",
+            "2. Add role assignment",
+            "3. Assignment type: Job function roles",
+            "4. Role: Microsoft Sentinel Contributor",
+            "5. Members: select managed identity for assigned access to and add your logic app as member",
+            "6. Click on review+assign"
+        ],
+        "entities": [ "account", "url" ],
+        "tags": [ "Anomaly", "Enrichment", "DownloadLink", "Rubrik" ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "lastUpdateTime": "2024-04-21T00:00:00.000Z",
+        "author": {
+            "name": "Rubrik"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "RubrikAnomalyGenerateDownloadableLink",
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Please do not keep 'PlaybookName' parameter empty, else you will receive validation failure"
+            }
+        },
+        "TeamsGroupId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Group where the adaptive card will be posted"
+            }
+        },
+        "TeamsChannelId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Channel where the adaptive card will be posted"
+            }
+        },
+        "PollAsyncResultPlaybookName": {
+            "type": "string",
+            "metadata": {
+                "description": "Playbook name that you have given while deployment of playbook RubrikPollAsynResult(e.g.RubrikPollAsyncResult)"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('Teams-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "schema": {
+                                    "properties": {
+                                        "AccessToken": {
+                                            "type": "string"
+                                        },
+                                        "ActivitySeriesId": {
+                                            "type": "string"
+                                        },
+                                        "BaseUrl": {
+                                            "type": "string"
+                                        },
+                                        "ClusterId": {
+                                            "type": "string"
+                                        },
+                                        "FilePaths": {
+                                            "items": {
+                                                "properties": {
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "value": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "title",
+                                                    "value"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "IncidentARMId": {
+                                            "type": "string"
+                                        },
+                                        "IncidentStartTime": {
+                                            "type": "string"
+                                        },
+                                        "LastUpdatedTime": {
+                                            "type": "string"
+                                        },
+                                        "ObjectId": {
+                                            "type": "string"
+                                        },
+                                        "ObjectName": {
+                                            "type": "string"
+                                        },
+                                        "ObjectType": {
+                                            "type": "string"
+                                        },
+                                        "SuspiciousFiles": {
+                                            "items": {
+                                                "properties": {
+                                                    "filePath": {
+                                                        "type": "string"
+                                                    },
+                                                    "lastModified": {
+                                                        "type": "string"
+                                                    },
+                                                    "suspiciousActivity": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "filePath",
+                                                    "lastModified",
+                                                    "suspiciousActivity"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Compose": {
+                            "runAfter": {
+                                "Initialize_requestId": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@triggerBody()?['FilePaths']"
+                        },
+                        "Create_HTML_table": {
+                            "runAfter": {
+                                "Initialize_grpahql_query_and_variables_based_on_objectType": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Table",
+                            "inputs": {
+                                "columns": [
+                                    {
+                                        "header": "Path",
+                                        "value": "@item()?['filePath']"
+                                    },
+                                    {
+                                        "header": "SuspiciousActivity",
+                                        "value": "@item()?['suspiciousActivity']"
+                                    },
+                                    {
+                                        "header": "LastModified",
+                                        "value": "@item()?['lastModified']"
+                                    }
+                                ],
+                                "format": "HTML",
+                                "from": "@triggerBody()?['SuspiciousFiles']"
+                            }
+                        },
+                        "Does_status_code_of_get_downloadable_link_API_equal_to_200": {
+                            "actions": {
+                                "Does_get_downloadble_links_API_response_contain_errors": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['IncidentARMId']",
+                                                    "message": "<p><strong>Suspicious Files</strong><br>\n@{body('Create_HTML_table')}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Set_Downloadlink_API_error_with_status_code_200": {
+                                            "runAfter": {
+                                                "Add_comment_to_incident_(V3)": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "DownloadLinkStatus",
+                                                "value": "Error: @{body('Get_downloadable_link_for_given_object')?['errors'][0]?['message']}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Does_Async_request_status_SUCCEEDED": {
+                                                "actions": {
+                                                    "Does_status_code_for_get_cluster_information_equal_to_200": {
+                                                        "actions": {
+                                                            "Does_response_of_get_cluster_information_contain_errors": {
+                                                                "actions": {
+                                                                    "Set_cluster_information_error_message_with_status_code_200": {
+                                                                        "runAfter": {},
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "DownloadLinkStatus",
+                                                                            "value": "Error: @{body('Get_downloadable_link_for_given_object')?['erros'][0]?['message']}"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {},
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "Enrich_Anomaly_incident_with_anomalous_files_and_downloadable_link_details": {
+                                                                            "runAfter": {
+                                                                                "Prepare_downloadable_link": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "body": {
+                                                                                    "incidentArmId": "@triggerBody()?['IncidentARMId']",
+                                                                                    "message": "<p><span style=\"font-size: 14px\"><strong>Suspicious Files</strong></span><br>\n@{body('Create_HTML_table')}<br>\n<br>\n<span style=\"font-size: 14px\"><strong>Download Links:</strong></span><br>\nDownload Links for @{length(variables('DownloadPaths'))} path(s) from snapshot of @{triggerBody()?['ObjectName']} taken at @{triggerBody()?['LastUpdatedTime']} is ready<br>\n@{outputs('Prepare_downloadable_link')}</p>"
+                                                                                },
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "post",
+                                                                                "path": "/Incidents/Comment"
+                                                                            }
+                                                                        },
+                                                                        "Parse_JSON_2": {
+                                                                            "runAfter": {},
+                                                                            "type": "ParseJson",
+                                                                            "inputs": {
+                                                                                "content": "@body('Get_Cluster_Information')",
+                                                                                "schema": {
+                                                                                    "properties": {
+                                                                                        "data": {
+                                                                                            "properties": {
+                                                                                                "clusterConnection": {
+                                                                                                    "properties": {
+                                                                                                        "__typename": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "edges": {
+                                                                                                            "items": {
+                                                                                                                "properties": {
+                                                                                                                    "__typename": {
+                                                                                                                        "type": "string"
+                                                                                                                    },
+                                                                                                                    "node": {
+                                                                                                                        "properties": {
+                                                                                                                            "__typename": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "cdmUpgradeInfo": {
+                                                                                                                                "properties": {
+                                                                                                                                    "__typename": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "clusterStatus": {
+                                                                                                                                        "properties": {
+                                                                                                                                            "__typename": {
+                                                                                                                                                "type": "string"
+                                                                                                                                            },
+                                                                                                                                            "message": {
+                                                                                                                                                "type": "string"
+                                                                                                                                            },
+                                                                                                                                            "status": {
+                                                                                                                                                "type": "string"
+                                                                                                                                            }
+                                                                                                                                        },
+                                                                                                                                        "type": "object"
+                                                                                                                                    },
+                                                                                                                                    "downloadedVersion": {},
+                                                                                                                                    "overallProgress": {
+                                                                                                                                        "type": "integer"
+                                                                                                                                    },
+                                                                                                                                    "scheduleUpgradeAt": {},
+                                                                                                                                    "version": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type": "object"
+                                                                                                                            },
+                                                                                                                            "clusterNodeConnection": {
+                                                                                                                                "properties": {
+                                                                                                                                    "__typename": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "nodes": {
+                                                                                                                                        "items": {
+                                                                                                                                            "properties": {
+                                                                                                                                                "__typename": {
+                                                                                                                                                    "type": "string"
+                                                                                                                                                },
+                                                                                                                                                "id": {
+                                                                                                                                                    "type": "string"
+                                                                                                                                                },
+                                                                                                                                                "ipAddress": {
+                                                                                                                                                    "type": "string"
+                                                                                                                                                },
+                                                                                                                                                "status": {
+                                                                                                                                                    "type": "string"
+                                                                                                                                                }
+                                                                                                                                            },
+                                                                                                                                            "required": [
+                                                                                                                                                "id",
+                                                                                                                                                "status",
+                                                                                                                                                "ipAddress",
+                                                                                                                                                "__typename"
+                                                                                                                                            ],
+                                                                                                                                            "type": "object"
+                                                                                                                                        },
+                                                                                                                                        "type": "array"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type": "object"
+                                                                                                                            },
+                                                                                                                            "connectivityLastUpdated": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "defaultAddress": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "estimatedRunway": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "geoLocation": {
+                                                                                                                                "properties": {
+                                                                                                                                    "__typename": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "address": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type": "object"
+                                                                                                                            },
+                                                                                                                            "globalManagerConnectivityStatus": {
+                                                                                                                                "properties": {
+                                                                                                                                    "__typename": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "urls": {
+                                                                                                                                        "items": {
+                                                                                                                                            "properties": {
+                                                                                                                                                "__typename": {
+                                                                                                                                                    "type": "string"
+                                                                                                                                                },
+                                                                                                                                                "isReachable": {
+                                                                                                                                                    "type": "boolean"
+                                                                                                                                                },
+                                                                                                                                                "url": {
+                                                                                                                                                    "type": "string"
+                                                                                                                                                }
+                                                                                                                                            },
+                                                                                                                                            "required": [
+                                                                                                                                                "url",
+                                                                                                                                                "isReachable",
+                                                                                                                                                "__typename"
+                                                                                                                                            ],
+                                                                                                                                            "type": "object"
+                                                                                                                                        },
+                                                                                                                                        "type": "array"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type": "object"
+                                                                                                                            },
+                                                                                                                            "id": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "lambdaFeatureHistory": {
+                                                                                                                                "properties": {
+                                                                                                                                    "__typename": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "wasSensitiveDataDiscoveryEverEnabled": {
+                                                                                                                                        "type": "boolean"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type": "object"
+                                                                                                                            },
+                                                                                                                            "lastConnectionTime": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "metric": {
+                                                                                                                                "properties": {
+                                                                                                                                    "__typename": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "availableCapacity": {
+                                                                                                                                        "type": "integer"
+                                                                                                                                    },
+                                                                                                                                    "totalCapacity": {
+                                                                                                                                        "type": "integer"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type": "object"
+                                                                                                                            },
+                                                                                                                            "name": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "passesConnectivityCheck": {
+                                                                                                                                "type": "boolean"
+                                                                                                                            },
+                                                                                                                            "productType": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "snappableConnection": {
+                                                                                                                                "properties": {
+                                                                                                                                    "__typename": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "count": {
+                                                                                                                                        "type": "integer"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type": "object"
+                                                                                                                            },
+                                                                                                                            "snapshotCount": {
+                                                                                                                                "type": "integer"
+                                                                                                                            },
+                                                                                                                            "state": {
+                                                                                                                                "properties": {
+                                                                                                                                    "__typename": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "clusterRemovalState": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    },
+                                                                                                                                    "connectedState": {
+                                                                                                                                        "type": "string"
+                                                                                                                                    }
+                                                                                                                                },
+                                                                                                                                "type": "object"
+                                                                                                                            },
+                                                                                                                            "status": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "type": {
+                                                                                                                                "type": "string"
+                                                                                                                            },
+                                                                                                                            "version": {
+                                                                                                                                "type": "string"
+                                                                                                                            }
+                                                                                                                        },
+                                                                                                                        "type": "object"
+                                                                                                                    }
+                                                                                                                },
+                                                                                                                "required": [
+                                                                                                                    "node",
+                                                                                                                    "__typename"
+                                                                                                                ],
+                                                                                                                "type": "object"
+                                                                                                            },
+                                                                                                            "type": "array"
+                                                                                                        },
+                                                                                                        "pageInfo": {
+                                                                                                            "properties": {
+                                                                                                                "__typename": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "endCursor": {
+                                                                                                                    "type": "string"
+                                                                                                                },
+                                                                                                                "hasNextPage": {
+                                                                                                                    "type": "boolean"
+                                                                                                                },
+                                                                                                                "hasPreviousPage": {
+                                                                                                                    "type": "boolean"
+                                                                                                                },
+                                                                                                                "startCursor": {
+                                                                                                                    "type": "string"
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "type": "object"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "Prepare_downloadable_link": {
+                                                                            "runAfter": {
+                                                                                "Set_cluster_location": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Compose",
+                                                                            "inputs": "@concat('https://',variables('ClusterLocation'),'/',variables('DownloadLinks')[1])"
+                                                                        },
+                                                                        "Response_3": {
+                                                                            "inputs": {
+                                                                                "body": "Anomaly incident for object @{triggerBody()?['ObjectName']} is enriched with Suspicious Files Data and downloadable link for those fielPath(s).",
+                                                                                "statusCode": 200
+                                                                            },
+                                                                            "kind": "Http",
+                                                                            "runAfter": {
+                                                                                "Enrich_Anomaly_incident_with_anomalous_files_and_downloadable_link_details": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "Response"
+                                                                        },
+                                                                        "Set_cluster_location": {
+                                                                            "runAfter": {
+                                                                                "Parse_JSON_2": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "ClusterLocation",
+                                                                                "value": "@{body('Parse_JSON_2')?['data']?['clusterConnection']?['edges'][0]?['node']?['defaultAddress']}"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "contains": [
+                                                                                "@body('Get_Cluster_Information')",
+                                                                                "errors"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "Get_Cluster_Information": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Set_cluster_information_error_message": {
+                                                                    "runAfter": {},
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "DownloadLinkStatus",
+                                                                        "value": "Error: @{body('Get_Cluster_Information')?['message']}"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@outputs('Get_Cluster_Information')['statusCode']",
+                                                                        200
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "For_each": {
+                                                        "foreach": "@body('Parse_JSON')?['links']",
+                                                        "actions": {
+                                                            "Append_to_array_variable": {
+                                                                "runAfter": {},
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "DownloadLinks",
+                                                                    "value": "@items('For_each')?['href']"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "Foreach",
+                                                        "runtimeConfiguration": {
+                                                            "concurrency": {
+                                                                "repetitions": 1
+                                                            }
+                                                        }
+                                                    },
+                                                    "Get_Cluster_Information": {
+                                                        "runAfter": {
+                                                            "For_each": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "Http",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "query": "query ClusterListFilterQuery($first: Int, $after: String, $filter: ClusterFilterInput, $sortBy: ClusterSortByEnum, $sortOrder: SortOrder) {\r\n  clusterConnection(\r\n    filter: $filter\r\n    sortBy: $sortBy\r\n    sortOrder: $sortOrder\r\n    first: $first\r\n    after: $after\r\n  ) {\r\n    edges {\r\n      node {\r\n        id\r\n        ...ClusterListFragment\r\n        __typename\r\n      }\r\n      __typename\r\n    }\r\n    pageInfo {\r\n      startCursor\r\n      endCursor\r\n      hasNextPage\r\n      hasPreviousPage\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n}\r\n\r\nfragment ClusterListFragment on Cluster {\r\n  id\r\n  name\r\n  type\r\n  status\r\n  version\r\n  defaultAddress\r\n  cdmUpgradeInfo {\r\n    clusterStatus {\r\n      message\r\n      status\r\n      __typename\r\n    }\r\n    overallProgress\r\n    scheduleUpgradeAt\r\n    downloadedVersion\r\n    version\r\n    __typename\r\n  }\r\n  productType\r\n  estimatedRunway\r\n  snapshotCount\r\n  geoLocation {\r\n    address\r\n    __typename\r\n  }\r\n  lastConnectionTime\r\n  metric {\r\n    totalCapacity\r\n    availableCapacity\r\n    __typename\r\n  }\r\n  snappableConnection(filter: {protectionStatus: Protected}) {\r\n    count\r\n    __typename\r\n  }\r\n  ...ClusterStateFragment\r\n  ...ClusterNodeConnectionFragment\r\n  ...ClusterGlobalManagerFragment\r\n  ...LambdaFeatureHistoryFragment\r\n  __typename\r\n}\r\n\r\nfragment ClusterNodeConnectionFragment on Cluster {\r\n  clusterNodeConnection {\r\n    nodes {\r\n      id\r\n      status\r\n      ipAddress\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterStateFragment on Cluster {\r\n  state {\r\n    connectedState\r\n    clusterRemovalState\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n\r\nfragment ClusterGlobalManagerFragment on Cluster {\r\n  passesConnectivityCheck\r\n  globalManagerConnectivityStatus {\r\n    urls {\r\n      url\r\n      isReachable\r\n      __typename\r\n    }\r\n    __typename\r\n  }\r\n  connectivityLastUpdated\r\n  __typename\r\n}\r\n\r\nfragment LambdaFeatureHistoryFragment on Cluster {\r\n  lambdaFeatureHistory {\r\n    wasSensitiveDataDiscoveryEverEnabled\r\n    __typename\r\n  }\r\n  __typename\r\n}\r\n",
+                                                                "variables": {
+                                                                    "filter": {
+                                                                        "id": [
+                                                                            "@{triggerBody()?['ClusterId']}"
+                                                                        ]
+                                                                    },
+                                                                    "first": 20,
+                                                                    "sortBy": "ClusterName",
+                                                                    "sortOrder": "ASC"
+                                                                }
+                                                            },
+                                                            "headers": {
+                                                                "Authorization": "Bearer @{triggerBody()?['AccessToken']}"
+                                                            },
+                                                            "method": "POST",
+                                                            "uri": "@{triggerBody()?['BaseUrl']}/api/graphql"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Parse_JSON": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@body('Parse_JSON')?['status']",
+                                                                "SUCCEEDED"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            },
+                                            "Parse_JSON": {
+                                                "runAfter": {
+                                                    "RubrikPollAsyncResult": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('RubrikPollAsyncResult')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "__typename": {
+                                                                "type": "string"
+                                                            },
+                                                            "error": {},
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "links": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "href": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "rel": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "href",
+                                                                        "rel"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "status": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "Parse_JSON_response_of_Downloadable_Links_API": {
+                                                "runAfter": {},
+                                                "type": "ParseJson",
+                                                "inputs": {
+                                                    "content": "@body('Get_downloadable_link_for_given_object')",
+                                                    "schema": {
+                                                        "properties": {
+                                                            "data": {
+                                                                "properties": {
+                                                                    "downloadVolumeGroupSnapshotFiles": {
+                                                                        "properties": {
+                                                                            "__typename": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "links": {
+                                                                                "items": {
+                                                                                    "properties": {
+                                                                                        "__typename": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "href": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "rel": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "href",
+                                                                                        "rel",
+                                                                                        "__typename"
+                                                                                    ],
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "type": "array"
+                                                                            },
+                                                                            "status": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "filesetDownloadSnapshotFiles": {
+                                                                        "properties": {
+                                                                            "__typename": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "links": {
+                                                                                "items": {
+                                                                                    "properties": {
+                                                                                        "__typename": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "href": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "rel": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "href",
+                                                                                        "rel",
+                                                                                        "__typename"
+                                                                                    ],
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "type": "array"
+                                                                            },
+                                                                            "status": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    },
+                                                                    "vsphereVmDownloadSnapshotFiles": {
+                                                                        "properties": {
+                                                                            "__typename": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "links": {
+                                                                                "items": {
+                                                                                    "properties": {
+                                                                                        "__typename": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "href": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "rel": {
+                                                                                            "type": "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "required": [
+                                                                                        "href",
+                                                                                        "rel",
+                                                                                        "__typename"
+                                                                                    ],
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "type": "array"
+                                                                            },
+                                                                            "status": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "RubrikPollAsyncResult": {
+                                                "runAfter": {
+                                                    "Set_variable_6": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Workflow",
+                                                "inputs": {
+                                                    "body": {
+                                                        "BaseUrl": "@triggerBody()?['BaseUrl']",
+                                                        "ClusterId": "@triggerBody()?['ClusterId']",
+                                                        "PollingInterval": 5,
+                                                        "PollingTimeout": 720,
+                                                        "RequestId": "@variables('requestId')"
+                                                    },
+                                                    "host": {
+                                                        "triggerName": "manual",
+                                                        "workflow": {
+                                                            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',parameters('PollAsyncResultPlaybookName'))]"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "Set_variable_6": {
+                                                "runAfter": {
+                                                    "Parse_JSON_response_of_Downloadable_Links_API": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "requestId",
+                                                    "value": "@{if(contains(triggerBody()?['ObjectType'],'Fileset'), body('Parse_JSON_response_of_Downloadable_Links_API')?['data']?['filesetDownloadSnapshotFiles']?['id'],if(contains(triggerBody()?['ObjectType'],'VolumeGroup'),body('Parse_JSON_response_of_Downloadable_Links_API')?['data']?['downloadVolumeGroupSnapshotFiles']?['id'],body('Parse_JSON_response_of_Downloadable_Links_API')?['data']?['vsphereVmDownloadSnapshotFiles']?['id']))}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "contains": [
+                                                    "@body('Get_downloadable_link_for_given_object')",
+                                                    "errors"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Get_downloadable_link_for_given_object": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Set_downloadLink_API_error_message": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                            "name": "DownloadLinkStatus",
+                                            "value": "Error: @{body('Get_downloadable_link_for_given_object')?['message']}"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('Get_downloadable_link_for_given_object')['statusCode']",
+                                            200
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Get_downloadable_link_for_given_object": {
+                            "runAfter": {
+                                "Create_HTML_table": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "query": "@variables('query')",
+                                    "variables": "@variables('variables')"
+                                },
+                                "headers": {
+                                    "Authorization": "Bearer @{triggerBody()?['AccessToken']}"
+                                },
+                                "method": "POST",
+                                "uri": "@{triggerBody()?['BaseUrl']}/api/graphql"
+                            }
+                        },
+                        "Get_filepaths_to_download": {
+                            "runAfter": {
+                                "Compose": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "body": {
+                                        "messageBody": "{\n  \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.3\",\n  \"body\": [\n{\n            \"type\": \"TextBlock\",\n            \"size\": \"Large\",\n            \"weight\": \"Bolder\",\n            \"text\": \"Download Forensics\",\n            \"horizontalAlignment\": \"Center\",\n            \"style\": \"heading\",\n            \"color\": \"Accent\",\n            \"fontType\": \"Default\",\n            \"wrap\": true,\n            \"id\": \"heading\"\n        },\n{\n            \"type\": \"TextBlock\",\n            \"style\": \"default\",\n             \"text\": \"Object Name= @{triggerBody()?['ObjectName']} \\n\\nObject Id = @{triggerBody()?['ObjectId']} \\n\\nSnapshot fid = @{triggerBody()?['ActivitySeriesId']} \\n\\n@{if(empty(triggerBody()?['incidentStartTime']),'',concat('Incident Start Time = ',triggerBody()?['incidentStartTime']))} \",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"accent\",\n            \"separator\": true,\n            \"id\": \"x\"\n        },\n         {\n            \"type\": \"TextBlock\",\n            \"text\": \"Select filepath to download for further investigation\\n\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\",\n            \"separator\": true,\n            \"id\": \"title\",\n            \"size\": \"Medium\",\n            \"spacing\": \"Large\"\n        },\n    {\n      \"type\": \"Input.ChoiceSet\",\n      \"id\": \"filePath\",\n      \"isMultiSelect\": true,\n       \"isRequired\": true,\n      \"choices\":@{outputs('Compose')} ,\n    \"style\": \"expanded\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"Action.Submit\",\n      \"title\": \"Submit\",\n      \"data\": {\n                    \"id\": \"Loginval\"\n                  },\n      \"style\": \"positive\",\n      \"id\": \"submit\"\n    }\n  ]\n}\n",
+                                        "recipient": {
+                                            "channelId": "[parameters('TeamsChannelId')]",
+                                            "groupId": "[parameters('TeamsGroupId')]"
+                                        },
+                                        "updateMessage": "Thanks for your response!"
+                                    },
+                                    "notificationUrl": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                            }
+                        },
+                        "Initialize_clusterLocation": {
+                            "runAfter": {
+                                "Initialize_downloadLinks": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ClusterLocation",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_downloadLinkStatus": {
+                            "runAfter": {
+                                "Initialize_graphql_variables": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DownloadLinkStatus",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_downloadLinks": {
+                            "runAfter": {
+                                "Initialize_downloadLinkStatus": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DownloadLinks",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_downloadPaths": {
+                            "runAfter": {
+                                "Get_filepaths_to_download": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "DownloadPaths",
+                                        "type": "array",
+                                        "value": "@split(body('Get_filepaths_to_download')?['data']?['filePath'], ',')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_graphql_query": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "query",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_graphql_variables": {
+                            "runAfter": {
+                                "Initialize_graphql_query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "variables",
+                                        "type": "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_grpahql_query_and_variables_based_on_objectType": {
+                            "runAfter": {
+                                "Initialize_downloadPaths": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "cases": {
+                                "Fileset_type_of_object": {
+                                    "case": "Fileset",
+                                    "actions": {
+                                        "Set_graphql_query_for_Fileset": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "query",
+                                                "value": "mutation PhysicalHostDownloadSnapshotFilesMutation($config: FilesetDownloadFilesJobConfigInput!, $id: String!, $deltaTypeFilter: [DeltaType!], $nextSnapshotFid: UUID, $userNote: String) {\n  filesetDownloadSnapshotFiles(\n    input: {config: $config, id: $id, deltaTypeFilter: $deltaTypeFilter, nextSnapshotFid: $nextSnapshotFid, userNote: $userNote}\n  ) {\n    id\n    status\n    error {\n      message\n      __typename\n    }\n    links {\n      href\n      rel\n      __typename\n    }\n    __typename\n  }\n}"
+                                            }
+                                        },
+                                        "Set_graphql_variable_for_Fileset": {
+                                            "runAfter": {
+                                                "Set_graphql_query_for_Fileset": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "variables",
+                                                "value": {
+                                                    "config": {
+                                                        "sourceDirs": "@variables('DownloadPaths')"
+                                                    },
+                                                    "id": "@{triggerBody()?['ActivitySeriesId']}"
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "VmwareVm_type_of_object": {
+                                    "case": "VmwareVm",
+                                    "actions": {
+                                        "Set_graphql_query_for_VmwareVm": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "query",
+                                                "value": "mutation RadarInvestigationVSphereDownloadFilesMutation($input: VsphereVmDownloadSnapshotFilesInput!) {\n  vsphereVmDownloadSnapshotFiles(input: $input) {\n    id\n    status\n    links {\n      href\n      rel\n      __typename\n    }\n    __typename\n  }\n}"
+                                            }
+                                        },
+                                        "Set_graphql_variable_for_VmwareVm": {
+                                            "runAfter": {
+                                                "Set_graphql_query_for_VmwareVm": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "variables",
+                                                "value": {
+                                                    "input": {
+                                                        "paths": "@variables('DownloadPaths')",
+                                                        "snapshotFid": "@{triggerBody()?['ActivitySeriesId']}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "VolumeGroup_ObjectType": {
+                                    "case": "VolumeGroup",
+                                    "actions": {
+                                        "Set_graphql_query_for_VolumeGroup": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "query",
+                                                "value": "mutation RadarInvestigationVGDownloadFilesMutation($input: DownloadVolumeGroupSnapshotFilesInput!) {\n  downloadVolumeGroupSnapshotFiles(input: $input) {\n    id\n    status\n    links {\n      href\n      rel\n      __typename\n    }\n    __typename\n  }\n}"
+                                            }
+                                        },
+                                        "Set_graphql_variable_for_VolumeGroup": {
+                                            "runAfter": {
+                                                "Set_graphql_query_for_VolumeGroup": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "variables",
+                                                "value": {
+                                                    "input": {
+                                                        "config": {
+                                                            "paths": "@variables('DownloadPaths')"
+                                                        },
+                                                        "id": "@{triggerBody()?['ActivitySeriesId']}"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "default": {
+                                "actions": {
+                                    "Response_2": {
+                                        "runAfter": {},
+                                        "type": "Response",
+                                        "kind": "Http",
+                                        "inputs": {
+                                            "body": "Error: Not a valid objectType.",
+                                            "statusCode": 400
+                                        }
+                                    },
+                                    "Terminate": {
+                                        "runAfter": {
+                                            "Response_2": [
+                                                "Succeeded"
+                                            ]
+                                        },
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "message": "Error: Not a valid objectType"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": "@if(contains(triggerBody()?['ObjectType'],'VolumeGroup'),'VolumeGroup',if(contains(triggerBody()?['ObjectType'],'Fileset'),'Fileset','VmwareVm'))",
+                            "type": "Switch"
+                        },
+                        "Initialize_requestId": {
+                            "runAfter": {
+                                "Initialize_clusterLocation": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "requestId",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Failure_Response": {
+                            "inputs": {
+                                "body": "Error while generating downloadable link for selected suspicious filePath(s): @{variables('DownloadLinkStatus')}",
+                                "statusCode": 400
+                            },
+                            "kind": "Http",
+                            "runAfter": {
+                                "Does_status_code_of_get_downloadable_link_API_equal_to_200": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Response"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "RubrikRetrieveAnomalyResult",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}

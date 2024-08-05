@@ -3,6 +3,7 @@ from typing import Dict
 import requests
 
 from connections.exceptions import ApiResponseException
+
 TIMEOUT = 30
 
 
@@ -31,9 +32,8 @@ class ZeroFoxClient:
             timeout=timeout,
             ok_code=200,
         )
+        yield response["results"]
 
-        for result in response["results"]:
-            yield result
         while response["next"]:
             response = self._http_request(
                 method="GET",
@@ -42,8 +42,7 @@ class ZeroFoxClient:
                 ok_code=200,
                 url=response["next"],
             )
-            for result in response["results"]:
-                yield result
+            yield response["results"]
 
     def _http_request(
         self,
@@ -88,7 +87,7 @@ class ZeroFoxClient:
 
     def _get_cti_request_header(self):
         token: str = self.get_cti_authorization_token()
-        logging.debug(f"Access token retrieved")
+        logging.debug("Access token retrieved")
         return {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",

@@ -4,18 +4,11 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.24.24.22086",
-      "templateHash": "1576663599375367683"
+      "version": "0.28.1.47646",
+      "templateHash": "12807419542720902161"
     }
   },
   "parameters": {
-    "functionAppName": {
-      "type": "string",
-      "defaultValue": "[format('VaronisSaaS-{0}', uniqueString(resourceGroup().id))]",
-      "metadata": {
-        "description": "The name of the Azure Function app."
-      }
-    },
     "storageAccountType": {
       "type": "string",
       "defaultValue": "Standard_LRS",
@@ -25,7 +18,7 @@
         "Standard_RAGRS"
       ],
       "metadata": {
-        "description": "Storage Account type"
+        "description": "Storage Account type."
       }
     },
     "location": {
@@ -35,85 +28,66 @@
         "description": "Location for all resources."
       }
     },
-    "appInsightsLocation": {
-      "type": "string",
-      "defaultValue": "[resourceGroup().location]",
-      "metadata": {
-        "description": "Location for Application Insights"
-      }
-    },
-    "functionWorkerRuntime": {
-      "type": "string",
-      "defaultValue": "dotnet",
-      "allowedValues": [
-        "dotnet"
-      ],
-      "metadata": {
-        "description": "The language worker runtime to load in the function app."
-      }
-    },
-    "functionPlanOS": {
-      "type": "string",
-      "defaultValue": "Linux",
-      "allowedValues": [
-        "Windows",
-        "Linux"
-      ],
-      "metadata": {
-        "description": "Specifies the OS used for the Azure Function hosting plan."
-      }
-    },
-    "functionAppPlanSku": {
-      "type": "string",
-      "defaultValue": "Y1",
-      "allowedValues": [
-        "Y1",
-        "EP1",
-        "EP2",
-        "EP3"
-      ],
-      "metadata": {
-        "description": "Specifies the Azure Function hosting plan SKU."
-      }
-    },
-    "packageUri": {
-      "type": "string",
-      "defaultValue": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VaronisSaaS/Data%20Connectors/Varonis.Sentinel.Functions.zip",
-      "metadata": {
-        "description": "The zip content url."
-      }
-    },
-    "linuxFxVersion": {
-      "type": "string",
-      "defaultValue": "DOTNET|6.0",
-      "metadata": {
-        "description": "Only required for Linux app to represent runtime stack in the format of 'runtime|runtimeVersion'. For example: 'python|3.9'"
-      }
-    },
     "logAnalyticsWorkspaceName": {
       "type": "string",
       "metadata": {
         "description": "Name of the Log Analytics workspace used by Microsoft Sentinel."
       }
     },
-    "datAlertHostName": {
+    "varonisFQDN": {
       "type": "string",
       "metadata": {
-        "description": "Varonis DatAlert host name."
+        "description": "FQDN/IP for the Integration Connection - Enter the Varonis Web Interface address (e.g. https://example.varonis.com)."
       }
     },
-    "datAlertApiKey": {
+    "varonisApiKey": {
       "type": "securestring",
       "metadata": {
-        "description": "Varonis DatAlert API key."
+        "description": "Copy the API Key from the Varonis web interface."
+      }
+    },
+    "alertRetrievalStartPoint": {
+      "type": "int",
+      "defaultValue": 7,
+      "minValue": 0,
+      "maxValue": 30,
+      "metadata": {
+        "description": "Enter the past number of days from which to start retrieving alerts. Up to 30 days and 1,000 alerts are supported."
+      }
+    },
+    "threatDetectionPolicies": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "To retrieve alerts related to specific threat detection policies, enter the relevant policy names. RECOMMENDED: LEAVE THIS BLANK TO RETRIEVE ALL ALERTS (DEFAULT)."
+      }
+    },
+    "alertStatus": {
+      "type": "string",
+      "defaultValue": "New, Under Investigation",
+      "metadata": {
+        "description": "Specify the Varonis alert status."
+      }
+    },
+    "alertSeverity": {
+      "type": "string",
+      "defaultValue": "Low, Medium, High",
+      "metadata": {
+        "description": "Specify the alert severity."
       }
     }
   },
   "variables": {
-    "hostingPlanName": "[parameters('functionAppName')]",
-    "applicationInsightsName": "[parameters('functionAppName')]",
+    "functionAppName": "[format('VaronisSaaS-{0}', uniqueString(resourceGroup().id))]",
+    "functionWorkerRuntime": "dotnet",
+    "functionPlanOS": "Linux",
+    "functionAppPlanSku": "Y1",
+    "packageUri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VaronisSaaS/Data%20Connectors/Varonis.Sentinel.Functions.zip",
+    "linuxFxVersion": "DOTNET|6.0",
+    "hostingPlanName": "[variables('functionAppName')]",
+    "applicationInsightsName": "[variables('functionAppName')]",
     "storageAccountName": "[format('{0}sa', uniqueString(resourceGroup().id))]",
-    "isReserved": "[if(equals(parameters('functionPlanOS'), 'Linux'), true(), false())]"
+    "isReserved": "[if(equals(variables('functionPlanOS'), 'Linux'), true(), false())]"
   },
   "resources": [
     {
@@ -127,31 +101,13 @@
       "kind": "Storage"
     },
     {
-      "condition": "[contains(parameters('functionAppPlanSku'), 'EP')]",
-      "type": "Microsoft.Web/serverfarms",
-      "apiVersion": "2022-03-01",
-      "name": "[variables('hostingPlanName')]",
-      "location": "[parameters('location')]",
-      "sku": {
-        "tier": "ElasticPremium",
-        "name": "[parameters('functionAppPlanSku')]",
-        "family": "EP"
-      },
-      "properties": {
-        "maximumElasticWorkerCount": 20,
-        "reserved": "[variables('isReserved')]"
-      },
-      "kind": "elastic"
-    },
-    {
-      "condition": "[contains(parameters('functionAppPlanSku'), 'Y')]",
       "type": "Microsoft.Web/serverfarms",
       "apiVersion": "2022-03-01",
       "name": "[variables('hostingPlanName')]",
       "location": "[parameters('location')]",
       "sku": {
         "tier": "Dynamic",
-        "name": "[parameters('functionAppPlanSku')]"
+        "name": "[variables('functionAppPlanSku')]"
       },
       "properties": {
         "reserved": "[variables('isReserved')]"
@@ -162,7 +118,7 @@
       "type": "Microsoft.Insights/components",
       "apiVersion": "2020-02-02",
       "name": "[variables('applicationInsightsName')]",
-      "location": "[parameters('appInsightsLocation')]",
+      "location": "[parameters('location')]",
       "tags": {
         "[format('hidden-link:{0}', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
       },
@@ -174,14 +130,14 @@
     {
       "type": "Microsoft.Web/sites",
       "apiVersion": "2022-03-01",
-      "name": "[parameters('functionAppName')]",
+      "name": "[variables('functionAppName')]",
       "location": "[parameters('location')]",
       "kind": "[if(variables('isReserved'), 'functionapp,linux', 'functionapp')]",
       "properties": {
         "reserved": "[variables('isReserved')]",
-        "serverFarmId": "[if(contains(parameters('functionAppPlanSku'), 'EP'), resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName')), resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName')))]",
+        "serverFarmId": "[if(contains(variables('functionAppPlanSku'), 'EP'), resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName')), resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName')))]",
         "siteConfig": {
-          "linuxFxVersion": "[if(variables('isReserved'), parameters('linuxFxVersion'), null())]",
+          "linuxFxVersion": "[if(variables('isReserved'), variables('linuxFxVersion'), null())]",
           "appSettings": [
             {
               "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
@@ -197,7 +153,7 @@
             },
             {
               "name": "WEBSITE_CONTENTSHARE",
-              "value": "[toLower(parameters('functionAppName'))]"
+              "value": "[toLower(variables('functionAppName'))]"
             },
             {
               "name": "FUNCTIONS_EXTENSION_VERSION",
@@ -205,19 +161,19 @@
             },
             {
               "name": "FUNCTIONS_WORKER_RUNTIME",
-              "value": "[parameters('functionWorkerRuntime')]"
+              "value": "[variables('functionWorkerRuntime')]"
             },
             {
               "name": "WEBSITE_RUN_FROM_PACKAGE",
-              "value": "[parameters('packageUri')]"
+              "value": "[variables('packageUri')]"
             },
             {
-              "name": "DatAlertHostName",
-              "value": "[parameters('datAlertHostName')]"
+              "name": "VaronisFQDN_IP",
+              "value": "[parameters('varonisFQDN')]"
             },
             {
-              "name": "DatAlertApiKey",
-              "value": "[parameters('datAlertApiKey')]"
+              "name": "VaronisApiKey",
+              "value": "[parameters('varonisApiKey')]"
             },
             {
               "name": "LogAnalyticsKey",
@@ -228,27 +184,26 @@
               "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2021-06-01').customerId]"
             },
             {
-              "name": "FirstFetchTime",
-              "value": "2 weeks"
+              "name": "AlertRetrievalStart",
+              "value": "[format('{0}', parameters('alertRetrievalStartPoint'))]"
             },
             {
-              "name": "Severities",
-              "value": "Low, Medium, High"
+              "name": "AlertSeverity",
+              "value": "[parameters('alertSeverity')]"
             },
             {
-              "name": "ThreatModelNameList",
-              "value": ""
+              "name": "ThreatDetectionPolicies",
+              "value": "[parameters('threatDetectionPolicies')]"
             },
             {
-              "name": "Statuses",
-              "value": "New, Under Investigation"
+              "name": "AlertStatus",
+              "value": "[parameters('alertStatus')]"
             }
           ]
         }
       },
       "dependsOn": [
         "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
-        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
         "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]

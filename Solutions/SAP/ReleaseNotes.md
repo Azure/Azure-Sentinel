@@ -10,3 +10,4 @@
 | 15/04/2024 | 3.1.4 | Bug fixes |
 | 25/04/2024 | 3.1.5 | Fixes SAPCONTROL_CL error when using cross workspace feature|
 | 16/06/2024 | 3.1.7 | Improved and simplified logic for 4 alert rules:  <br> SAP Data has Changed During Debugging Activity <br> SAP Execution of Sensitive Function Module <br> SAP Function module tested  <br> SAP Multiple Logons by IP. <br>  <br> Fixed bugs in parsers:  <br> SAPCRLog, SAPGetSystemParameter.   <br> <br> Added additionalData column to "SAP - Systems" watchlist
+| 11/07/2024 | 3.1.13 | Handle the "Unknown function" error on queries using multiple parsers. <br>  Disable incident creation for low severity data collection health alerts. <br> Excluded SAPJAVAFilesLogs from being queried in SAPSystems and SAPUsers* parsers by default. <br> Updated "Audit Controls" workbook to support solution versions 3.X. <br> Updated workbooks to default to local workspace even when workspace is a fresh one. 

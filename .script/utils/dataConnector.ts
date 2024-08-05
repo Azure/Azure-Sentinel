@@ -213,5 +213,6 @@ export enum ConnectorCategory {
   SecurityAlertASC="SecurityAlert(ASC)",
   CybleThreatIntel="CybleThreatIntel",
   CrowdStrikeFalconIOC="CrowdStrikeFalconIOC",
+  Wiz="Wiz",
   VectraStreamAma="VectraStreamAma"
 }
