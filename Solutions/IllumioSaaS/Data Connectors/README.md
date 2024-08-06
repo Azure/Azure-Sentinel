@@ -22,8 +22,8 @@ This might result in additional data ingestion costs. Check the [Azure Functions
 
 Use the following template:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2Fazuredeploy_IllumioSaaS_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FcreateUiDefinition.json) 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-IllumioSaaS-FunctionApp) 
 
 ### To deploy additional function apps, use the following link, note this deploys QueueTrigger function only. There is no need to deploy additional TimedApi/TimedSQS/QueueManager apps.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FQueueTriggerFuncApp%2FDeployFunctionApp%2Fazuredeploy_QueueTrigger_FunctionApp.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FIllumioSaaS%2FData%2520Connectors%2FQueueTriggerFuncApp%2FDeployFunctionApp%2FcreateUiDefinitionQueueTrigger.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://aka.ms/sentinel-IllumioSaaS-QueueTriggerFunctionApp)
