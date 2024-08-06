@@ -1,0 +1,421 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "functionAppName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Function App"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location of Microsoft Sentinel workspace"
+            }
+        },
+        "workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Microsoft Sentinel workspace"
+            }
+        },
+        "keyVaultName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault holding BTP secret"
+            }
+        },
+        "secretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault secret holding BTP client secret"
+            }
+        },
+        "btpApiHost": {
+            "type": "string",
+            "metadata": {
+                "description": "Hostname for the BTP Audit Log API endpoint"
+            }
+        },
+        "btpClientId": {
+            "type": "string",
+            "metadata": {
+                "description": "BTP authentication service client ID"
+            }
+        },
+        "btpUAAUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "URL of the BTP authentication service"
+            }
+        },
+        "AppInsightsWorkspaceResourceID": {
+            "type": "string",
+            "metadata": {
+                "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
+            }
+        }
+    },
+    "variables": {
+        "storageAccountName": "[concat(replace(toLower(parameters('functionAppName')),'-',''),'sa')]",
+        "storageSuffix": "[environment().suffixes.storage]",
+        "serverFarmName": "[concat('serverfarm_', parameters('functionAppName'))]",
+        "appInsightsLogName": "[concat(parameters('functionAppName'),'Logs')]",
+        "clv2TableName": "SAPBTPAuditLog_CL",
+        "dataCollectionEndpointName": "Microsoft-Sentinel-SAP-BTP-DCE",
+        "dataCollectionRuleName": "Microsoft-Sentinel-SAP-BTP-DCR",
+        "dCRStreamName": "[concat('Custom-', variables('clv2TableName'))]",
+        "monitoringMetricsPublisherRoleId": "3913510d-42f4-4e42-8a64-420c390055eb"
+    },
+    "resources": [
+        {
+            "type": "microsoft.insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('appInsightsLogName')]",
+            "location": "[parameters('location')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[parameters('functionAppName')]",
+                "WorkspaceResourceId": "[parameters('AppInsightsWorkspaceResourceID')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2022-03-01",
+            "name": "[variables('serverFarmName')]",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic",
+                "size": "Y1",
+                "family": "Y",
+                "capacity": 0
+            },
+            "kind": "functionapp",
+            "properties": {
+                "perSiteScaling": false,
+                "elasticScaleEnabled": false,
+                "maximumElasticWorkerCount": 1,
+                "isSpot": false,
+                "reserved": true,
+                "isXenon": false,
+                "hyperV": false,
+                "targetWorkerCount": 0,
+                "targetWorkerSizeId": 0,
+                "zoneRedundant": false
+            }
+        },
+        {
+            "name": "[variables('storageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2021-04-01",
+            "location": "[parameters('location')]",
+            "kind": "StorageV2",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            }
+        },
+        {
+            "name": "[parameters('functionAppName')]",
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2022-03-01",
+            "location": "[parameters('location')]",
+            "kind": "functionapp,linux",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('appInsightsLogName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "httpsOnly": true,
+                "publicNetworkAccess": "Disabled",
+                "keyVaultReferenceIdentity": "SystemAssigned",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+                "siteProperties": {
+                    "properties": [
+                        {
+                            "name": "LinuxFxVersion",
+                            "value": "Python|3.10"
+                        }
+                    ]
+                },
+                "siteConfig": {
+                    "linuxFxVersion": "Python|3.10",
+                    "ftpsState": "Disabled",
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('storageAccountName'))), '2021-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', toLower(variables('storageAccountName')),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', toLower(variables('storageAccountName'))), '2021-06-01').keys[0].value, ';EndpointSuffix=',toLower(variables('storageSuffix')))]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "[toLower(parameters('functionAppName'))]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('Microsoft.insights/components', variables('appInsightsLogName'))).InstrumentationKey]"
+                        },
+                        {
+                            "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('appInsightsLogName'))).ConnectionString]"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+                        {
+                            "name": "AzureWebJobsFeatureFlags",
+                            "value": "EnableWorkerIndexing",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "BTP_API_HOST",
+                            "value": "[parameters('btpApiHost')]",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "BTP_CLIENT_ID",
+                            "value": "[parameters('btpClientId')]",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "BTP_CLIENT_KEY",
+                            "value": "[concat('@Microsoft.KeyVault(VaultName=', parameters('keyVaultName'), ';SecretName=', parameters('secretName'),')')]",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "BTP_UAA_URL",
+                            "value": "[parameters('btpUAAUrl')]",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "BTP_API_TIMEOUT_SECONDS",
+                            "value": "30",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "DCR_DCE_URL",
+                            "value": "[reference(variables('dataCollectionEndpointName')).logsIngestion.endpoint]",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "DCR_IMMUTABLE_ID",
+                            "value": "[reference(variables('dataCollectionRuleName')).immutableId]",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "DCR_STREAM_NAME",
+                            "value": "[variables('dCRStreamName')]",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "FUNCTION_SHUTDOWN_TIMEOUT_MINS",
+                            "value": "9",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "TIMER_SCHEDULE_MINS",
+                            "value": "10",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "MAX_LOOKBACK_DURATION_HOURS",
+                            "value": "8",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "QUERY_WINDOW_OFFSET_MINS",
+                            "value": "5",
+                            "slotSetting": false
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "https://aka.ms/sentinel-sapbtp-functionapp"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[variables('dataCollectionRuleName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dataCollectionEndpointName'))]"
+            ],
+            "properties": {
+                "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints',variables('dataCollectionEndpointName'))]",
+                "streamDeclarations": {
+                    "[variables('dCRStreamName')]": {
+                        "columns": [
+                            {
+                                "name": "message_uuid",
+                                "type": "string"
+                            },
+                            {
+                                "name": "time",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "tenant",
+                                "type": "string"
+                            },
+                            {
+                                "name": "org_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "space_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "app_or_service_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "als_service_id",
+                                "type": "string"
+                            },
+                            {
+                                "name": "user",
+                                "type": "string"
+                            },
+                            {
+                                "name": "category",
+                                "type": "string"
+                            },
+                            {
+                                "name": "format_version",
+                                "type": "string"
+                            },
+                            {
+                                "name": "message",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {},
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]",
+                            "name": "clv2ws1"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "[variables('dCRStreamName')]"
+                        ],
+                        "destinations": [
+                            "clv2ws1"
+                        ],
+                        "transformKql": "source\n| extend TimeGenerated = now()\n| extend\n    MessageUuid = tostring(message_uuid),\n    UpdatedOn = todatetime(['time']),\n    Tenant = tostring(tenant),\n    OrgId = tostring(org_id),\n    SpaceId = tostring(space_id),\n    AlsServiceId = tostring(app_or_service_id),\n    Category = tostring(category),\n    Message = parse_json(message),\n    UserName = tostring(user)\n| project\n    TimeGenerated,\n    UserName,\n    Message,\n    UpdatedOn,\n    MessageUuid,\n    Tenant,\n    OrgId,\n    SpaceId,\n    AlsServiceId,\n    Category\n",
+                        "outputStream": "[variables('dCRStreamName')]"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Insights/dataCollectionEndpoints",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[variables('dataCollectionEndpointName')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('clv2TableName'))]"
+            ],
+            "properties": {
+                "networkAcls": {
+                    "publicNetworkAccess": "Enabled"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "apiVersion": "2021-12-01-preview",
+            "name": "[concat(parameters('workspaceName'), '/', variables('clv2TableName'))]",
+            "properties": {
+                "schema": {
+                    "name": "[variables('clv2TableName')]",
+                    "columns": [
+                        {
+                            "name": "TimeGenerated",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "UserName",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Message",
+                            "type": "dynamic"
+                        },
+                        {
+                            "name": "UpdatedOn",
+                            "type": "datetime"
+                        },
+                        {
+                            "name": "MessageUuid",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Tenant",
+                            "type": "string"
+                        },
+                        {
+                            "name": "OrgId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "SpaceId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "AlsServiceId",
+                            "type": "string"
+                        },
+                        {
+                            "name": "Category",
+                            "type": "string"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[guid(parameters('functionAppName'), variables('dataCollectionRuleName'), variables('monitoringMetricsPublisherRoleId'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]",
+                "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dataCollectionRuleName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', variables('monitoringMetricsPublisherRoleId') )]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', parameters('functionAppName')), '2022-03-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            },
+            "scope": "[concat('Microsoft.Insights/dataCollectionRules', '/', variables('dataCollectionRuleName'))]"
+        }
+    ],
+    "outputs": {}
+}
