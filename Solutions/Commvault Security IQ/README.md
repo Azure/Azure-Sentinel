@@ -54,36 +54,36 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
   * Name =  
     * Commvault_Disable_IDP
   * Runbook Type =  
-    * Python 
+    * Powershell 
   * Runtime Version =  
-    * 3.8 
+    * 5.1 
   * Click “Create” 
-  * Edit Python Runbook =
-    * Use the content in this file: **Runbooks/Commvault_Disable_IDP.py**
+  * Edit Powershell Runbook =
+    * Use the content in this file: **Runbooks/Commvault_Disable_IDP.ps1**
     * Click "Publish"
   * Click "Save"
 * Go to “Commvault-Automation-Account" ->  Runbooks (under “Process Automation”) -> Create a Runbook 
   * Name = 
     * Commvault_Disable_User
   * Runbook Type = 
-    * Python
+    * Powershell
   * Runtime Version = 
-    * 3.8
+    * 5.1
   * Click "Create"
-  * Edit Python Runbook = 
-    * Use the content in this file: **Runbooks/Commvault_Disable_Users.py**
+  * Edit Powershell Runbook = 
+    * Use the content in this file: **Runbooks/Commvault_Disable_Users.ps1**
     * Click "Publish"
   * Click "Save"
 * Go to “Commvault-Automation-Account" ->  Runbooks (under “Process Automation”) -> Create a Runbook 
   * Name = 
     * Commvault_Disable_Data_Aging
   * Runbook Type =
-    * Python
+    * Powershell
   * Runtime Version = 
-    * 3.8
+    * 5.1
   * Click "Create"
-  * Edit Python Runbook = 
-    * Use the content in this file: **Runbooks/Commvault_Disable_Data_Aging.py**
+  * Edit Powershell Runbook = 
+    * Use the content in this file: **Runbooks/Commvault_Disable_Data_Aging.ps1**
     * Click "Publish"
   * Click "Save"
     
