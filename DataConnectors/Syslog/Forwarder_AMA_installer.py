@@ -135,7 +135,7 @@ def set_rsyslog_new_configuration():
                 if "imudp" in line or "imtcp" in line:
                     # Load configuration line requires 1 replacement
                     if "load" in line:
-                        fout.write(line.lstrip("#"))
+                        fout.write(line.replace("#", "", 1))
                     # Port configuration line requires 2 replacements
                     elif "port" in line:
                         fout.write(line.replace("#", "", 2))

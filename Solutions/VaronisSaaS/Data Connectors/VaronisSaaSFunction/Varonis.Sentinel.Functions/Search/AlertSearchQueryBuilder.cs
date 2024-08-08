@@ -135,7 +135,7 @@ namespace Varonis.Sentinel.Functions.Search
                 _searchQueryFilters.Add(new Filter
                 {
                     Operator = EmOperator.In,
-                    Path = AlertAttributes.DeviceHostName,
+                    Path = AlertAttributes.DeviceHostname,
                     Values = ParametersToValuesConverter.CreateValuesListFromList(deviceNames)
                 });
             }

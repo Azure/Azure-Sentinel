@@ -1,0 +1,1956 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Domain Enrichment- DomainTools Iris Investigate With Farsight DNSDB", 
+        "description": "Given a domain or set of domains associated with an incident, enrich the domain using the DomainTools Iris Investigate API, returning whois and infrastructure details. Subsequently retrieve associated subdomains from passive DNS information seen in Farsight’s DNSDB.",
+        "prerequisites": [
+            "A DomainTools API Key provisioned for Iris Investigate. Visit https://www.domaintools.com/integrations to request a trial key.",
+            "A Farisght API Key provisioned for Farsight DNSDB. Visit https://www.farsightsecurity.com/about-farsight-security/contacts/ to request a trial key"
+        ],
+        "lastUpdateTime": "2022-09-24T00:00:00.000Z", 
+        "entities": ["host"], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Dan Nunes, DomainTools"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "DomainTools_Iris_Investigate-With_Farsight_pDNS_Playbook",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+		"DomainToolsApiKey": "[concat('domaintoolsirisinves-', parameters('PlaybookName'))]",
+        "FarsightDNSDBApiKey": "[concat('farsightdnsdb-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+        {
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('DomainToolsApiKey')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[parameters('UserName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/domaintoolsirisinves')]"
+                }
+            }
+        },
+        {
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('FarsightDNSDBApiKey')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[parameters('UserName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/farsightdnsdb')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('DomainToolsApiKey'))]",
+                "[resourceId('Microsoft.Web/connections', variables('FarsightDNSDBApiKey'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "DNS_Name_Variable": {
+                            "runAfter": {
+                                "Host_Name_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dns_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Domain_Name_Variable": {
+                            "runAfter": {
+                                "DNS_Name_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "domain_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {
+                                "registrar_value": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "For_each_Host": {
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions": {
+                                "Check_DNS_Name_is_empty": {
+                                    "actions": {
+                                        "Set_Domain_Name_Variable": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "domain_name",
+                                                "value": "@{variables('host_name')}.@{variables('dns_name')}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_DNS_Name_Variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "domain_name",
+                                                    "value": "@variables('host_name')"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@variables('dns_name')",
+                                                        ""
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Check_if_results_exists": {
+                                    "actions": {
+                                        "Results_Loop": {
+                                            "foreach": "@body('Investigate_Domain')?['response']?['results']",
+                                            "actions": {
+                                                "Add_comment_to_incident_(V3)": {
+                                                    "runAfter": {
+                                                        "Condition_2": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "body": {
+                                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                            "message": "<p><span style=\"font-size: 16px\"><strong>DomainTools IRIS Investigate response for: </strong></span><span style=\"font-size: 16px\">@{variables('domain_name')}</span><span style=\"font-size: 16px\"></span><br>\n@{body('Domain_detailts_Table')}@{replace(replace(replace(body('Domain_Risk_Score_Components_Table') , '&quot;', ''),']','') , '[', '') }@{body('miscellaneouos_Table')}@{body('IP_Table')}@{body('MX_Table')}@{body('Nameserver_Table')}@{body('Admin_Contact_Table')}@{body('Billing_Contact_Table')}@{body('Registrant_Contact_Table')}@{body('Technical_Contact_Table')}<br>\nFind more details: https://research.domaintools.com/iris/search/?q=@{variables('domain_name')}<br>\n<span style=\"font-size: 16px\"><strong><br>\nFarsight DNSDB RData Reuslts for: </strong></span><span style=\"font-size: 16px\"><strong>@{variables('domain_name')}</strong></span><span style=\"font-size: 16px\"><strong></strong></span><br>\n@{variables('dnsdb_results_string')}<br>\n@{replace(replace(replace(body('DNSDB_Table') , '&quot;', ''),']','') , '[', '')}<br>\nFind more details: https://scout.dnsdb.info/?seed=@{variables('domain_name')}<br>\n<br>\n</p>"
+                                                        },
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/Incidents/Comment"
+                                                    }
+                                                },
+                                                "Admin_Contact_Compose": {
+                                                    "runAfter": {
+                                                        "For_each_Admin_Contact_Email": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Admin Contact City": "@items('Results_Loop')?['admin_contact']?['city']?['value']",
+                                                        "Admin Contact Country": "@items('Results_Loop')?['admin_contact']?['country']?['value']",
+                                                        "Admin Contact Email": "@substring(variables('admin_contact_email'),0,sub(length(variables('admin_contact_email')),1))",
+                                                        "Admin Contact Fax": "@items('Results_Loop')?['admin_contact']?['fax']?['value']",
+                                                        "Admin Contact Name": "@items('Results_Loop')?['admin_contact']?['name']?['value']",
+                                                        "Admin Contact Org": "@items('Results_Loop')?['admin_contact']?['org']?['value']",
+                                                        "Admin Contact Phone": "@items('Results_Loop')?['admin_contact']?['phone']?['value']",
+                                                        "Admin Contact Postal": "@items('Results_Loop')?['admin_contact']?['postal']?['value']",
+                                                        "Admin Contact State": "@items('Results_Loop')?['admin_contact']?['state']?['value']",
+                                                        "Admin Contact Street": "@items('Results_Loop')?['admin_contact']?['street']?['value']"
+                                                    }
+                                                },
+                                                "Admin_Contact_Table": {
+                                                    "runAfter": {
+                                                        "Nameserver_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('admin_contact_details')"
+                                                    }
+                                                },
+                                                "Append_to__Domain_Details_array": {
+                                                    "runAfter": {
+                                                        "_Domain_Details_Compose": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "domain_details_array",
+                                                        "value": "@outputs('_Domain_Details_Compose')"
+                                                    }
+                                                },
+                                                "Append_to_admin_contact_array": {
+                                                    "runAfter": {
+                                                        "Admin_Contact_Compose": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "admin_contact_details",
+                                                        "value": "@outputs('Admin_Contact_Compose')"
+                                                    }
+                                                },
+                                                "Append_to_billing_contact_array": {
+                                                    "runAfter": {
+                                                        "Billing_Contact_Compose": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "billing_contact_details",
+                                                        "value": "@outputs('Billing_Contact_Compose')"
+                                                    }
+                                                },
+                                                "Append_to_miscellaneous_array_variable": {
+                                                    "runAfter": {
+                                                        "Miscellaneous_Compose": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "Miscellaneous",
+                                                        "value": "@outputs('Miscellaneous_Compose')"
+                                                    }
+                                                },
+                                                "Append_to_registrant_contact_array": {
+                                                    "runAfter": {
+                                                        "Registrant_Contact_Compose": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "registrant_contact_details",
+                                                        "value": "@outputs('Registrant_Contact_Compose')"
+                                                    }
+                                                },
+                                                "Append_to_techinical_contact_array": {
+                                                    "runAfter": {
+                                                        "Technical_Contact_Compose": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "technical_contact_details",
+                                                        "value": "@outputs('Technical_Contact_Compose')"
+                                                    }
+                                                },
+                                                "Billing_Contact_Compose": {
+                                                    "runAfter": {
+                                                        "For_each_Billing_Contact_Email": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Billing Contact City": "@items('Results_Loop')?['billing_contact']?['city']?['value']",
+                                                        "Billing Contact Country": "@items('Results_Loop')?['billing_contact']?['country']?['value']",
+                                                        "Billing Contact Email": "@substring(variables('billing_contact_email'),0,sub(length(variables('billing_contact_email')),1))",
+                                                        "Billing Contact Fax": "@items('Results_Loop')?['billing_contact']?['fax']?['value']",
+                                                        "Billing Contact Name": "@items('Results_Loop')?['billing_contact']?['name']?['value']",
+                                                        "Billing Contact Org": "@items('Results_Loop')?['billing_contact']?['org']?['value']",
+                                                        "Billing Contact Phone": "@items('Results_Loop')?['billing_contact']?['phone']?['value']",
+                                                        "Billing Contact Postal": "@items('Results_Loop')?['billing_contact']?['postal']?['value']",
+                                                        "Billing Contact State": "@items('Results_Loop')?['billing_contact']?['state']?['value']",
+                                                        "Billing Contact Street": "@items('Results_Loop')?['billing_contact']?['street']?['value']"
+                                                    }
+                                                },
+                                                "Billing_Contact_Table": {
+                                                    "runAfter": {
+                                                        "Admin_Contact_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('billing_contact_details')"
+                                                    }
+                                                },
+                                                "Check_dnsdb_results_exist": {
+                                                    "actions": {
+                                                        "For_each": {
+                                                            "foreach": "@body('RData_Lookup_with_RRType')",
+                                                            "actions": {
+                                                                "Condition": {
+                                                                    "actions": {
+                                                                        "Append_to_dnsdb_results": {
+                                                                            "runAfter": {
+                                                                                "dndb_compose_": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "AppendToArrayVariable",
+                                                                            "inputs": {
+                                                                                "name": "dnsdb_rdata_results",
+                                                                                "value": "@outputs('dndb_compose_')"
+                                                                            }
+                                                                        },
+                                                                        "dndb_compose_": {
+                                                                            "runAfter": {},
+                                                                            "type": "Compose",
+                                                                            "inputs": {
+                                                                                "Count": "@items('For_each')?['count']",
+                                                                                "First Seen": "@items('For_each')?['time_first']",
+                                                                                "Last Seen": "@items('For_each')?['time_last']",
+                                                                                "RRName": "@items('For_each')?['rrname']",
+                                                                                "Rdata": "@items('For_each')?['rdata']",
+                                                                                "Record Type": "@items('For_each')?['rrtype']"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {},
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Append_to_array_variable_2": {
+                                                                                "runAfter": {
+                                                                                    "dnsdb_compose_2": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "dnsdb_rdata_results",
+                                                                                    "value": "@outputs('dnsdb_compose_2')"
+                                                                                }
+                                                                            },
+                                                                            "dnsdb_compose_2": {
+                                                                                "runAfter": {},
+                                                                                "type": "Compose",
+                                                                                "inputs": {
+                                                                                    "Count": "@items('For_each')?['count']",
+                                                                                    "First Seen": "@items('For_each')?['zone_time_first']",
+                                                                                    "Last Seen": "@items('For_each')?['zone_time_last']",
+                                                                                    "RRName": "@items('For_each')?['rrname']",
+                                                                                    "Rdata": "@items('For_each')?['rdata']",
+                                                                                    "Record Type": "@items('For_each')?['rrtype']"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "not": {
+                                                                                    "equals": [
+                                                                                        "@items('For_each')?['time_first']",
+                                                                                        "@null"
+                                                                                    ]
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "Foreach"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "set_dnsdb_results": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "greater": [
+                                                                    "@length(body('RData_Lookup_with_RRType'))",
+                                                                    0
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Condition_2": {
+                                                    "actions": {
+                                                        "Set_variable_2": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "dnsdb_results_string",
+                                                                "value": "Showing first  @{variables('dnsdb_results_count')}  records "
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "DNSDB_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_variable_4": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "dnsdb_results_string",
+                                                                    "value": "No records found"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "greaterOrEquals": [
+                                                                    "@length(variables('dnsdb_rdata_results'))",
+                                                                    "@variables('dnsdb_results_count')"
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Condition_3": {
+                                                    "actions": {
+                                                        "Set_variable_3": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "registrar_value",
+                                                                "value": "@{items('Results_Loop')?['registrar']?['value']}"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "set_registrar_value": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "greater": [
+                                                                    "@length(variables('registrar_value'))",
+                                                                    0
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "DNSDB_Table": {
+                                                    "runAfter": {
+                                                        "Check_dnsdb_results_exist": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('dnsdb_rdata_results')"
+                                                    }
+                                                },
+                                                "Domain_Risk_Score_Components_Table": {
+                                                    "runAfter": {
+                                                        "Domain_detailts_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@items('Results_Loop')?['domain_risk']?['components']"
+                                                    }
+                                                },
+                                                "Domain_detailts_Table": {
+                                                    "runAfter": {
+                                                        "Append_to_miscellaneous_array_variable": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('domain_details_array')"
+                                                    }
+                                                },
+                                                "For_Each_Email_Domain": {
+                                                    "foreach": "@items('Results_Loop')['email_domain']",
+                                                    "actions": {
+                                                        "Append_to_email_domains_variable": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "email_domains",
+                                                                "value": "@{items('For_Each_Email_Domain')?['value']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "set_email_domain_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_Admin_Contact_Email": {
+                                                    "foreach": "@items('Results_Loop')['admin_contact']['email']",
+                                                    "actions": {
+                                                        "Append_to_admin_contact_email_": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "admin_contact_email",
+                                                                "value": "@{items('For_each_Admin_Contact_Email')?['value']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Append_to__Domain_Details_array": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_Billing_Contact_Email": {
+                                                    "foreach": "@items('Results_Loop')['billing_contact']['email']",
+                                                    "actions": {
+                                                        "Append_to_billing_contact_email": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "billing_contact_email",
+                                                                "value": "@{items('For_each_Billing_Contact_Email')?['value']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Append_to_admin_contact_array": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_Name_Server": {
+                                                    "foreach": "@items('Results_Loop')['name_server']",
+                                                    "actions": {
+                                                        "Append_to_array_variable": {
+                                                            "runAfter": {
+                                                                "Name_Server_Compose": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "nameservers",
+                                                                "value": "@outputs('Name_Server_Compose')"
+                                                            }
+                                                        },
+                                                        "For_each_namer_server_ip": {
+                                                            "foreach": "@items('For_each_Name_Server')['ip']",
+                                                            "actions": {
+                                                                "Append_to_name_server_ips_variable": {
+                                                                    "runAfter": {},
+                                                                    "type": "AppendToStringVariable",
+                                                                    "inputs": {
+                                                                        "name": "name_server_ips",
+                                                                        "value": "@{items('For_each_namer_server_ip')?['value']},"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Set_name_server_ips_to_empty": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Foreach"
+                                                        },
+                                                        "Name_Server_Compose": {
+                                                            "runAfter": {
+                                                                "For_each_namer_server_ip": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "Nameserver Domain": "@items('For_each_Name_Server')?['domain']?['value']",
+                                                                "Nameserver Host": "@items('For_each_Name_Server')?['host']?['value']",
+                                                                "Nameserver IPs": "@substring(variables('name_server_ips'),0,sub(length(variables('name_server_ips')),1))"
+                                                            }
+                                                        },
+                                                        "Set_name_server_ips_to_empty": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "name_server_ips",
+                                                                "value": " "
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "For_each_mx": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_Registrant_Contact_Email": {
+                                                    "foreach": "@items('Results_Loop')['registrant_contact']['email']",
+                                                    "actions": {
+                                                        "Append_to_registrant_contact_email": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "registrant_contact_email",
+                                                                "value": "@{items('For_each_Registrant_Contact_Email')?['value']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Append_to_billing_contact_array": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_SOA_Email": {
+                                                    "foreach": "@items('Results_Loop')['soa_email']",
+                                                    "actions": {
+                                                        "Append_to_soa_email_variable": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "soa_emails",
+                                                                "value": "@{items('For_each_SOA_Email')?['value']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "set_soa_email_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_SSL_Email": {
+                                                    "foreach": "@items('Results_Loop')['ssl_email']",
+                                                    "actions": {
+                                                        "Append_to_SSL_Email_array_variable": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "ssl_emails",
+                                                                "value": "@{items('For_each_SSL_Email')?['value']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "set_ssl_email_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_Tags": {
+                                                    "foreach": "@items('Results_Loop')?['tags']",
+                                                    "actions": {
+                                                        "Append_to_string_variable": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "tags",
+                                                                "value": "@{items('For_each_Tags')?['label']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "For_each_adddtional_whois_email": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_Technical_Contact_Email": {
+                                                    "foreach": "@items('Results_Loop')['technical_contact']['email']",
+                                                    "actions": {
+                                                        "Append_to_technical_contact_email": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "technical_contact_email",
+                                                                "value": "@{items('For_each_Technical_Contact_Email')?['value']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Append_to_registrant_contact_array": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_adddtional_whois_email": {
+                                                    "foreach": "@items('Results_Loop')['additional_whois_email']",
+                                                    "actions": {
+                                                        "Append_toadddtional_whois_email_variable": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "additional_whois_emails",
+                                                                "value": "@{items('For_each_adddtional_whois_email')?['value']},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "set_additonal_whois_email_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_ip": {
+                                                    "foreach": "@items('Results_Loop')['ip']",
+                                                    "actions": {
+                                                        "Append_to_ips_array_variable": {
+                                                            "runAfter": {
+                                                                "IP_Compose": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "ips",
+                                                                "value": "@outputs('IP_Compose')"
+                                                            }
+                                                        },
+                                                        "For_each_IP_Asn": {
+                                                            "foreach": "@items('For_each_ip')['asn']",
+                                                            "actions": {
+                                                                "Append_to_ips_asn_variable": {
+                                                                    "runAfter": {},
+                                                                    "type": "AppendToStringVariable",
+                                                                    "inputs": {
+                                                                        "name": "ips_asns",
+                                                                        "value": "@{items('For_each_IP_Asn')?['value']},"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Set_ips_asn_to_empty": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Foreach"
+                                                        },
+                                                        "IP_Compose": {
+                                                            "runAfter": {
+                                                                "For_each_IP_Asn": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "IP ASN": "@substring(variables('ips_asns'),0,sub(length(variables('ips_asns')),1))",
+                                                                "IP Address": "@items('For_each_ip')?['address']?['value']",
+                                                                "IP Country Code": "@items('For_each_ip')?['country_code']?['value']",
+                                                                "IP ISP": "@items('For_each_ip')?['country_code']?['value']"
+                                                            }
+                                                        },
+                                                        "Set_ips_asn_to_empty": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "ips_asns",
+                                                                "value": " "
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Append_to_techinical_contact_array": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_mx": {
+                                                    "foreach": "@items('Results_Loop')['mx']",
+                                                    "actions": {
+                                                        "Append_to_mxs_array_variable": {
+                                                            "runAfter": {
+                                                                "MX_Compose": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "mxs",
+                                                                "value": "@outputs('MX_Compose')"
+                                                            }
+                                                        },
+                                                        "For_each_Mx_ip": {
+                                                            "foreach": "@items('For_each_mx')['ip']",
+                                                            "actions": {
+                                                                "Append_to_mx_ips_variable": {
+                                                                    "runAfter": {},
+                                                                    "type": "AppendToStringVariable",
+                                                                    "inputs": {
+                                                                        "name": "mx_ips",
+                                                                        "value": "@{items('For_each_Mx_ip')?['value']},"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Set_mx_ips_to_empty": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Foreach"
+                                                        },
+                                                        "MX_Compose": {
+                                                            "runAfter": {
+                                                                "For_each_Mx_ip": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Compose",
+                                                            "inputs": {
+                                                                "MX Domain": "@items('For_each_mx')?['domain']?['value']",
+                                                                "MX Host": "@items('For_each_mx')?['host']?['value']",
+                                                                "MX IP": "@substring(variables('mx_ips'),0,sub(length(variables('mx_ips')),1))",
+                                                                "MX Priority": "@items('For_each_mx')?['priority']"
+                                                            }
+                                                        },
+                                                        "Set_mx_ips_to_empty": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "mx_ips",
+                                                                "value": " "
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "For_each_ip": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "For_each_registrar_status": {
+                                                    "foreach": "@items('Results_Loop')?['registrar_status']",
+                                                    "actions": {
+                                                        "Append_to_registrar_status_string_variable": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "registrar_status",
+                                                                "value": "@{items('For_each_registrar_status')},"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_Tags_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Foreach"
+                                                },
+                                                "IP_Table": {
+                                                    "runAfter": {
+                                                        "miscellaneouos_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('ips')"
+                                                    }
+                                                },
+                                                "MX_Table": {
+                                                    "runAfter": {
+                                                        "IP_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('mxs')"
+                                                    }
+                                                },
+                                                "Miscellaneous_Compose": {
+                                                    "runAfter": {
+                                                        "For_each_Tags": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Additional Whois Emails": "@substring(variables('additional_whois_emails'),0,sub(length(variables('additional_whois_emails')),1))",
+                                                        "Email Domains": "@substring(variables('email_domains'),0,sub(length(variables('email_domains')),1))",
+                                                        "SOA Emails": "@substring(variables('soa_emails'),0,sub(length(variables('soa_emails')),1))",
+                                                        "SSL Emails": "@substring(variables('ssl_emails'),0,sub(length(variables('ssl_emails')),1))",
+                                                        "Tags": "@substring(variables('tags'),0,sub(length(variables('tags')),1))"
+                                                    }
+                                                },
+                                                "Nameserver_Table": {
+                                                    "runAfter": {
+                                                        "MX_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('nameservers')"
+                                                    }
+                                                },
+                                                "RData_Lookup_with_RRType": {
+                                                    "runAfter": {
+                                                        "Technical_Contact_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['farsightdnsdb']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/lookup/rdata/name/@{encodeURIComponent(variables('domain_name'))}/ANY",
+                                                        "queries": {
+                                                            "humantime": true,
+                                                            "limit": "@variables('dnsdb_results_count')"
+                                                        }
+                                                    }
+                                                },
+                                                "Registrant_Contact_Compose": {
+                                                    "runAfter": {
+                                                        "For_each_Registrant_Contact_Email": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Registrant Contact City": "@items('Results_Loop')?['registrant_contact']?['city']?['value']",
+                                                        "Registrant Contact Country": "@items('Results_Loop')?['registrant_contact']?['country']?['value']",
+                                                        "Registrant Contact Email": "@substring(variables('registrant_contact_email'),0,sub(length(variables('registrant_contact_email')),1))",
+                                                        "Registrant Contact Fax": "@items('Results_Loop')?['registrant_contact']?['fax']?['value']",
+                                                        "Registrant Contact Name": "@items('Results_Loop')?['registrant_contact']?['name']?['value']",
+                                                        "Registrant Contact Org": "@items('Results_Loop')?['registrant_contact']?['org']?['value']",
+                                                        "Registrant Contact Phone": "@items('Results_Loop')?['registrant_contact']?['phone']?['value']",
+                                                        "Registrant Contact Postal": "@items('Results_Loop')?['registrant_contact']?['postal']?['value']",
+                                                        "Registrant Contact State": "@items('Results_Loop')?['registrant_contact']?['state']?['value']",
+                                                        "Registrant Contact Street": "@items('Results_Loop')?['registrant_contact']?['street']?['value']"
+                                                    }
+                                                },
+                                                "Registrant_Contact_Table": {
+                                                    "runAfter": {
+                                                        "Billing_Contact_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('registrant_contact_details')"
+                                                    }
+                                                },
+                                                "Set_Admin_Contact_to_Empty": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "admin_contact_details",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_Billing_Contact_Email_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_Billing_Contact_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "billing_contact_email",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "Set_Billing_Contact_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_Set_Admin_Contact_Email_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "billing_contact_details",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_Domain_Details_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_Techinical_Contact_Email_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "domain_details_array",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_Registrant_Contact_Email_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_Registrant_Contact_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "registrant_contact_email",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "Set_Registrant_Contact_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_Billing_Contact_Email_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "registrant_contact_details",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_Set_Admin_Contact_Email_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_Admin_Contact_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "admin_contact_email",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "Set_Tags_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_registrar_status_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "tags",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "Set_Techinical_Contact_Email_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_Techinical_Contact_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "technical_contact_email",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "Set_Techinical_Contact_to_Empty": {
+                                                    "runAfter": {
+                                                        "Set_Registrant_Contact_Email_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "technical_contact_details",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_ips_variable_to_empty": {
+                                                    "runAfter": {
+                                                        "Set_miscellaneous_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "ips",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_miscellaneous_to_empty": {
+                                                    "runAfter": {
+                                                        "Set_Domain_Details_to_Empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "Miscellaneous",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_mxs_variable_to_empty": {
+                                                    "runAfter": {
+                                                        "Set_ips_variable_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "mxs",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_nameservers_variable_to_empty": {
+                                                    "runAfter": {
+                                                        "Set_mxs_variable_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "nameservers",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "Set_registrar_status_to_empty": {
+                                                    "runAfter": {
+                                                        "Set_nameservers_variable_to_empty": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "registrar_status",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "Technical_Contact_Compose": {
+                                                    "runAfter": {
+                                                        "For_each_Technical_Contact_Email": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Technical Contact City": "@items('Results_Loop')?['technical_contact']?['city']?['value']",
+                                                        "Technical Contact Country": "@items('Results_Loop')?['technical_contact']?['country']?['value']",
+                                                        "Technical Contact Email": "@substring(variables('technical_contact_email'),0,sub(length(variables('technical_contact_email')),1))",
+                                                        "Technical Contact Fax": "@items('Results_Loop')?['technical_contact']?['fax']?['value']",
+                                                        "Technical Contact Name": "@items('Results_Loop')?['technical_contact']?['name']?['value']",
+                                                        "Technical Contact Org": "@items('Results_Loop')?['technical_contact']?['org']?['value']",
+                                                        "Technical Contact Phone": "@items('Results_Loop')?['technical_contact']?['phone']?['value']",
+                                                        "Technical Contact Postal": "@items('Results_Loop')?['technical_contact']?['postal']?['value']",
+                                                        "Technical Contact State": "@items('Results_Loop')?['technical_contact']?['state']?['value']",
+                                                        "Technical Contact Street": "@items('Results_Loop')?['technical_contact']?['street']?['value']"
+                                                    }
+                                                },
+                                                "Technical_Contact_Table": {
+                                                    "runAfter": {
+                                                        "Registrant_Contact_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('technical_contact_details')"
+                                                    }
+                                                },
+                                                "_Domain_Details_Compose": {
+                                                    "runAfter": {
+                                                        "Condition_3": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Active": "@items('Results_Loop')?['active']",
+                                                        "Adsense": "@items('Results_Loop')?['adsense']?['value']",
+                                                        "Alexa": "@items('Results_Loop')?['alexa']",
+                                                        "Create Date": "@items('Results_Loop')?['create_date']?['value']",
+                                                        "Data Updated Timestsamap": "@items('Results_Loop')?['data_updated_timestamp']",
+                                                        "Domain": "@items('Results_Loop')?['domain']",
+                                                        "Expiration Date": "@items('Results_Loop')?['expiration_date']?['value']",
+                                                        "Google Analytics": "@items('Results_Loop')?['google_analytics']?['value']",
+                                                        "Redirect": "@items('Results_Loop')?['redirect']?['value']",
+                                                        "Redirect Domain": "@items('Results_Loop')?['redirect_domain']?['value']",
+                                                        "Registrant Name": "@items('Results_Loop')?['registrant_name']?['value']",
+                                                        "Registrant Org": "@items('Results_Loop')?['registrant_org']?['value']",
+                                                        "Registrar": "@variables('registrar_value')",
+                                                        "Registrar Status": "@substring(variables('registrar_status'),0,sub(length(variables('registrar_status')),1))",
+                                                        "Risk Score": "@items('Results_Loop')?['domain_risk']?['risk_score']",
+                                                        "SPF Info": "@items('Results_Loop')?['spf_info']",
+                                                        "TLD": "@items('Results_Loop')?['tld']",
+                                                        "Website Response": "@items('Results_Loop')?['website_response']",
+                                                        "Whois URL": "@items('Results_Loop')?['whois_url']"
+                                                    }
+                                                },
+                                                "miscellaneouos_Table": {
+                                                    "runAfter": {
+                                                        "Domain_Risk_Score_Components_Table": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Table",
+                                                    "inputs": {
+                                                        "format": "HTML",
+                                                        "from": "@variables('Miscellaneous')"
+                                                    }
+                                                },
+                                                "set_additonal_whois_email_to_empty": {
+                                                    "runAfter": {
+                                                        "For_each_SSL_Email": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "additional_whois_emails",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "set_dnsdb_results": {
+                                                    "runAfter": {
+                                                        "RData_Lookup_with_RRType": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "dnsdb_rdata_results",
+                                                        "value": []
+                                                    }
+                                                },
+                                                "set_email_domain_to_empty": {
+                                                    "runAfter": {
+                                                        "For_each_Name_Server": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "email_domains",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "set_registrar_value": {
+                                                    "runAfter": {
+                                                        "For_each_registrar_status": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "registrar_value",
+                                                        "value": "@{items('Results_Loop')?['registrar']}"
+                                                    }
+                                                },
+                                                "set_soa_email_to_empty": {
+                                                    "runAfter": {
+                                                        "For_Each_Email_Domain": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "soa_emails",
+                                                        "value": " "
+                                                    }
+                                                },
+                                                "set_ssl_email_to_empty": {
+                                                    "runAfter": {
+                                                        "For_each_SOA_Email": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "ssl_emails",
+                                                        "value": " "
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Investigate_Domain": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p>No results found for @{variables('domain_name')}</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Investigate_Domain')?['response']?['results'])",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Investigate_Domain": {
+                                    "runAfter": {
+                                        "Check_DNS_Name_is_empty": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['domaintoolsirisinves']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/iris-investigate/investigate_domain",
+                                        "queries": {
+                                            "domain": "@variables('domain_name')"
+                                        }
+                                    }
+                                },
+                                "Set_DNS_Name_Variable": {
+                                    "runAfter": {
+                                        "Set_Host_Name_Variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "dns_name",
+                                        "value": "@items('For_each_Host')?['DnsDomain']"
+                                    }
+                                },
+                                "Set_Host_Name_Variable": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "host_name",
+                                        "value": "@items('For_each_Host')?['HostName']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Host_Name_Variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "host_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Miscellaneous_variable": {
+                            "runAfter": {
+                                "registrar_status_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Miscellaneous",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "additional_whois_email": {
+                            "runAfter": {
+                                "ssl_emails": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "additional_whois_emails",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "admin_contact_details_variable": {
+                            "runAfter": {
+                                "domain_details_array_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "admin_contact_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "admin_contact_email_variable": {
+                            "runAfter": {
+                                "admin_contact_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "admin_contact_email",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "billing_contact_details_variable": {
+                            "runAfter": {
+                                "admin_contact_email_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "billing_contact_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "billing_contact_email_variable": {
+                            "runAfter": {
+                                "billing_contact_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "billing_contact_email",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "dnsdb_rdata_results": {
+                            "runAfter": {
+                                "nameservers_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dnsdb_rdata_results",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "dnsdb_results_count": {
+                            "runAfter": {
+                                "dnsdb_rdata_results": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dnsdb_results_count",
+                                        "type": "integer",
+                                        "value": 10
+                                    }
+                                ]
+                            }
+                        },
+                        "dnsdb_results_string": {
+                            "runAfter": {
+                                "dnsdb_results_count": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dnsdb_results_string",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "domain_details_array_variable": {
+                            "runAfter": {
+                                "Domain_Name_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "domain_details_array",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "email_domains": {
+                            "runAfter": {
+                                "technical_contact_email_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "email_domains",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "ips_asns_": {
+                            "runAfter": {
+                                "additional_whois_email": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ips_asns",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "ips_variable": {
+                            "runAfter": {
+                                "Miscellaneous_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ips",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "mx_ips": {
+                            "runAfter": {
+                                "ips_asns_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "mx_ips",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "mxs_variable": {
+                            "runAfter": {
+                                "ips_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "mxs",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "name_server_ips": {
+                            "runAfter": {
+                                "mx_ips": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "name_server_ips",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "nameservers_variable": {
+                            "runAfter": {
+                                "mxs_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "nameservers",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "registrant_contact_details_variable": {
+                            "runAfter": {
+                                "billing_contact_email_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "registrant_contact_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "registrant_contact_email_variable": {
+                            "runAfter": {
+                                "registrant_contact_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "registrant_contact_email",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "registrar_status_variable": {
+                            "runAfter": {
+                                "tags_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "registrar_status",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "registrar_value": {
+                            "runAfter": {
+                                "dnsdb_results_string": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "registrar_value",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "soa_emails": {
+                            "runAfter": {
+                                "email_domains": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "soa_emails",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "ssl_emails": {
+                            "runAfter": {
+                                "soa_emails": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ssl_emails",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "ssl_info_array": {
+                            "runAfter": {
+                                "name_server_ips": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ssl_info",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "tags_variable": {
+                            "runAfter": {
+                                "ssl_info_array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tags",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "technical_contact_details_variable": {
+                            "runAfter": {
+                                "registrant_contact_email_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "technical_contact_details",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "technical_contact_email_variable": {
+                            "runAfter": {
+                                "technical_contact_details_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "technical_contact_email",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            },
+                            "farsightdnsdb": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('FarsightDNSDBApiKey'))]",
+                                "connectionName": "[variables('FarsightDNSDBApiKey')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/farsightdnsdb')]"
+                            },
+                            "domaintoolsirisinves": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('DomainToolsApiKey'))]",
+                                "connectionName": "[variables('DomainToolsApiKey')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/domaintoolsirisinves')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
