@@ -1,23 +1,22 @@
-# ReversingLabs-EnrichFileHash
+# SpectraIntelligence-EnrichFileHash
 
 Author: Aaron Hoffmann (ReversingLabs)
 
 ## Summary
-This playbook enriches file hash entities with information from the ReversingLabs TitaniumCloud API.
+This playbook enriches file hash entities with information from ReversingLabs Spectra Intelligence (formerly TitaniumCloud).
 
 ## Prerequisites
 
 You'll need the following:
-* A ReversingLabs TitaniumCloud subscription
-* A ReversingLabs TitaniumCloud username
-* A ReversingLabs TitaniumCloud password
+* A ReversingLabs Spectra Intelligence username
+* A ReversingLabs Spectra Intelligence password
 
 
 ## Deployment instructions
 1. Deploy the playbook by clicking on "Deploy to Azure" button. This will take you to deploying an ARM Template wizard.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FReversingLabs%2FPlaybooks%2FReversingLabs-EnrichFileHash%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FReversingLabs%2FPlaybooks%2FReversingLabs-EnrichFileHash%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FReversingLabs%2FPlaybooks%2FSpectraIntelligence-EnrichFileHash%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FReversingLabs%2FPlaybooks%2FSpectraIntelligence-EnrichFileHash%2Fazuredeploy.json)
 
 ## Post-deployment
 
@@ -33,7 +32,7 @@ Once deployment is complete, you will need to authorize each connection.
 
 ## Screenshots
 
-![Playbook overview](./images/playbook.png)
+![Playbook overview](./playbook.png)
 
 ## References
 
