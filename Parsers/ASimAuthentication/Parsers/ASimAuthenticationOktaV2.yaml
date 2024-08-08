@@ -1,0 +1,165 @@
+Parser:
+  Title: Authentication ASIM parser for OktaV2
+  Version: '0.3.1'
+  LastUpdated: May 20, 2024
+Product:
+  Name: Okta
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+  - Title: ASIM Authentication Schema
+    Link: https://aka.ms/ASimAuthenticationDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Okta sign in logs, stored in OktaV2_CL table, to the ASIM Authentication schema. 
+ParserName: ASimAuthenticationOktaV2
+EquivalentBuiltInParser: _ASim_Authentication_OktaV2
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled: bool=false) {
+    let OktaSuccessfulOutcome = dynamic(['SUCCESS', 'ALLOW']);
+    let OktaFailedOutcome = dynamic(['FAILURE', 'SKIPPED', 'DENY']);
+    let OktaSigninEvents=dynamic(['user.session.start', 'user.session.end']);
+    let emptyOctaV2Table = datatable(
+    TimeGenerated: datetime,
+    ActorDetailEntry: dynamic,
+    ActorDisplayName: string,
+    AuthenticationContext: string,
+    AuthenticationProvider: string,
+    AuthenticationStep: string,
+    AuthenticationContextAuthenticationProvider: string,
+    AuthenticationContextAuthenticationStep: int,
+    AuthenticationContextCredentialProvider: string,
+    AuthenticationContextInterface: string,
+    AuthenticationContextIssuerId: string,
+    AuthenticationContextIssuerType: string,
+    DebugData: dynamic,
+    DvcAction: string,
+    EventResult:string,
+    OriginalActorAlternateId: string,
+    OriginalClientDevice: string,
+    OriginalOutcomeResult: string,
+    OriginalSeverity: string,
+    OriginalTarget: dynamic,
+    OriginalUserId: string,
+    OriginalUserType: string,
+    Request: dynamic,
+    SecurityContextAsNumber: int,
+    SecurityContextAsOrg: string,
+    SecurityContextDomain: string,
+    SecurityContextIsProxy: bool,
+    TransactionDetail: dynamic,
+    TransactionId: string,
+    TransactionType: string
+  )[];
+      let OktaV2 = union isfuzzy=true emptyOctaV2Table, OktaV2_CL
+          | where not(disabled)      
+          | extend
+              EventOriginalType=column_ifexists('EventOriginalType', "") 
+              ,
+              OriginalActorAlternateId = column_ifexists('OriginalActorAlternateId', "")
+              ,
+              ActorUsername=column_ifexists('ActorUsername', "")
+              ,
+              SrcIpAddr = column_ifexists('SrcIpAddr', "")
+          | where EventOriginalType in (OktaSigninEvents)
+          | extend ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)
+          | extend 
+              EventProduct='Okta'
+              ,
+              EventSchema = 'Authentication'
+              ,
+              EventVendor='Okta'
+              ,
+              EventCount=int(1)
+              ,
+              EventSchemaVersion='0.1.0'
+              ,
+              EventStartTime=TimeGenerated
+              ,
+              EventEndTime=TimeGenerated
+              ,
+              EventType=iff(EventOriginalType hassuffix 'start', 'Logon', 'Logoff')       
+              ,
+              TargetSessionId=column_ifexists('ActorSessionId', "")
+              ,
+              TargetUserId= column_ifexists('ActorUserId', "")
+              ,
+              TargetUsername=column_ifexists('ActorUsername', "")
+              ,
+              TargetUserType=column_ifexists('ActorUserType', "")
+              ,
+              TargetUserIdType=column_ifexists('ActorUserIdType', "")
+              ,
+              TargetUsernameType=column_ifexists('ActorUsernameType', "")
+              ,
+              SrcIpAddr = column_ifexists('SrcIpAddr', "")
+              //** extend non-normalized fields to be projected-away 
+              ,
+              ActorDetailEntry,
+              ActorDisplayName,
+              AuthenticationContextAuthenticationProvider,
+              AuthenticationContextAuthenticationStep,
+              AuthenticationContextCredentialProvider,
+              AuthenticationContextInterface,
+              AuthenticationContextIssuerId,
+              AuthenticationContextIssuerType
+              ,
+              DebugData,
+              DvcAction,
+              OriginalActorAlternateId,
+              OriginalClientDevice,
+              OriginalOutcomeResult,
+              OriginalSeverity,
+              OriginalTarget,
+              OriginalUserId,
+              OriginalUserType,
+              Request,
+              SecurityContextAsNumber,
+              SecurityContextAsOrg,
+              SecurityContextDomain,
+              SecurityContextIsProxy
+              ,
+              TransactionDetail,
+              TransactionId,
+              TransactionType
+          // ** Aliases
+          | extend 
+              User=TargetUsername
+              ,
+              Dvc=EventVendor
+              ,
+              IpAddr=SrcIpAddr
+          | project-away
+              ActorDetailEntry,
+              ActorDisplayName,
+              AuthenticationContextAuthenticationProvider,
+              AuthenticationContextAuthenticationStep,
+              AuthenticationContextCredentialProvider,
+              AuthenticationContextInterface,
+              AuthenticationContextIssuerId,
+              AuthenticationContextIssuerType,
+              DebugData,
+              DvcAction,
+              OriginalActorAlternateId,
+              OriginalClientDevice,
+              OriginalOutcomeResult,
+              OriginalSeverity,
+              OriginalTarget,
+              OriginalUserId,
+              OriginalUserType,
+              Request,
+              SecurityContextAsNumber,
+              SecurityContextAsOrg,
+              SecurityContextDomain,
+              SecurityContextIsProxy,
+              TransactionId,
+              TransactionType;
+      OktaV2
+  };
+  parser(disabled = disabled)
