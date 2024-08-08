@@ -27,13 +27,13 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
     @connectionAutoClose = {
       :last_use => Time.now,
       :lock => Mutex.new,
-      :max_idal_time => 60,
+      :max_idel_time => 60,
       :is_closed => true
     }
 
     @timer = Thread.new do
       loop do
-        sleep @connectionAutoClose[:max_idal_time] / 2
+        sleep @connectionAutoClose[:max_idel_time] / 2
         if is_connection_stale?
           @connectionAutoClose[:lock].synchronize do
             if is_connection_stale?
@@ -92,7 +92,7 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
   end
 
   def is_connection_stale?
-    return Time.now - @connectionAutoClose[:last_use] > @connectionAutoClose[:max_idal_time] && !@connectionAutoClose[:is_closed]
+    return Time.now - @connectionAutoClose[:last_use] > @connectionAutoClose[:max_idel_time] && !@connectionAutoClose[:is_closed]
   end
   # Create a header for the given length 
   def get_header()
