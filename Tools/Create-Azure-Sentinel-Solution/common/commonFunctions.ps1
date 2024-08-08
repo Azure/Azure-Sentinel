@@ -1819,23 +1819,6 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         break;
                     }
 
-                    $hasStaticDataConnectorIdsProperty = [bool]($contentToImport.PSObject.Properties.Name.tolower() -match 'staticdataconnectorids') ? $true : $false
-
-                    $is1PConnector = $false
-                    if ($hasStaticDataConnectorIdsProperty) {
-                        $staticDataConnectorIdsArray = $contentToImport.StaticDataConnectorIds
-
-                        if ($null -ne $staticDataConnectorIdsArray -and $staticDataConnectorIdsArray.count -gt 0) {
-                            $dataConnectorId = $connectorData.id
-                            $hasDataConnectorId = [bool]($contentToImport.StaticDataConnectorIds | Where-Object { $_ -eq "$dataConnectorId"} )
-    
-                            if ($hasDataConnectorId) {
-                                # data connector id is specified in GenericDataConnectorIds array so we have to make this as generic connector
-                                $is1PConnector = $true
-                            }
-                        }
-                    }
-
                     $global:DependencyCriteria += [PSCustomObject]@{
                         kind      = "DataConnector";
                         contentId = if ($contentToImport.TemplateSpec){"[variables('_dataConnectorContentId$global:connectorCounter')]"}else{"[variables('_$connectorId')]"};
@@ -1897,7 +1880,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                             $global:baseMainTemplate.resources += $baseDataConnectorTemplateSpec
                         }
-                        if(!$is1PConnector)
+                        if(!$contentToImport.Is1PConnector)
                         {
                             $existingFunctionApp = $false;
                             $instructionArray = $templateSpecConnectorData.instructionSteps
@@ -1936,31 +1919,24 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
                             }
                         }
-
                         # Data Connector Content -- *Assumes GenericUI
-                        if($is1PConnector)
+                        if($contentToImport.Is1PConnector)
                         {
                             $1pconnectorData = $templateSpecConnectorData
                             $1pconnectorData = $1pconnectorData | Select-Object -Property id,title,publisher,descriptionMarkdown, graphQueries, connectivityCriterias,dataTypes
                         }
-                        $templateSpecConnectorUiConfig = ($is1PConnector -eq $true) ? $1pconnectorData : $templateSpecConnectorData
+                        $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true) ? $1pconnectorData : $templateSpecConnectorData
                         $templateSpecConnectorUiConfig.id = "[variables('_uiConfigId$global:connectorCounter')]"
-                        if($is1PConnector -eq $false)
+                        if($contentToImport.Is1PConnector -eq $false)
                         {
-                            $hasIsPreviewProperty = [bool]($templateSpecConnectorUiConfig.availability.PsObject.Properties.Name.tolower() -match "ispreview")
-
-                            if (!$hasIsPreviewProperty) {
-                                $templateSpecConnectorUiConfig.availability | Add-Member -NotePropertyName "isPreview" -NotePropertyValue $false
-                            } else {
-                                $templateSpecConnectorUiConfig.availability.isPreview =  ($templateSpecConnectorUiConfig.availability.isPreview -eq $true) ? $false : $templateSpecConnectorUiConfig.availability.isPreview
-                            }
+                            $templateSpecConnectorUiConfig.availability.isPreview =  ($templateSpecConnectorUiConfig.availability.isPreview -eq $true) ? $false : $templateSpecConnectorUiConfig.availability.isPreview
                         }
                         $dataConnectorContent = [PSCustomObject]@{
                             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$global:connectorCounter'))]";
                             apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
-                            kind       = ($is1PConnector -eq $true) ? "StaticUI" : (($ccpConnector -eq $true) ? $connectorData.resources[0].kind : "GenericUI");
+                            kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : (($ccpConnector -eq $true) ? $connectorData.resources[0].kind : "GenericUI");
                             properties = [PSCustomObject]@{
                                 connectorUiConfig = $templateSpecConnectorUiConfig
                             }
@@ -2078,7 +2054,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             connectivityCriterias = $connectorData.connectivityCriterias;
                         }
 
-                        if(!$is1PConnector)
+                        if(!$contentToImport.Is1PConnector)
                         {
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $connectorData.sampleQueries;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "availability" -NotePropertyValue $connectorData.availability;
@@ -2096,7 +2072,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
-                            kind       = ($is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
+                            kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
                             properties = [PSCustomObject]@{
                                 connectorUiConfig = $standardConnectorUiConfig
                             }

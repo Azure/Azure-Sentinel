@@ -6,9 +6,8 @@ namespace Varonis.Sentinel.Functions.DatAlert
     (
         DateTime Start,
         DateTime End,
-        string AlertSeverity,
-        string ThreatDetectionPolicies,
-        string AlertStatus,
-        int MaxAlertRetrieval
+        string Severities,
+        string ThreatModel,
+        string Status
     );
 }

@@ -28,10 +28,10 @@ namespace Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesServic
         [StringLength(5000)]
         public string Description { get; set; }
 
-        [JsonProperty("tactics", Required = Required.Always)]
+        [JsonProperty("tactics")]
         public List<AttackTactic> Tactics { get; set; }
 
-        [JsonProperty("relevantTechniques", Required = Required.Always)]
+        [JsonProperty("relevantTechniques")]
         public List<string> RelevantTechniques { get; set; }
 
         [JsonProperty("requiredDataConnectors", NullValueHandling = NullValueHandling.Ignore)]

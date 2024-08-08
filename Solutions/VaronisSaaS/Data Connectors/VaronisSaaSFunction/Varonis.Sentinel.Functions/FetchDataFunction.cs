@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using Varonis.Sentinel.Functions.LogAnalytics;
 using Varonis.Sentinel.Functions.DatAlert;
+using Varonis.Sentinel.Functions.Helpers;
 using System.Linq;
 using System.Text.Json;
 
@@ -16,30 +17,27 @@ namespace Varonis.Sentinel.Functions
         {
             try
             {
-                var hostname = Environment.GetEnvironmentVariable("VaronisFQDN_IP");
-                var datalertApiKey = Environment.GetEnvironmentVariable("VaronisApiKey");
+                var hostname = Environment.GetEnvironmentVariable("DatAlertHostName");
+                var datalertApiKey = Environment.GetEnvironmentVariable("DatAlertApiKey");
                 var logAnalyticsKey = Environment.GetEnvironmentVariable("LogAnalyticsKey");
                 var logAnalyticsWorkspace = Environment.GetEnvironmentVariable("LogAnalyticsWorkspace");
 
-                var firstFetchTime = int.TryParse(Environment.GetEnvironmentVariable("AlertRetrievalStart"), out var maxdays)
-                    ? maxdays
-                    : 30;
-                var severities = Environment.GetEnvironmentVariable("AlertSeverity");
-                var threatModelName = Environment.GetEnvironmentVariable("ThreatDetectionPolicies");
-                var status = Environment.GetEnvironmentVariable("AlertStatus");
-                const int maxAlerts = 1000;
+                var firstFetchTimeStr = Environment.GetEnvironmentVariable("FirstFetchTime");
+                var severities = Environment.GetEnvironmentVariable("Severities");
+                var threatModelName = Environment.GetEnvironmentVariable("ThreatModelNameList");
+                var status = Environment.GetEnvironmentVariable("Statuses");
 
-                var baseUri = hostname.StartsWith("http") 
-                    ? new Uri(hostname)
-                    : new Uri($"https://{hostname}");
+                var baseUri = new Uri($"https://{hostname}");
 
                 var client = new DatAlertClient(baseUri, datalertApiKey, log);
                 var storage = new LogAnalyticsCollector(logAnalyticsKey, logAnalyticsWorkspace, log);
 
                 if (timer.IsPastDue)
                 {
-                    log.LogWarning("Timer is running late!");
+                    log.LogInformation("Timer is running late!");
                 }
+
+                var minDate = DateTime.MinValue.ToUniversalTime();
 
                 var last = timer.ScheduleStatus.Last.ToUniversalTime();
                 var lastUpdated = timer.ScheduleStatus.LastUpdated.ToUniversalTime();
@@ -47,9 +45,9 @@ namespace Varonis.Sentinel.Functions
 
                 log.LogInformation($"Schedule status: {last}, {lastUpdated}, {next}");
 
-                if (firstFetchTime > 0)
+                if (!string.IsNullOrWhiteSpace(firstFetchTimeStr))
                 {
-                    var firstDate = DateTime.UtcNow.AddDays(-firstFetchTime);
+                    var firstDate = CustomParser.ParseDate(firstFetchTimeStr);
 
                     if (last <= firstDate)
                     {
@@ -58,12 +56,12 @@ namespace Varonis.Sentinel.Functions
                     }
                 }
 
-                log.LogInformation($"Varonis host name: {hostname}; LogAnalytics Key: {logAnalyticsKey.Substring(0, 5)}...;" +
+                log.LogInformation($"DatAlert host name: {hostname}; LogAnalytics Key: {logAnalyticsKey.Substring(0, 5)}...;" +
                     $" LogAnalytics Workspace: {logAnalyticsWorkspace}; Time: {DateTime.Now}");
 
                 var interval = timer.ScheduleStatus.Next - timer.ScheduleStatus.Last;
 
-                var parameters = new DatAlertParams(lastUpdated, next, severities, threatModelName, status, maxAlerts);
+                var parameters = new DatAlertParams(lastUpdated, next, severities, threatModelName, status);
                 var alerts = await client.GetDataAsync(parameters);
 
                 if (!alerts.Any())

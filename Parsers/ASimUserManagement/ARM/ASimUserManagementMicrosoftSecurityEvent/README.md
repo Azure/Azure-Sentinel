@@ -1,8 +1,8 @@
-# Microsoft Security Event ASIM UserManagement Normalization Parser
+# Microsoft ASIM UserManagement Normalization Parser
 
-ARM template for ASIM UserManagement schema parser for Microsoft Security Event.
+ARM template for ASIM UserManagement schema parser for Microsoft.
 
-This ASIM parser supports normalizing Microsoft Security Event logs ingested in 'SecurityEvent' table delivered using AMA to the ASIM UserManagement normalized schema.
+This ASIM parser supports normalizing Microsoft Security Event logs delivered using AMA to the ASIM UserManagement normalized schema.
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.

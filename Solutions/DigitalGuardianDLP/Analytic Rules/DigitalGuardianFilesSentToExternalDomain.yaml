@@ -1,0 +1,38 @@
+id: 5f75a873-b524-4ba5-a3b8-2c20db517148
+name: Digital Guardian - Bulk exfiltration to external domain
+description: |
+  'Detects bulk exfiltration to external domain.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DigitalGuardianDLP
+    dataTypes:
+      - DigitalGuardianDLPEvent
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Exfiltration
+relevantTechniques:
+  - T1048
+query: |
+  let threshold = 10;
+  let corp_domain = dynamic(['example.com']);
+  DigitalGuardianDLPEvent
+  | where NetworkApplicationProtocol =~ 'SMTP'
+  | where isnotempty(inspected_document)
+  | extend s_domain = extract(@'@(.*)', 1, SrcUserName)
+  | extend d_domain = extract(@'@(.*)', 1, DstUserName)
+  | where s_domain in~ (corp_domain)
+  | where d_domain !in (corp_domain)
+  | summarize f = dcount(inspected_document) by SrcUserName, DstUserName, bin(TimeGenerated, 30m)
+  | where  f >= threshold
+  | extend AccountCustomEntity = SrcUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled
