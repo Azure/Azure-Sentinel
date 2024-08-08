@@ -52,7 +52,7 @@ class TeamCymruScoutUtility:
             required_params.update({"APIKey": consts.API_KEY})
         else:
             required_params.update(
-                {"Username": consts.USERNAME, "Password": consts.PASSWORD}
+                {"TeamCymruScoutUsername": consts.USERNAME, "TeamCymruScoutPassword": consts.PASSWORD}
             )
         applogger.debug(
             "{}(method={}) : Checking if all the environment variables exist or not.".format(
