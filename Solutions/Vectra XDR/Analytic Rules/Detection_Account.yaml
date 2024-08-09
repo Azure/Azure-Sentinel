@@ -1,0 +1,61 @@
+id: e796701f-6b39-4c54-bf8a-1d543a990784
+name: Vectra Create Detection Alert for Accounts
+version: 1.0.1
+kind: Scheduled
+description: This analytic rule is looking for new attacker behaviors observed by the Vectra Platform. The intent is to create entries in the SecurityAlert table for every new detection attached to an entity monitored by the Vectra Platform
+status: Available
+requiredDataConnectors:
+  - connectorId: VectraXDR
+    dataTypes:
+      - Detections_Data_CL
+severity: Medium
+queryFrequency: 10m
+queryPeriod: 10m
+suppressionDuration: PT1H
+suppressionEnabled: false
+triggerOperator: GreaterThan
+triggerThreshold: 0
+tactics: 
+  - Persistence
+relevantTechniques:
+  - T1546
+query: |
+  VectraDetections
+  | where Type == "account"
+  | extend
+      entity_uid = ['Entity UID'],
+      entity_id = ['Entity ID'],
+      entity_type = ['Entity Type'],
+      detection_id = ['Detection ID'],
+      detection = ['Detection Name'],
+      category = ['Detection Category'],
+      detection_url = ['Vectra Pivot'],
+      mitre = Mitre,
+      tags = Tags
+  | summarize arg_max(TimeGenerated, *) by ['Detection ID'], entity_uid
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: Name
+    columnName: entity_uid
+incidentConfiguration:
+  createIncident: false
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+customDetails:
+  entity_id: entity_id
+  tags: tags
+  entity_type: entity_type
+  detection_id: detection_id
+  mitre_techniques: mitre
+alertDetailsOverride:
+  alertDisplayNameFormat: Vectra AI Detection-  {{detection}}
+  alertDescriptionFormat: Vectra AI has detected {{category}} - {{detection} on entity {{entity_uid}}.
+  alertDynamicProperties:
+  - alertProperty: AlertLink
+    value: detection_url
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
