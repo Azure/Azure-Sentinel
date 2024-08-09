@@ -52,7 +52,8 @@ def transform_wb_list_v3_to_v2_fields(workbench_list_v3: List[dict]) -> List[dic
             'workbenchLink': workbench["workbenchLink"],
             'createdTime': workbench["createdDateTime"],
             'updatedTime': workbench["updatedDateTime"],
-            'severity': workbench["severity"]
+            'severity': workbench["severity"],
+            'modelId': workbench["modelId"],
         }
         workbench_list_v2.append(workbench_v2)
     return workbench_list_v2
