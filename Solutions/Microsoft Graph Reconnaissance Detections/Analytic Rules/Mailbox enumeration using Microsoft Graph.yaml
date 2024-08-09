@@ -1,0 +1,58 @@
+id: 81a12d9a-2174-4c53-81ba-1cc31bdd7cc5
+name: Mailbox enumeration using Microsoft Graph
+version: 1.0.0
+kind: Scheduled
+description: |-
+  This rule will detect any single user attempting to access more than 20 mailboxes within an hour using Microsoft Graph API.
+
+  Investigation
+  ---------------------
+  1. Scrutinize what kind of user is doing this. Are they technical? If not, it's more suspicious
+  2. Look at which mailboxes are being accessed. Perhaps these are shared mailboxes being read out by a script?
+  3. Look at the User Agent being used. If it's a Powershell UA, there's a high chance this is GraphRunner.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - MicrosoftGraphActivityLogs
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Discovery
+- Collection
+relevantTechniques:
+- T1526
+- T1114
+query: |-
+  MicrosoftGraphActivityLogs
+  | where TimeGenerated > ago(1h)
+  | where RequestUri contains "https://graph.microsoft.com/v1.0/users/" and RequestUri contains "/mailFolders/Inbox/messages"
+  | join kind=inner (IdentityInfo| where TimeGenerated > ago(14d) | distinct AccountUPN, AccountObjectId) on $left.UserId == $right.AccountObjectId
+  // Only check for other mailboxes than the one of the user
+  | where RequestUri !contains AccountUPN
+  | summarize count() by AccountUPN
+  // More than 20 mailboxes scanned
+  | where count_ > 20
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDynamicProperties: []
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: AccountUPN
+suppressionDuration: 5h

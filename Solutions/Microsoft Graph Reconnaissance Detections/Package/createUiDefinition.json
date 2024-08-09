@@ -1,0 +1,173 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Graph.png\" width=\"120px\" height=\"60px\">\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Microsoft%20Graph%20Reconnaissance%20Detections/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nThis query pack contains 6 analytic rules which are scoped to reconnaissance of Entra ID environments using the Graph API. Adding these to your Sentinel Workspace will generate an incident when activity correlates with what the rule is trying to detect.\n\n**Analytic Rules:** 6\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Conditional Access policy enumeration via Graph API",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule aims to detect anyone enumerating the conditional access policies using the Graph API.\n\nInvestigation\n-------------------\n1. Scrutinize the user. Are they an IT profile?\n2. Scrutinize the IP this happens from. An unknown IP may be more suspicious"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Enterprise applications enumerated via Graph API",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule aims to detect anyone enumerating the Enterprise Applications using the Graph API as part of reconnaissance.\n\nInvestigation\n-------------------------\n1. Scrutinize the user. Are they an IT profile?\n2. Scrutinize the IP address this is happening from\n3. Scrutinize the UserAgent."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Foreign access to mailbox using Graph",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule detects when a mailbox is successfully accessed using Graph API by a user who is not the owner of this mailbox.\n\nInvestigation\n------------------\n1. Verify whether this isn't a shared mailbox\n2. Scrutinize the IP this happened from\n3. Scrutinize the user who did this. Could this be within their job function?"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Mailbox enumeration using Microsoft Graph",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule will detect any single user attempting to access more than 20 mailboxes within an hour using Microsoft Graph API.\n\nInvestigation\n---------------------\n1. Scrutinize what kind of user is doing this. Are they technical? If not, it's more suspicious\n2. Look at which mailboxes are being accessed. Perhaps these are shared mailboxes being read out by a script?\n3. Look at the User Agent being used. If it's a Powershell UA, there's a high chance this is GraphRunner."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Security groups enumerated via Graph API",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule aims to detect the enumeration of security groups via the Graph API by looking for requests on the Groups endpoint with a specific filter on \"securityEnabled eq true\".\n\nInvestigation steps\n-----------------------\n1. Scrutinize the user. Are they an IT profile?\n2. Look at the User Agent. If it is powershell, it is suspicious as this may be GraphRunner."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Updatable groups enumerated via Graph API",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This rule aims to detect the enumeration of updatable groups via Graph API. It will check for users calling the API to search for all groups AND having more than 10 EstimateAccess calls within the hour.\n\nInvestigation steps\n---------------------------\n1. Scrutinize the user doing this. Are they an IT profile?\n2. Look at the user agent being used. Powershell is highly suspicious as this may be GraphRunner."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}
