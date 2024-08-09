@@ -115,7 +115,7 @@ ParserQuery: |
     | where (array_length(eventresultdetails_in) == 0 or tostring(EventResultDetails) has_any(eventresultdetails_in)) 
     | lookup EventLookup on DeviceAction 
     | where (eventresult == '*' or EventResult =~ eventresult)
-    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName, ASimMatchingIpAddr
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction, RequestURL, RequestContext, DestinationHostName, SourceHostName, SourceUserName, DestinationUserName, ASimMatchingIpAddr, ApplicationProtocol
     | project-rename 
       Url                     = RequestURL
       , UrlCategory           = RequestContext
@@ -132,6 +132,7 @@ ParserQuery: |
       , SrcInterfaceName      = DeviceInboundInterface
       , SrcIpAddr             = SourceIP
       , SrcPortNumber         = SourcePort
+      , NetworkApplicationProtocol = ApplicationProtocol
       , DvcId                 = DeviceExternalID
       , EventUid              = _ItemId
       , DstHostname           = DestinationHostName
@@ -175,7 +176,9 @@ ParserQuery: |
         ThreatOriginalRiskLevel = FortinetFortiGatecrscore,
         SrcPackets              = FortinetFortiGatesentpkt,
         DstPackets              = FortinetFortiGatercvdpkt
-    | parse AdditionalExtensions with * "Method=" temp_HttpRequestMethod "|User-Agent=" temp_HttpUserAgent ";" *
+    | extend 
+        temp_HttpRequestMethod = extract(@"rawdata=.*?Method=(.*?)(?:\||\;|$)", 1, AdditionalExtensions),
+        temp_HttpUserAgent = extract(@"rawdata=.*?User-Agent=(.*?)(?:\||\;|$)", 1, AdditionalExtensions)
     | extend 
         HttpRequestMethod = coalesce(temp_HttpRequestMethod,HttpRequestMethod),
         HttpUserAgent = coalesce(temp_HttpUserAgent,HttpUserAgent)
@@ -187,6 +190,7 @@ ParserQuery: |
         , EventSchemaVersion     = "0.2.6"
         , EventType              = "HTTPsession"
         , EventVendor            = "Fortinet"
+        , EventProduct           = "Fortigate"
         , DvcIdType              = "Other"
         , NetworkBytes           = DstBytes + SrcBytes
         , EventEndTime           = TimeGenerated
