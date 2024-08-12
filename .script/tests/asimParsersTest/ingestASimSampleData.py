@@ -50,46 +50,36 @@ def filter_yaml_files(modified_files):
 
 def convert_schema_csv_to_json(csv_file):
     data = []
-    main_data=[]
-    output_dict=[]
     with open(csv_file, 'r',encoding='utf-8-sig') as file:
-        suffixes = ['_s', '_d','_b','_g']
         reader = csv.DictReader(file)
         for row in reader:
             if row['ColumnName'] in reserved_columns:
                 continue
             elif row['ColumnType'] == "bool":
                 data.append({        
-                'name': row['ColumnName'].rsplit("_",1)[0],
+                'name': row['ColumnName'],
                 'type': "boolean",
                 })
             else:
                 data.append({        
-                'name': row['ColumnName'].rsplit("_",1)[0],
+                'name': row['ColumnName'],
                 'type': row['ColumnType'],
-                })
-        for item in data:
-            output_dict = {key[:-2] if any(key.endswith(suffix) for suffix in suffixes) else key: value 
-               for key, value in item.items()}
-            main_data.append(output_dict)                         
-    return main_data
+                })                       
+    return data
 
 def convert_data_csv_to_json(csv_file):
     data = []
-    output_dict=[]
     with open(csv_file, 'r',encoding='utf-8-sig') as file:
-        suffixes = ['_s', '_d','_b','_g']
         reader = csv.DictReader(file)
         for row in reader:
             table_name=row['Type']
-            output_dict = {key[:-2] if any(key.endswith(suffix) for suffix in suffixes) else key: value 
-               for key, value in row.items()}
-            data.append(output_dict)
+            data.append(row)
         for item in data:
             for key in list(item.keys()):
                 # If the key matches 'TimeGenerated [UTC]', rename it
-                if key == 'TimeGenerated [UTC]':
-                    item['TimeGenerated'] = item.pop(key)                               
+                if key.endswith('[UTC]'):
+                    substring = key.split(" [")[0] 
+                    item[substring] = item.pop(key)                               
     return data , table_name
 
 def check_for_custom_table(table_name):
@@ -119,6 +109,18 @@ def create_table(schema,table):
      method="PUT"
      url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}/tables/{table}?api-version=2022-10-01"
      return request_object , url , method
+
+def get_table_status(table):
+    while True:
+        table_name=table
+        url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}/tables/{table_name}?api-version=2022-10-01"
+        method="GET"
+        time.sleep(3)
+        response = hit_api(url,"",method)
+        if response.status_code == 200:
+            print(f"Custom Table {table_name} is created successfully")
+            break
+    return response.status_code  
 
 def get_schema_for_builtin(query_table):
     # Obtain the access token
@@ -205,7 +207,13 @@ def hit_api(url,request,method):
     "Authorization": f"Bearer {access_token}",
     "Content-Type": "application/json"
     }
-    response = requests.request(method, url, headers=headers, json=request)
+    try:
+        if method == "GET":
+            response = requests.request(method, url, headers=headers)
+        else:
+            response = requests.request(method, url, headers=headers, json=request)
+    except Exception as e:
+        print(f"Upload failed: {e}")       
     return response
 
 def senddtosentinel(immutable_id,data_result,stream_name,flag_status):
@@ -255,7 +263,7 @@ SAMPLE_DATA_PATH = '/Sample%20Data/ASIM/'
 dcr_directory=[]
 
 lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation']
-reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG"]
+reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG","_ResourceId_s"]
 
 SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -302,8 +310,12 @@ for file in parser_yaml_files:
         # create table 
         request_body, url_to_call , method_to_use = create_table(json.dumps(schema_result, indent=4),table_name)
         response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of table creation: {response_body.status_code}")
-        time.sleep(5)
+        print(f"Response of table creation: {response_body.text} {response_body.status_code}")
+        if response_body.status_code != 202 and response_body.status_code != 200:
+            print(f"Table creation failed for {table_name}")
+            continue
+        else:
+            get_table_status(table_name)
         #Once table is created now creating DCR
         request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema_result, indent=4),table_name,"Custom")  
         response_body=hit_api(url_to_call,request_body,method_to_use)
