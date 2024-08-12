@@ -1,328 +1,244 @@
-"""This file contains implementation of breaches endpoint."""
-import requests
-import base64
-import os
-import json
-from ..SharedCode.logger import applogger
+"""Module containing the BitSightBreaches class for fetching BitSight breaches data and posting it to Sentinel."""
+import time
+
+from ..SharedCode import consts
+from ..SharedCode.bitsight_client import BitSight
 from ..SharedCode.bitsight_exception import BitSightException
-from ..SharedCode.azure_sentinel import AzureSentinel
-from ..SharedCode.state_manager import StateManager
-
-# fetch data from os environment
-api_token = os.environ.get("API_token")
-breaches_table_name = os.environ.get("Breaches_Table_Name")
-connection_string = os.environ["AzureWebJobsStorage"]
-
-# in companies variable user need to pass slash separated names of companies
-# for example: "Actors Films/Goliath Investments LLC/HCL Group/Saperix, Inc."
-companies_str = os.environ.get("Companies")
+from ..SharedCode.get_logs_data import get_logs_data
+from ..SharedCode.logger import applogger
+from ..SharedCode.utils import CheckpointManager
 
 
-class BitSight:
-    """Implementation of data ingestion."""
+class BitSightBreaches(BitSight):
+    """Class for fetching BitSight breaches data and posting it to Sentinel."""
 
-    def __init__(self) -> None:
-        """Contains class variable."""
-        self.headers = None
-        self.last_data = None
-        self.state = None
-        self.check_environment_var_exist()
+    def __init__(self, start_time) -> None:
+        """Initialize BitSightBreaches object.
+
+        Args:
+            start_time (float): The start time for data fetching.
+        """
+        super().__init__()
+        self.start_time = start_time
+        self.check_env_var = self.check_environment_var_exist(
+            [
+                {"api_token": consts.API_TOKEN},
+                {"Portfolio_Companies_table_name": consts.COMPANY_DETAIL_TABLE_NAME},
+                {"Breaches_Table_Name": consts.BREACHES_TABLE_NAME},
+                {"companies_list": consts.COMPANIES},
+            ]
+        )
+        self.checkpoint_obj = CheckpointManager()
+        self.breach_company_state = self.checkpoint_obj.get_state("breaches_company")
+        self.breaches_details_state = self.checkpoint_obj.get_state("breaches_details")
         self.generate_auth_token()
-        self.get_last_data()
-        self.check_env_var = True
-        self.azuresentinel = AzureSentinel()
-        self.base_url = "https://api.bitsighttech.com"
-        self.breaches_endpoint_path = "/v1/companies/{}/providers/breaches"
 
-    def check_environment_var_exist(self):
-        """Stop execution if os environment is not set.
+    def get_breaches_data_into_sentinel(self) -> None:
+        """Fetch breaches data for all companies or specified companies and post it to Sentinel."""
+        if not self.check_env_var:
+            raise BitSightException(
+                "{} {} Some Environment variables are not set hence exiting the app.".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME
+                )
+            )
+
+        applogger.info(
+            "{} {} Fetching companies from companies table.".format(
+                self.logs_starts_with, consts.BREACHES_FUNC_NAME
+            )
+        )
+        logs_data, flag = get_logs_data()
+        if not flag:
+            applogger.info(
+                "{} {} Companies are not available yet.".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME
+                )
+            )
+            return
+
+        applogger.info(
+            "{} {} Fetched companies from companies table.".format(
+                self.logs_starts_with, consts.BREACHES_FUNC_NAME
+            )
+        )
+        logs_data = sorted(logs_data, key=lambda x: x["name_s"])
+        company_names = [data["name_s"] for data in logs_data]
+
+        if consts.COMPANIES.strip().lower() == "all":
+            self.get_all_companies_breaches_details(company_names, logs_data)
+        else:
+            self.get_specific_company_breaches_details(company_names, logs_data)
+
+    def get_all_companies_breaches_details(self, company_names, logs_data):
+        """Fetch breaches data for all companies and post it to Sentinel.
+
+        Args:
+            company_names (list): List of company names.
+            logs_data (list): List of log data.
+        """
+        count_companies = 0
+        fetching_index = self.get_last_data_index(
+            company_names, self.checkpoint_obj, self.breach_company_state
+        )
+        for company_index in range(fetching_index + 1, len(logs_data)):
+            company_name = logs_data[company_index].get("name_s")
+            if int(time.time()) >= self.start_time + 540:
+                applogger.info(
+                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching from {}.".format(
+                        self.logs_starts_with,
+                        consts.BREACHES_FUNC_NAME,
+                        company_name,
+                    )
+                )
+                break
+            company_guid = logs_data[company_index].get("guid_g")
+            self.get_breaches_data(company_name, company_guid)
+            count_companies += 1
+            self.checkpoint_obj.save_checkpoint(
+                self.breach_company_state,
+                company_name,
+                "breaches",
+                company_name_flag=True,
+            )
+        applogger.info(
+            "{} {} Posted {} companies data.".format(
+                self.logs_starts_with, consts.BREACHES_FUNC_NAME, count_companies
+            )
+        )
+
+    def get_specific_company_breaches_details(self, company_names, logs_data):
+        """Fetch breaches data for specified companies and post it to Sentinel.
+
+        Args:
+            company_names (list): List of company names.
+            logs_data (list): List of log data.
+        """
+        applogger.debug(
+            "{} {} Fetching data for specified company names.".format(
+                self.logs_starts_with, consts.BREACHES_FUNC_NAME
+            )
+        )
+        count_companies = 0
+        companies_to_get = self.get_specified_companies_list(
+            company_names, consts.COMPANIES
+        )
+        company_names = list(map(str.lower, company_names))
+
+        for company in companies_to_get:
+            if int(time.time()) >= self.start_time + 540:
+                applogger.info(
+                    "{} {} 9:00 mins executed hence breaking. In next iteration, start fetching after {}".format(
+                        self.logs_starts_with, consts.BREACHES_FUNC_NAME, company
+                    )
+                )
+                break
+
+            index = company_names.index(company)
+            company_name = logs_data[index].get("name_s")
+            company_guid = logs_data[index].get("guid_g")
+            self.get_breaches_data(company_name, company_guid)
+            count_companies += 1
+        applogger.info(
+            "{} {} Posted {} companies data.".format(
+                self.logs_starts_with, consts.BREACHES_FUNC_NAME, count_companies
+            )
+        )
+
+    def get_breaches_data(self, company_name, company_guid):
+        """Fetch breaches data for a specific company and post it to Sentinel.
+
+        Args:
+            company_name (str): Name of the company.
+            company_guid (str): GUID of the company.
 
         Raises:
-            BitSightException: will raise if there is any unset variable which is used in this function.
+            BitSightException: Raises exception if any error occurs.
         """
-        env_var = [
-            {"api_token": api_token},
-            {"breaches_table_name": breaches_table_name},
-            {"companies_list": companies_str},
-        ]
         try:
-            applogger.debug(
-                "BitSight: check_environment_var_exist: started checking existence of all custom environment variable"
+            checkpoint_key = "{}".format(company_guid)
+            breaches_endpoint = consts.ENDPOINTS["breaches_endpoint_path"].format(
+                company_guid
             )
-            for i in env_var:
-                key, val = next(iter(i.items()))
-                if val is None:
-                    self.check_env_var = False
-                    raise BitSightException(
-                        "BitSight: ENVIRONMENT VARIABLE: {} is not set in the environment.".format(
-                            key
-                        )
+            breaches_url = self.base_url + breaches_endpoint
+            breaches_response = self.get_bitsight_data(breaches_url)
+            if not breaches_response:
+                return
+            breaches_results = breaches_response.get("results", [])
+            if not breaches_results:
+                applogger.info(
+                    "{} {} No new data found.".format(
+                        self.logs_starts_with, consts.BREACHES_FUNC_NAME
                     )
-            applogger.debug(
-                "BitSight: check_environment_var_exist: All custom environment variable is exist."
+                )
+                return
+            last_data = self.checkpoint_obj.get_last_data(self.breaches_details_state)
+            last_checkpoint_company = self.checkpoint_obj.get_endpoint_last_data(
+                last_data, "breaches", company_guid
             )
-        except BitSightException as error:
-            applogger.error(error)
+            max_date = (
+                last_checkpoint_company if last_checkpoint_company else "0000-01-01"
+            )
+            body, checkpoint_date = self.create_breaches_data(
+                breaches_results, company_name, company_guid, max_date
+            )
+            self.send_data_to_sentinel(
+                body, consts.BREACHES_TABLE_NAME, company_name, breaches_endpoint
+            )
+            self.checkpoint_obj.save_checkpoint(
+                self.breaches_details_state,
+                last_data,
+                "breaches",
+                checkpoint_key,
+                checkpoint_date,
+            )
+
+            # delete rating field after post.
+            del breaches_response["results"]
+        except BitSightException:
+            applogger.error(
+                "{} {} Exception occurred in get_breaches_data method.".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME
+                )
+            )
             raise BitSightException()
-        except Exception as error:
-            applogger.exception("BitSight: ENVIRONMENT VARIABLE {}".format(error))
+        except Exception as err:
+            applogger.exception(
+                "{} {} Error: {}".format(
+                    self.logs_starts_with, consts.BREACHES_FUNC_NAME, err
+                )
+            )
             raise BitSightException()
 
-    def generate_auth_token(self):
-        """Initialize Authentication parameter."""
-        try:
-            applogger.info(
-                "BitSight: Started generating auth header to authenticate BitSight APIs."
-            )
-            api = [api_token, api_token]
-            connector = ":"
-            api = connector.join(api)
-            user_and_pass = base64.b64encode(api.encode()).decode("ascii")
-            headers = {
-                "Accept": "application/json",
-                "X-BITSIGHT-CONNECTOR-NAME-VERSION": "BitSight Security Performance Management for Microsoft Sentinel Data Connector 1.0.0",
-                "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
-            }
-            headers["Authorization"] = "Basic %s" % user_and_pass
-            self.headers = headers
-            applogger.info(
-                "BitSight: Successfully generated the authentication header."
-            )
-        except Exception as error:
-            applogger.exception("BitSight: GENERATE AUTH TOKEN: {}".format(error))
-            raise BitSightException()
+    def create_breaches_data(
+        self, breaches_results, company_name, company_guid, max_date
+    ):
+        """Create breaches data for a specific company.
 
-    def get_last_data(self):
-        """Fetch last data from checkpoint file.
+        Args:
+            breaches_results (list): List of breaches data.
+            company_name (str): Name of the company.
+            company_guid (str): GUID of the company.
+            max_date (str): Maximum date of breaches data.
 
         Returns:
-            None/json: last_data
+            body (list): List of breaches data.
+            max_date (str): Maximum date of breaches data.
         """
-        try:
-            self.state = StateManager(
-                connection_string=connection_string, file_path="breaches"
-            )
-            self.last_data = self.state.get()
-            if self.last_data is not None:
-                self.last_data = json.loads(self.last_data)
-            applogger.debug("BitSight: last checkpoint : {}".format(self.last_data))
-        except Exception as err:
-            applogger.exception("BitSight: GET LAST DATA: {}".format(err))
-            raise BitSightException()
-
-    def save_checkpoint(self, endpoint, checkpoint_key, value):
-        """Post checkpoint into sentinel.
-
-        Args:
-            endpoint (str): endpoint for which user want to save checkpoint
-            checkpoint_key (str): checkpoint key
-            value (str): value to be set in checkpoint key
-        """
-        try:
-            if self.last_data is None:
-                self.last_data = {}
-                self.last_data[endpoint] = {}
-            elif endpoint not in self.last_data:
-                self.last_data[endpoint] = {}
-            self.last_data[endpoint][checkpoint_key] = value
-            self.state.post(json.dumps(self.last_data))
-            applogger.info(
-                "BitSight: save_checkpoint: {} -> {} successfully posted data.".format(
-                    endpoint, checkpoint_key
-                )
-            )
-            applogger.debug(
-                "BitSight: save_checkpoint: {}: {}: Posted Data: {}".format(
-                    endpoint, checkpoint_key, self.last_data[endpoint][checkpoint_key]
-                )
-            )
-        except Exception as err:
-            applogger.exception("BitSight: SAVE CHECKPOINT: {}".format(err))
-            raise BitSightException()
-
-    def get_data_breaches(
-        self,
-        breaches_results,
-        company_name,
-        company_guid,
-        body,
-        max_date,
-        post_data_status_code,
-    ):
-        """Create data to post into microsoft sentinel."""
-        try:
-            is_data_exist = False
-            status_code = post_data_status_code
-            maximum_date = max_date
-            if breaches_results:
-                if maximum_date == "0000-01-01":
-                    for breach in breaches_results:
-                        date_created = breach.get("date_created", "")
-                        if date_created and date_created > maximum_date:
-                            maximum_date = date_created
-                        breach["company_name"] = company_name
-                        breach["company_guid"] = company_guid
-                        body.append(breach)
-                else:
-                    for breach in breaches_results:
-                        date_created = breach.get("date_created", "")
-                        if date_created and date_created > maximum_date:
-                            maximum_date = date_created
-                            breach["company_name"] = company_name
-                            breach["company_guid"] = company_guid
-                            body.append(breach)
-                if not body:
-                    is_data_exist = True
-                data = json.dumps(body)
-                status_code = self.azuresentinel.post_data(
-                    data, breaches_table_name
-                )
-            return status_code, maximum_date, is_data_exist
-        except Exception:
-            raise BitSightException()
-
-    def get_breaches_details(self, company_name, company_guid):
-        """Post the data of breaches details.
-
-        Args:
-            company_name (str): Name of the company for which we are fetching data.
-            company_guid (str): Company guid to pass it in url.
-        """
-        try:
-            breaches_exception = "BitSight: GET BREACHES: {}"
-            exception_string = (
-                "BitSight: BITSIGHT API( {} ):  Response code: {} \nError: {}"
-            )
-            url = self.base_url + self.breaches_endpoint_path.format(company_guid)
-            breaches_response = requests.get(url=url, headers=self.headers)
-            is_data_exist = False
-            if breaches_response.status_code == 200:
-                breaches_response = breaches_response.json()
-                post_data_status_code = None
-                breaches_results = breaches_response.get("results", [])
-                body = []
-                max_date = (
-                    "0000-01-01"
-                    if self.last_data is None
-                    else self.last_data.get("breaches", {}).get(
-                        company_guid, "0000-01-01"
-                    )
-                )
-                if not breaches_results:
-                    is_data_exist = True
-                    return is_data_exist
-                post_data_status_code, max_date, is_data_exist = self.get_data_breaches(
-                    breaches_results,
-                    company_name,
-                    company_guid,
-                    body,
-                    max_date,
-                    post_data_status_code,
-                )
-                if post_data_status_code == 200:
-                    applogger.info(
-                        "BitSight: [status code {}] Successfully posted the breaches details of {} company.".format(
-                            post_data_status_code, company_name
-                        )
-                    )
-                    self.save_checkpoint("breaches", company_guid, max_date)
-                elif post_data_status_code != 200 and post_data_status_code is not None:
-                    applogger.error(
-                        "BitSight: [status code {}] The findings details of {} company is not posted".format(
-                            post_data_status_code, company_name
-                            )
-                        )
-                    raise BitSightException()
-            else:
-                raise BitSightException(
-                    exception_string.format(
-                        url, breaches_response.status_code, breaches_response.text
-                    )
-                )
-            return is_data_exist
-        except BitSightException as error:
-            applogger.error(error)
-            raise BitSightException()
-        except requests.exceptions.Timeout as err:
-            # Maybe set up for a retry, or continue in a retry loop
-            applogger.exception(breaches_exception.format(err))
-            raise BitSightException()
-        except requests.exceptions.RequestException as err:
-            applogger.exception(breaches_exception.format(err))
-            raise BitSightException()
-        except Exception as err:
-            applogger.exception(breaches_exception.format(err))
-            raise BitSightException()
-
-    def get_data_of_companies(self, companies, company_list, all_companies):
-        """Get data of companies."""
-        try:
-            count_companies = 0
-            for company in companies:
-                if (
-                    (company["name"].lower()).strip() in company_list
-                ) or all_companies is True:
-                    applogger.info(
-                        "BitSight: Started fetching data for {} company.".format(
-                            company["name"]
-                        )
-                    )
-                    is_data_exist = self.get_breaches_details(company["name"], company["guid"])
-                    if is_data_exist:
-                        applogger.info("BitSight: No new data found.")
-                    count_companies += 1
-                    applogger.info(
-                        "BitSight: Completed fetching of data for {} company.".format(
-                            company["name"]
-                        )
-                    )
-            if count_companies == 0:
-                applogger.info("BitSight: No valid company name provided.")
-                applogger.info(
-                    "BitSight: Please provide valid company names or pass all to fetch data of all the companies."
-                )
-        except Exception:
-            raise BitSightException()
-
-    def get_bitsight_data_into_sentinel(self):
-        """Implement API of portfolio, fetch guid of companies."""
-        try:
-            breaches_exception = "BitSight: GET BREACHES DETAILS: {}"
-            applogger.info(
-                "BitSight: Started fetching companies from portfolio endpoint."
-            )
-            if self.check_env_var:
-                if (companies_str.strip()).lower() == "all":
-                    all_companies = True
-                    company_list = []
-                else:
-                    all_companies = False
-                    company_list = companies_str.split("/")
-                    company_list = [
-                        company_name.lower() for company_name in company_list
-                    ]
-                url = "{}/ratings/v2/portfolio".format(self.base_url)
-                resp = requests.get(url=url, headers=self.headers)
-                if resp.status_code == 200:
-                    response = resp.json()
-                    companies = response["results"]
-                    self.get_data_of_companies(companies, company_list, all_companies)
-                else:
-                    raise BitSightException(
-                        "BITSIGHT API( {} ):  Response code: {} \nError: {}".format(
-                            url, resp.status_code, resp.text
-                        )
-                    )
-        except BitSightException as error:
-            applogger.error(error)
-            raise BitSightException()
-        except requests.exceptions.Timeout as err:
-            # Maybe set up for a retry, or continue in a retry loop
-            applogger.exception(breaches_exception.format(err))
-            raise BitSightException()
-        except requests.exceptions.RequestException as err:
-            applogger.exception(breaches_exception.format(err))
-            raise BitSightException()
-        except Exception as err:
-            applogger.exception(breaches_exception.format(err))
-            raise BitSightException()
+        body = []
+        if max_date == "0000-01-01":
+            for breach in breaches_results:
+                date_created = breach.get("date_created", "")
+                if date_created and date_created > max_date:
+                    max_date = date_created
+                breach["company_name"] = company_name
+                breach["company_guid"] = company_guid
+                body.append(breach)
+        else:
+            for breach in breaches_results:
+                date_created = breach.get("date_created", "")
+                if date_created and date_created > max_date:
+                    max_date = date_created
+                    breach["company_name"] = company_name
+                    breach["company_guid"] = company_guid
+                    body.append(breach)
+        return body, max_date

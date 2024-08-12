@@ -1,14 +1,16 @@
 id: 7da088aa-00de-4804-973e-3304d0840ab2
 Function:
   Title: Parser for SymantecEndpointProtection
-  Version: '1.0.0'
-  LastUpdated: '2023-08-23'
+  Version: '1.1.1'
+  LastUpdated: '2024-07-30'
 Category: Microsoft Sentinel Parser
 FunctionName: SymantecEndpointProtection
 FunctionAlias: SymantecEndpointProtection
 FunctionQuery: |
+    let datasource = union isfuzzy=true  (datatable(Source: string)[]), (_GetWatchlist('ASimSourceType') | where SearchKey == 'SymantecEndpointProtection' | project Source);
+    let forwarder_host_names = dynamic(["server1", "server2"]);  // server1 and server2 are examples, replace this list with your SEP device names
     Syslog
-    | where Computer in ("server1", "server2") // server1 and server2 are examples, replace this list with your SEP device names
+    | where CollectorHostName in (forwarder_host_names) or Computer in (forwarder_host_names) or CollectorHostName in (datasource) or Computer in (datasource) or ProcessName =~ "SymantecServer"
     | extend ServerName = extract(@"^([\w\-\_]+)?(,|\Site:)",1,SyslogMessage)
     // Administrative Log Header
     | extend AdministrativeLogsParser = iif(SyslogMessage has ("Admin:"), extract_all(@"Site:\s([^,]+)\,Server\sName\:\s([^,]+)\,Domain\sName\:\s([^,]+)?\,Admin\:\s([^,]+)?\,Event\sDescription\:\s([^#]+)?(#|$)",dynamic([1,2,3,4,5,6,7]), SyslogMessage)[0], dynamic(""))

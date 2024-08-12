@@ -707,7 +707,7 @@ This file is a catalog of all solutions and standalone content templates that ex
 | | |Claroty - Critical baseline deviation|AnalyticsRule|Detects when critical deviation from baseline occurs.|Solution|
 | | |Claroty - Login to uncommon location|AnalyticsRule|Detects user login to uncommon location.|Solution|
 | | |Claroty - Asset Down|AnalyticsRule|Triggers asset is down.|Solution|
-| | |Claroty|DataConnector|The [Claroty](https://claroty.com/) data connector provides the capability to ingest [Continuous Threat Detection](https://claroty.com/continuous-threat-detection/) and [Secure Remote Access](https://claroty.com/secure-remote-access/) events into Microsoft Sentinel.|Solution|
+| | |Claroty|DataConnector|The [Claroty](https://claroty.com/) data connector provides the capability to ingest [Continuous Threat Detection](https://claroty.com/continuous-threat-detection/) and [Secure Remote Access](https://claroty.com/industrial-cybersecurity/sra) events into Microsoft Sentinel.|Solution|
 | | |Claroty - PLC logins|HuntingQuery| |Solution|
 | | |Claroty - Write and Execute operations|HuntingQuery| |Solution|
 | | |Claroty - Baseline deviation|HuntingQuery| |Solution|

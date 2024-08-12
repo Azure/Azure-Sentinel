@@ -1,0 +1,57 @@
+id: 89a86f70-615f-4a79-9621-6f68c50f365f
+name: CloudNGFW By Palo Alto Networks - Threat signatures from Unusual IP addresses 
+description: |
+  'Identifies Palo Alto Threat signatures from unusual IP addresses which are not historically seen. 
+  This detection is also leveraged and required for MDE and PAN Fusion scenario
+  https://docs.microsoft.com/Azure/sentinel/fusion-scenario-reference#network-request-to-tor-anonymization-service-followed-by-anomalous-traffic-flagged-by-palo-alto-networks-firewall'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: CloudNgfwByPAN
+    dataTypes:
+      - fluentbit_CL
+queryFrequency: 1h
+queryPeriod: 7d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+  - Exfiltration
+  - CommandAndControl
+relevantTechniques:
+  - T1046
+  - T1030
+  - T1071.001
+tags:
+  - Fusion
+query: |
+  let starttime = 7d;
+  let endtime = 1d;
+  let timeframe = 1h;
+  let HistThreshold = 25; 
+  let CurrThreshold = 10; 
+  let HistoricalThreats = fluentbit_CL
+  | where ident_s == "THREAT"
+  | where isnotempty(parse_json(Message).src_ip)
+  | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+  | where parse_json(Message).threat_content_type in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')
+  | extend src_ip = tostring(parse_json(Message).src_ip)
+  | summarize TotalEvents = count(), ThreatTypes = make_set(parse_json(Message).threat_content_type), DestinationIpList = make_set(parse_json(Message).dst), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by src_ip, parse_json(Message).action, FirewallName_s;
+  let CurrentHourThreats = fluentbit_CL
+  | where ident_s == "THREAT"
+  | where isnotempty(parse_json(Message).src_ip)
+  | where TimeGenerated > ago(timeframe)
+  | where parse_json(Message).threat_content_type in ('spyware', 'scan', 'file', 'vulnerability', 'flood', 'packet', 'virus','wildfire', 'wildfire-virus')
+  | extend src_ip = tostring(parse_json(Message).src_ip)
+  | summarize TotalEvents = count(), ThreatTypes = make_set(parse_json(Message).threat_content_type), DestinationIpList = make_set(parse_json(Message).dst), FirstSeen = min(TimeGenerated) , LastSeen = max(TimeGenerated) by src_ip, parse_json(Message).action, FirewallName_s;
+  CurrentHourThreats 
+  | where TotalEvents < CurrThreshold
+  | join kind = leftanti (HistoricalThreats 
+  | where TotalEvents > HistThreshold) on src_ip
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: src_ip
+version: 1.0.0
+kind: Scheduled

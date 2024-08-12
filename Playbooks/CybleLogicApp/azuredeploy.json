@@ -1,0 +1,641 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+     "metadata": {
+        "title": "Cyble-Threat-Intel-Playbook",
+        "description": "The Cyble Threat Intel Playbook facilitates the retrieval of logs from the Cyble Alerts API into Microsoft Sentinel.",
+        "prerequisites": [
+            "A Cyble Alerts Token and Cyble Alerts Endpoint is required for authentication. Obtain your unique from [Cyble Vision Application](https://cyble.ai) for deployment."
+        ],
+        "postDeployment": [
+            "After deployment, open your Microsoft Sentinel Workspace to track latest incidents with the tag Cyble-Incidents"
+        ],
+        "prerequisitesDeployTemplateFile": "",
+        "entities": [],
+        "lastUpdateTime": "2024-03-04T19:42:00.000Z",
+        "support": {
+            "tier": "Developer",
+            "name": "Cyble",
+            "email": "support@cyble.com",
+            "link": "https://cyble.com"
+        },
+        "author": {
+            "name": "Cyble"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Cyble-Threat-Intel",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "logicAppName": {
+            "defaultValue": "CybleThreatIntel",
+            "type": "String",
+            "metadata": {
+                "description": "Name of Cyble Connector Logic App"
+            }
+
+        },
+        "workspaceName": {
+            "defaultValue": "",
+            "type": "String",
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Cyble Connector is setup"
+            }
+        },
+        "CybleAccessToken": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Access Token for Cyble Threat Intel"
+            }
+        },
+        "CybleEndpoint": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Endpoint to access Cyble Threat Intel"
+            }
+        },
+        "FrequencyMinutes": {
+            "defaultValue": 10,
+            "type": "Int",
+            "metadata": {
+                "description": "Number of minutes in which the data needs to be collected"
+            }
+        },
+        "baseTime": {
+            "type": "string",
+            "defaultValue": "[utcNow('u')]"
+        }
+    },
+    "variables": {
+        "subscription": "[last(split(subscription().id, '/'))]",
+        "resourceGroupName": "[resourceGroup().name]",
+        "sentinelRoleId": "[guid(concat(subscription().subscriptionId, 'contributor', parameters('logicAppName')))]",
+        "frequency": "[concat('-PT',parameters('FrequencyMinutes'),'M')]",
+        "frequencyNone": "[concat('-PT0M')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('logicAppName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', variables('subscription'), '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('sentinelRoleId')]",
+            "scope": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.OperationalInsights/workspaces/', parameters('workspaceName'))]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Logic/workflows', parameters('logicAppName'))]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[concat('/subscriptions/', variables('subscription'), '/providers/Microsoft.Authorization/roleDefinitions/ab8e14d6-4a74-4a29-9ba8-549422addade')]",
+                "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('logicAppName')), '2019-05-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('logicAppName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Minute",
+                                "interval": "[parameters('FrequencyMinutes')]"
+                            },
+                            "evaluatedRecurrence": {
+                                "frequency": "Minute",
+                                "interval": "[parameters('FrequencyMinutes')]"
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "HTTP": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "orderBy": [
+                                        {
+                                            "created_at": "desc"
+                                        }
+                                    ],
+                                    "select": {
+                                        "archive_date": true,
+                                        "archived": true,
+                                        "assignee_id": true,
+                                        "assignment_date": true,
+                                        "created_at": true,
+                                        "data_id": true,
+                                        "deleted_at": true,
+                                        "description": true,
+                                        "hash": true,
+                                        "id": true,
+                                        "metadata": true,
+                                        "risk_score": true,
+                                        "service": true,
+                                        "severity": true,
+                                        "status": true,
+                                        "tags": true,
+                                        "updated_at": true,
+                                        "user_severity": true
+                                    },
+                                    "skip": 0,
+                                    "take": 1000,
+                                    "where": {
+                                        "created_at": {
+                                            "gte": "[dateTimeAdd(parameters('baseTime'), variables('frequency'))]",
+                                            "lte": "[dateTimeAdd(parameters('baseTime'), variables('frequencyNone'))]"
+                                        },
+                                        "status": {
+                                            "in": [
+                                                "VIEWED",
+                                                "UNREVIEWED",
+                                                "CONFIRMED_INCIDENT",
+                                                "UNDER_REVIEW",
+                                                "INFORMATIONAL"
+                                            ]
+                                        }
+                                    },
+                                    "withDataMessage": true
+                                },
+                                "headers": {
+                                    "Authorization": "[concat('Bearer ',parameters('CybleAccessToken'))]"
+                                },
+                                "method": "POST",
+                                "uri": "[parameters('CybleEndpoint')]"
+                            }
+                        },
+                        "Initialize_variable": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "data_message",
+                                        "type": "string",
+                                        "value": "Missing Description"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Scope": {
+                            "actions": {
+                                "Condition": {
+                                    "actions": {},
+                                    "else": {
+                                        "actions": {
+                                            "Terminate": {
+                                                "inputs": {
+                                                    "runStatus": "Succeeded"
+                                                },
+                                                "runAfter": {},
+                                                "type": "Terminate"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_JSON')?['data']",
+                                                        null
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "For_each": {
+                                    "foreach": "@body('Parse_JSON')?['data']",
+                                    "actions": {
+                                        "Condition_2": {
+                                            "actions": {
+                                                "Set_variable": {
+                                                    "inputs": {
+                                                        "name": "data_message",
+                                                        "value": "@{if(less(length(string(items('For_each')?['data_message']?['data'])),4000),string(items('For_each')?['data_message']?['data']),substring(string(items('For_each')?['data_message']?['data']),0, 4000))}"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each')?['data_message']?['data']",
+                                                                null
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {},
+                                            "type": "If"
+                                        },
+                                        "Condition_3": {
+                                            "actions": {
+                                                "Set_variable_4": {
+                                                    "inputs": {
+                                                        "name": "data_message",
+                                                        "value": "@{if(less(length(string(items('For_each')?['data_message']?['metadata'])),4000),string(items('For_each')?['data_message']?['metadata']),substring(string(items('For_each')?['data_message']?['metadata']),0, 4000))}"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@items('For_each')?['data_message']?['metadata']",
+                                                                null
+                                                            ]
+                                                        }
+                                                    },
+                                                    {
+                                                        "equals": [
+                                                            "@variables('data_message')",
+                                                            "Missing Description"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Condition_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Create_incident_2": {
+                                            "runAfter": {
+                                                "Condition_2": [
+                                                    "Succeeded"
+                                                ],
+                                                "Condition_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "description": "@variables('data_message')",
+                                                    "ownerAction": "Unassign",
+                                                    "providerName": "Cyble-Incidents",
+                                                    "severity": "@items('For_each')?['severity']",
+                                                    "status": "New",
+                                                    "tagsToAdd": {
+                                                        "TagsToAdd": [
+                                                            {
+                                                                "Tag": "Cyble-Incidents"
+                                                            },
+                                                            {
+                                                                "Tag": "@if(not(equals(items('For_each')?['metadata']?['entity']?['keyword']?['tag_name'],null)),items('For_each')?['metadata']?['entity']?['keyword']?['tag_name'],'Missing Keyword')"
+                                                            },
+                                                            {
+                                                                "Tag": "@if(not(equals(items('For_each')?['data_message']?['source'],null)),items('For_each')?['data_message']?['source'],'Missing Source')"
+                                                            },
+                                                            {
+                                                                "Tag": "@if(not(equals(items('For_each')?['data_message']?['type'],null)),items('For_each')?['data_message']?['type'],'Missing Type')"
+                                                            },
+                                                            {
+                                                                "Tag": "@if(not(equals(items('For_each')?['data_message']?['confidence'],null)),items('For_each')?['data_message']?['confidence'],'Missing Confidence')"
+                                                            },
+                                                            {
+                                                                "Tag": "@if(not(equals(items('For_each')?['data_message']?['sentiment'],null)),items('For_each')?['data_message']?['sentiment'],'Missing sentiment')"
+                                                            }
+                                                        ]
+                                                    },
+                                                    "title": "@{if(not(equals(items('For_each')?['metadata']?['entity']?['keyword']?['tag_name'],null)),concat(items('For_each')?['metadata']?['entity']?['keyword']?['tag_name'],' - ',items('For_each')?['service']), items('For_each')?['service'])}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "[concat('/Incidents/subscriptions/',variables('subscription'),'/resourceGroups/',variables('resourceGroupName'),'/workspaces/',parameters('workspaceName'))]"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Condition": [
+                                            "Succeeded"
+                                        ]
+
+                                    },
+                                    "type": "Foreach"
+                                },
+
+                                "Parse_JSON": {
+                                    "runAfter": {
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP')",
+                                        "schema": {
+                                            "properties": {
+                                                "cached": {
+                                                    "type": [
+                                                        "boolean",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "data": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "archive_date": {},
+                                                            "archived": {
+                                                                "type": [
+                                                                    "boolean",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "assignee_id": {},
+                                                            "assignment_date": {},
+                                                            "created_at": {
+                                                                "type": [ "string", "null" ]
+                                                            },
+                                                            "data_id": {
+                                                                "type": [ "string", "null" ]
+                                                            },
+                                                            "data_message": {
+                                                                "properties": {
+                                                                    "data": {
+                                                                        "properties": {
+                                                                            "_id": {
+                                                                                "type": [ "string", "null" ]
+                                                                            },
+                                                                            "doc": {
+                                                                                "properties": {
+                                                                                    "data": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    },
+                                                                                    "id": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    },
+                                                                                    "search_engine": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    },
+                                                                                    "search_keyword": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    },
+                                                                                    "tor_url": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    },
+                                                                                    "updated_on": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    }
+                                                                                },
+                                                                                "type": [ "object", "null" ]
+                                                                            }
+                                                                        },
+                                                                        "type": [ "object", "null" ]
+                                                                    },
+                                                                    "hash": {
+                                                                        "type": [ "string", "null" ]
+                                                                    },
+                                                                    "id": {
+                                                                        "type": [ "string", "null" ]
+                                                                    },
+                                                                    "metadata": {}
+                                                                },
+                                                                "type": [ "object", "null" ]
+                                                            },
+                                                            "deleted_at": {},
+                                                            "description": {},
+                                                            "hash": {
+                                                                "type": [ "string", "null" ]
+                                                            },
+                                                            "id": {
+                                                                "type": [ "string", "null" ]
+                                                            },
+                                                            "metadata": {
+                                                                "properties": {
+                                                                    "created_at": {
+                                                                        "type": [ "string", "null" ]
+                                                                    },
+                                                                    "entity": {
+                                                                        "properties": {
+                                                                            "entity_id": {
+                                                                                "type": [ "integer", "null" ]
+                                                                            },
+                                                                            "entity_type": {
+                                                                                "type": [ "integer", "null" ]
+                                                                            },
+                                                                            "keyword": {
+                                                                                "properties": {
+                                                                                    "bucket_id": {
+                                                                                        "type": [ "integer", "null" ]
+                                                                                    },
+                                                                                    "company_id": {
+                                                                                        "type": [ "integer", "null" ]
+                                                                                    },
+                                                                                    "created_at": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    },
+                                                                                    "display_name": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    },
+                                                                                    "id": {
+                                                                                        "type": [ "integer", "null" ]
+                                                                                    },
+                                                                                    "k_query": {
+                                                                                        "properties": {
+                                                                                            "query": {
+                                                                                                "properties": {
+                                                                                                    "main_query": {
+                                                                                                        "items": {
+                                                                                                            "properties": {
+                                                                                                                "chain_operator": {
+                                                                                                                    "type": [ "string", "null" ]
+                                                                                                                },
+                                                                                                                "is_primary": {
+                                                                                                                    "type": [ "boolean", "null" ]
+                                                                                                                },
+                                                                                                                "query": {
+                                                                                                                    "properties": {
+                                                                                                                        "operands": {
+                                                                                                                            "items": {
+                                                                                                                                "type": [ "string", "null" ]
+                                                                                                                            },
+                                                                                                                            "type": [ "array", "null" ]
+                                                                                                                        },
+                                                                                                                        "operators": {
+                                                                                                                            "items": {
+                                                                                                                                "type": [ "string", "null" ]
+                                                                                                                            },
+                                                                                                                            "type": [ "array", "null" ]
+                                                                                                                        }
+                                                                                                                    },
+                                                                                                                    "type": [ "object", "null" ]
+                                                                                                                }
+                                                                                                            },
+                                                                                                            "required": [
+                                                                                                                "query",
+                                                                                                                "chain_operator",
+                                                                                                                "is_primary"
+                                                                                                            ],
+                                                                                                            "type": [ "object", "null" ]
+                                                                                                        },
+                                                                                                        "type": [ "array", "null" ]
+                                                                                                    },
+                                                                                                    "per_page": {
+                                                                                                        "type": [ "string", "null" ]
+                                                                                                    },
+                                                                                                    "search_Keyword": {
+                                                                                                        "type": [ "string", "null" ]
+                                                                                                    },
+                                                                                                    "search_by_extension": {
+                                                                                                        "type": [ "string", "null" ]
+                                                                                                    },
+                                                                                                    "search_by_file_name": {
+                                                                                                        "type": [ "string", "null" ]
+                                                                                                    },
+                                                                                                    "search_by_language": {
+                                                                                                        "type": [ "string", "null" ]
+                                                                                                    },
+                                                                                                    "short_by": {
+                                                                                                        "type": [ "string", "null" ]
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": [ "object", "null" ]
+                                                                                            }
+                                                                                        },
+                                                                                        "type": [ "object", "null" ]
+                                                                                    },
+                                                                                    "queries": {},
+                                                                                    "tag_name": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    },
+                                                                                    "updated_at": {
+                                                                                        "type": [ "string", "null" ]
+                                                                                    }
+                                                                                },
+                                                                                "type": [ "object", "null" ]
+                                                                            }
+                                                                        },
+                                                                        "type": [ "object", "null" ]
+                                                                    }
+                                                                },
+                                                                "type": [ "object", "null" ]
+                                                            },
+                                                            "risk_score": {},
+                                                            "service": {
+                                                                "type": [ "string", "null" ]
+                                                            },
+                                                            "severity": {
+                                                                "type": [ "string", "null" ]
+                                                            },
+                                                            "status": {
+                                                                "type": [ "string", "null" ]
+                                                            },
+                                                            "tags": {
+                                                                "properties": {},
+                                                                "type": [ "object", "null" ]
+                                                            },
+                                                            "updated_at": {
+                                                                "type": [ "string", "null" ]
+                                                            },
+                                                            "user_severity": {
+                                                                "type": [ "string", "null" ]
+                                                            }
+                                                        },
+                                                        "required": [],
+                                                        "type": [ "object", "null" ]
+                                                    },
+                                                    "type": [ "array", "null" ]
+                                                },
+                                                "ids_error": {
+                                                    "type": [ "array", "null" ]
+                                                },
+                                                "success": {
+                                                    "type": [ "boolean", "null" ]
+                                                }
+                                            },
+                                            "type": [ "object", "null" ]
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections',parameters('logicAppName'))]",
+                                "connectionName": "[parameters('logicAppName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', parameters('logicAppName'))]"
+            ]
+        }
+    ]
+}

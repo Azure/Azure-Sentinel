@@ -34,6 +34,7 @@ param (
 . ".\Utils\CommonAwsPolicies.ps1"
 . ".\Utils\AwsPoliciesUpdate.ps1"
 . ".\Utils\AwsSentinelTag.ps1"
+. ".\Enviornment\EnviornmentConstants.ps1"
 
 # Verify that the AWS CLI is available
 if ($null -eq (Get-Command "aws" -ErrorAction SilentlyContinue)) 

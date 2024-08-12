@@ -2,13 +2,13 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "metadata": {
-        "title": "AS-Revoke-Azure-AD-User-Session-From-Incident", 
-        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will look up Azure AD users associated with the incident account entities and revoke their sessions. A comment noting the affected users will be added to the Incident.",
+        "title": "AS-Revoke-Entra-ID-User-Session-From-Incident", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will look up Entra ID users associated with the incident account entities and revoke their sessions. A comment noting the affected users will be added to the Incident.",
         "prerequisites": "1. An App Registration with User.ReadWrite.All permissions granted on Microsoft Graph API. 2. A client secret for the App Registration must be generated. 3. An Azure Key Vault Secret to hold the client secret. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Revoke-Azure-AD-User-Session-From-Incident",
         "postDeployment": ["Access to the Azure Key Vault must be granted to the playbook","The Microsoft Sentinel Contributor role must be applied to the playbook"],
-        "lastUpdateTime": "2023-10-24T3:17:47Z",
+        "lastUpdateTime": "2024-05-22T23:40:50Z",
         "entities": ["Account"], 
-        "tags": ["Microsoft Sentinel", "Incident", "Azure AD", "Revoke User Sessions"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Entra ID", "Revoke User Sessions"], 
         "support": {
             "tier": "partner"
         },
@@ -18,7 +18,7 @@
     },
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "AS-Revoke-Azure-AD-User-Session-From-Incident",
+            "defaultValue": "AS-Revoke-Entra-ID-User-Session-From-Incident",
             "type": "string",
             "metadata": {
                 "description": "Name of the Logic App resource to be created"
@@ -133,7 +133,7 @@
                                     "inputs": {
                                         "body": {
                                             "incidentArmId": "@triggerBody()?['object']?['id']",
-                                            "message": "<p><strong>Revoked the following Azure AD user sessions:<br>\n</strong>@{variables('Affected Azure AD Users')}</p>"
+                                            "message": "<p><strong>Revoked the following Entra ID user sessions:<br>\n</strong>@{variables('Affected Entra ID Users')}</p>"
                                         },
                                         "host": {
                                             "connection": {
@@ -154,7 +154,7 @@
                                 "and": [
                                     {
                                         "greater": [
-                                            "@length(variables('Affected Azure AD Users'))",
+                                            "@length(variables('Affected Entra ID Users'))",
                                             0
                                         ]
                                     }
@@ -179,14 +179,50 @@
                         "For_each": {
                             "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
                             "actions": {
+                                "Condition_-_Determine_which_value_to_use_for_UPN": {
+                                    "actions": {
+                                        "Set_variable_-_Concatenate_Account_Name_and_UPN_Suffix": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "UPN",
+                                                "value": "@{concat(items('For_each')?['accountName'],'@', items('For_each')?['upnSuffix'])}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_-_Use_AadUserId_for_UPN": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "UPN",
+                                                    "value": "@{items('For_each')?['AadUserId']}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@items('For_each')?['AadUserId']",
+                                                    "@null"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
                                 "Condition_-_User_session_successfully_revoked": {
                                     "actions": {
-                                        "Append_to_string_variable_-_Affected_Azure_AD_Users": {
+                                        "Append_to_string_variable_-_Affected_Entra_ID_Users": {
                                             "runAfter": {},
                                             "type": "AppendToStringVariable",
                                             "inputs": {
-                                                "name": "Affected Azure AD Users",
-                                                "value": "@{items('For_each')?['Name']} [@{items('For_each')?['AadUserId']}]\n"
+                                                "name": "Affected Entra ID Users",
+                                                "value": "@{items('For_each')?['accountName']} [@{variables('UPN')}]\n"
                                             }
                                         }
                                     },
@@ -208,15 +244,20 @@
                                     "type": "If"
                                 },
                                 "HTTP_-_Revoke_user_sign_in_sessions": {
-                                    "runAfter": {},
+                                    "runAfter": {
+                                        "Condition_-_Determine_which_value_to_use_for_UPN": [
+                                            "Succeeded"
+                                        ]
+                                    },
                                     "type": "Http",
                                     "inputs": {
                                         "headers": {
                                             "Authorization": "Bearer @{body('Parse_JSON_-_Access_token')?['access_token']}",
+                                            "Content-Type": "application/json",
                                             "Host": "graph.microsoft.com"
                                         },
                                         "method": "POST",
-                                        "uri": "https://graph.microsoft.com/v1.0/users/@{items('For_each')?['AadUserId']}/revokeSignInSessions"
+                                        "uri": "https://graph.microsoft.com/v1.0/users/@{variables('UPN')}/revokeSignInSessions"
                                     }
                                 }
                             },
@@ -246,7 +287,7 @@
                         },
                         "HTTP_-_Authenticate": {
                             "runAfter": {
-                                "Initialize_variable_-_Affected_Azure_AD_Users": [
+                                "Initialize_variable_-_UPN": [
                                     "Succeeded"
                                 ]
                             },
@@ -261,7 +302,7 @@
                                 "uri": "[concat('https://login.microsoftonline.com/', subscription().tenantId, '/oauth2/v2.0/token')]"
                             }
                         },
-                        "Initialize_variable_-_Affected_Azure_AD_Users": {
+                        "Initialize_variable_-_Affected_Entra_ID_Users": {
                             "runAfter": {
                                 "Get_Client_Secret": [
                                     "Succeeded"
@@ -271,7 +312,23 @@
                             "inputs": {
                                 "variables": [
                                     {
-                                        "name": "Affected Azure AD Users",
+                                        "name": "Affected Entra ID Users",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_UPN": {
+                            "runAfter": {
+                                "Initialize_variable_-_Affected_Entra_ID_Users": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "UPN",
                                         "type": "string"
                                     }
                                 ]

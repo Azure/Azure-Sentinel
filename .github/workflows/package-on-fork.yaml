@@ -5,6 +5,9 @@ env:
   DEFAULTPACKAGEVERSION: "${{ vars.DEFAULTPACKAGEVERSION }}"
   BLOB_CONN_STRING: "${{ secrets.BLOB_CONN_STRING }}"
   BRANCH_NAME: "${{ github.event.pull_request.head.ref }}"
+  BASE_FOLDER_PATH: "${{ vars.BASEFOLDERPATH }}"
+  GITHUB_APPS_ID: "${{ secrets.APPLICATION_ID }}"
+  GITHUB_APPS_KEY: "${{ secrets.APPLICATION_PRIVATE_KEY }}"
 
 on:
   pull_request_target: 
@@ -15,19 +18,24 @@ on:
     types:
       - closed
 
-permissions:
-  contents: write
-  pull-requests: write
-  packages: write
-
 jobs:
   if_merged:
     if: ${{ github.actor != 'dependabot[bot]' && github.event.pull_request.merged && github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@46e4a501e119d39574a54e53a06c9a705efc55c9
+        with:
+          app-id: ${{ env.GITHUB_APPS_ID }}
+          private-key: ${{ env.GITHUB_APPS_KEY }}
+
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        env:
+          GeneratedToken: ${{ steps.generate_token.outputs.token }}
         with:
           fetch-depth: 0
+          token: ${{ env.GeneratedToken}}
 
       - id: checkAutomatedPR
         name: check-Automated-PR
@@ -58,7 +66,7 @@ jobs:
           $instrumentationKey = "${{ vars.APPINSIGHTS }}"
           $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
           $defaultPackageVersion = "${{ env.DEFAULTPACKAGEVERSION }}"
-          $baseFolderPath = "/home/runner/work/Sentinel/Azure-Sentinel/"
+          $baseFolderPath = "${{ env.BASE_FOLDER_PATH }}"
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module powershell-yaml
           ./.script/package-automation/package-on-fork-pr.ps1 $runId $pullRequestNumber $instrumentationKey $baseFolderPath $defaultPackageVersion
@@ -105,12 +113,12 @@ jobs:
           committer: GitHub <noreply@github.com>
           assignees: "${{ env.ASSIGNEES }}"
           signoff: false
-          branch: "${{ env.CURRENT_BRANCH_NAME }}-automated-pr"
+          branch: "${{ env.CURRENT_BRANCH_NAME }}-fork-automated-pr"
           base: master
           delete-branch: false
           title: '[GitHub Bot] 🤖 Package Created For ${{ env.SOLUTION_NAME }} Solution'
           body: |
             Automation have successfully generated package for solution '${{ env.SOLUTION_NAME }}' based on Fork Pull request #${{ env.PULL_REQUEST_NUMBER }}.
           labels: |
-            auto-package
+            auto-fork-package
             Solution

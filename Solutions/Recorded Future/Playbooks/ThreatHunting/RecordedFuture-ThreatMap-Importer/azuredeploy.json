@@ -1,7 +1,7 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-       "metadata": {
+    "metadata": {
         "title": "RecordedFuture-ThreatMap-Importer",
         "description": "This playbook will import Threat Map data from Recorded Future and store it in a custom log.",
         "prerequisites": [
@@ -9,11 +9,11 @@
             "The custom connector RecordedFuture-CustomConnector have to be deployed under the same subscription.",
             "To use the Recorded Future for Azure connector, you will need a valid API token from Recorded Future as described in the [documentation](https://learn.microsoft.com/en-us/connectors/recordedfuturev2/#how-to-get-credentials)"
         ],
-         "postDeployment": [
+        "postDeployment": [
             "After deployment, open the playbook to configure all connections and press save."
         ],
         "prerequisitesDeployTemplateFile": "../../Connectors/RecordedFuture-CustomConnector/azuredeploy.json",
-        "lastUpdateTime": "2023-10-23T00:00:00.000Z",
+        "lastUpdateTime": "2024-03-08T00:00:00.000Z",
         "entities": [],
         "tags": [ "Threat Intelligence" ],
         "support": {
@@ -28,6 +28,16 @@
                 "version": "1.0",
                 "title": "RecordedFuture-ThreatMap-Importer",
                 "notes": [ "Initial version" ]
+            },
+            {
+                "version": "1.1",
+                "title": "API Connectors",
+                "notes": [ "API connection rename." ]
+            },
+            {
+                "version": "1.2",
+                "title": "Default Recurrence",
+                "notes": [ "Changed Default Recurrence to 24." ]
             }
         ]
     },
@@ -45,8 +55,8 @@
         }
     },
     "variables": {
-        "RecordedFutureCustomConnectorConnectionName": "[concat('RecordedFutureCustomConnector-', parameters('PlaybookName'))]",
-        "AzureloganalyticsdatacollectorConnectionName": "[concat('Azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+        "RecordedFutureCustomConnectorConnectionName": "Recordedfuture-CustomConnector",
+        "AzureloganalyticsdatacollectorConnectionName": "RecordedFuture-Azureloganalyticsdatacollector"
     },
     "resources": [
         {
@@ -66,11 +76,11 @@
                         "Recurrence": {
                             "recurrence": {
                                 "frequency": "Hour",
-                                "interval": 1
+                                "interval": 24
                             },
                             "evaluatedRecurrence": {
                                 "frequency": "Hour",
-                                "interval": 1
+                                "interval": 24
                             },
                             "type": "Recurrence"
                         }
@@ -81,7 +91,7 @@
                             "type": "ApiConnection",
                             "inputs": {
                                 "body": {
-                                 },
+                                },
                                 "headers": {
                                     "Content-Type": "application/json"
                                 },
@@ -94,66 +104,7 @@
                                 "path": "/threat/map/actors"
                             }
                         },
-                        "For_each": {
-                            "foreach": "@body('Parse_JSON')?['data']?['threat_map']",
-                            "actions": {
-                                "For_each_2": {
-                                    "foreach": "@items('For_each')?['log_entries']",
-                                    "actions": {
-                                        "Compose": {
-                                            "runAfter": {},
-                                            "type": "Compose",
-                                            "inputs": "@addProperty(items('For_each_2'), 'name', items('For_each')?['name'])"
-                                        },
-                                        "Compose_2": {
-                                            "runAfter": {
-                                                "Compose": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "Compose",
-                                            "inputs": "@addProperty(outputs('Compose'), 'id', items('For_each')?['id'])"
-                                        },
-                                        "Send_Data": {
-                                            "runAfter": {
-                                                "Compose_2": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "body": "@{outputs('Compose_2')}",
-                                                "headers": {
-                                                    "Log-Type": "RecordedFutureThreatMapLogEntries"
-                                                },
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "path": "/api/logs"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {},
-                                    "type": "Foreach"
-                                }
-                            },
-                            "runAfter": {
-                                "Send_Data_-_Save_full_ThreatMap_response": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Foreach"
-                        },
                         "Parse_JSON": {
-                            "runAfter": {
-                                "Fetch_Threat_Map_actors": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "ParseJson",
                             "inputs": {
                                 "content": "@body('Fetch_Threat_Map_actors')",
                                 "schema": {
@@ -267,7 +218,13 @@
                                     },
                                     "type": "object"
                                 }
-                            }
+                            },
+                            "runAfter": {
+                                "Fetch_Threat_Map_actors": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
                         },
                         "Send_Data_-_Save_full_ThreatMap_response": {
                             "runAfter": {
@@ -315,7 +272,7 @@
             "location": "[resourceGroup().location]",
             "tags": {
                 "hidden-SentinelTemplateName": "RecordedFuture-ThreatMap-Importer",
-                "hidden-SentinelTemplateVersion": "1.0"
+                "hidden-SentinelTemplateVersion": "1.2"
             },
             "apiVersion": "2017-07-01",
             "dependsOn": [
@@ -333,7 +290,7 @@
                 "displayName": "[variables('RecordedFutureCustomConnectorConnectionName')]",
                 "customParameterValues": {},
                 "api": {
-                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"                   
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
                 }
             }
         },

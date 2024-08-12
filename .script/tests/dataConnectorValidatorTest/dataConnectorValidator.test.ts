@@ -62,7 +62,7 @@ describe("dataConnectorValidator", () => {
   });
 
   it("should pass when Syslog data connector have valid set of permissions", async () => {
-    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validSyslogConnectorPermissions.json");
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validSyslogConnectorPermissions.json") || await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validSyslogConnectorDataSourcesPermissions.json");
   });
 
   it("should throw an exception when Syslog data connector have Invalid set of permissions", async () => {

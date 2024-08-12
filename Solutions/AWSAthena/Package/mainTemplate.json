@@ -30,55 +30,43 @@
     }
   },
   "variables": {
-    "solutionId": "azuresentinel.azure-sentinel-solution-awsathena",
-    "_solutionId": "[variables('solutionId')]",
     "email": "support@microsoft.com",
     "_email": "[variables('email')]",
+    "_solutionName": "AWSAthena",
+    "_solutionVersion": "3.0.0",
+    "solutionId": "azuresentinel.azure-sentinel-solution-awsathena",
+    "_solutionId": "[variables('solutionId')]",
     "AWSAthena_FunctionAppConnector": "AWSAthena_FunctionAppConnector",
     "_AWSAthena_FunctionAppConnector": "[variables('AWSAthena_FunctionAppConnector')]",
+    "TemplateEmptyArray": "[json('[]')]",
     "playbookVersion1": "1.0",
     "playbookContentId1": "AWSAthena_FunctionAppConnector",
     "_playbookContentId1": "[variables('playbookContentId1')]",
-    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'-fa-',uniquestring(variables('_playbookContentId1')))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-fa-',uniquestring(variables('_playbookContentId1'))))]",
     "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_playbookcontentProductId1": "[concat(take(variables('_solutionId'),50),'-','fa','-', uniqueString(concat(variables('_solutionId'),'-','AzureFunction','-',variables('_playbookContentId1'),'-', variables('playbookVersion1'))))]",
     "AWSAthena-GetQueryResults": "AWSAthena-GetQueryResults",
     "_AWSAthena-GetQueryResults": "[variables('AWSAthena-GetQueryResults')]",
     "playbookVersion2": "1.0",
     "playbookContentId2": "AWSAthena-GetQueryResults",
     "_playbookContentId2": "[variables('playbookContentId2')]",
     "playbookId2": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId2'))]",
-    "playbookTemplateSpecName2": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId2')))]",
-    "blanks": "[replace('b', 'b', '')]"
+    "playbookTemplateSpecName2": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId2'))))]",
+    "_playbookcontentProductId2": "[concat(take(variables('_solutionId'),50),'-','pl','-', uniqueString(concat(variables('_solutionId'),'-','Playbook','-',variables('_playbookContentId2'),'-', variables('playbookVersion2'))))]",
+    "blanks": "[replace('b', 'b', '')]",
+    "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
   "resources": [
     {
-      "type": "Microsoft.Resources/templateSpecs",
-      "apiVersion": "2021-05-01",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('playbookTemplateSpecName1')]",
       "location": "[parameters('workspace-location')]",
-      "tags": {
-        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "AzureFunction"
-      },
-      "properties": {
-        "description": "AWSAthena_FunctionAppConnector",
-        "displayName": "AWSAthena_FunctionAppConnector"
-      }
-    },
-    {
-      "type": "Microsoft.Resources/templateSpecs/versions",
-      "apiVersion": "2021-05-01",
-      "name": "[concat(variables('playbookTemplateSpecName1'),'/',variables('playbookVersion1'))]",
-      "location": "[parameters('workspace-location')]",
-      "tags": {
-        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "AzureFunction"
-      },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName1'))]"
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "AWSAthena_FunctionAppConnector Playbook with template version 2.0.0",
+        "description": "AWSAthena_FunctionAppConnector Playbook with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion1')]",
@@ -96,6 +84,12 @@
             "FunctionAppName": {
               "defaultValue": "awsathena",
               "type": "string"
+            },
+            "AppInsightsWorkspaceResourceID": {
+              "type": "string",
+              "metadata": {
+                "description": "Migrate Classic Application Insights to Log Analytic Workspace which is retiring by 29 Febraury 2024. Use 'Log Analytic Workspace-->Properties' blade having 'Resource ID' property value. This is a fully qualified resourceId which is in format '/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}'"
+              }
             }
           },
           "variables": {
@@ -123,6 +117,8 @@
               "properties": {
                 "networkAcls": {
                   "bypass": "AzureServices",
+                  "virtualNetworkRules": "[variables('TemplateEmptyArray')]",
+                  "ipRules": "[variables('TemplateEmptyArray')]",
                   "defaultAction": "Allow"
                 },
                 "supportsHttpsTrafficOnly": true,
@@ -163,10 +159,11 @@
               "name": "[[variables('applicationInsightsName')]",
               "location": "[[variables('workspace-location-inline')]",
               "tags": {
-                "[concat('hidden-link:', resourceId('Microsoft.Web/sites', 'AWSAthenaFunctionApp'))]": "Resource"
+                "[[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
               },
               "properties": {
-                "Application_Type": "web"
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[[parameters('AppInsightsWorkspaceResourceID')]"
               },
               "kind": "web"
             },
@@ -206,7 +203,7 @@
                     },
                     {
                       "name": "WEBSITE_RUN_FROM_PACKAGE",
-                      "value": "https://github.com/Azure/Azure-Sentinel/blob/origin/users/rahul/aws-athena/Solutions/AWSAthena/Playbooks/CustomConnector/AWSAthena_FunctionAppConnector/AWSAthenaFunctionApp.zip?raw=true"
+                      "value": "https://aka.ms/sentinel-soar-aws-athena-functionapp"
                     },
                     {
                       "name": "AWSAccessKeyID",
@@ -251,37 +248,30 @@
               }
             }
           ]
-        }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_playbookContentId1')]",
+        "contentKind": "AzureFunction",
+        "displayName": "AWSAthena_FunctionAppConnector",
+        "contentProductId": "[variables('_playbookcontentProductId1')]",
+        "id": "[variables('_playbookcontentProductId1')]",
+        "version": "[variables('playbookVersion1')]"
       }
     },
     {
-      "type": "Microsoft.Resources/templateSpecs",
-      "apiVersion": "2021-05-01",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
       "name": "[variables('playbookTemplateSpecName2')]",
       "location": "[parameters('workspace-location')]",
-      "tags": {
-        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "Playbook"
-      },
-      "properties": {
-        "description": "AWSAthena-GetQueryResults playbook",
-        "displayName": "AWSAthena-GetQueryResults playbook"
-      }
-    },
-    {
-      "type": "Microsoft.Resources/templateSpecs/versions",
-      "apiVersion": "2021-05-01",
-      "name": "[concat(variables('playbookTemplateSpecName2'),'/',variables('playbookVersion2'))]",
-      "location": "[parameters('workspace-location')]",
-      "tags": {
-        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
-        "hidden-sentinelContentType": "Playbook"
-      },
       "dependsOn": [
-        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName2'))]"
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
       "properties": {
-        "description": "AWSAthena-GetQueryResults Playbook with template version 2.0.0",
+        "description": "AWSAthena-GetQueryResults Playbook with template version 3.0.0",
         "mainTemplate": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
           "contentVersion": "[variables('playbookVersion2')]",
@@ -734,7 +724,9 @@
           "metadata": {
             "title": "AWS Athena - Execute Query and Get Results",
             "description": "When a new sentinel incident is created, this playbook gets triggered and performs the following actions:\n 1. It executes the query specified during playbook setup on given database.\n 2. Downloads the query result and adds as a comment to the incident.",
-            "prerequisites": ["Obtain AWS Access Key ID, Secret Access Key and Region."],
+            "prerequisites": [
+              "Obtain AWS Access Key ID, Secret Access Key and Region."
+            ],
             "postDeployment": [
               "Follow Post deployment steps from playbook readme file."
             ],
@@ -751,17 +743,35 @@
               ]
             }
           }
-        }
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_playbookContentId2')]",
+        "contentKind": "Playbook",
+        "displayName": "AWSAthena-GetQueryResults",
+        "contentProductId": "[variables('_playbookcontentProductId2')]",
+        "id": "[variables('_playbookcontentProductId2')]",
+        "version": "[variables('playbookVersion2')]"
       }
     },
     {
-      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
-      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
       "location": "[parameters('workspace-location')]",
       "properties": {
-        "version": "2.0.0",
+        "version": "3.0.0",
         "kind": "Solution",
-        "contentSchemaVersion": "2.0.0",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "AWSAthena",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> <em>There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</em></p>\n<p><a href=\"https://aws.amazon.com/athena/?whats-new-cards.sort-by=item.additionalFields.postDateTime&amp;whats-new-cards.sort-order=desc\">Amazon Athena</a> is an interactive query service that makes it easy to analyze data in Amazon S3 using standard SQL. Athena is serverless, so there is no infrastructure to manage, and you pay only for the queries that you run.</p>\n<p><strong>Underlying Microsoft Technologies used:</strong></p>\n<p>This solution takes a dependency on the following technologies, and some of these dependencies either may be in <a href=\"https://azure.microsoft.com/support/legal/preview-supplemental-terms/\">Preview</a> state or might result in additional ingestion or operational costs:</p>\n<ol type=\"a\">\n<li><a href=\"https://azure.microsoft.com/products/functions/#overview\">Azure Functions</a></li>\n</ol>\n<p><strong>Function Apps:</strong> 1, <strong>Playbooks:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/AWSAthena/Playbooks/aws-logo.svg\" width=\"75px\" height=\"75px\">",
         "contentId": "[variables('_solutionId')]",
         "parentId": "[variables('_solutionId')]",
         "source": {

@@ -1,0 +1,446 @@
+Parser:
+  Title: ASIM Authentication filtering parser for Salesforce Service Cloud
+  Version: "0.1.1"
+  LastUpdated: Mar 24, 2024
+Product:
+  Name: Salesforce Service Cloud
+Normalization:
+  Schema: Authentication
+  Version: "0.1.3"
+References:
+  - Title: Using functions
+    Link: https://docs.microsoft.com/azure/azure-monitor/log-query/function
+  - Title: ASIM Authentication Schema
+    Link: https://aka.ms/ASimAuthenticationDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
+  - Title: Salesforce Service Cloud
+    Link: https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_eventlogfile_login.htm
+Description: |
+  This ASIM parser supports filtering and normalizing the Salesforce Service Cloud logs stored in 'SalesforceServiceCloud_CL' table to the ASIM authentication normalized schema.
+ParserName: vimAuthenticationSalesforceSC
+EquivalentBuiltInParser: _Im_Authentication_SalesforceSC
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: targetappname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresultdetails_in
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+      starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      username_has_any: dynamic = dynamic([]),
+      targetappname_has_any: dynamic = dynamic([]),
+      srcipaddr_has_any_prefix: dynamic = dynamic([]),
+      srchostname_has_any: dynamic = dynamic([]),
+      eventtype_in: dynamic = dynamic([]),
+      eventresultdetails_in: dynamic = dynamic([]),
+      eventresult: string = '*',
+      disabled: bool=false
+      )
+  {
+      let SalesforceSchema = datatable
+  (
+      api_version_s: string,
+      browser_type_s: string,
+      cipher_suite_s: string,
+      client_ip_s: string,
+      delegated_user_id_s: string,
+      delegated_user_name_s: string,
+      event_type_s: string,
+      login_key_s: string,
+      login_status_s: string,
+      login_type_s: string,
+      login_sub_type_s: string,
+      organization_id_s: string,
+      platform_type_s: string,
+      request_id_s: string,
+      request_status_s: string,
+      session_key_s: string,
+      source_ip_s: string,
+      timestamp_s: string,
+      tls_protocol_s: string,
+      uri_s: string,
+      user_id_s: string,
+      user_name_s: string,
+      user_type_s: string,
+      wave_session_id_g: string
+  )[];
+      let EventResultLookup = datatable
+  (
+      login_status_s: string,
+      DvcAction: string,
+      EventResultDetails: string,
+      EventResult: string,
+      EventSeverity: string
+  )
+  [
+      "LOGIN_CHALLENGE_ISSUED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_CHALLENGE_PENDING", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_DATA_DOWNLOAD_ONLY", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_END_SESSION_TXN_SECURITY_POLICY", "Blocked", "Logon violates policy", "Failure", "Informational",
+      "LOGIN_ERROR_API_TOO_OLD", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ASYNC_USER_CREATE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_AVANTGO_DISABLED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_AVANTGO_TRIAL_EXP", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_CLIENT_NO_ACCESS", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_CLIENT_REQ_UPDATE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_CSS_FROZEN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_CSS_PW_LOCKOUT", "Blocked", "User locked", "Failure", "Informational",
+      "LOGIN_ERROR_DUPLICATE_USERNAME", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_EXPORT_RESTRICTED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_GLOBAL_BLOCK_DOMAIN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_HT_DOWN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_HTP_METHD_INVALID", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_INSECURE_LOGIN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_INVALID_GATEWAY", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_INVALID_ID_FIELD", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_INVALID_PASSWORD", "Blocked", "Incorrect password", "Failure", "Informational",
+      "LOGIN_ERROR_LOGINS_EXCEEDED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_MUST_USE_API_TOKEN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_MUTUAL_AUTHENTICATION", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_NETWORK_INACTIVE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_NO_HT_ACCESS", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_NO_NETWORK_ACCESS", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_NO_NETWORK_INFO", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_NO_SET_COOKIES", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_OFFLINE_DISABLED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_OFFLINE_TRIAL_EXP", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ORG_CLOSED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ORG_DOMAIN_ONLY", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ORG_IN_MAINTENANCE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ORG_INACTIVE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ORG_IS_DOT_ORG", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ORG_LOCKOUT", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ORG_SIGNING_UP", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_ORG_SUSPENDED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_OUTLOOK_DISABLED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_PAGE_REQUIRES_LOGIN", "Blocked", "Session expired", "Failure", "Informational",
+      "LOGIN_ERROR_PASSWORD_EMPTY", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_PASSWORD_LOCKOUT", "Blocked", "User locked", "Failure", "Informational",
+      "LOGIN_ERROR_PORTAL_INACTIVE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_RATE_EXCEEDED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_RESTRICTED_DOMAIN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_RESTRICTED_TIME", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_SESSION_TIMEOUT", "Blocked", "Session expired", "Failure", "Informational",
+      "LOGIN_ERROR_SSO_PWD_INVALID", "Blocked", "Incorrect password", "Failure", "Informational",
+      "LOGIN_ERROR_SSO_SVC_DOWN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_SSO_URL_INVALID", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_STORE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_STORE_DOWN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_SWITCH_SFDC_INSTANCE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_SWITCH_SFDC_LOGIN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_SYNCOFFLINE_DISBLD", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_SYSTEM_DOWN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_USER_API_ONLY", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_USER_FROZEN", "Blocked", "User locked", "Failure", "Informational",
+      "LOGIN_ERROR_USER_INACTIVE", "Blocked", "User disabled", "Failure", "Informational",
+      "LOGIN_ERROR_USER_NON_MOBILE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_USER_STORE_ACCESS", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_USERNAME_EMPTY", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_WIRELESS_DISABLED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ERROR_WIRELESS_TRIAL_EXP", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_LIGHTNING_LOGIN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_NO_ERROR", "Allowed", "", "Success", "Informational",
+      "LOGIN_OAUTH_API_DISABLED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_CONSUMER_DELETED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_DS_NOT_EXPECTED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_EXCEED_GET_AT_LMT", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_CODE_CHALLENGE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_CODE_VERIFIER", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_DEVICE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_DS", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_DSIG", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_IP", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_NONCE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_SIG_METHOD", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_TIMESTAMP", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_TOKEN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_VERIFIER", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_INVALID_VERSION", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_MISSING_DS", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_NO_CALLBACK_URL", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_NO_CONSUMER", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_NO_TOKEN", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_NONCE_REPLAY", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_PACKAGE_MISSING", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_PACKAGE_OLD", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_OAUTH_UNEXPECTED_PARAM", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_ORG_TRIAL_EXP", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_READONLY_CANNOT_VALIDATE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_AUDIENCE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_CONFIG", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_FORMAT", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_IN_RES_TO", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_ISSUER", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_ORG_ID", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_PORTAL_ID", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_RECIPIENT", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_SESSION_LEVEL", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_SIGNATURE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_SITE_URL", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_STATUS", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_SUB_CONFIRM", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_TIMESTAMP", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_USERNAME", "Blocked", "No such user", "Failure", "Informational",
+      "LOGIN_SAML_INVALID_VERSION", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_MISMATCH_CERT", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_MISSING_ORG_ID", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_MISSING_PORTAL_ID", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_PROVISION_ERROR", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_REPLAY_ATTEMPTED", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_SAML_SITE_INACTIVE", "Blocked", "Other", "Failure", "Informational",
+      "LOGIN_TWOFACTOR_REQ", "Blocked", "Logon violates policy", "Failure", "Informational"
+  ];
+      let SalesforceEventType = dynamic(['Login', 'LoginAs', 'Logout']);
+      let EventTypeLookup = datatable(event_type_s: string, EventType: string)
+  [
+      "Login", "Logon",
+      "LoginAs", "Logon",
+      "Logout", "Logoff"
+  ];
+      let DvcOsLookup = datatable
+  (
+      platform_type_s: string,
+      DvcOs: string,
+      DvcOsVersion: string
+  )
+  [
+      "1000", "Windows", "",
+      "1008", "Windows", "2003",
+      "1013", "Windows", "8.1",
+      "1015", "Windows", "10",
+      "2003", "Macintosh/Apple", "OSX",
+      "4000", "Linux", "",
+      "5005", "Android", "",
+      "5006", "iPhone", "",
+      "5007", "iPad", "",
+      "5200", "Android", "10.0"
+  ];
+      let LogonMethodLookup = datatable
+  (
+      LoginType_s: string,
+      LogonMethodOriginal: string,
+      LogonMethod: string
+  )
+  [
+      "7", "AppExchange", "Other",
+      "A", "Application", "Other",
+      "s", "Certificate-based login", "PKI",
+      "k", "Chatter Communities External User", "Other",
+      "n", "Chatter Communities External User Third Party SSO", "Other",
+      "r", "Employee Login to Community", "Other",
+      "z", "Lightning Login", "Username & Password",
+      "l", "Networks Portal API Only", "Other",
+      "6", "Remote Access Client", "Other",
+      "i", "Remote Access 2.0", "Other",
+      "I", "Other Apex API", "Other",
+      "R", "Partner Product", "Other",
+      "w", "Passwordless Login", "Passwordless",
+      "3", "Customer Service Portal", "Other",
+      "q", "Partner Portal Third-Party SSO", "Other",
+      "9", "Partner Portal", "Other",
+      "5", "SAML Idp Initiated SSO", "Other",
+      "m", "SAML Chatter Communities External User SSO", "Other",
+      "b", "SAML Customer Service Portal SSO", "Other",
+      "c", "SAML Partner Portal SSO", "Other",
+      "h", "SAML Site SSO", "Other",
+      "8", "SAML Sfdc Initiated SSO", "Other",
+      "E", "SelfService", "Other",
+      "j", "Third Party SSO", "Other"
+  ];
+      let LogonProtocolLookup = datatable
+  (
+      LoginSubType_s: string,
+      LogonProtocolOriginal: string,
+      LogonProtocol: string
+  )
+  [
+      "uiup", "UI Username-Password", "Basic Auth",
+      "oauthpassword", "OAuth Username-Password", "OAuth",
+      "oauthtoken", "OAuth User-Agent", "OAuth",
+      "oauthhybridtoken", "OAuth User-Agent for Hybrid Apps", "OAuth",
+      "oauthtokenidtoken", "OAuth User-Agent with ID Token", "OAuth",
+      "oauthclientcredential", "OAuth Client Credential", "OAuth",
+      "oauthcode", "OAuth Web Server", "OAuth",
+      "oauthhybridauthcode", "OAuth Web Server for Hybrid Apps", "OAuth",
+  ];
+      let TempEventResultLookup = datatable(request_status_s: string, TempEventResult: string)
+  [
+      "S", "Success",
+      "F", "Failure",
+      "A", "Failure",
+      "R", "Success",
+      "N", "Failure",
+      "U", "NA"
+  ];
+      let UserTypeLookup = datatable(user_type_s: string, TargetUserType: string)
+  [
+      "CsnOnly", "Other",
+      "CspLitePortal", "Other",
+      "CustomerSuccess", "Other",
+      "Guest", "Anonymous",
+      "PowerCustomerSuccess", "Other",
+      "PowerPartner", "Other",
+      "SelfService", "Other",
+      "Standard", "Regular",
+      "A", "Application",
+      "b", "Other",
+      "C", "Other",
+      "D", "Other",
+      "F", "Other",
+      "G", "Anonymous",
+      "L", "Other",
+      "N", "Service",
+      "n", "Other",
+      "O", "Other",
+      "o", "Other",
+      "P", "Other",
+      "p", "Other",
+      "S", "Regular",
+      "X", "Admin"
+  ];
+      union isfuzzy=true
+          SalesforceSchema,
+          SalesforceServiceCloud_CL 
+      | where not(disabled)
+      | extend TimeGenerated = todatetime(tostring(split(timestamp_s, '.', 0)[0]))
+      //  -- Pre filtering
+      | where 
+          (isnull(starttime) or TimeGenerated >= starttime) 
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and ((array_length(username_has_any) == 0) or (user_name_s has_any (username_has_any)) or (delegated_user_name_s has_any (username_has_any)))
+          and ((array_length(targetappname_has_any) == 0) or ('Salesforce Dot Com(SFDC)' in~ (targetappname_has_any)))
+          and ((array_length(srcipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(source_ip_s, srcipaddr_has_any_prefix)))
+          and (array_length(srchostname_has_any) == 0) // SrcHostname not available in source
+          // eventtype_in filtering done later in the parser
+          // eventresultdetails_in filtering done later in the parser
+          // eventresult filtering done later in the parser
+          and event_type_s in~ (SalesforceEventType)
+      //  -- end pre-filtering
+      // mapping ASimMatchingUsername
+      | extend
+          temp_isMatchTargetUsername=user_name_s has_any(username_has_any)
+          ,
+          temp_isMatchActorUsername=delegated_user_name_s has_any(username_has_any)
+      | extend ASimMatchingUsername = case
+                                  (
+                                      array_length(username_has_any) == 0,
+                                      "-",
+                                      temp_isMatchTargetUsername and temp_isMatchActorUsername,
+                                      "Both",
+                                      temp_isMatchTargetUsername,
+                                      "TargetUsername",
+                                      temp_isMatchActorUsername,
+                                      "ActorUsername",
+                                      "No match"
+                                  )
+      | extend LoginType_s = login_type_s, LoginSubType_s = login_sub_type_s
+      | lookup EventResultLookup on login_status_s
+      // filtering on 'eventresultdetails_in'
+      | where (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
+      | lookup EventTypeLookup on event_type_s
+      // Filtering on eventtype_in
+      | where ((array_length(eventtype_in) == 0) or (EventType in~ (eventtype_in)))
+      | lookup LogonMethodLookup on LoginType_s
+      | lookup LogonProtocolLookup on LoginSubType_s
+      | lookup TempEventResultLookup on request_status_s
+      | lookup DvcOsLookup on platform_type_s
+      | lookup UserTypeLookup on user_type_s
+      | project-rename
+          EventProductVersion = api_version_s,
+          EventOriginalResultDetails = login_status_s,
+          TargetUserId = user_id_s,
+          SrcIpAddr = source_ip_s,
+          EventOriginalUid = request_id_s,
+          TlsCipher = cipher_suite_s,
+          TlsVersion = tls_protocol_s,
+          HttpUserAgent= browser_type_s,
+          TargetUserScopeId = organization_id_s,
+          TargetUrl = uri_s,
+          TargetOriginalUserType = user_type_s,
+          ActorUsername = delegated_user_name_s,
+          ActorUserId = delegated_user_id_s,
+          TargetUsername = user_name_s
+      | where ((array_length(username_has_any) == 0) or (TargetUsername has_any (username_has_any)) or (ActorUsername has_any (username_has_any)))
+      | extend
+          EventVendor = 'Salesforce',
+          EventProduct='Service Cloud',
+          EventCount = int(1),
+          EventSchema = 'Authentication',
+          EventSchemaVersion = '0.1.3',
+          TargetAppName = "Salesforce Dot Com(SFDC)",
+          TargetAppType = "SaaS application",
+          EventUid = _ItemId,
+          EventOriginalType=event_type_s,
+          SrcIpAddr = coalesce(SrcIpAddr, client_ip_s)
+      | extend
+          TargetSessionId = coalesce(session_key_s, login_key_s),
+          TargetUserScope = "Salesforce Organization",
+          TargetUserIdType = iff(isnotempty(TargetUserId), "SaleforceId", ""),
+          ActorUserIdType = iff(isnotempty(ActorUserId), "SaleforceId", ""),
+          TargetUsernameType = iff(isnotempty(TargetUsername), "UPN", ""),
+          ActorUsernameType = iff(isnotempty(ActorUsername), "UPN", ""),
+          User = coalesce(TargetUsername, TargetUserId),
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          Dvc = EventProduct,
+          EventResult = coalesce(EventResult, TempEventResult),
+          Application = TargetAppName,
+          EventStartTime = TimeGenerated,
+          EventEndTime = TimeGenerated
+      // Filtering on 'eventresult'
+      | where (eventresult == "*" or (EventResult == eventresult))
+      | project-away
+          *_s,
+          *_t,
+          *_g,
+          TenantId,
+          SourceSystem,
+          Computer,
+          MG,
+          ManagementGroupName,
+          Message,
+          RawData,
+          TempEventResult,
+          _ItemId,
+          temp*
+  };
+  parser (
+    starttime=starttime,
+    endtime=endtime,
+    username_has_any=username_has_any,
+    targetappname_has_any=targetappname_has_any,
+    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix,
+    srchostname_has_any=srchostname_has_any,
+    eventtype_in=eventtype_in,
+    eventresultdetails_in=eventresultdetails_in,
+    eventresult=eventresult,
+    disabled=disabled
+  )

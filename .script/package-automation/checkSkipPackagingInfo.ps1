@@ -1,5 +1,5 @@
 
-param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath, $instrumentationKey)
+param ($solutionName, $pullRequestNumber, $runId, $baseFolderPath, $instrumentationKey,$isPRMerged = $false)
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
 $isPackagingRequired = $false
 try 
@@ -42,10 +42,16 @@ try
         else
         {
             # WHEN CHANGES ARE IN SOLUTION PACKAGE FOLDER THEN WE SHOULD SKIP PACKAGING 
-            $diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+            #$diff = git diff --diff-filter=d --name-only HEAD^ HEAD
+            if ($isPRMerged) {
+                git fetch --depth=1 origin master
+                $diff = git diff --diff-filter=d --name-only --first-parent origin/master..
+            } else {
+                $diff = git diff --diff-filter=d --name-only --first-parent HEAD^ HEAD
+            }
             Write-Host "List of files changed in PR: $diff"
 
-            $changesInPackageFolder = $diff | Where-Object {$_ -like "Solutions/$solutionName/Package/*" }
+            $changesInPackageFolder = $diff | Where-Object {$_ -notlike '*testParameters.json' } | Where-Object {$_ -like "Solutions/$solutionName/Package/*" }
             Write-Host "List of files changed in Package folder:  $changesInPackageFolder"
 
             if ($changesInPackageFolder.Count -gt 0)

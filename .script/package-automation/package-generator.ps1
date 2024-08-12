@@ -1,6 +1,6 @@
 param ($solutionName, $pullRequestNumber, $runId, $instrumentationKey, $defaultPackageVersion, $solutionOfferId, $inputBaseFolderPath, $isNewSolution)
 . ./Tools/Create-Azure-Sentinel-Solution/common/LogAppInsights.ps1
-. ./.script/package-automation/catelogAPI.ps1
+. ./.script/package-automation/catalogAPI.ps1
 
 function ErrorOutput {
     Write-Host "Package creation process failed!"
@@ -225,7 +225,7 @@ try {
 
     #Optional Fields
     $TemplateSpecAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "TemplateSpec")
-    $Is1PconnectorAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "Is1Pconnector")
+    #$Is1PconnectorAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "Is1Pconnector")
     $logoAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "Logo")
     $basePathAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "BasePath")
     $packageVersionAttribute = [bool]($dataFileContentObject.PSobject.Properties.Name -match "Version")
@@ -238,11 +238,11 @@ try {
         exit 0 
     }
 
-    # =============START: DETAILS TO IDENTIFY VERSION FROM CATELOG API=========
+    # =============START: DETAILS TO IDENTIFY VERSION FROM CATALOG API=========
     $customProperties = @{ 'RunId' = "$runId"; 'SolutionName' = "$solutionName"; 'PullRequestNumber' = "$pullRequestNumber"; 'EventName' = "Package Generator"; 'SolutionOfferId' = "$solutionOfferId"; }
 
     $offerId = "$solutionOfferId"
-    $offerDetails = GetCatelogDetails $offerId
+    $offerDetails = GetCatalogDetails $offerId
     Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "Offer details in Package-generator for Solution Name : $solutionName, Job Run Id : $runId" -Severity Information -CustomProperties $customProperties
 
     $userInputPackageVersion = ''
@@ -252,7 +252,7 @@ try {
     $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $packageVersionAttribute $userInputPackageVersion
 
     Write-Host "Package version identified is $packageVersion"
-    # =============END: DETAILS TO IDENTIFY VERSION FROM CATELOG API=========
+    # =============END: DETAILS TO IDENTIFY VERSION FROM CATALOG API=========
     if (!$packageVersionAttribute) {
         $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'Version' -Value "$packageVersion"
     }
@@ -267,9 +267,9 @@ try {
         $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'TemplateSpec' -Value $true 
     }
 
-    if (!$is1PconnectorAttribute) {
-        $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'Is1Pconnector' -Value $false 
-    }
+    # if (!$is1PconnectorAttribute) {
+    #     $dataFileContentObject | Add-Member -MemberType NoteProperty -Name 'Is1Pconnector' -Value $false 
+    # }
 
     if (!$logoAttribute) {
         $logoAttributeValue = '<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg\" width=\"75px\" height=\"75px\">'
