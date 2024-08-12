@@ -5,7 +5,9 @@ Azure Data Explorer (ADX) is a big data analytics platform that is highly optimi
 
 For more information, see the Azure Data Explorer [documentation](https://docs.microsoft.com/azure/sentinel/store-logs-in-azure-data-explorer)
 
-To learn about architectural options please refer to my colleague's [Javier Soriano](https://github.com/javiersoriano) excellent [Blog](https://techcommunity.microsoft.com/t5/azure-sentinel/using-azure-data-explorer-for-long-term-retention-of-azure/ba-p/1883947)  
+To learn about architectural options please refer to my colleague's [Javier Soriano](https://github.com/javiersoriano) excellent [Blog](https://techcommunity.microsoft.com/t5/azure-sentinel/using-azure-data-explorer-for-long-term-retention-of-azure/ba-p/1883947)
+
+If you want to create the a ADX Script file, instead of modifying ADX directly, follow the instructions found here [Create-LA-Tables-ScriptFile.ps1](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/AzureDataExplorer/CreateTables_ADX_ScriptFile).
 
 ## Prerequisites
 1. **Create an ADX Cluster in the same region as your Log Analytics Workspace**  
