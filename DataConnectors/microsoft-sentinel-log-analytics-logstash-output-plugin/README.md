@@ -8,8 +8,7 @@ Released on: 2023-07-23
 
 This plugin is currently in development and is free to use. We welcome contributions from the open source community on this project, and we request and appreciate feedback from users.
 
-
-## Steps to implement the output plugin
+## Installation Instructions
 1) Install the plugin
 2) Create a sample file
 3) Create the required DCR-related resources
@@ -19,8 +18,11 @@ This plugin is currently in development and is free to use. We welcome contribut
 
 ## 1. Install the plugin
 
-Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API. 
-Install the microsoft-sentinel-log-analytics-logstash-output-plugin, use [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
+Microsoft Sentinel provides Logstash output plugin to Log analytics workspace using DCR based logs API.
+
+The plugin is published on [RubyGems](https://rubygems.org/gems/microsoft-sentinel-log-analytics-logstash-output-plugin). To install to an existing logstash installation, run `logstash-plugin install microsoft-sentinel-log-analytics-logstash-output-plugin`.
+
+If you do not have a direct internet connection, you can install the plugin to another logstash installation, and then export and import a plugin bundle to the offline host. For more information, see [Logstash Offline Plugin Management instruction](<https://www.elastic.co/guide/en/logstash/current/offline-plugins.html>). 
 
 Microsoft Sentinel's Logstash output plugin supports the following versions
 - 7.0 - 7.17.13

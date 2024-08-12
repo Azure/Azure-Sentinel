@@ -7,6 +7,8 @@ Write-Log -Message "Starting data connector configuration script" -LogFileName $
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -LinePadding 2
 Write-ScriptNotes
 
+# Add an Identity Provider
+New-OidcProvider
 New-ArnRole
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
 $roleArnObject = aws iam get-role --role-name $roleName

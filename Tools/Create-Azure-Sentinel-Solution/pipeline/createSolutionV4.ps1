@@ -10,6 +10,16 @@ try
 	Write-Host "Running for Build Pipeline"
 	Write-Host "Data File Content is $pipelineDataFileRawContent"
 
+	$has1PConnectorProperty = [bool]($pipelineDataFileRawContent.PSobject.Properties.Name -match "Is1PConnector")
+  if ($has1PConnectorProperty) {
+      $Is1PConnectorPropertyValue = [bool]($pipelineDataFileRawContent.Is1PConnector)
+      if ($Is1PConnectorPropertyValue) {
+          # when true we terminate package creation.
+          Write-Host "ERROR: Is1PConnector property is deprecated. Please use StaticDataConnector property. Refer link https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md for more details!"
+          exit 1;
+      }
+  }
+
 	$customProperties = @{ 'SolutionName'="$pipelineSolutionName"; 'DataFileName'="$dataFileName"; 'RunId'="$runId"; 'PullRequestNumber'="$pullRequestNumber" }
 	Send-AppInsightsEventTelemetry -InstrumentationKey $instrumentationKey -EventName "CreateSolutionV4" -CustomProperties $customProperties
 	Send-AppInsightsTraceTelemetry -InstrumentationKey $instrumentationKey -Message "CreateSolutionV4: Starting execution for Solution $pipelineSolutionName." -Severity Information -CustomProperties $customProperties
@@ -68,7 +78,9 @@ try
 					$objectProperties.Name.ToLower() -eq "metadata" -or
 					$objectProperties.Name.ToLower() -eq "templatespec" -or
 					$objectProperties.Name.ToLower() -eq "is1pconnector" -or
-					$objectProperties.Name.ToLower() -eq "createpackage")
+					$objectProperties.Name.ToLower() -eq "createpackage" -or
+					$objectProperties.Name.ToLower() -eq "dependentDomainSolutionIds" -or
+					$objectProperties.Name.ToLower() -eq "staticdataconnectorids")
 				{
 					continue;
 				}

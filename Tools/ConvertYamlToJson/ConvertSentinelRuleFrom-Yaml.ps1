@@ -1,3 +1,4 @@
+#Requires -Version 7.2
 <#
 .SYNOPSIS
     Convert Microsoft Sentinel YAML rules to JSON ARM format
@@ -18,7 +19,7 @@
     Output is the JSON file
 .NOTES
     AUTHOR: P.Khabazi
-    LASTEDIT: 16-03-2022
+    LASTEDIT: 05-06-2024
 #>
 
 function ConvertSentinelRuleFrom-Yaml {
@@ -99,7 +100,7 @@ function ConvertSentinelRuleFrom-Yaml {
             $template = [PSCustomObject]@{
                 '$schema'      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
                 contentVersion = "1.0.0.0"
-                Parameters     = @{
+                parameters     = @{
                     Workspace = @{
                         type = "string"
                     }
@@ -110,7 +111,7 @@ function ConvertSentinelRuleFrom-Yaml {
                         name       = ""
                         type       = "Microsoft.OperationalInsights/workspaces/providers/alertRules"
                         kind       = "Scheduled"
-                        apiVersion = "2021-03-01-preview"
+                        apiVersion = "2023-02-01-preview"
                         properties = [PSCustomObject]@{}
                     }
                 )
@@ -149,7 +150,7 @@ function ConvertSentinelRuleFrom-Yaml {
 
             #Export to JSON
             try {
-                $template | ConvertTo-Json -Depth 20 | Out-File $outputFile -ErrorAction Stop
+                $template | ConvertTo-Json -Depth 20 -EscapeHandling EscapeNonAscii | Out-File $outputFile -ErrorAction Stop
             }
             catch {
                 Write-Error $_.Exception.Message

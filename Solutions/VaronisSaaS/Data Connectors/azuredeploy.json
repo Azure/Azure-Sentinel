@@ -1,0 +1,212 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.28.1.47646",
+      "templateHash": "12807419542720902161"
+    }
+  },
+  "parameters": {
+    "storageAccountType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_RAGRS"
+      ],
+      "metadata": {
+        "description": "Storage Account type."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "logAnalyticsWorkspaceName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace used by Microsoft Sentinel."
+      }
+    },
+    "varonisFQDN": {
+      "type": "string",
+      "metadata": {
+        "description": "FQDN/IP for the Integration Connection - Enter the Varonis Web Interface address (e.g. https://example.varonis.com)."
+      }
+    },
+    "varonisApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Copy the API Key from the Varonis web interface."
+      }
+    },
+    "alertRetrievalStartPoint": {
+      "type": "int",
+      "defaultValue": 7,
+      "minValue": 0,
+      "maxValue": 30,
+      "metadata": {
+        "description": "Enter the past number of days from which to start retrieving alerts. Up to 30 days and 1,000 alerts are supported."
+      }
+    },
+    "threatDetectionPolicies": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "To retrieve alerts related to specific threat detection policies, enter the relevant policy names. RECOMMENDED: LEAVE THIS BLANK TO RETRIEVE ALL ALERTS (DEFAULT)."
+      }
+    },
+    "alertStatus": {
+      "type": "string",
+      "defaultValue": "New, Under Investigation",
+      "metadata": {
+        "description": "Specify the Varonis alert status."
+      }
+    },
+    "alertSeverity": {
+      "type": "string",
+      "defaultValue": "Low, Medium, High",
+      "metadata": {
+        "description": "Specify the alert severity."
+      }
+    }
+  },
+  "variables": {
+    "functionAppName": "[format('VaronisSaaS-{0}', uniqueString(resourceGroup().id))]",
+    "functionWorkerRuntime": "dotnet",
+    "functionPlanOS": "Linux",
+    "functionAppPlanSku": "Y1",
+    "packageUri": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/VaronisSaaS/Data%20Connectors/Varonis.Sentinel.Functions.zip",
+    "linuxFxVersion": "DOTNET|6.0",
+    "hostingPlanName": "[variables('functionAppName')]",
+    "applicationInsightsName": "[variables('functionAppName')]",
+    "storageAccountName": "[format('{0}sa', uniqueString(resourceGroup().id))]",
+    "isReserved": "[if(equals(variables('functionPlanOS'), 'Linux'), true(), false())]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2022-05-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('storageAccountType')]"
+      },
+      "kind": "Storage"
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('hostingPlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "tier": "Dynamic",
+        "name": "[variables('functionAppPlanSku')]"
+      },
+      "properties": {
+        "reserved": "[variables('isReserved')]"
+      },
+      "kind": "[if(variables('isReserved'), 'linux', 'windows')]"
+    },
+    {
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('applicationInsightsName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "[format('hidden-link:{0}', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+      },
+      "properties": {
+        "Application_Type": "web"
+      },
+      "kind": "web"
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[parameters('location')]",
+      "kind": "[if(variables('isReserved'), 'functionapp,linux', 'functionapp')]",
+      "properties": {
+        "reserved": "[variables('isReserved')]",
+        "serverFarmId": "[if(contains(variables('functionAppPlanSku'), 'EP'), resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName')), resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName')))]",
+        "siteConfig": {
+          "linuxFxVersion": "[if(variables('isReserved'), variables('linuxFxVersion'), null())]",
+          "appSettings": [
+            {
+              "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('applicationInsightsName')), '2020-02-02').InstrumentationKey]"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-05-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+              "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', variables('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2022-05-01').keys[0].value)]"
+            },
+            {
+              "name": "WEBSITE_CONTENTSHARE",
+              "value": "[toLower(variables('functionAppName'))]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~4"
+            },
+            {
+              "name": "FUNCTIONS_WORKER_RUNTIME",
+              "value": "[variables('functionWorkerRuntime')]"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "[variables('packageUri')]"
+            },
+            {
+              "name": "VaronisFQDN_IP",
+              "value": "[parameters('varonisFQDN')]"
+            },
+            {
+              "name": "VaronisApiKey",
+              "value": "[parameters('varonisApiKey')]"
+            },
+            {
+              "name": "LogAnalyticsKey",
+              "value": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2021-06-01').primarySharedKey]"
+            },
+            {
+              "name": "LogAnalyticsWorkspace",
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2021-06-01').customerId]"
+            },
+            {
+              "name": "AlertRetrievalStart",
+              "value": "[format('{0}', parameters('alertRetrievalStartPoint'))]"
+            },
+            {
+              "name": "AlertSeverity",
+              "value": "[parameters('alertSeverity')]"
+            },
+            {
+              "name": "ThreatDetectionPolicies",
+              "value": "[parameters('threatDetectionPolicies')]"
+            },
+            {
+              "name": "AlertStatus",
+              "value": "[parameters('alertStatus')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    }
+  ]
+}

@@ -1,15 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Linq;
-using System.Text.RegularExpressions;
-using FluentAssertions;
+﻿using FluentAssertions;
 using Microsoft.Azure.Sentinel.Analytics.Management.AnalyticsTemplatesService.Interface.Model;
 using Microsoft.Azure.Sentinel.ApiContracts.ModelValidation;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Octokit;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.IO;
+using System.Linq;
 using Xunit;
 using YamlDotNet.Serialization;
 
@@ -29,29 +27,41 @@ namespace Kqlvalidations.Tests
                 Assert.True(true);
                 return;
             }
-            var yaml = GetYamlFileAsString(detectionsYamlFileName);
 
-            //we ignore known issues (in progress)
-            foreach (var templateToSkip in TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds)
+            var yamlFilePaths = GetYamlFilePathsByFileName(detectionsYamlFileName);
+            foreach (var yamlFilePath in yamlFilePaths)
             {
-                if (yaml.Contains(templateToSkip))
+                var yaml = File.ReadAllText(yamlFilePath);
+                bool isTemplateToSkip = false;
+                foreach (var templateToSkip in TemplatesSchemaValidationsReader.WhiteListStructureTestsTemplateIds)
                 {
-                    return;
+                    if (yaml.Contains(templateToSkip))
+                    {
+                        isTemplateToSkip = true;
+                        break;
+                    }
+                }
+
+                if (isTemplateToSkip)
+                {
+                    Assert.True(true);
+                }
+                else
+                {
+                    var exception = Record.Exception(() =>
+                    {
+                        var templateObject = JsonConvert.DeserializeObject<AnalyticsTemplateInternalModelBase>(ConvertYamlToJson(yaml));
+                        var validationResults = DataAnnotationsValidator.ValidateObjectRecursive(templateObject);
+                        DataAnnotationsValidator.ThrowExceptionIfResultsInvalid(validationResults);
+                    });
+                    string exceptionToDisplay = string.Empty;
+                    if (exception != null)
+                    {
+                        exceptionToDisplay = $"In template {detectionsYamlFileName} there was an error while parsing: {exception.Message}";
+                    }
+                    exception.Should().BeNull(exceptionToDisplay);
                 }
             }
-
-            var exception = Record.Exception(() =>
-            {
-                var templateObject = JsonConvert.DeserializeObject<AnalyticsTemplateInternalModelBase>(ConvertYamlToJson(yaml));
-                var validationResults = DataAnnotationsValidator.ValidateObjectRecursive(templateObject);
-                DataAnnotationsValidator.ThrowExceptionIfResultsInvalid(validationResults);
-            });
-            string exceptionToDisplay = string.Empty;
-            if (exception != null)
-            {
-                exceptionToDisplay = $"In template {detectionsYamlFileName} there was an error while parsing: {exception.Message}";
-            }
-            exception.Should().BeNull(exceptionToDisplay);
         }
 
         [Theory]
@@ -188,7 +198,18 @@ namespace Kqlvalidations.Tests
             Assert.True(isRuleKindValid, $"Invalid rule kind '{ruleKind}' encountered in template '{detectionsYamlFileName}'. Valid rule kinds are: {string.Join(", ", validRuleKinds)}");
         }
 
+        private List<string> GetYamlFilePathsByFileName(string detectionsYamlFileName)
+        {
+            var yamlFilePaths = new List<string>();
+            var filesList = (Directory.GetFiles(RootDetectionPaths, detectionsYamlFileName, SearchOption.AllDirectories).Where(s => s.Contains("\\Detections\\") || s.Contains("/Detections/") || s.Contains("Analytic Rules")).ToList());
 
+            if (filesList.Any())
+            {
+                yamlFilePaths.AddRange(filesList);
+            }
+
+            return yamlFilePaths;
+        }
 
         private string GetYamlFileAsString(string detectionsYamlFileName)
         {

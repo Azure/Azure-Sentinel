@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for Cisco Meraki
-  Version: '1.1.0'
-  LastUpdated: Jun 20 2023
+  Version: '1.2.1'
+  LastUpdated: Jul 19, 2024
 Product:
   Name: Cisco Meraki
 Normalization:
@@ -11,11 +11,11 @@ References:
 - Title: ASIM Network Session Schema
   Link: https://aka.ms/ASimNetworkSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Cisco Meraki Documentation
   Link: https://documentation.meraki.com/General_Administration/Monitoring_and_Reporting/Syslog_Event_Types_and_Log_Samples
 Description: |
-  This ASIM parser supports normalizing Cisco Meraki logs to the ASIM Network Session normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
+  This ASIM parser supports normalizing Cisco Meraki logs ingested in 'meraki_CL' table to the ASIM Network Session normalized schema. Cisco Meraki events are generated from network activity and security events from Meraki devices such as firewalls, switches, and access points. These logs are captured through the Cisco Meraki Sentinel connector which uses a Linux agent to collect logs in Syslog format.
 ParserName: ASimNetworkSessionCiscoMeraki
 EquivalentBuiltInParser: _ASim_NetworkSession_CiscoMeraki
 ParserParams:
@@ -143,6 +143,8 @@ ParserQuery: |
     let DvcActionLookup = datatable(pattern: string, DvcAction: string, EventResult: string)[
         "allow", "Allow", "Success",
         "deny", "Deny", "Failure",
+        "0", "Allow", "Success",
+        "1", "Deny", "Failure",
         "Blocked", "Deny", "Failure"
     ];
     let EventResultLookup = datatable(LogSubType: string, EventResult_type: string)[
@@ -151,15 +153,9 @@ ParserQuery: |
         "Virtual router collision", "Failure",
     ];
     let parser=(disabled: bool=false) {
-        let allData = union isfuzzy=true
-                (
+        let allData = (
                 meraki_CL
                 | project-rename LogMessage =  Message
-                ),
-                (
-                Syslog
-                | where Computer in (_ASIM_GetSourceBySourceType('CiscoMeraki'))
-                | project-rename LogMessage =  SyslogMessage
                 );
         let PreFilteredData = allData
             | where not(disabled) and (LogMessage has_any("flows", "firewall", "ids-alerts") or LogMessage has_all("security_event", "ids-alerted") or (LogMessage has "events" and (LogMessage has_any ("Blocked DHCP server response", "association") or (LogMessage has "VRRP packet" and not(LogMessage has_any ("VRRP passive", "VRRP active"))) or (LogMessage has "disassociation" and not(LogMessage has_any ("auth_neg_failed", "dhcp"))))) or (LogMessage has "airmarshal_events" and LogMessage has_any("ssid_spoofing_detected", "rogue_ssid_detected")))
@@ -180,6 +176,8 @@ ParserQuery: |
             | extend NetworkIcmpType = iff(isnotempty(NetworkIcmpCode), coalesce(NetworkIcmpType_lookup, NetworkIcmpType), "")
             | extend pattern = coalesce(pattern1, pattern2)
             | lookup DvcActionLookup on pattern
+            | extend direction = case(pattern has_any ('0','1'), 'ingress', pattern has_any ('allow','deny'), 'egress', 'unknown')
+            | lookup NetworkDirectionLookup on direction
             | lookup EventSeverityDvcActionLookup on DvcAction
             | extend
                 SrcMacAddr = trim('"', mac),
@@ -379,15 +377,6 @@ ParserQuery: |
             SourceSystem,
             Computer,
             _ResourceId,
-            MG,
-            ManagementGroupName,
-            RawData,
-            EventTime,
-            Facility,
-            HostName,
-            SeverityLevel,
-            ProcessID,
-            HostIP,
-            ProcessName
+            MG
     };
     parser(disabled=disabled)

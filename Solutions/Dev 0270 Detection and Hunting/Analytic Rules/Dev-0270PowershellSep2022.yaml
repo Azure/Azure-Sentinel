@@ -7,6 +7,9 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
   - connectorId: MicrosoftThreatProtection
     dataTypes:
       - DeviceProcessEvents
@@ -29,22 +32,33 @@ query: |
   | where EventID==4688
   | extend FileName=tostring(split(NewProcessName, @'\')[(-1)]),  ProcessCommandLine = CommandLine, InitiatingProcessFileName=ParentProcessName
   | where (FileName =~ "powershell.exe" and ProcessCommandLine has_all("try", "Add-MpPreference", "-ExclusionPath", "ProgramData", "catch")) or (FileName =~ 'powershell.exe' and ProcessCommandLine has_all('Add-PSSnapin', 'Get-Recipient', '-ExpandProperty', 'EmailAddresses', 'SmtpAddress', '-hidetableheaders') )
-  | project TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, InitiatingProcessFileName, EventID, Activity, CommandLine, EventSourceName, Type
+  | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, InitiatingProcessFileName, EventID, Activity, CommandLine, EventSourceName, Type
   ),
   (DeviceProcessEvents 
   | where (FileName =~ "powershell.exe" and ((ProcessCommandLine has_all("try", "Add-MpPreference", "-ExclusionPath", "ProgramData", "catch"))  or (ProcessCommandLine has_all('Add-PSSnapin', 'Get-Recipient', '-ExpandProperty', 'EmailAddresses', 'SmtpAddress', '-hidetableheaders'))))
   or ( InitiatingProcessFileName =~ 'powershell.exe' and (((InitiatingProcessCommandLine has_all('$file=', 'dllhost.exe', 'Invoke-WebRequest', '-OutFile')) or ((InitiatingProcessCommandLine has_all('$admins=', 'System.Security.Principal.SecurityIdentifier', 'Translate', '-split', 'localgroup', '/add', '$rdp='))))))
-  | extend timestamp = TimeGenerated, AccountCustomEntity =  InitiatingProcessAccountName, HostCustomEntity = DeviceName
+  | extend Account = strcat(InitiatingProcessAccountDomain, @'\', InitiatingProcessAccountName),  Computer = DeviceName
   )
   )
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(Account, @'\')[1]), AccountNTDomain = tostring(split(Account, @'\')[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
-version: 1.0.2
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.0.4
 kind: Scheduled

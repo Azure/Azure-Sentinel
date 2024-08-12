@@ -1,0 +1,63 @@
+Parser:
+  Title: Dhcp event ASIM filtering parser
+  Version: '0.1.0'
+  LastUpdated: Mar 11 2024
+Product:
+  Name: Source agnostic
+Normalization:
+  Schema: DhcpEvent
+  Version: '0.1'
+References:
+- Title: ASIM Dhcp Event Schema
+  Link: https://aka.ms/ASimDhcpEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+    This ASIM parser supports filtering and normalizing Dhcp event logs from all supported sources to the ASIM Dhcp Event normalized schema.
+ParserName: imDhcpEvent
+EquivalentBuiltInParser: _Im_DhcpEvent
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: srcusername_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DisabledParsers=materialize(_GetWatchlist('ASimDisabledParsers') | where SearchKey in ('Any', 'ExcludevimDhcpEvent') | extend SourceSpecificParser=column_ifexists('SourceSpecificParser','') | distinct SourceSpecificParser | where isnotempty(SourceSpecificParser));
+  let vimBuiltInDisabled=toscalar('ExcludevimDhcpEvent' in (DisabledParsers) or 'Any' in (DisabledParsers)); 
+  let parser=(
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    srchostname_has_any:dynamic=dynamic([]),
+    srcusername_has_any:dynamic=dynamic([]),
+    eventresult:string='*',
+    pack:bool=false)
+  {
+  union isfuzzy=true
+    vimDhcpEventEmpty,
+    vimDhcpEventNative (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, srcusername_has_any=srcusername_has_any, eventresult=eventresult, disabled=(vimBuiltInDisabled or ('ExcludevimDhcpEventNative' in (DisabledParsers))))
+  };
+  parser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, srchostname_has_any=srchostname_has_any, srcusername_has_any=srcusername_has_any, eventresult=eventresult, pack=pack)
+Parsers:
+  - _Im_DhcpEvent_Empty
+  - _Im_DhcpEvent_Native

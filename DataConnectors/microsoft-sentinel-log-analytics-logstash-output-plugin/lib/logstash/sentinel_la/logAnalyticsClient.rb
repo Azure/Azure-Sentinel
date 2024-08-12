@@ -51,8 +51,6 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
   def post_data(body)
     raise ConfigError, 'no json_records' if body.empty?
     response = nil
-
-    # Create REST request header
     
     @connectionAutoClose[:lock].synchronize do 
       #close connection if its stale
@@ -62,6 +60,7 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
       if @connectionAutoClose[:is_closed]
         open_connection
       end
+      
       headers = get_header()
       # Post REST request
       response = @connection.request(method: :post, body: body, headers: headers)
@@ -69,6 +68,7 @@ require "logstash/sentinel_la/logAnalyticsAadTokenProvider"
       @connectionAutoClose[:last_use] = Time.now
     end
     return response
+
   end # def post_data
 
   # Static function to return if the response is OK or else

@@ -1,0 +1,33 @@
+id: 54ea2379-28e7-48e1-8dfd-aaf8fb1331ba
+name: Regsvr32 Rundll32 with Anomalous Parent Process
+description: 
+  This query searches for rundll32.exe or regsvr32.exe being spawned by abnormal processes such as wscript.exe, powershell.exe, cmd.exe, pwsh.exe, cscript.exe.
+description-detailed: |
+  This query looks for rundll32.exe or regsvr32.exe being spawned by abnormal processes: wscript.exe, powershell.exe, cmd.exe, pwsh.exe, cscript.exe.
+  Blog:
+  https://threathunt.blog/running-live-malware-for-threat-hunting-purposes/
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceNetworkEvents
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1218.010
+  - T1218.011
+query: |
+  DeviceProcessEvents
+  | where TimeGenerated > ago(30d)
+  | where FileName has_any ("rundll32.exe","regsvr32.exe")
+  | where InitiatingProcessFileName has_any ("wscript.exe","powershell.exe","cmd.exe","pwsh.exe","cscript.exe")
+  | project TimeGenerated,DeviceName, InvestigatedProcessName=FileName, InvestigatedProcessCommandLine = ProcessCommandLine,InvestigatedProcessStartTime = ProcessCreationTime, InvestigatedProcessId = ProcessId, InitiatingProcessFileName, InitiatingProcessCommandLine, InitiatingProcessParentFileName
+  | join (
+  DeviceNetworkEvents
+  | where TimeGenerated > ago(30d)
+  | where InitiatingProcessFileName has_any ("rundll32.exe","regsvr32.exe")
+  | where RemoteIPType == "Public"
+  | project DeviceName, InvestigatedProcessName=InitiatingProcessFileName, InvestigatedProcessCommandLine = InitiatingProcessCommandLine,InvestigatedProcessStartTime = InitiatingProcessCreationTime, InvestigatedProcessId = InitiatingProcessId, RemoteIP, RemoteUrl
+  ) on DeviceName, InvestigatedProcessCommandLine, InvestigatedProcessId, InvestigatedProcessName, InvestigatedProcessStartTime
+  | project-away DeviceName1, InvestigatedProcessCommandLine1, InvestigatedProcessId1, InvestigatedProcessName1, InvestigatedProcessStartTime1
+version: 1.0.0

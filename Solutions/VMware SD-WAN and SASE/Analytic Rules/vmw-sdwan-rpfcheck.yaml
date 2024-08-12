@@ -1,0 +1,71 @@
+id: 840b050f-842b-4264-8973-d4f9b65facb5
+name: VMware SD-WAN Edge - Network Anomaly Detection - RPF Check Failure
+version: 1.0.0
+kind: Scheduled
+description: |-
+  The VMware SD-WAN Edge appliance received packets that failed a Reverse Path Forwarding (RPF) Check.
+
+  Reverse path forwarding (RPF) check is a network security mechanism that verifies whether the source IP address of a packet is reachable through the incoming interface on which the packet is received. The packet is dropped if the source IP address is not reachable through the incoming interface.
+
+  RPF checks prevent spoofing attacks, in which an attacker uses a forged source IP address to make it appear that the packets are coming from a trusted source. This can allow the attacker to gain unauthorized network access or launch a denial-of-service attack against a target system.
+
+  An IP fragmentation attack is a cyberattack that exploits how IP packets are fragmented and reassembled. IP fragmentation is a process by which large IP packets are broken down into smaller packets to transmit them over networks with smaller Maximum Transmission Unit (MTU) sizes.
+
+  This analytics rule analyzes Syslog streams; these alerts are not reported by default if Search API is used.
+severity: Low
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+requiredDataConnectors:
+  - connectorId: VMwareSDWAN
+    dataTypes:
+      - SDWAN
+tactics:
+- Impact
+relevantTechniques:
+- T1498
+query: |+
+  Syslog
+  | where SyslogMessage contains "VCF Drop"
+  | where SyslogMessage contains "Reverse path forwarding check fail"
+  | project-rename EdgeName=HostName
+  | project-away Computer, HostIP, SourceSystem, Type
+  | extend OverlaySegmentName = extract("SEGMENT_NAME=(.+) COUNT=", 1, SyslogMessage)
+  | extend IpProtocol = extract("PROTO=(.+) SRC=", 1, SyslogMessage)
+  | extend SrcIpAddress = extract("SRC=(.+) DST=", 1, SyslogMessage)
+  | extend DstIpAddress = extract("DST=(.+) REASON=", 1, SyslogMessage)
+  | extend EdgeFwAction = extract("ACTION=(.+) SEGMENT=", 1, SyslogMessage)
+  | extend SyslogTag = extract("^(.+): ACTION=", 1, SyslogMessage)
+  | extend pcktCount = extract("COUNT=([0-9]+)$", 1, SyslogMessage)
+  | project
+      TimeGenerated,
+      EdgeFwAction,
+      EdgeName,
+      SrcIpAddress,
+      IpProtocol,
+      DstIpAddress,
+      pcktCount,
+      SyslogTag
+
+suppressionEnabled: false
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 1h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  Edge_Name: EdgeName
+entityMappings:
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: SrcIpAddress
+suppressionDuration: 5h

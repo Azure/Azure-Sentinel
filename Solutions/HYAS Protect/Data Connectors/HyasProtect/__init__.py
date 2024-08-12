@@ -28,6 +28,7 @@ INPUT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 HYAS_URL = "https://api.hyas.com/dns-log-report/v2/logs"
 
 
+
 def get_from_and_to_date(date_format=INPUT_DATE_FORMAT):
     """
     Returns the 'from' and 'to' dates as formatted strings based on the given date_format.
@@ -56,6 +57,7 @@ def call_hyas_protect_api():
     Returns:
         None
     """
+
     if (
         fetch_blocked_domains == "No"
         and fetch_suspicious_domains == "No"
@@ -122,13 +124,9 @@ def call_hyas_protect_api():
             records_fetched += len(logs)
             page_number += 1
             total_count = result["total_count"]
-            sentinel_logs = [hyas_dict(log) for log in logs]
+            sentinel_logs = [make_hyas_dict(log) for log in logs]
             sentinel_resp = save_to_sentinel(
-                log_analytics_uri,
-                customer_id,
-                shared_key,
-                dumps(sentinel_logs),
-                table_name,
+                log_analytics_uri, customer_id, shared_key, dumps(sentinel_logs), table_name
             )
             if sentinel_resp in range(200, 299):
                 logging.info(
@@ -145,77 +143,83 @@ def call_hyas_protect_api():
             break
         if records_fetched >= total_count:
             break
-        
-        
 
-def hyas_dict(log: dict):
+
+def make_hyas_dict(log: dict):
     """
     Converts a dictionary representing HYAS Protect log data into a standardized format.
 
     Args:
-        log (dict): The dictionary containing the HYAS Protect log data.
+        data (dict): The dictionary containing the HYAS Protect log data.
 
     Returns:
         dict: The converted log data in a standardized format.
     """
     return {
         "Reputation": log.get("reputation"),
-        "DateTime": log.get("datetime"),
-        "Domain": log.get("domain"),
-        "DeviceName": log.get("devicename"),
-        "ProcessName": log.get("processname"),
-        "Nameserver": log.get("nameserver"),
-        "Verdict": log.get("verdict"),
-        "VerdictSource": log.get("verdictSource"),
-        "VerdictStatus": log.get("verdictStatus"),
-        "Registrar": log.get("registrar"),
-        "PolicyName": log.get("policy", {}).get("policy_name"),
-        "PolicyID": log.get("policy", {}).get("policy_id"),
-        "RegistrarVerdict": log.get("markup", {}).get("registrar", {}).get("verdict"),
-        "FQDNVerdict": log.get("markup", {}).get("fqdn", {}).get("verdict"),
-        "DomainVerdict": log.get("markup", {}).get("domain", {}).get("verdict"),
-        "IPVerdict": log.get("markup", {}).get("ip", {}).get("verdict"),
-        "CNameVerdict": log.get("markup", {}).get("cname", {}).get("verdict"),
+        "DateTime": log.get("datetime",""),
+        "Domain": log.get("domain",""),
+        "DeviceName": log.get("devicename",""),
+        "ProcessName": log.get("processname",""),
+        "Nameserver": log.get("nameserver",""),
+        "Verdict": log.get("verdict",""),
+        "VerdictSource": log.get("verdictSource",""),
+        "VerdictStatus": log.get("verdictStatus",""),
+        "Registrar": log.get("registrar",""),
+        "PolicyName": log.get("policy", {}).get("name",""),
+        "PolicyID": log.get("policy", {}).get("id"),
+        "RegistrarVerdict": log.get("markup", {}).get("registrar", {}).get("verdict",""),
+        "FQDNVerdict": log.get("markup", {}).get("fqdn", {}).get("verdict",""),
+        "DomainVerdict": log.get("markup", {}).get("domain", {}).get("verdict", ""),
+        "IPVerdict": log.get("markup", {}).get("ip", {}).get("verdict", ""),
+        "CNameVerdict": log.get("markup", {}).get("cname", {}).get("verdict", ""),
         "NameserverIPVerdict": log.get("markup", {})
         .get("nameserver_ip", {})
-        .get("verdict"),
-        "NameserverVerdict": log.get("markup", {}).get("nameserver", {}).get("verdict"),
-        "TLDVerdict": log.get("markup", {}).get("tld", {}).get("verdict"),
+        .get("verdict", ""),
+        "NameserverVerdict": log.get("markup", {}).get("nameserver", {}).get("verdict", ""),
+        "TLDVerdict": log.get("markup", {}).get("tld", {}).get("verdict", ""),
         "TTL": log.get("ttl"),
         "Tags": ",".join(str(x) for x in log.get("tags", [])),
-        "LogID": log.get("log_id"),
-        "ClientID": log.get("client_id"),
-        "ClientName": log.get("client_name"),
-        "ClientIP": log.get("client_ip"),
-        "Domain2TLD": log.get("domain_2tld"),
-        "DomainTLD": log.get("domain_tld"),
-        "Nameserver2TLD": log.get("nameserver_2tld"),
-        "NameserverTLD": log.get("nameserver_tld"),
-        "NameserverIP": log.get("nameserver_ip", {}).get("ip"),
+        "LogID": log.get("log_id",""),
+        "ClientID": log.get("client_id",""),
+        "ClientName": log.get("client_name",""),
+        "ClientIP": log.get("client_ip",""),
+        "Domain2TLD": log.get("domain_2tld",""),
+        "DomainTLD": log.get("domain_tld",""),
+        "Nameserver2TLD": log.get("nameserver_2tld",""),
+        "NameserverTLD": log.get("nameserver_tld",""),
+        "NameserverIP": log.get("nameserver_ip", {}).get("ip",""),
         "NameserverCountryISOCode": log.get("nameserver_ip", {}).get(
-            "country_iso_code"
+            "country_iso_code",""
         ),
-        "NameserverCountryName": log.get("nameserver_ip", {}).get("country_name"),
-        "ARecord": ",".join(str(x) for x in log.get("a_record", [])),
+        "NameserverCountryName": log.get("nameserver_ip", {}).get("country_name",""),
+        "ARecordIP": ",".join(x.get('ip',"") for x in log.get("a_record", [])),
+        "ARecordCountryISOCode": ",".join(x.get('country_iso_code',"") for x in log.get("a_record", [])),
+        "ARecordCountryName": ",".join(x.get('country_name',"") for x in log.get("a_record", [])),
+        "AAAARecordIP": ",".join(x.get('ip',"") for x in log.get("aaaa_record", [])),
+        "AAAARecordCountryISOCode": ",".join(x.get('country_iso_code',"") for x in log.get("aaaa_record", [])),
+        "AAAARecordCountryName": ",".join(x.get('country_name',"") for x in log.get("aaaa_record", [])),
         "CName": ",".join(x for x in log.get("c_name", [])),
         "CName2TLD": ",".join(x for x in log.get("c_name_2tld", [])),
         "CNameTLD": ",".join(x for x in log.get("c_name_tld", [])),
-        "ThreatLevel": log.get("threat_level"),
-        "QueryType": log.get("query_type"),
+        "ThreatLevel": log.get("threat_level", ""),
+        "QueryType": log.get("query_type",""),
         "ResponseCode": log.get("response_code"),
-        "ResponseName": log.get("response_name"),
-        "ResponseDescription": log.get("response_description"),
-        "ResolverMode": log.get("resolver_mode"),
-        "ReasonLists": ",".join(str(x) for x in log.get("reason", {}).get("lists", [])),
-        "ReasonType": log.get("reason", {}).get("type"),
+        "ResponseName": log.get("response_name",""),
+        "ResponseDescription": log.get("response_description",""),
+        "ResolverMode": log.get("resolver_mode", ""),
+        "ReasonListsName": ",".join(x.get('name',"") for x in log.get("reason", {}).get("lists", [])),
+        "ReasonListsDatatype": ",".join(x.get('datatype', "") for x in log.get("reason", {}).get("lists", [])),
+        "ReasonType": log.get("reason", {}).get("type", ""),
         "DomainAge": log.get("domain_age"),
         "DomainCategory": ",".join(x for x in log.get("domain_category", [])),
-        "DomainCreationDate": log.get("domain_creation_date"),
-        "DomainExpiresDate": log.get("domain_expires_date"),
-        "DomainUpdatedDate": log.get("domain_updated_date"),
+        "DomainCreationDate": log.get("domain_creation_date", ""),
+        "DomainExpiresDate": log.get("domain_expires_date", ""),
+        "DomainUpdatedDate": log.get("domain_updated_date", ""),
+        "Raw Data": dumps(log)
     }
 
-
+   
 
 def main(mytimer: func.TimerRequest) -> None:
     """
@@ -233,4 +237,3 @@ def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
     call_hyas_protect_api()
     logging.info("Python timer trigger function ran at %s", utc_timestamp)
-

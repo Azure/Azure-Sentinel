@@ -127,6 +127,9 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
     ![Alt text](./ccpimages/dcrStreamName.png)
 
   - Property dataCollectionEndpoint and dataCollectionRuleImmutableId are optional parameters in dcrConfic object. 
+  - To configure "authentication" object properties refer [Authentication configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#authentication-configuration) link
+  - To configure "response" object properties refer [Response configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#response-configuration) link.
+  - To configure "paging" object properties refer [Paging configuration](https://learn.microsoft.com/en-us/azure/sentinel/data-connector-connection-rules-reference#paging-configuration) link.
   - Keep rest all properties of the file as is.
   - Below is a sample data poller file and is used to pole details from the API.
 
@@ -178,7 +181,8 @@ For more details refer [link](https://learn.microsoft.com/en-us/azure/sentinel/c
       "format": "json"
     },
     "paging": {
-      "type": "LinkHeader"
+      "pagingType": "LinkHeader",
+      "linkHeaderTokenJsonPath" : "$.metadata.links.next"
     }
   }
 }]
