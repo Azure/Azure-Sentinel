@@ -17,7 +17,7 @@
         ],
         "entities": [],
         "tags": [ "Infoblox", "Service Name" ],
-        "lastUpdateTime": "2024-07-19T16:15:48.355Z",
+        "lastUpdateTime": "2024-08-09T15:24:09.773Z",
         "support": {
             "tier": "Community",
             "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
@@ -62,16 +62,17 @@
                     "contentVersion": "1.0.0.0",
                     "parameters": {
                         "$connections": {
-                            "defaultValue": {},
+                            "defaultValue": {
+                            },
                             "type": "Object"
                         },
                         "API Key": {
-                            "type": "String",
-                            "defaultValue": "[trim(parameters('Infoblox API Key'))]"
+                            "defaultValue": "[parameters('Infoblox API Key')]",
+                            "type": "String"
                         },
                         "BaseUrl": {
-                            "type": "String",
-                            "defaultValue": "[trim(parameters('Infoblox Base Url'))]"
+                            "defaultValue": "[parameters('Infoblox Base Url')]",
+                            "type": "String"
                         }
                     },
                     "triggers": {
@@ -88,142 +89,7 @@
                         }
                     },
                     "actions": {
-                        "Condition_To_Verify_API_Call_Is_Success_Or_Not": {
-                            "actions": {
-                                "Condition_For_Services_Result_Is_Available_Or_Not": {
-                                    "actions": {
-                                        "Terminate_Due_To_Empty_Results_List": {
-                                            "runAfter": {},
-                                            "type": "Terminate",
-                                            "inputs": {
-                                                "runError": {
-                                                    "message": "Empty Results From Services API"
-                                                },
-                                                "runStatus": "Failed"
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Parse_JSON_For_Services_Data": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "Send_Data_Into_Log_Analytics_Workspace": {
-                                                "runAfter": {},
-                                                "type": "ApiConnection",
-                                                "inputs": {
-                                                    "body": "@{body('Parse_JSON_For_Services_Data')?['results']}",
-                                                    "headers": {
-                                                        "Log-Type": "@variables('Table Name')"
-                                                    },
-                                                    "host": {
-                                                        "connection": {
-                                                            "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
-                                                        }
-                                                    },
-                                                    "method": "post",
-                                                    "path": "/api/logs"
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "equals": [
-                                                    "@empty(body('Parse_JSON_For_Services_Data')?['results'])",
-                                                    "@true"
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type": "If"
-                                },
-                                "Parse_JSON_For_Services_Data": {
-                                    "runAfter": {},
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@body('HTTP_Request_To_Services_Endpoint')",
-                                        "schema": {
-                                            "results": [
-                                                {
-                                                    "configs": [
-                                                        {
-                                                            "current_version": "string",
-                                                            "host_id": "string",
-                                                            "id": "string",
-                                                            "service_id": "string",
-                                                            "upgraded_at": "string"
-                                                        }
-                                                    ],
-                                                    "created_at": "string",
-                                                    "desired_state": "string",
-                                                    "destinations": [],
-                                                    "id": "string",
-                                                    "name": "string",
-                                                    "pool_id": "string",
-                                                    "service_type": "string",
-                                                    "source_interfaces": [],
-                                                    "tags": {},
-                                                    "updated_at": "string"
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            },
-                            "runAfter": {
-                                "HTTP_Request_To_Services_Endpoint": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "else": {
-                                "actions": {
-                                    "Terminate_Due_To_API_Failure": {
-                                        "runAfter": {},
-                                        "type": "Terminate",
-                                        "inputs": {
-                                            "runError": {
-                                                "code": "@{outputs('HTTP_Request_To_Services_Endpoint')['statusCode']}",
-                                                "message": "Services API request failed with error message: @{body('HTTP_Request_To_Services_Endpoint')}"
-                                            },
-                                            "runStatus": "Failed"
-                                        }
-                                    }
-                                }
-                            },
-                            "expression": {
-                                "and": [
-                                    {
-                                        "equals": [
-                                            "@outputs('HTTP_Request_To_Services_Endpoint')['statusCode']",
-                                            200
-                                        ]
-                                    }
-                                ]
-                            },
-                            "type": "If"
-                        },
-                        "HTTP_Request_To_Services_Endpoint": {
-                            "runAfter": {
-                                "Initialize_Table_Name": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "Http",
-                            "inputs": {
-                                "headers": {
-                                    "Authorization": "Token @{parameters('API Key')}"
-                                },
-                                "method": "GET",
-                                "uri": "@{variables('base_url')}/api/infra/v1/services"
-                            }
-                        },
                         "Initialize_Base_URL": {
-                            "runAfter": {},
-                            "type": "InitializeVariable",
                             "inputs": {
                                 "variables": [
                                     {
@@ -232,15 +98,79 @@
                                         "value": "@parameters('BaseUrl')"
                                     }
                                 ]
-                            }
+                            },
+                            "runAfter": {},
+                            "type": "InitializeVariable"
                         },
-                        "Initialize_Table_Name": {
+                        "Initialize_Break_Loop": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Break_Loop",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Limit": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_Limit": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "limit",
+                                        "type": "integer",
+                                        "value": 25
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Offset": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_Offset": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "offset",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            },
                             "runAfter": {
                                 "Initialize_Base_URL": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "InitializeVariable",
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_Retry_Count": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Retry Count",
+                                        "type": "integer",
+                                        "value": 3
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_Table_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Initialize_Table_Name": {
                             "inputs": {
                                 "variables": [
                                     {
@@ -249,10 +179,281 @@
                                         "value": "Service_Name_Info"
                                     }
                                 ]
-                            }
+                            },
+                            "runAfter": {
+                                "Initialize_Break_Loop": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Until_Loop_For_Fetching_Service_Endpoint_Data_With_Pagination": {
+                            "actions": {
+                                "Condition_To_Verify_API_Call_Is_Success_Or_Not": {
+                                    "actions": {
+                                        "Condition_For_Services_Result_Is_Available_Or_Not": {
+                                            "actions": {
+                                                "Set_Break_Loop_True_Because_Of_Empty_Results": {
+                                                    "inputs": {
+                                                        "name": "Break_Loop",
+                                                        "value": "@true"
+                                                    },
+                                                    "runAfter": {},
+                                                    "type": "SetVariable"
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Condition_To_Check_Data_Is_Sent_To_Workspace": {
+                                                        "actions": {
+                                                            "Condition_For_Length_Of_Data_is_Less_Than_Limit_": {
+                                                                "actions": {
+                                                                    "Set_Break_Loop_True_Because_Of_Data_Is_Less_Than_Limit": {
+                                                                        "inputs": {
+                                                                            "name": "Break_Loop",
+                                                                            "value": "@true"
+                                                                        },
+                                                                        "runAfter": {},
+                                                                        "type": "SetVariable"
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "less": [
+                                                                                "@length(body('Parse_JSON_For_Services_Data')?['results'])",
+                                                                                "@variables('limit')"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "runAfter": {
+                                                                    "Increment_Offset_By_Limit": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            },
+                                                            "Increment_Offset_By_Limit": {
+                                                                "inputs": {
+                                                                    "name": "offset",
+                                                                    "value": "@variables('limit')"
+                                                                },
+                                                                "runAfter": {
+                                                                    "Set_Retry_Count": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "IncrementVariable"
+                                                            },
+                                                            "Set_Retry_Count": {
+                                                                "inputs": {
+                                                                    "name": "Retry Count",
+                                                                    "value": 3
+                                                                },
+                                                                "runAfter": {},
+                                                                "type": "SetVariable"
+                                                            }
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Condition_To_Check_Retry_Count": {
+                                                                    "actions": {
+                                                                        "Increment_Offset_And_Skip_The_One_Page": {
+                                                                            "inputs": {
+                                                                                "name": "offset",
+                                                                                "value": "@variables('limit')"
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "Set_New_Retry_Count": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "IncrementVariable"
+                                                                        },
+                                                                        "Set_New_Retry_Count": {
+                                                                            "inputs": {
+                                                                                "name": "Retry Count",
+                                                                                "value": 3
+                                                                            },
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable"
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "less": [
+                                                                                    "@variables('Retry Count')",
+                                                                                    0
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Decrement_Retry_Count": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                },
+                                                                "Decrement_Retry_Count": {
+                                                                    "inputs": {
+                                                                        "name": "Retry Count",
+                                                                        "value": 1
+                                                                    },
+                                                                    "runAfter": {},
+                                                                    "type": "DecrementVariable"
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@outputs('Send_Data_Into_Log_Analytics_Workspace')['statusCode']",
+                                                                        200
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "runAfter": {
+                                                            "Send_Data_Into_Log_Analytics_Workspace": [
+                                                                "Succeeded",
+                                                                "Failed"
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "Send_Data_Into_Log_Analytics_Workspace": {
+                                                        "inputs": {
+                                                            "body": "@{body('Parse_JSON_For_Services_Data')?['results']}",
+                                                            "headers": {
+                                                                "Log-Type": "@variables('Table Name')"
+                                                            },
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "post",
+                                                            "path": "/api/logs"
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@empty(body('Parse_JSON_For_Services_Data')?['results'])",
+                                                            "@true"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_For_Services_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Parse_JSON_For_Services_Data": {
+                                            "inputs": {
+                                                "content": "@body('HTTP_Request_To_Services_Endpoint')",
+                                                "schema": {
+                                                    "results": [
+                                                        {
+                                                            "configs": [
+                                                                {
+                                                                    "current_version": "string",
+                                                                    "host_id": "string",
+                                                                    "id": "string",
+                                                                    "service_id": "string",
+                                                                    "upgraded_at": "string"
+                                                                }
+                                                            ],
+                                                            "created_at": "string",
+                                                            "desired_state": "string",
+                                                            "destinations": [],
+                                                            "id": "string",
+                                                            "name": "string",
+                                                            "pool_id": "string",
+                                                            "service_type": "string",
+                                                            "source_interfaces": [],
+                                                            "tags": {},
+                                                            "updated_at": "string"
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "type": "ParseJson"
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_Break_Loop_True_Because_Of_Status_Code_Is_Not_200": {
+                                                "inputs": {
+                                                    "name": "Break_Loop",
+                                                    "value": "@true"
+                                                },
+                                                "runAfter": {},
+                                                "type": "SetVariable"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP_Request_To_Services_Endpoint')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "runAfter": {
+                                        "HTTP_Request_To_Services_Endpoint": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "HTTP_Request_To_Services_Endpoint": {
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Token @{parameters('API Key')}"
+                                        },
+                                        "method": "GET",
+                                        "queries": {
+                                            "_limit": "@{variables('limit')}",
+                                            "_offset": "@{variables('offset')}"
+                                        },
+                                        "uri": "@{variables('base_url')}/api/infra/v1/services"
+                                    },
+                                    "runAfter": {},
+                                    "type": "Http"
+                                }
+                            },
+                            "expression": "@equals(variables('Break_Loop'), true)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "runAfter": {
+                                "Initialize_Retry_Count": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Until"
                         }
                     },
-                    "outputs": {}
+                    "outputs": {
+                    }
                 },
                 "parameters": {
                     "$connections": {
@@ -289,7 +490,8 @@
             "kind": "V1",
             "properties": {
                 "displayName": "[variables('AzureloganalyticsdatacollectorConnectionName')]",
-                "customParameterValues": {},
+                "customParameterValues": {
+                },
                 "api": {
                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureloganalyticsdatacollector')]"
                 }
