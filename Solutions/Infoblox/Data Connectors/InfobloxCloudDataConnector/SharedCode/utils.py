@@ -322,7 +322,7 @@ class Utils:
                     "Sort Files by current timestamp",
                 )
             )
-            sorted_filenames = sorted(filenames, key=lambda x: self.get_timestamp(x))
+            sorted_filenames = sorted(filenames, key=self.get_timestamp)
 
             applogger.info(
                 self.log_format.format(

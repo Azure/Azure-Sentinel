@@ -67,6 +67,7 @@ class DossierCreateJob(Utils):
                     "Key error : Error-{}".format(key_error),
                 )
             )
+            raise InfobloxException()
         except Exception as error:
             applogger.error(
                 self.log_format.format(
