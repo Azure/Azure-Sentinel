@@ -106,7 +106,7 @@ class AzureSentinelConnector:
     def _make_request(self, uri, body, headers):
         response = requests.post(uri, data=body, headers=headers)
         if not (200 <= response.status_code <= 299):
-            raise Exception("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status))
+            raise Exception("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status_code))
 
     def _check_size(self, queue):
         data_bytes_len = len(json.dumps(queue).encode())
