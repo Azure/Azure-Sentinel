@@ -51,10 +51,10 @@ Possible remediations include requiring a password reset, or temporarily locking
 
 1) [Overview](#overview)
 2) [Playbooks](#playbooks)
-   1) ["Base" playbooks (Workforce and External)](#base_playbooks)
-   2) ["Search" playbooks](#search_playbooks)
-      1) [Add risky user to Active Directory Security Group](#add_risky_user_to_active_directory_security_group)
-      2) [Active Directory Identity Protection - confirm user is compromised](#active_directory_identity_protection_confirm_user_is_compromised)
+   1) ["Search" playbooks (Workforce and External)](#search_playbooks)
+   2) ["Base" playbooks](#base_playbooks)
+      1) [Add risky user to Microsoft EntraID Group](#add_risky_user_to_entraid_security_group)
+      2) [Microsoft EntraID Protection - confirm user is compromised](#entraid_identity_protection_confirm_user_is_compromised)
       3) [Lookup risky user and save results](#lookup_risky_user_and_save_results)
 3) [Deployment](#deployment)
    1) [Prerequisites](#prerequisites)  
@@ -79,9 +79,9 @@ Possible remediations include requiring a password reset, or temporarily locking
 
 ## Overview
 
-This Solution consists of 5 Playbooks (Logic Apps).
+This Solution consists of 6 Playbooks (Logic Apps).
 
-"Base" playbooks:
+"Search" playbooks:
 
 | Playbook Name                                     | Description                               |
 |---------------------------------------------------|-------------------------------------------|
@@ -91,27 +91,35 @@ This Solution consists of 5 Playbooks (Logic Apps).
 
 <br/>
 
-"Search" playbooks:
+"Base" playbooks:
 Theese are sub playbooks that are called by the base playbooks. 
 
 | Playbook Name                                          | Description                                                                            |
 |--------------------------------------------------------|----------------------------------------------------------------------------------------|
-| **RFI-add-EntraID-security-group-user** | Add risky user to Active Directory Security Group for users at risk.                   |
-| **RFI-confirm-EntraID-risky-user**      | Confirm to Active Directory Identity Protection that user is compromised.              |
+| **RFI-add-EntraID-security-group-user** | Add risky user to Microsoft EntraID Group for users at risk.                   |
+| **RFI-confirm-EntraID-risky-user**      | Confirm to Microsoft EntraID Identity Protection that user is compromised.              |
 | **RFI-lookup-and-save-user**        | Lookup additional information on a compromised user and save results to Log Analytics. |
 
+<br/>
+
+"Connector" playbooks:
+Custom connector  are used to communicate and authorize towards Recorded Future backend API. 
+
+| Playbook Name                                          | Description                                                                            |
+|--------------------------------------------------------|----------------------------------------------------------------------------------------|
+| **RecordedFuture-CustomConnector** | RecordedFuture-CustomConnector connection and autorization to Recorded Future Backend API.                   |
 
 <a id="playbooks"></a>
 
 ## Playbooks
 
-<a id="base_playbooks"></a>
+<a id="search_playbooks"></a>
 
-### "Base" playbooks (Workforce and External)
+### "Search" playbooks (Workforce and External)
 
 <br/>
 
-#### Workflow of Base Logic Apps (both Workforce and External use cases)
+#### Workflow of Search Logic Apps (both Workforce and External use cases)
 
 
 Those playbooks search the Recorded Future Identity Intelligence Module for compromised workforce or external (customer) users.
@@ -122,19 +130,19 @@ Those playbooks search the Recorded Future Identity Intelligence Module for comp
 |-----|--------------------------------------------------------------------------------------------------------------------------------|
 | 1   | Pull data from Recorded Future Identity API for specified domain and time range (can be "workforce" or "external" use case).   |
 | 2   | Pull previously seen/saved leaks data from Log Analytics Custom Log.                                                           |
-| 3   | Compare data from step 1 and step 2 - to determine which leaks are new and haven't been seen previously by the Base Logic App. |
-| 4   | Save the new leaks from step 3, so on the next run of the Base Logic App we would get that data on step 2.                     |
-| 5   | Use "Search" Logic Apps to react / take actions on the newly leaked credentials.                                             |
+| 3   | Compare data from step 1 and step 2 - to determine which leaks are new and haven't been seen previously by the Search Logic App. |
+| 4   | Save the new leaks from step 3, so on the next run of the Search Logic App we would get that data on step 2.                     |
+| 5   | Use "Base" Logic Apps to react / take actions on the newly leaked credentials.                                             |
 
 <br/>
 
-If you are using External use case - you will get info on your clients leaks, so probably the most valuable "Search" Logic App for you will be "Lookup risky user and save results", as "Add risky user to Active Directory Security Group" and "Active Directory Identity Protection - confirm user is compromised" assumes that the leaked email is a user in your organization Microsoft Entra ID, which is mostly probably not true for External use case.
+If you are using External use case - you will get info on your clients leaks, so probably the most valuable "Base" Logic App for you will be "Lookup risky user and save results", as "Add risky user to Microsoft EntraID Group" and "Microsoft EntraID Identity Protection - confirm user is compromised" assumes that the leaked email is a user in your organization Microsoft Entra ID, which is mostly probably not true for External use case.
 
 <br/>
 
 #### Parameters
 
-Logic App Parameters for Base Logic App Workforce use case:
+Logic App Parameters for Search Logic App Workforce use case. These are configured in the Azure portal int the Logic App designer after installation.
 
 | Parameter                                          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 |----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -142,34 +150,34 @@ Logic App Parameters for Base Logic App Workforce use case:
 | **search_lookback_days**                           | Time range for Search / number of days before today to search (e.g. input "-14" to search the last 14 days).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **malware_logs_log_analytics_custom_log_name**     | Name for Log Analytics Custom Log to save Credential Dumps Search results at (**needs to end with "`_CL`"**).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **credential_dumps_log_analytics_custom_log_name** | Name for Log Analytics Custom Log to save Malware Logs Search results at (**needs to end with "`_CL`"**).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **active_directory_security_group_id**             | ID of Active Directory Security Group for users at risk. You need to pre-create it by hand: search for "Groups" in Service search at the top of the page. For more information, see [Active Directory Security Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **active_directory_security_group_id**             | ID of Microsoft EntraID Group for users at risk. You need to pre-create it by hand: search for "Groups" in Service search at the top of the page. For more information, see [Microsoft EntraID Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **lookup_lookback_days**                           | Time range for Lookup / number of days before today to search (e.g. input "-14" to search the last 14 days). **Make sure to use `lookup_lookback_days` same or larger than `search_lookback_days`. Otherwise you can encounter a situation when you get empty results on Lookup for the compromised credentials from the Search.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **lookup_results_log_analytics_custom_log_name**   | Name for Log Analytics Custom Log to save Lookup results at (**needs to end with "`_CL`"**).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **active_directory_domain**                        | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
+| **active_directory_domain**                        | (Optional, can be left empty) - in case your Microsoft EntraID domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Microsoft EntraID (ex. Compromised email: leaked@mycompany.com, your Microsoft EntraID domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Microsoft EntraID: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 
 <br/>
 
-Logic App Parameters for Base Logic App "External use case" are the same as for "Workforce use case", except "External use case" does NOT need credential_dumps_log_analytics_custom_log_name parameter.
+Logic App Parameters for Search Logic App "External use case" are the same as for "Workforce use case", except "External use case" does NOT need credential_dumps_log_analytics_custom_log_name parameter.
 
 <br/>
 
-<a id="search_playbooks"></a>
+<a id="base_playbooks"></a>
 
-### "Search" playbooks
-
-<br/>
-
-"Search" playbooks can be used to react to leaked credentials and mitigate the risks.
+### "Base" playbooks
 
 <br/>
 
-<a id="add_risky_user_to_active_directory_security_group"></a>
+"Base" playbooks can be used to take action to leaked credentials and mitigate the risks.
+
+<br/>
+
+<a id="add_risky_user_to_entraid_security_group"></a>
 
 #### RFI-add-EntraID-security-group-user
 
-This playbook adds a compromised user to an EntraID security group. Triage and remediation should be handled in follow up playbooks or actions.
+This playbook adds a compromised user to an Microsoft EntraID group. Triage and remediation should be handled in follow up playbooks or actions.
 
-By applying security policies to the security group and adding leaked users to that group - you can react to a leak and mitigate the risks.
+By applying security policies to the Microsoft EntraID group and adding leaked users to that group - you can react to a leak and mitigate the risks.
 
 **BEWARE: if you apply a Security Group policy that prohibits any compromised member from logging in, and you yourself get identified as having a compromised account, then you could potentially lock yourself out!**
 
@@ -180,34 +188,34 @@ By applying security policies to the security group and adding leaked users to t
 
 | #   | Action                                                                                             |
 |-----|----------------------------------------------------------------------------------------------------|
-| 1   | Form `user_principal_name` (email or email username + active directory domain if it is not empty). |
-| 2   | Get user from Active Directory by `user_principal_name`.                                           |
-| 3   | Add user to Active Directory security group.                                                       |
+| 1   | Form `user_principal_name` (email or email username + Entra ID domain if it is not empty). |
+| 2   | Get user from EntraID by `user_principal_name`.                                           |
+| 3   | Add user to EntraID security group.                                                       |
 
 <br/>
 
 ##### Parameters
 
-**For this playbook to work - you need to pre-create Active Directory Security Group, and provide the Security Group ID as a parameter to the Logic App. For more information, see [Active Directory Security Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation.**
+**To configure thos playbook - you need to create a Microsoft EntraID Group, and provide the group ID as a parameter to the Logic App. For more information, see [Microsoft EntraID Groups](https://learn.microsoft.com/en-us/entra/fundamentals/how-to-manage-groups) documentation.**
 
 HTTP request parameters:
 
 | Parameter                              | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 |----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **risky_user_email**                   | Compromised user email.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **active_directory_security_group_id** | ID of Active Directory Security Group for users at risk. You need to pre-create security group by hand: search for "Groups" in Service search at the top of the page. For more information, see [Active Directory Security Groups](https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups) documentation.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **active_directory_domain**            | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
+| **active_directory_security_group_id** | ID of Microsoft EntraID Group for users at risk. You need to pre-create security group by hand: search for "Groups" in Service search at the top of the page. For more information, see [Microsoft EntraID Groups](https://learn.microsoft.com/en-us/entra/fundamentals/how-to-manage-groups) documentation.                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **active_directory_domain**            | (Optional, can be left empty) - in case your Microsoft EntraID domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Microsoft EntraID Directory (ex. Compromised email: leaked@mycompany.com, your Microsoft EntraID domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Microsoft EntraID: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 
 
 <br/>
 
-<a id="active_directory_identity_protection_confirm_user_is_compromised"></a>
+<a id="entraid_identity_protection_confirm_user_is_compromised"></a>
 
 #### RFI-confirm-EntraID-risky-user
 
 This playbook confirms compromise of users deemed "high risk" by Microsoft Entra ID Protection.
 
-For more info on Entra ID Protection, read here: [link1](https://learn.microsoft.com/en-gb/entra/id-protection/) and [link2](https://learn.microsoft.com/en-gb/entra/id-protection/overview-identity-protection) and [link3](https://learn.microsoft.com/en-gb/entra/id-protection/howto-identity-protection-remediate-unblock).
+For more info on Microsoft EntraID Protection, read here: [link1](https://learn.microsoft.com/en-gb/entra/id-protection/) and [link2](https://learn.microsoft.com/en-gb/entra/id-protection/overview-identity-protection) and [link3](https://learn.microsoft.com/en-gb/entra/id-protection/howto-identity-protection-remediate-unblock).
 
 Note that this playbook only runs on already flagged risky users. If a user isn't flagged as a risky user by Entra ID Protection, this playbook won't do anything.
 
@@ -218,10 +226,10 @@ Note that this playbook only runs on already flagged risky users. If a user isn'
 
 | #   | Action                                                                                             |
 |-----|----------------------------------------------------------------------------------------------------|
-| 1   | Form `user_principal_name` (email or email username + active directory domain if it is not empty). |
-| 2   | Get user from Active Directory by `user_principal_name`.                                           |
-| 3   | Check if Active Directory Identity Protection contains the user in a list of risky users.          |
-| 3   | Confirm to Active Directory Identity Protection that user is compromised.                          |
+| 1   | Form `user_principal_name` (email or email username + Microsoft EntraID domain if it is not empty). |
+| 2   | Get user from Microsoft EntraID by `user_principal_name`.                                           |
+| 3   | Check if Microsoft EntraID Identity Protection contains the user in a list of risky users.          |
+| 3   | Confirm to Microsoft EntraID Identity Protection that user is compromised.                          |
 
 <br/>
 
@@ -232,7 +240,7 @@ HTTP request parameters:
 | Parameter                              | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 |----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **risky_user_email**                   | Compromised user email.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **active_directory_domain**            | (Optional, can be left empty) - in case your Active Directory domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Active Directory (ex. Compromised email: leaked@mycompany.com, your Active Directory domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Active Directory: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
+| **active_directory_domain**            | (Optional, can be left empty) - in case your Microsoft EntraID domain is different from your organization domain, this parameter will be used to transform compromised credentials to find corresponding user in your Microsoft EntraID (ex. Compromised email: leaked@mycompany.com, your Microsoft EntraID domain: `@mycompany.onmicrosoft.com`, so you set parameter `active_directory_domain = mycompany.onmicrosoft.com` (**just domain, without "@"**), and search playbooks will replace the domain from the leaked email with the provided domain from the active_directory_domain parameter, before searching for the corresponding user in your Microsoft EntraID: `leaked@mycompany.com ->  leaked@mycompany.onmicrosoft.com`. (Lookup playbook - will still use the original email to Lookup the data). |
 
 
 <br/>
@@ -241,7 +249,7 @@ HTTP request parameters:
 
 #### RFI-lookup-and-save-user
 
-This playbook gets compromise identity details from Recorded Future Identity Intelligence and saves the data for further review and analysis.
+This playbook gets compromise identity details from Recorded Future Identity Intelligence and saves the data in Awuse Log Analytics Workspace for further review and analysis.
 
 Lookup returns more data than initial Search, so you will get the leaks' history for the email and other info.
 
@@ -301,15 +309,14 @@ Another way to cover this case - you can add a corresponding check to RFI-lookup
 ## Deployment
 
 > [!IMPORTANT]  
-> Make sure you deploy all "Base" playbooks before deploying any of the "search" playbooks. And make sure you configure all 3 base playbooks before running "RFI-search..." playbooks.
-> Make sure to specify correct playbook names while deploying "search" playbooks.** "Correct" - are just the same as you have used while deploying playbooks.
+> Deploy all "Base" and "Connector" playbooks before deploying the "Search" playbooks. 
 
 
 <a id="prerequisites"></a>
 
 ### Prerequisites
 
-- An Entra ID Tenant and subscription. If you don't have a subscription, [sign up for a free Azure account](https://azure.microsoft.com/free/?WT.mc_id=A261C142F).
+- An Microsoft EntraID Tenant and subscription. If you don't have a subscription, [sign up for a free Azure account](https://azure.microsoft.com/free/?WT.mc_id=A261C142F).
 - Azure subscription Owner or Contributor permissions so you can install the Logic Apps Management solution from the Azure Marketplace. For more information, review [Permission to purchase - Azure Marketplace purchasing](https://docs.microsoft.com/marketplace/azure-purchasing-invoicing#permission-to-purchase) and [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
 - A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these playbooks will be created automatically if they don’t already exist.
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
@@ -319,16 +326,10 @@ Another way to cover this case - you can add a corresponding check to RFI-lookup
 
 #### Deploy Playbooks one by one
 
-
-> [!IMPORTANT]  
-> Make sure you deploy all "Base" playbooks before deploying any of the "search" playbooks. And make sure you configure all 3 base playbooks before running "RFI-search..." playbooks.
-> Make sure to specify correct playbook names while deploying "search" playbooks.** "Correct" - are just the same as you have used while deploying playbooks.
-
 <a id="deployment_custom_template_playbooks_add_EntraID_security_group_user"></a>
 
-
 ##### RecordedFuture-CustomConnector
-Logic-app custom connector\
+Logic-app custom connector
 
 This connector is used by other logic apps in this solution to comunicate with Recorded Future backend API. 
 
@@ -345,6 +346,7 @@ Parameters for deployment:
 | **Connector-Name**  | Connector name to use for this playbook (ex. "RFI-CustomConnector-0-1-0").                                                                     |
 |**Service Endpoint**| API Endpoint, always use the default ```https://api.recordedfuture.com/gw/azure-identity```| 
 
+<a id="deployment_custom_template_playbooks_add_EntraID_security_group_user"></a>
 
 ##### RFI-add-EntraID-security-group-user
 
@@ -461,9 +463,8 @@ After deployment - initial set up for each deployed Logic App (playbook) include
 
 <br/>
 
-**Important:**
-- **Make sure you deploy all 3 "Search" playbooks before deploying "Base" playbooks. And make sure you configure all 3 "Search" playbooks before running "Base" playbooks.**
-- **Make sure to specify correct "Search" playbook names while deploying "Base" playbooks.** "Correct" - are just the same as you have used while deploying "Search" playbooks.
+**Important:** 
+- **Make sure you deploy all "Base" and "Connector" playbooks before deploying "Search" playbooks.**
 - **Make sure to use `lookup_lookback_days` same or larger than `search_lookback_days`. Otherwise you can encounter a situation when you get empty results on Lookup for the compromised credentials from the Search.**
 
 <br/>
@@ -490,10 +491,8 @@ For `Recorded Future Identity` Connections you will need `Recorded Future Identi
 <img src="./images/workforce_playbook_connections_2.png" alt="Logic Apps Parameters #3" width="60%"/>
 <img src="./images/workforce_playbook_connections_3.png" alt="Logic Apps Parameters #4" width="60%"/>
 
-
 <br/>
 <br/>
-
 
 <a id="configuration_parameters"></a>
 
@@ -518,7 +517,7 @@ On the screenshots you can see where to configure Logic Apps Parameters:
 
 ## Suggestions for advanced users
 
-- You can add more advanced control of compromised Active Directory users using GraphQL API, which allows you to force a user to reset a password, etc. But it requires some additional Azure skills (secrets handling, etc).
+- You can add more advanced control of compromised Microsoft EntraID users using GraphQL API, which allows you to force a user to reset a password, etc. But it requires some additional Azure skills (secrets handling, etc).
 - As Search and Lookup data is stored in Log Analytics Custom Log - you can create / set up custom Sentinel Alerts on that data.
 - In current implementation Search request gets only 500 records per request. You can request more records using the "Results" parameter. Also you can create a loop and use the "Offset" parameter in Search to request all the records using pagination. Probably better to process/react on compromised credentials "on the go" in the same loop cycle you retrieved them.
 
