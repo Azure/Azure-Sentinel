@@ -1,8 +1,7 @@
 id: d57c33a9-76b9-40e0-9dfa-ff0404546410
 name: AD FS Remote HTTP Network Connection
 description: |
-  'This detection uses Sysmon events (NetworkConnect events) to detect incoming network traffic on port 80 on AD FS servers. This could be a sign of a threat actor
-  trying to use replication services on the AD FS server to get its configuration settings and extract sensitive information such as AD FS certificates.
+  'This detection uses Sysmon events (NetworkConnect events) to detect incoming network traffic on port 80 on AD FS servers. This could be a sign of a threat actor trying to use replication services on the AD FS server to get its configuration settings and extract sensitive information such as AD FS certificates.
   In order to use this query you need to enable Sysmon telemetry on the AD FS Server.
   Reference: https://twitter.com/OTR_Community/status/1387038995016732672
   '
@@ -72,19 +71,29 @@ query: |
   | where DestinationIp !in ('::1','0:0:0:0:0:0:0:1')
   | extend Operation = RenderedDescription
   | project-reorder TimeGenerated, Operation, Image, Computer, UserName
-  | extend HostCustomEntity = Computer, AccountCustomEntity = UserName, IPCustomEntity = SourceIp
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(UserName, @'\')[1]), AccountNTDomain = tostring(split(UserName, @'\')[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: UserName
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: IPCustomEntity
-version: 1.0.0
+        columnName: SourceIp
+version: 1.0.2
 kind: Scheduled

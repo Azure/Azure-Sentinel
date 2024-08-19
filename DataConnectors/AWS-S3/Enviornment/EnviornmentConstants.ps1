@@ -4,6 +4,12 @@
 #$script:CloudEnv = 'Gov'
 #$script:AwsCloudResource = 'arn:aws-us-gov'
 
+#GovToCom
+#$script:SentinelClientId = 'api://1462b192-27f7-4cb9-8523-0f4ecb54b47e'
+#$script:SentinelTenantId = '33e01921-4d64-4f8c-a055-5bdaffd5e33d'
+#$script:CloudEnv = 'Gov'
+#$script:AwsCloudResource = 'arn:aws-us-gov'
+
 #ComToProd
 $script:SentinelClientId = 'api://1462b192-27f7-4cb9-8523-0f4ecb54b47e'
 $script:SentinelTenantId = '33e01921-4d64-4f8c-a055-5bdaffd5e33d'
