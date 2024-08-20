@@ -42,7 +42,8 @@ class AzureSentinelConnector:
             if queue:
                 queue_list = self._split_big_request(queue)
                 for q in queue_list:
-                    self._post_data(self.workspace_id, self.shared_key, q, self.log_type)
+                    self._post_data(self.workspace_id,
+                                    self.shared_key, q, self.log_type)
 
         self._bulks_list = []
 
@@ -57,10 +58,13 @@ class AzureSentinelConnector:
 
     def _build_signature(self, workspace_id, shared_key, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
-        string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
+        string_to_hash = method + "\n" + \
+            str(content_length) + "\n" + content_type + \
+            "\n" + x_headers + "\n" + resource
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
-        encoded_hash = base64.b64encode(hmac.new(decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
+        encoded_hash = base64.b64encode(hmac.new(
+            decoded_key, bytes_to_hash, digestmod=hashlib.sha256).digest()).decode()
         authorization = "SharedKey {}:{}".format(workspace_id, encoded_hash)
         return authorization
 
@@ -72,7 +76,8 @@ class AzureSentinelConnector:
         resource = '/api/logs'
         rfc1123date = datetime.datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')
         content_length = len(body)
-        signature = self._build_signature(workspace_id, shared_key, rfc1123date, content_length, method, content_type, resource)
+        signature = self._build_signature(
+            workspace_id, shared_key, rfc1123date, content_length, method, content_type, resource)
         uri = self.log_analytics_uri + resource + '?api-version=2016-04-01'
 
         headers = {
@@ -85,28 +90,32 @@ class AzureSentinelConnector:
         try_number = 1
         while True:
             try:
-                self._make_request(uri, body, headers)
+                if body != None and body != '':
+                  self._make_request(uri, body, headers)
             except Exception as err:
                 if try_number < 3:
-                    logging.warning('Error while sending data to Microsoft Sentinel. Try number: {}. {}'.format(try_number, err))
+                    logging.warning(
+                        'Error while sending data to Microsoft Sentinel. Try number: {}.err - details {}, body - {}'.format(try_number, err, body))
                     time.sleep(try_number)
                     try_number += 1
                 else:
                     logging.error(str(err))
                     if not hasattr(self, "failed_sent_events_number"):
                         setattr(self, "failed_sent_events_number", 0)
-                    
+
                     self.failed_sent_events_number += events_number
                     raise err
             else:
-                logging.info('{} events have been successfully sent to Microsoft Sentinel'.format(events_number))
+                logging.info(
+                    '{} events have been successfully sent to Microsoft Sentinel'.format(events_number))
                 self.successfull_sent_events_number += events_number
                 break
 
     def _make_request(self, uri, body, headers):
         response = requests.post(uri, data=body, headers=headers)
-        if not (200 <= response.status_code <= 299):
-            raise Exception("Error during sending events to Microsoft Sentinel. Response code: {}".format(response.status_code))
+        if not (response.status_code == 200 or response.status_code == 201):
+            raise Exception("Error during sending events to Microsoft Sentinel. Response code: {}, error details {}".format(
+                response.status_code, response.content))
 
     def _check_size(self, queue):
         data_bytes_len = len(json.dumps(queue).encode())
