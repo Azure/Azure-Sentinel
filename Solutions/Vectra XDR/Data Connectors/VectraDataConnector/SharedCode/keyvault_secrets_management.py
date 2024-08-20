@@ -40,6 +40,7 @@ class KeyVaultSecretManage:
         except ResourceNotFoundError as err:
             self.applogger.error("Resource not found : '{}' ".format(err))
             self.set_keyvault_secret(secret_name, "")
+            return ""
 
     def set_keyvault_secret(self, secret_name, secret_value):
         """To update secret value of given secret name or create new secret.

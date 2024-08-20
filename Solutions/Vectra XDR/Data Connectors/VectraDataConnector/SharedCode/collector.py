@@ -44,8 +44,8 @@ class BaseCollector:
 
     def load_expiration_time_from_checkpoint_file(self):
         """Load expiration time from checkpoint file."""
+        __method_name = inspect.currentframe().f_code.co_name
         try:
-            __method_name = inspect.currentframe().f_code.co_name
             data = self.state.get()
             if data is not None and data:
                 data = json.loads(data)
