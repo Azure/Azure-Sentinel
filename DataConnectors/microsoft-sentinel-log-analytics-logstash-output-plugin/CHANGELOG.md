@@ -1,5 +1,8 @@
-## 1.0.0
-* Initial release for output plugin for logstash to Microsoft Sentinel. This is done with the Log Analytics DCR based API.
+## 1.1.3
+* Replace the library rest-client used for connecting with Azure to excon.
+
+## 1.1.1
+* Support China and US Government Azure sovereign clouds.
 
 ## 1.1.0 
 * Increase timeout for read/open connections to 120 seconds.
@@ -9,6 +12,5 @@
 * Upgrade version for ingestion api to 2023-01-01.
 * Rename the plugin to microsoft-sentinel-log-analytics-logstash-output-plugin.
 
-## 1.1.1
-* Support China and US Government Azure sovereign clouds.
-* Increase timeout for read/open connections to 240 seconds.
+## 1.0.0
+* Initial release for output plugin for logstash to Microsoft Sentinel. This is done with the Log Analytics DCR based API.
