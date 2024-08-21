@@ -1,4 +1,4 @@
-# Cymru Scout Live Investigation
+# Team Cymru Scout Live Investigation
 
 ## Summary
 
@@ -6,19 +6,19 @@ This playbook will fetch and ingest IP or Domain Indicator data based on input p
 
 ### Prerequisites
 
-1. Make sure that the CymruScoutCreateIncidentAndNotify playbook is deployed before deploying the CymruScoutLiveInvestigation playbook.
+1. Make sure that the TeamCymruScoutCreateIncidentAndNotify playbook is deployed before deploying the TeamCymruScoutLiveInvestigation playbook.
 
 ### Deployment instructions
 
 1. To deploy the Playbook, click the Deploy to Azure button. This will launch the ARM Template deployment wizard.
 2. Fill in the required parameters:
   * PlaybookName: Please do not change the playbook name, else you will not get any data for the live investigation dashboard.
-  * UserName: Enter username of your CymruScout account.
-  * Password: Enter password of your CymruScout account.
-  * BaseURL: Enter Base URL of your CymruScout account.
+  * UserName: Enter username of your Team Cymru Scout account.
+  * Password: Enter password of your Team Cymru Scout account.
+  * BaseURL: Enter Base URL of your Team Cymru Scout account.
   * CreateIncidentAndNotifyPlaybookName: Playbook name which is deployed as part of prerequisites.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTeam%20Cymru%20Scout%2FPlaybooks%2FCymruScoutLiveInvestigation%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTeam%20Cymru%20Scout%2FPlaybooks%2FCymruScoutLiveInvestigation%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTeam%20Cymru%20Scout%2FPlaybooks%2FTeamCymruScoutLiveInvestigation%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FTeam%20Cymru%20Scout%2FPlaybooks%2FTeamCymruScoutLiveInvestigation%2Fazuredeploy.json)
 
 ### Post-Deployment instructions
 
