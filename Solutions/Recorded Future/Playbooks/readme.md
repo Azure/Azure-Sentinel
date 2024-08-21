@@ -70,8 +70,9 @@ When installing playbooks from templates, read the description and look for depe
 ![](Images/2023-11-20-12-34-15.png)
 
 ## 2. Individual Playbook installation
-To install individual playbooks, use the buttons next to the descriptions of the playbooks further down in this document.
+To install individual playbooks, use the buttons next to the descriptions of the [Playbooks [further down in this document](#Playbooks).
 
+> [!IMPORTANT] 
 > **Due to internal dependencies, always deploy and activate the ThreatIntelligenceImport playbook before any of the \*-IndicatorImport playbooks.**
 
 # Upgrade from previous versions
@@ -141,13 +142,32 @@ The enrichment is now configured to run when incidents are triggered, and it wil
 
 <img src="Enrichment/RecordedFuture-IOC_Enrichment/images/CreateAutomationRule.png" width="500"><br/>
 
-## Recorded Future Collective Insights Configuration
+## Collective Insights Configuration
 Recorded Future Collective Insights aggregates data related to Sigma Rules and other indicators, driving collective insights to better identify threats. Anonymized, unattributable data is collected for analytical purposes to identify trends and insights with the Collective Insights. The **RecordedFuture-IOC_Enrichment** playbook contributes to collective insights. 
 [Click here to learn more](https://support.recordedfuture.com/hc/en-us/articles/19308547864339) (Require Recorded Future Login)
 
 To opt-out from Collective insights by setting the CollectiveInsights parameter to [false]
 
 <img src="Enrichment/RecordedFuture-IOC_Enrichment/images/IntelligenceCloudParameter.png" width="500"><br/>
+
+
+
+![](Images/2023-04-18-16-39-00.png)
+
+# Playbooks
+All playbooks are not included in the Content Hub Solution. It is stated in the description of each playbook as 'Included in Solution: Yes/No'. Some of the playbooks are provided as previews or examples of how to automate use cases.   
+
+Playbooks in subfolders:
+- [Enrichment Playbooks](Enrichment/readme.md)
+- [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md)
+- [Alert Playbooks](Alerts/readme.md)
+- [Sandbox Playbooks](./Sandboxing/readme.md)
+- [Threat Hunt Playbooks](./ThreatHunting/readme.md)
+- [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md)
+- [Deprecated Risk List Playbooks](Deprecated/readme.md)
+
+
+# Troubleshooting
 
 ## Query Risk Lists
 After successfully running and importing one or more Risk Lists it is possible to query the imported data in your Log Analytics Workspace. 
@@ -171,20 +191,11 @@ ThreatIntelligenceIndicator
 | take 10
 ```
 
-![](Images/2023-04-18-16-39-00.png)
+### Report isses/errors
 
-# Playbooks
-All playbooks are not included in the Content Hub Solution. It is stated in the description of each playbook as 'Included in Solution: Yes/No'. Some of the playbooks are considered previews or examples, but they might be added in future versions.   
+When reporting issues or errors to Recorded Future on logic apps. Please include logic app version identifier that can be found in the version section in the azure portal.
 
-Playbooks in subfolders:
-- [Enrichment Playbooks](Enrichment/readme.md)
-- [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md)
-- [Alert Playbooks](Alerts/readme.md)
-- [Sandbox Playbooks](./Sandboxing/readme.md)
-- [Threat Hunt Playbooks](./ThreatHunting/readme.md)
-- [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md)
-- [Deprecated Risk List Playbooks](Deprecated/readme.md)
-
+![alt text](Images/LogicAppVersion.png)
 
 # Known Issues 
 ## Version 3.0

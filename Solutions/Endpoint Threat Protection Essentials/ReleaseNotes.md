@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                           |
 |-------------|--------------------------------|------------------------------------------------------------------------------|
-| 3.0.4       |     07-06-2024                 | Added entityMappings in **Analytical Rules **                                |
+| 3.0.4       |     10-06-2024                 | Added entityMappings and added missing AMA DC reference in **Analytical Rules** and **Hunting Queries**  |
 | 3.0.3       |     11-03-2024                 | Added few **Hunting Queries** to detect Endpoint Threats                     |
 | 3.0.2       |     21-02-2024                 | Tagged for dependent solutions for deployment                                |
 |             |                                | Added New rules to detect Suspicious PowerShell Commandlet Exceutions        | 
