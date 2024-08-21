@@ -391,7 +391,30 @@ class UmbrellaClient:
                     try:
                         event['Destination List IDs'] = row[31]
                     except IndexError:
-                        pass                                         
+                        pass
+                    # Version 7 — The same as version 6, but adds the DLP file label field
+                    # Version8—The same as version 7, but adds the Isolate Action, File Action, and Warn Status fields to the Proxy log.
+                    # Version9—The same fields as version 8, but the v9 log format adds fields to the Proxy logs.
+                    try:
+                        event['Isolate Action'] = row[32]
+                    except IndexError:
+                        pass
+                    try:
+                        event['File Action'] = row[33]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Warn Status'] = row[34]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Forwarding Method'] = row[35]
+                    except IndexError:
+                        pass
+                    try:
+                        event['Producer'] = row[36]
+                    except IndexError:
+                        pass                        
 
                     int_fields = [
                         'requestSize',
