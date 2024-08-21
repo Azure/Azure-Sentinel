@@ -1,7 +1,7 @@
 Parser:
   Title: Network Session ASIM parser for Barracuda WAF
-  Version: '0.1'
-  LastUpdated: Jun 13 2023
+  Version: '0.2.1'
+  LastUpdated: Jul 17, 2024
 Product:
   Name: Barracuda WAF
 Normalization:
@@ -11,11 +11,11 @@ References:
 - Title: ASIM Network Session Schema
   Link: https://aka.ms/ASimNetworkSessionDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Logs type Description in Barracuda WAF
   Link: https://campus.barracuda.com/product/webapplicationfirewall/doc/78810008/types-of-logs/
 Description: |
-  This ASIM parser supports normalizing Barracuda WAF logs to the ASIM Web Session normalized schema.
+  This ASIM parser supports normalizing Barracuda WAF logs ingested in 'barracuda_CL' tablet o the ASIM Web Session normalized schema.
 ParserName: ASimNetworkSessionBarracudaWAF
 EquivalentBuiltInParser: _ASim_NetworkSession_BarracudaWAF
 ParserParams:
@@ -107,6 +107,7 @@ ParserQuery: |
           DvcIpAddr = HostIP_s,
           DstPortNumber = toint(DestinationPort_d),
           SrcPortNumber = toint(SourcePort_d),
+          EventUid = _ItemId,
           EventProductVersion = DeviceVersion_s
       | extend
           IpAddr = SrcIpAddr,
@@ -126,79 +127,6 @@ ParserQuery: |
           ManagementGroupName,
           TenantId,
           SourceSystem;
-  let BarracudaCEF = 
-      CommonSecurityLog
-      | where not(disabled) and DeviceVendor startswith "Barracuda" and (DeviceProduct == "WAF" or DeviceProduct == "WAAS")
-      | where DeviceEventCategory == "NF"
-      | extend
-          severity = toint(LogSeverity)
-      | lookup EventResultLookup on $left.DeviceAction == $right.ActionID_s
-      | lookup SeverityLookup on severity
-      | lookup ProtocolLookup on $left.Protocol == $right.Protocol_s
-      | extend
-          EventCount = toint(1),
-          EventProduct = "WAF",
-          EventSchema = "NetworkSession",
-          EventSchemaVersion = "0.2.6",
-          EventType = "NetworkSession",
-          EventVendor = "Barracuda"
-      | extend
-          Dvc =  DeviceName,
-          EventStartTime = iff(isnotempty(FlexNumber2), unixtime_milliseconds_todatetime(tolong(ReceiptTime)-tolong(FlexNumber2)), unixtime_milliseconds_todatetime(tolong(ReceiptTime))),
-          DstIpAddr = DestinationIP,
-          SrcIpAddr = SourceIP,
-          DvcHostname = DeviceName,
-          DvcIpAddr = DestinationIP,
-          DstPortNumber = toint(DestinationPort),
-          SrcPortNumber = toint(SourcePort),
-          EventProductVersion = DeviceVersion
-      | extend
-          IpAddr = SrcIpAddr,
-          Src = SrcIpAddr,
-          Dst = DstIpAddr,
-          EventEndTime = EventStartTime
-      | project-away
-          ThreatConfidence,
-          CommunicationDirection,
-          AdditionalExtensions,
-          Device*,
-          Source*,
-          Destination*,
-          Activity,
-          LogSeverity,
-          ApplicationProtocol,
-          ProcessID,
-          ExtID,
-          Protocol,
-          Reason,
-          ReceiptTime,
-          SimplifiedDeviceAction,
-          OriginalLogSeverity,
-          ProcessName,
-          EndTime,
-          ExternalID,
-          File*,
-          ReceivedBytes,
-          Message,
-          Old*,
-          EventOutcome,
-          Request*,
-          StartTime,
-          Field*,
-          Flex*,
-          Remote*,
-          Malicious*,
-          severity,
-          ThreatSeverity,
-          IndicatorThreatType,
-          ThreatDescription,
-          _ResourceId,
-          SentBytes,
-          ReportReferenceLink,
-          Computer,
-          TenantId;
-  union isfuzzy = true 
-      BarracudaCustom,
-      BarracudaCEF
-  };
+  BarracudaCustom
+   };
   parser(disabled=disabled)
