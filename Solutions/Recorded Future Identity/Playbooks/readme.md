@@ -9,7 +9,7 @@ Recorded Future automates the collection, analysis, and production of identity i
 
 You can incorporate identity intelligence into automated workflows that regularly monitor for compromised credentials and take immediate action using Recorded Future Identity data and Microsoft Entra ID.
 
-There are many ways organizations can utilize Recorded Future Identity Intelligence. The Azure Logic Apps in this Solution provided as exampes and are a quick introduction to some of those ways. 
+There are many ways organizations can utilize Recorded Future Identity Intelligence. The Azure Logic Apps in this Solution provided as examples and are a quick introduction to some of those ways. 
 
 These playbooks include several actions that can be coordinated, or used separately. 
 
@@ -29,7 +29,7 @@ Organizations seeking to proactively protect their own employees from account ta
 - on a periodic basis, query Recorded Future identity intelligence (via "Credential Search" Action) for any "new" employee credentials that may have been exposed.
 - when suspicious employee behavior is noticed (e.g. logins from uncommon geographic locations, or large downloads of information during non business hours), query Recorded Future identity intelligence (via "Credential Lookup" Action) to check if that user has had credentials exposed in prior dumps or malware logs.
 
-Possible remediations include password resets, user privilege revocation, and user quarantining.  Advanced teams may also choose to flag users suspected of takeover by a threat actor to track usage through their system.
+Possible remediation include password resets, user privilege revocation, and user quarantining.  Advanced teams may also choose to flag users suspected of takeover by a threat actor to track usage through their system.
 
  
 2. **Customer ("External" use case)**
@@ -39,7 +39,7 @@ Organizations that provide their customers with online services via a web-based 
 - during account creation, use the Identity Intelligence module (via "Credential Lookup" Action) to check whether the username and/or username/password pair are previously compromised.
 - during account login, check the Identity Intelligence module (via "Credential Lookup" Action) for whether the username/password pair is compromised.
 
-Possible remediations include requiring a password reset, or temporarily locking down the account and requesting the user contact customer service for a user re-authentication process.
+Possible remediation include requiring a password reset, or temporarily locking down the account and requesting the user contact customer service for a user re-authentication process.
 
 ## Table of Contents
 
@@ -70,14 +70,14 @@ Possible remediations include requiring a password reset, or temporarily locking
 This Solution consists of 6 Playbooks (Logic Apps).
 
 "Connector" playbooks:
-Custom connector  are used to communicate and authorize towards Recorded Future backend API. 
+Custom connector are used to communicate and authorize towards Recorded Future backend API. 
 
 | Playbook Name| Description  |
 |-|-|
 | **RFI-CustomConnector** | RFI-CustomConnector connection and autorization to Recorded Future Backend API.|
 
 "Base" playbooks:
-Theese are sub playbooks that are called by the base playbooks. 
+Sub playbooks that are called by the search playbooks. 
 
 | Playbook Name | Description |
 |-|-|
@@ -86,6 +86,7 @@ Theese are sub playbooks that are called by the base playbooks.
 | **RFI-lookup-and-save-user** | Lookup additional information on a compromised user and save results to Log Analytics. |
 
 "Search" playbooks:
+These are the main playbooks, select one and run on a schedule.  
 
 | Playbook Name | Description |
 |-|-|
@@ -96,11 +97,11 @@ Theese are sub playbooks that are called by the base playbooks.
 
 ## Deployment
 
-We recomend deploying logic apps from this readme, first the connector and then the base playbooks. Select one of the searchplaybooks dependant on your usecase workforce or external. 
+We recommend deploying logic apps from this README, first the connector and then the base playbooks. Select one of the search playbooks dependent on your use case workforce or external.  
 
 ### Prerequisites
 
-- An Microsoft EntraID Tenant and subscription. If you don't have a subscription, [sign up for a free Azure account](https://azure.microsoft.com/free/?WT.mc_id=A261C142F).
+- A Microsoft EntraID Tenant and subscription. If you don't have a subscription, [sign up for a free Azure account](https://azure.microsoft.com/free/?WT.mc_id=A261C142F).
 - Azure subscription Owner or Contributor permissions so you can install the Logic Apps. [Azure roles - Classic subscription administrator roles, Azure roles, and Entra ID roles](https://docs.microsoft.com/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles).
 - A [Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/essentials/resource-logs#send-to-log-analytics-workspace). If you don't have a workspace, learn [how to create a Log Analytics workspace](https://docs.microsoft.com/azure/azure-monitor/logs/quick-create-workspace). Note that the custom logs specified as parameters in these playbooks will be created automatically if they don’t already exist.
 - In Consumption logic apps, before you can create or manage logic apps and their connections, you need specific permissions. For more information about these permissions, review [Secure operations - Secure access and data in Azure Logic Apps](https://docs.microsoft.com/azure/logic-apps/logic-apps-securing-a-logic-app#secure-operations).
@@ -117,13 +118,13 @@ We recomend deploying logic apps from this readme, first the connector and then 
 <a id="connector_playbooks"></a>
 ### "Connector" playbooks
 
-"Connector" playbooks are used by other logic apps in this solution to comunicate with Recorded Future backend API. 
+"Connector" playbooks are used by other logic apps in this solution to communicate with Recorded Future backend API. 
 
 <a id="RFI-CustomConnector"></a>
 
 ## RFI-CustomConnector
 
-This connector is used by other logic apps in this solution to comunicate with Recorded Future backend API. 
+This connector is used by other logic apps in this solution to communicate with Recorded Future backend API. 
 
 ### Depolyment
 
@@ -145,12 +146,12 @@ Parameters for deployment:
 <a id="base_playbooks"></a>
 ## "Base" playbooks
 
-The "Base" playbooks is called from the searchplaybooks and used to take action to leaked credentials or mitigate the risks. 
+The "Base" playbooks is called from the search playbooks and used to take action to leaked credentials or mitigate the risks. 
 
 <a id="add_risky_user_to_entraid_security_group"></a>
 ## RFI-add-EntraID-security-group-user
 
-This playbook adds a compromised user to an Microsoft EntraID group. Triage and remediation should be handled in follow up playbooks or actions. 
+This playbook adds a compromised user to an Microsoft EntraID group. Triage and remediation should be handled in sub playbooks. 
 By applying security policies to the Microsoft EntraID group and adding leaked users to that group - you can react to a leak and mitigate the risks.
 
 **BEWARE: if you apply a Security Group policy that prohibits any compromised member from logging in, and you yourself get identified as having a compromised account, then you could potentially lock yourself out!**
@@ -234,7 +235,7 @@ Parameters for deployment:
 
 ## RFI-lookup-and-save-user
 
-This playbook gets compromise identity details from Recorded Future Identity Intelligence and saves the data in Awuse Log Analytics Workspace for further review and analysis.
+This playbook gets compromise identity details from Recorded Future Identity Intelligence and saves the data in Azure Log Analytics Workspace for further review and analysis.
 
 Lookup returns more data than initial Search, so you will get the leaks' history for the email and other info.
 
@@ -379,7 +380,7 @@ After deployment - initial set up for each deployed Logic App (playbook) include
 
 ### How to find the playbooks (Logic Apps) after deployment
 
-Find your Playbooks (Logic Apps) after deployment - you can search for `Logic Apps` from the Azure Portal page and find deployed Logic Apps there.
+To find installed Playbooks (Logic Apps) after deployment - you can search for `Logic Apps` from the Azure Portal page and find deployed Logic Apps there.
 
 <a id="configuration_connections"></a>
 ### Configuring Logic App Connections
