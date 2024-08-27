@@ -487,7 +487,9 @@ class UmbrellaClient:
                         'destinationPort': row[10],
                         'dataCenter': row[11],
                         'ruleId': row[12],
-                        'verdict': row[13]
+                        'verdict': row[13],
+                        'fqdns': row[14],
+                        'destinationlistIDs': row[15]
                     }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
@@ -513,7 +515,9 @@ class UmbrellaClient:
                         'destinationPort': row[10],
                         'dataCenter': row[11],
                         'ruleId': row[12],
-                        'verdict': row[13]
+                        'verdict': row[13],
+                        'fqdns': row[14],
+                        'destinationlistIDs': row[15]
                     }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
