@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.2.9       | 27-08-2024                     | Removed preview tag from **Data Connector**	    																																		|
 | 3.2.8       | 26-07-2024                     | Updated **Analytical Rule** for missing TTP	                  						                        |
 | 3.2.7       | 12-06-2024                     | Fixed the bugs from **Analytic Rules**        																																		|
 | 3.2.6       | 06-06-2024                     | Successful logon from IP and failure from a different IP fixes       																												        |
