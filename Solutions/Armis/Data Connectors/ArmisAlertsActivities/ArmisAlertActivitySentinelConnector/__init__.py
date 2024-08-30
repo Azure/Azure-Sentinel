@@ -367,7 +367,7 @@ def main(mytimer: func.TimerRequest) -> None:
     try:
         armis_obj.check_data_exists_or_not_alert()
     except ArmisDataNotFoundException:
-        pass
+        logging.warning(consts.LOG_FORMAT.format(__method_name, "Alert Data not found hence, stopping the execution."))
 
     utc_timestamp_final = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
     logging.info(consts.LOG_FORMAT.format(__method_name, "execution completed at {}.".format(utc_timestamp_final)))
