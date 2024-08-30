@@ -35,7 +35,7 @@ if (not match):
 key_vault_name = os.environ.get("KeyVaultName")
 uri = None
 url = None
-qsdk_token = None
+qsdk_token = qsdk_token or ""
 headers = {
     "authtoken": "QSDK " + qsdk_token,
     "Content-Type": "application/json",
