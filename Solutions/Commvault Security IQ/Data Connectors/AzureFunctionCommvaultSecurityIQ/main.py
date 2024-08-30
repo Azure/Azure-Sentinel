@@ -35,7 +35,7 @@ if (not match):
 key_vault_name = os.environ.get("KeyVaultName")
 uri = None
 url = None
-qsdk_token = os.environ.get("QSDKToken")
+qsdk_token = None
 headers = {
     "authtoken": "QSDK " + qsdk_token,
     "Content-Type": "application/json",
@@ -119,6 +119,12 @@ def myTimer(myTimer: func.TimerRequest) -> None:
         url = "https://" + uri + "/commandcenter/api"
         secret_name = "access-token"
         qsdk_token = client.get_secret(secret_name).value
+        if not qsdk_token:
+            raise ValueError("QSDK token is not set.")
+        qsdk_token = ""
+
+        
+          
         
         ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=false&showAnomalous=true"
         f_url = url + ustring
