@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.3.0       | 26-08-2024                     | Add Compare in Exchange Security Review      |
+| 3.3.0       | 26-08-2024                     | Add Compare in Exchange Security Review. Create DataConnectors for Azure Monitor Agent. Correct bugs      |
 | 3.2.0       | 09-04-2024                     | Explode "ExchangeAdminAuditLogEvents" dataconnector to multiple simplier dataconnectors      |
 | 3.1.5       | 26-04-2024                     | Repackaged for fix on parser in maintemplate to have old parsername and parentid                    |
 | 3.1.4       | 18-04-2024                     | Repackaged for parser issue while redeployment      |
