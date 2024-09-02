@@ -1,6 +1,7 @@
 
 <img src="./Playbooks/images/logo.png" alt="RecordedFuture logo" width="50%"/>
 
+Link to [Recorded Future main readme](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Recorded%20Future/readme.md)
 # Recorded Future Identity Solution 
 
 Recorded Future Identity Intelligence enables security and IT teams to detect identity compromises. 

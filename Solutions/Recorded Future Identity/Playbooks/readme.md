@@ -1,4 +1,7 @@
 # Recorded Future Identity Installation Guide
+
+Link to [Recorded Future Identity main readme](../readme.md)
+
 ## Table of Contents
 
 1. [Overview](#overview)
