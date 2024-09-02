@@ -7,8 +7,6 @@ import re
 import time
 import azure.functions as func
 from dateutil.parser import parse as parse_date
-from google.api_core.exceptions import TooManyRequests
-from google.api_core.retry import Retry
 
 from .sentinel_connector import AzureSentinelConnector
 from .state_manager import StateManager
@@ -66,35 +64,19 @@ def main(mytimer: func.TimerRequest):
 
     last_ts = None
     with sentinel:
-        # Retry logic with exponential backoff for handling 429 errors
-        retry = Retry(
-            predicate=lambda exc: isinstance(exc, TooManyRequests),
-            initial=1.0,
-            maximum=30.0,
-            multiplier=2.0,
-        )
-        try:
-            entries = gcp_cli.list_entries(
-                resource_names=get_resource_names(),
-                filter_=filt,
-                order_by='timestamp',
-                page_size=1000,
-                retry=retry  # Apply retry settings
-            )
-            for entry in entries:
-                event = parse_entry(entry)
-                sentinel.send(event)
-                last_ts = event['timestamp']
-                if sentinel.is_empty():
-                    logging.info('Saving last timestamp - {}'.format(last_ts))
-                    state_manager.post(last_ts)
-                    if check_if_script_runs_too_long(start_ts):
-                        logging.info(
-                            'Script is running too long. Saving progress and exit.')
-                        break
-        except TooManyRequests as e:
-            logging.error(
-                f"Encountered a 429 error: {str(e)}. Retrying with exponential backoff...")
+        entries = list_entries_with_backoff(gcp_cli, get_recource_names(), filt, 'timestamp', 1000)
+        for entry in entries:
+            event = parse_entry(entry)
+            sentinel.send(event)
+
+            last_ts = event['timestamp']
+            if sentinel.is_empty():
+                logging.info('Saving last timestamp - {}'.format(last_ts))
+                state_manager.post(last_ts)
+                if check_if_script_runs_too_long(start_ts):
+                    logging.info(
+                        'Script is running too long. Saving progress and exit.')
+                    break
 
     if last_ts:
         last_ts = event['timestamp']
@@ -110,6 +92,28 @@ def create_credentials_file():
         content = CREDENTIALS_FILE_CONTENT.strip().replace('\n', '\\n')
         f.write(content)
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = CREDS_FILE_PATH
+    
+    
+def list_entries_with_backoff(client, resource_names, filter_, order_by, page_size):
+    max_retries = 5
+    retry_delay = 1  # initial delay in seconds
+    max_delay = 32  # maximum delay in seconds
+
+    for attempt in range(max_retries):
+        try:
+            return client.list_entries(resource_names=resource_names, filter_=filter_, order_by=order_by, page_size=page_size)
+        except Exception as e:
+            if e.code() == 429:  # Quota exceeded
+                logging.warning(f"Quota exceeded. Retrying in {retry_delay} seconds.")
+                time.sleep(retry_delay + random.random())  # add some jitter to the delay
+                retry_delay *= 2  # exponential backoff
+                if retry_delay > max_delay:
+                    retry_delay = max_delay
+            else:
+                raise
+
+    logging.error(f"Failed to list entries after {max_retries} retries.")
+    return []
 
 
 def remove_credentials_file():
@@ -117,7 +121,7 @@ def remove_credentials_file():
         os.remove(CREDS_FILE_PATH)
 
 
-def get_resource_names():
+def get_recource_names():
     return [x for x in RESOURCE_NAMES.split(',') if x]
 
 
