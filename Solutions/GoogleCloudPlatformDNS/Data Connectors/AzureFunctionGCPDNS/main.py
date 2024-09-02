@@ -7,6 +7,8 @@ import re
 import time
 import azure.functions as func
 from dateutil.parser import parse as parse_date
+from google.api_core.exceptions import TooManyRequests
+from google.api_core.retry import Retry
 
 from .sentinel_connector import AzureSentinelConnector
 from .state_manager import StateManager
@@ -64,17 +66,35 @@ def main(mytimer: func.TimerRequest):
 
     last_ts = None
     with sentinel:
-        for entry in gcp_cli.list_entries(resource_names=get_recource_names(), filter_=filt, order_by='timestamp', page_size=1000):
-            event = parse_entry(entry)
-            sentinel.send(event)
-
-            last_ts = event['timestamp']
-            if sentinel.is_empty():
-                logging.info('Saving last timestamp - {}'.format(last_ts))
-                state_manager.post(last_ts)
-                if check_if_script_runs_too_long(start_ts):
-                    logging.info('Script is running too long. Saving progress and exit.')
-                    break
+        # Retry logic with exponential backoff for handling 429 errors
+        retry = Retry(
+            predicate=lambda exc: isinstance(exc, TooManyRequests),
+            initial=1.0,
+            maximum=30.0,
+            multiplier=2.0,
+        )
+        try:
+            entries = gcp_cli.list_entries(
+                resource_names=get_resource_names(),
+                filter_=filt,
+                order_by='timestamp',
+                page_size=1000,
+                retry=retry  # Apply retry settings
+            )
+            for entry in entries:
+                event = parse_entry(entry)
+                sentinel.send(event)
+                last_ts = event['timestamp']
+                if sentinel.is_empty():
+                    logging.info('Saving last timestamp - {}'.format(last_ts))
+                    state_manager.post(last_ts)
+                    if check_if_script_runs_too_long(start_ts):
+                        logging.info(
+                            'Script is running too long. Saving progress and exit.')
+                        break
+        except TooManyRequests as e:
+            logging.error(
+                f"Encountered a 429 error: {str(e)}. Retrying with exponential backoff...")
 
     if last_ts:
         last_ts = event['timestamp']
@@ -97,7 +117,7 @@ def remove_credentials_file():
         os.remove(CREDS_FILE_PATH)
 
 
-def get_recource_names():
+def get_resource_names():
     return [x for x in RESOURCE_NAMES.split(',') if x]
 
 
