@@ -46,6 +46,8 @@ class BG_CASB():
         self.state = StateManager(connection_string=connection_string,
                                   share_name='funcstatemarkershare', file_path=filepath)
         self.from_time = self.generate_date()
+        logging.info(
+            "from time: {}".format(self.from_time))
 
     def get_query(self, url, token):
         retries = Retry(
@@ -58,6 +60,8 @@ class BG_CASB():
         session = requests.Session()
         session.mount('https://', adapter)
         if token is None:
+            logging.info(
+                "Token in if: {}".format(token))
             self.params = {
                 "startdate": self.from_time,
                 "cv": "1.0.1",
@@ -66,7 +70,7 @@ class BG_CASB():
             }
         else:
             logging.info(
-                "Token: {}".format(token))
+                "Token in else: {}".format(token))
             self.params = {
                 "nextpagetoken": token,
                 "cv": "1.0.1",
@@ -129,6 +133,8 @@ class BG_CASB():
                 self.event_type))
             past_time = (current_time - datetime.timedelta(hours=24)
                          ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            logging.info("Past time is.".format(
+                past_time))
         return (past_time)
 
 
