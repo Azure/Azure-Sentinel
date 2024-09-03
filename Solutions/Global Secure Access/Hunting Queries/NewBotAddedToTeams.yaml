@@ -1,0 +1,39 @@
+id: bf76e508-9282-4cf1-9cc1-5c20c3dea2ee
+name: Previously Unseen Bot or Application Added to Teams
+description: |
+  This hunting query helps identify new, and potentially unapproved applications or bots being added to Teams.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1176
+  - T1119
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let historical_bots = 
+    EnrichedMicrosoft365AuditLogs
+    | where TimeGenerated between (lookback .. starttime)
+    | where Workload == "MicrosoftTeams"
+    | extend AddonName = tostring(parse_json(tostring(AdditionalProperties)).AddonName)
+    | where isnotempty(AddonName)
+    | distinct AddonName;
+  EnrichedMicrosoft365AuditLogs
+  | where TimeGenerated between (starttime .. endtime)
+  | where Workload == "MicrosoftTeams"
+  | extend AddonName = tostring(parse_json(tostring(AdditionalProperties)).AddonName)
+  | where AddonName !in (historical_bots)
+  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.1
