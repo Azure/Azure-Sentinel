@@ -64,7 +64,7 @@ class BG_CASB():
             }
         else:
             self.params = {
-                "nextpagetoken": token,
+                "nextpagetoken": nextpagetoken,
                 "cv": "1.0.1",
                 "type": self.event_type,
                 "responseformat": "json"
