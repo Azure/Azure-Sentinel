@@ -1,6 +1,6 @@
 import requests
 
-api_url = "https://portal.eu.bitglass.net"
+bitglass_serviceURL = "https://portal.eu.bitglass.net"
 event_type = "swgweb"
 url = f'{bitglass_serviceURL}/api/bitglassapi/logs/v1/'
 bearer_token = "vm0QtGXJITtHBo4NcZZa8j8vJUiRf2"
@@ -21,6 +21,7 @@ if bearer_token is None:
             }
 else:
             params = {
+                "nextpagetoken": nextpagetoken,
                 "cv": "1.0.1",
                 "type": event_type,
                 "responseformat": "json"
