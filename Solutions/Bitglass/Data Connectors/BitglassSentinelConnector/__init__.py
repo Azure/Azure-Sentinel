@@ -68,6 +68,7 @@ class BG_CASB():
                 "type": self.event_type,
                 "responseformat": "json"
             }
+            logging.info("startdate is".format(self.params))
         else:
             logging.info(
                 "Token in else: {}".format(token))
@@ -82,6 +83,8 @@ class BG_CASB():
                             headers=self.headers,
                             params=self.params
                             )
+            logging.info("status code is: {}".format(r.status_code))
+            logging.info("reponse is: {}".format(r))
             if r.status_code == 200:
                 return r.json()
             elif r.status_code == 401:

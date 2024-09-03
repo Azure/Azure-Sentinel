@@ -4,6 +4,8 @@ bitglass_serviceURL = "https://portal.eu.bitglass.net"
 event_type = "swgweb"
 url = f'{bitglass_serviceURL}/api/bitglassapi/logs/v1/'
 bearer_token = "vm0QtGXJITtHBo4NcZZa8j8vJUiRf2"
+token = None
+from_time = "2024-09-02T09:50:14Z"
 headers = {
        "Authorization": f"Bearer {bearer_token}",
        "Content-Type": "application/json"
@@ -12,13 +14,23 @@ headers = {
 adapter = requests.adapters.HTTPAdapter
 session = requests.Session()
 session.mount('https://', adapter)
-if bearer_token is None:
+if token is None:
             params = {
                 "startdate": from_time,
                 "cv": "1.0.1",
                 "type": event_type,
                 "responseformat": "json"
             }
+
+            r = requests.get(url=url,
+                             headers=headers,
+                             params=params
+                             )
+            if r.status_code == 200:
+                print(r.json())
+            elif r.status_code == 401:
+                print("The authentication credentials are incorrect or missing. Error code: {}".format(
+                    r.status_code))
 else:
             params = {
                 "nextpagetoken": nextpagetoken,
