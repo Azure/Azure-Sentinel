@@ -21,7 +21,7 @@ This Playbook will extract the IP address from entities associated with an incid
    * KeyVaultName: Name of the Key Vault where secrets are stored.
    * TenantId: Tenant ID where the Key Vault is located.
    * BaseURL: Enter the base URL of your Vectra account.
-   * GenerateAccessTokenPlaybookName: Playbook name which is deployed as part of prerequisites.
+   * GenerateAccessCredPlaybookName: Playbook name which is deployed as part of prerequisites.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraOperateOnEntitySourceIP%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraOperateOnEntitySourceIP%2Fazuredeploy.json)
 
