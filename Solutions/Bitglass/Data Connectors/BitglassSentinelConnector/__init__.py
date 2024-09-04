@@ -83,6 +83,9 @@ class BG_CASB():
                             headers=self.headers,
                             params=self.params
                             )
+            logging.info(
+                "Token in if: {}".format(bitglass_token))
+            logging.info("status code is: {}".format(token))
             logging.info("status code is: {}".format(r.status_code))
             logging.info("reponse is: {}".format(r))
             if r.status_code == 200:
