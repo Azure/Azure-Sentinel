@@ -1,0 +1,1994 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Vectra Add Tag To Entity Selected Detections",
+        "description": "This playbook enables users to add tags to selected detections associated with an entity. Users can provide inputs of detections selection and tags value via Microsoft Teams.",
+        "prerequisites": [
+            "1. Obtain keyvault name and tenantId where client credentials are stored using which access token will be generated.",
+            "a. Create a Key Vault with unique name",
+            "b. Go to Keyvaults → <your keyvault> → Overview and copy DirectoryID which will be used as tenantId",
+            "NOTE: Make sure the Permission model in the Access Configuration of Keyvault is selected to the Vault access policy. If not then change it to 'Vault access policy'",
+            "2. Obtain Teams GroupId and ChannelId",
+            "a. Create a Team with public channel.",
+            "b. Click on three dots (...) present on right side of the your newly created teams channel and Get link to the channel.",
+            "c. copy the text from the link between /channel and /, decode it using online url decoder and copy it to use as channelId.",
+            "d. copy the text of groupId parameter from link to use as groupId.",
+            "3. Make sure that VectraGenerateAccessToken playbook is deployed before deploying VectraAddTagToEntitySelectedDetections playbook."
+        ],
+        "postDeployment": [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Go to your logic app → API connections → Select keyvault connection resource",
+            "2. Go to General → edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections",
+            "**b. Add Access policy in Keyvault**",
+            "Add access policy for the playbook's managed identity and authorized user to read, and write secrets of key vault.",
+            "1. Go to logic app → <your logic app> → identity → System assigned Managed identity and copy Object (principal) ID.",
+            "2. Go to keyvaults → <your keyvault> → Access policies → create.",
+            "3. Select all keys & secrets permissions. Click next.",
+            "4. In the principal section, search by copied object ID. Click next.",
+            "5. Click review + create.",
+            "6. Repeat the above step 2 to 5 to add access policy for the user account using which connection is authorized.",
+            "**c. Configurations in Microsoft Sentinel**",
+            "1. In Microsoft sentinel, analytical rule should be configured to trigger an incident based on data ingested from Vectra. Incident should have Entity mapping.",
+            "2. To manually run the playbook on a particular incident follow the below steps:",
+            "a. Go to Microsoft Sentinel → <your workspace> → Incidents",
+            "b. Select an incident.",
+            "c. In the right pane, click on Actions, and from the dropdown select the 'Run Playbook' option.",
+            "d. click on the Run button beside this playbook."
+        ],
+        "entities": ["Account", "Host"],
+        "tags": ["Vectra", "Tag", "Entity", "Selected", "Detections"],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Vectra"
+        },
+        "lastUpdateTime": "2024-09-02T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "VectraAddTagToEntitySelectedDetections",
+            "minLength": 1,
+            "type": "string",
+            "metadata": {
+                "description": "Please do not keep 'PlaybookName' parameter empty, else you will receive validation failure"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "TenantId": {
+            "type": "string",
+            "minLength": 1
+        },
+        "BaseURL": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Enter baseurl for your vectra account.(e.g. https://host.portal.vectra.ai)"
+            }
+        },
+        "TeamsGroupId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Group where the adaptive card will be posted"
+            }
+        },
+        "TeamsChannelId": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter Id of the Teams Channel where the adaptive card will be posted"
+            }
+        },
+        "GenerateAccessCredPlaybookName": {
+            "type": "string",
+            "metadata": {
+                "description": "Playbook name that you have given while deployment of playbook VectraGenerateAccessToken(e.g.VectraGenerateAccessToken)"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', trim(parameters('PlaybookName')))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', trim(parameters('PlaybookName')))]",
+        "TeamsConnectionName": "[concat('Teams-', trim(parameters('PlaybookName')))]"
+    },
+    "resources": [
+        {
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_To_Terminate_Execution_If_No_Alerts_Found": {
+                            "actions": {
+                                "Terminate_Due_To_No_Alerts_Found": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "No Alerts found associated with this Incident."
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Tags_Which_Will_Be_Updated_To_Detections": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@length(triggerBody()?['object']?['properties']?['Alerts'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_Error_Occurred_While_Adding_Tags_To_Detections_": {
+                            "actions": {
+                                "Terminate_Due_To_Error_While_Adding_Tag_To_Detection": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "message": "Error occurred while adding tag to any Detection."
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Detections": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('tag_add_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_Error_Occurred_While_Fetching_Detections_Data": {
+                            "actions": {
+                                "Terminate_Due_To_Failure_While_Fetching_Detections_Data": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "code": "@{outputs('HTTP_Request_To_Fetch_Detections_Data_For_Associated_Entity')['statusCode']}",
+                                            "message": "@{body('HTTP_Request_To_Fetch_Detections_Data_For_Associated_Entity')}"
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Terminate_If_Error_Occurred_While_Generating_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('fetch_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_Error_Occurred_While_Generating_Token": {
+                            "actions": {
+                                "Terminate_Due_To_Failure_While_Generating_Access_Token": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "code": "400",
+                                            "message": "Error occurred while generating access token."
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Until_Retry_Count_is_Zero_For_Detections_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('access_token_generate_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_Error_While_Generating_Token_While_Adding_Tag": {
+                            "actions": {
+                                "Terminate_Due_To_Failure_While_Generating_Token_While_Adding_Tag_To_Detections": {
+                                    "runAfter": {},
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runError": {
+                                            "message": "Error occurred while generating access token while adding tag to detections."
+                                        },
+                                        "runStatus": "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Terminate_If_Error_Occurred_While_Adding_Tags_To_Detections_": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@variables('access_token_generate_error')",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_To_Terminate_If_No_Detections_Found_For_Entity": {
+                            "actions": {
+                                "Post_Message_in_Chat_For_No_Detections_Found": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "messageBody": "<p><strong>No Detections Found</strong> for entity ID: @{variables('entity_id')} and type: @{variables('entity_type')}.</p>",
+                                            "recipient": {
+                                                "channelId": "[trim(parameters('TeamsChannelId'))]",
+                                                "groupId": "[trim(parameters('TeamsGroupId'))]"
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/beta/teams/conversation/message/poster/Flow bot/location/@{encodeURIComponent('Channel')}"
+                                    }
+                                },
+                                "Terminate_Due_To_No_Detections_Found_For_Entity": {
+                                    "runAfter": {
+                                        "Post_Message_in_Chat_For_No_Detections_Found": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_To_Terminate_If_Error_Occurred_While_Fetching_Detections_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@empty(variables('detections'))",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "For_Each_Detections": {
+                            "foreach": "@variables('detections')",
+                            "actions": {
+                                "Condition_To_Skip_Tag_Add_If_Any_Error_Occurred_While_Fetching_Tags": {
+                                    "actions": {
+                                        "Set_Tag_Add_Error_True_For_Error_While_Fetching_Tags": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "tag_add_error",
+                                                "value": "@true"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Until_Retry_Count_is_Zero_For_Fetching_Tags_For_Each_Detection": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Set_Retry_Count_For_Each_Detection": {
+                                                "runAfter": {
+                                                    "Set_Tags_Which_Will_Be_Updated_To_Detection": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "retry_count",
+                                                    "value": 2
+                                                }
+                                            },
+                                            "Set_Tags_Which_Will_Be_Updated_To_Detection": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "new_tags",
+                                                    "value": "@union(variables('present_tags'), variables('tags'))"
+                                                }
+                                            },
+                                            "Until_Retry_Count_is_Zero_For_Each_Detection": {
+                                                "actions": {
+                                                    "Condition_To_Verify_Tags_Added_To_Detection_Successfully": {
+                                                        "actions": {
+                                                            "Set_Retry_Count_As_Zero_For_Each_Detection": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "retry_count",
+                                                                    "value": 0
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "HTTP_Request_To_Add_Tags_To_Detection": [
+                                                                "Succeeded",
+                                                                "TimedOut",
+                                                                "Failed"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Condition_To_Generate_New_Access_Token_For_Each_Detection": {
+                                                                    "actions": {
+                                                                        "Condition_To_Verify_Access_Token_Generated_Successfully_For_Each_Detection": {
+                                                                            "actions": {
+                                                                                "Decrement_Retry_Count_For_Each_Detection": {
+                                                                                    "runAfter": {},
+                                                                                    "type": "DecrementVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "retry_count",
+                                                                                        "value": 1
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "GenerateAccessTokenVectra_2": [
+                                                                                    "Succeeded",
+                                                                                    "TimedOut",
+                                                                                    "Failed"
+                                                                                ]
+                                                                            },
+                                                                            "else": {
+                                                                                "actions": {
+                                                                                    "Decrement_Retry_Count_For_Error_While_Generating_Access_Token_For_Each_Detection": {
+                                                                                        "runAfter": {
+                                                                                            "Set_Error_True_While_Generating_Access_Token_For_Each_Detection": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "DecrementVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "retry_count",
+                                                                                            "value": 1
+                                                                                        }
+                                                                                    },
+                                                                                    "Set_Error_True_While_Generating_Access_Token_For_Each_Detection": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "access_token_generate_error",
+                                                                                            "value": "@false"
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "equals": [
+                                                                                            "@body('GenerateAccessTokenVectra_2')?['status']",
+                                                                                            "success"
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "type": "If"
+                                                                        },
+                                                                        "GenerateAccessTokenVectra_2": {
+                                                                            "runAfter": {},
+                                                                            "type": "Workflow",
+                                                                            "inputs": {
+                                                                                "host": {
+                                                                                    "triggerName": "manual",
+                                                                                    "workflow": {
+                                                                                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('GenerateAccessCredPlaybookName')))]"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {},
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Set_Error_True_While_Adding_Tag_To_Detection": {
+                                                                                "runAfter": {},
+                                                                                "type": "SetVariable",
+                                                                                "inputs": {
+                                                                                    "name": "tag_add_error",
+                                                                                    "value": "@true"
+                                                                                }
+                                                                            },
+                                                                            "Set_Retry_Count_As_Zero_While_Adding_Tag_To_Detection": {
+                                                                                "runAfter": {
+                                                                                    "Set_Error_True_While_Adding_Tag_To_Detection": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "SetVariable",
+                                                                                "inputs": {
+                                                                                    "name": "retry_count",
+                                                                                    "value": 0
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@outputs('HTTP_Request_To_Add_Tags_To_Detection')['statusCode']",
+                                                                                    401
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@outputs('HTTP_Request_To_Add_Tags_To_Detection')['statusCode']",
+                                                                        200
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "Get_Access_Token_For_Each_Detection": {
+                                                        "runAfter": {},
+                                                        "type": "ApiConnection",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "connection": {
+                                                                    "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method": "get",
+                                                            "path": "/secrets/@{encodeURIComponent('Vectra-Access-Token')}/value"
+                                                        },
+                                                        "runtimeConfiguration": {
+                                                            "secureData": {
+                                                                "properties": [
+                                                                    "inputs",
+                                                                    "outputs"
+                                                                ]
+                                                            }
+                                                        }
+                                                    },
+                                                    "HTTP_Request_To_Add_Tags_To_Detection": {
+                                                        "runAfter": {
+                                                            "Get_Access_Token_For_Each_Detection": [
+                                                                "Succeeded",
+                                                                "Failed"
+                                                            ]
+                                                        },
+                                                        "type": "Http",
+                                                        "inputs": {
+                                                            "body": {
+                                                                "tags": "@variables('new_tags')"
+                                                            },
+                                                            "headers": {
+                                                                "Authorization": "Bearer @{body('Get_Access_Token_For_Each_Detection')?['value']}",
+                                                                "Content-Type": "application/json"
+                                                            },
+                                                            "method": "PATCH",
+                                                            "uri": "@{variables('base_url')}/api/@{variables('api_version')}/tagging/detection/@{int(items('For_Each_Detections'))}"
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Set_Retry_Count_For_Each_Detection": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "expression": "@equals(variables('retry_count'), 0)",
+                                                "limit": {
+                                                    "count": 60,
+                                                    "timeout": "PT1H"
+                                                },
+                                                "type": "Until"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "equals": [
+                                                    "@variables('fetch_error')",
+                                                    "@true"
+                                                ]
+                                            },
+                                            {
+                                                "equals": [
+                                                    "@variables('access_token_generate_error')",
+                                                    "@true"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Set_Retry_Count_For_Fetching_Tags": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "retry_count",
+                                        "value": 0
+                                    }
+                                },
+                                "Until_Retry_Count_is_Zero_For_Fetching_Tags_For_Each_Detection": {
+                                    "actions": {
+                                        "Condition_To_Verify_Tags_Fetched_Successfully": {
+                                            "actions": {
+                                                "Condition_To_Set_Available_Detection_Tags_If_Any_Available": {
+                                                    "actions": {
+                                                        "Set_Available_Tags_For_Detection": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "present_tags",
+                                                                "value": "@body('Parse_JSON_For_Detection_Tags')?['tags']"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Parse_JSON_For_Detection_Tags": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Set_Available_Tags_For_No_Tags_Found_In_Detection": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "present_tags",
+                                                                    "value": []
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@length(body('Parse_JSON_For_Detection_Tags')?['tags'])",
+                                                                        0
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Parse_JSON_For_Detection_Tags": {
+                                                    "runAfter": {},
+                                                    "type": "ParseJson",
+                                                    "inputs": {
+                                                        "content": "@body('HTTP_Request_To_Fetch_Detection_Tags')",
+                                                        "schema": {
+                                                            "properties": {
+                                                                "status": {
+                                                                    "type": "string"
+                                                                },
+                                                                "tag_id": {
+                                                                    "type": "string"
+                                                                },
+                                                                "tags": {
+                                                                    "items": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": "array"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    }
+                                                },
+                                                "Set_Retry_Count_As_Zero_For_Successfull_Data_Fetch": {
+                                                    "runAfter": {
+                                                        "Condition_To_Set_Available_Detection_Tags_If_Any_Available": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "retry_count",
+                                                        "value": 0
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_Request_To_Fetch_Detection_Tags": [
+                                                    "Succeeded",
+                                                    "TimedOut",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Condition_To_Generate_New_Access_Token_For_Fetching_Tags": {
+                                                        "actions": {
+                                                            "Condition_To_Verify_Access_Token_Generated_Successfully_For_Fetching_Tags": {
+                                                                "actions": {
+                                                                    "Decrement_Retry_Count_For_Generating_Token_Successfully": {
+                                                                        "runAfter": {},
+                                                                        "type": "DecrementVariable",
+                                                                        "inputs": {
+                                                                            "name": "retry_count",
+                                                                            "value": 1
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "runAfter": {
+                                                                    "GenerateAccessTokenVectra_3": [
+                                                                        "Succeeded",
+                                                                        "TimedOut",
+                                                                        "Failed"
+                                                                    ]
+                                                                },
+                                                                "else": {
+                                                                    "actions": {
+                                                                        "Decrement_Retry_Count_For_Error_In_Generating_Access_Token_For_Fetching_Tags": {
+                                                                            "runAfter": {
+                                                                                "Set_Error_True_While_Generating_Token_For_Fetching_Tags": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "DecrementVariable",
+                                                                            "inputs": {
+                                                                                "name": "retry_count",
+                                                                                "value": 1
+                                                                            }
+                                                                        },
+                                                                        "Set_Error_True_While_Generating_Token_For_Fetching_Tags": {
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "access_token_generate_error",
+                                                                                "value": "@true"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "expression": {
+                                                                    "and": [
+                                                                        {
+                                                                            "equals": [
+                                                                                "@body('GenerateAccessTokenVectra_3')?['status']",
+                                                                                "success"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "type": "If"
+                                                            },
+                                                            "GenerateAccessTokenVectra_3": {
+                                                                "runAfter": {},
+                                                                "type": "Workflow",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "triggerName": "manual",
+                                                                        "workflow": {
+                                                                            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('GenerateAccessCredPlaybookName')))]"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "else": {
+                                                            "actions": {
+                                                                "Set_Retry_Count_As_Zero_For_Error_While_Fetching_Tags": {
+                                                                    "runAfter": {
+                                                                        "Set_Tags_Fetch_Error_True": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "retry_count",
+                                                                        "value": 0
+                                                                    }
+                                                                },
+                                                                "Set_Tags_Fetch_Error_True": {
+                                                                    "runAfter": {},
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "fetch_error",
+                                                                        "value": "@true"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@outputs('HTTP_Request_To_Fetch_Detection_Tags')['statusCode']",
+                                                                        401
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@outputs('HTTP_Request_To_Fetch_Detection_Tags')['statusCode']",
+                                                            200
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Get_Access_Token_For_Fetching_Tags": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/secrets/@{encodeURIComponent('Vectra-Access-Token')}/value"
+                                            },
+                                            "runtimeConfiguration": {
+                                                "secureData": {
+                                                    "properties": [
+                                                        "inputs",
+                                                        "outputs"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "HTTP_Request_To_Fetch_Detection_Tags": {
+                                            "runAfter": {
+                                                "Get_Access_Token_For_Fetching_Tags": [
+                                                    "Succeeded",
+                                                    "Failed"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "headers": {
+                                                    "Authorization": "Bearer @{body('Get_Access_Token_For_Fetching_Tags')?['value']}"
+                                                },
+                                                "method": "GET",
+                                                "uri": "@{variables('base_url')}/api/@{variables('api_version')}/tagging/detection/@{items('For_Each_Detections')}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_Retry_Count_For_Fetching_Tags": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": "@equals(variables('retry_count'), 0)",
+                                    "limit": {
+                                        "timeout": "PT1H"
+                                    },
+                                    "type": "Until"
+                                }
+                            },
+                            "runAfter": {
+                                "Set_Tags": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Initialize_API_Version": {
+                            "runAfter": {
+                                "Initialize_Detection_ID_Array": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "api_version",
+                                        "type": "string",
+                                        "value": "v3.3"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Available_Tags_For_Detection": {
+                            "runAfter": {
+                                "Initialize_Page_Number": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "present_tags",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Base_URL": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "base_url",
+                                        "type": "string",
+                                        "value": "[trim(parameters('BaseURL'))]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Break_Loop": {
+                            "runAfter": {
+                                "Initialize_Retry_Count": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "break_loop",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Data_Fetch_Error_False": {
+                            "runAfter": {
+                                "Initialize_Error_False_While_Generating_Access_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "fetch_error",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Detection_ID_Array": {
+                            "runAfter": {
+                                "Initialize_Detection_Object": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "detections",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Detection_Object": {
+                            "runAfter": {
+                                "Initialize_Entity_Type": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "detection",
+                                        "type": "object"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entity_ID": {
+                            "runAfter": {
+                                "Initialize_Base_URL": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entity_id",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Entity_Type": {
+                            "runAfter": {
+                                "Initialize_Entity_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "entity_type",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_False_While_Adding_Tag_To_Entity": {
+                            "runAfter": {
+                                "Initialize_API_Version": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tag_add_error",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Error_False_While_Generating_Access_Token": {
+                            "runAfter": {
+                                "Initialize_Error_False_While_Adding_Tag_To_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "access_token_generate_error",
+                                        "type": "boolean",
+                                        "value": "@false"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Page_Number": {
+                            "runAfter": {
+                                "Initialize_Break_Loop": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "page",
+                                        "type": "integer",
+                                        "value": 1
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Retry_Count": {
+                            "runAfter": {
+                                "Initialize_Tags": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "retry_count",
+                                        "type": "integer",
+                                        "value": 2
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Tags": {
+                            "runAfter": {
+                                "Initialize_Data_Fetch_Error_False": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tags",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Tags_Which_Will_Be_Updated_To_Detections": {
+                            "runAfter": {
+                                "Initialize_Available_Tags_For_Detection": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "new_tags",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON_For_Custom_Entities_Mapping_Data": {
+                            "runAfter": {
+                                "Condition_To_Terminate_Execution_If_No_Alerts_Found": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']?['Alerts'][0]?['properties']?['additionalData']?['Custom Details']",
+                                "schema": {
+                                    "properties": {
+                                        "entity_id": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "entity_type": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "tags": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "attack_profile": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "entity_importance": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "ip_address": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "detection_id": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "mitre_techniques": {
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "required": [
+                                        "entity_id",
+                                        "entity_type"
+                                    ],
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Post_Detections_List_And_Tags_Input_And_Wait_For_Response": {
+                            "runAfter": {
+                                "Condition_To_Terminate_If_No_Detections_Found_For_Entity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "body": {
+                                        "messageBody": "{\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Submit Answer\",\n            \"style\": \"positive\",\n            \"id\": \"submit\"\n        }\n    ],\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"large\",\n            \"weight\": \"bolder\",\n            \"text\": \"Vectra Add Tag To Selected Detections\",\n            \"horizontalAlignment\": \"center\",\n            \"style\": \"heading\",\n            \"color\": \"accent\",\n            \"fontType\": \"Default\",\n            \"wrap\": true,\n            \"id\": \"heading\"\n        },\n{\n            \"type\": \"TextBlock\",\n            \"text\": \"Entity ID =  @{variables('entity_id')}\\n\\nEntity Type= @{variables('entity_type')}\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"color\": \"accent\",\n            \"separator\": true,\n            \"id\": \"x\"\n        },\n        {\n            \"id\": \"detection-choice\",\n            \"type\": \"Input.ChoiceSet\",\n            \"choices\": @{variables('detections')},\n            \"isRequired\": true,\n            \"label\": \"Please select detections to add tag values in it.\",\n            \"isMultiSelect\": true,\n            \"separator\": true,\n            \"errorMessage\": \"Please select atleast one detection.\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Please provide tag values to add into above selected detections.\",\n            \"wrap\": true,\n            \"style\": \"default\",\n            \"id\": \"info-tag\"\n        },\n        {\n            \"id\": \"tag-text\",\n            \"type\": \"Input.Text\",\n            \"placeholder\": \"Enter Tags ex: tag1,tag2,tag3,...\"\n        }\n    ],\n    \"type\": \"AdaptiveCard\",\n    \"version\": \"1.3\"\n}",
+                                        "recipient": {
+                                            "channelId": "[trim(parameters('TeamsChannelId'))]",
+                                            "groupId": "[trim(parameters('TeamsGroupId'))]"
+                                        },
+                                        "updateMessage": "Thanks for your response!"
+                                    },
+                                    "notificationUrl": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "path": "/v1.0/teams/conversation/gatherinput/poster/Flow bot/location/@{encodeURIComponent('Channel')}/$subscriptions"
+                            }
+                        },
+                        "Set_Detection_ID_Array_From_User_Input": {
+                            "runAfter": {
+                                "Post_Detections_List_And_Tags_Input_And_Wait_For_Response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "detections",
+                                "value": "@split(body('Post_Detections_List_And_Tags_Input_And_Wait_For_Response')?['data']?['detection-choice'], ',')"
+                            }
+                        },
+                        "Set_Entity_ID": {
+                            "runAfter": {
+                                "Set_Entity_Type": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "entity_id",
+                                "value": "@{split(body('Parse_JSON_For_Custom_Entities_Mapping_Data')?['entity_id'][0], '.')[0]}"
+                            }
+                        },
+                        "Set_Entity_Type": {
+                            "runAfter": {
+                                "Parse_JSON_For_Custom_Entities_Mapping_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "entity_type",
+                                "value": "@{body('Parse_JSON_For_Custom_Entities_Mapping_Data')?['entity_type'][0]}"
+                            }
+                        },
+                        "Set_Tags": {
+                            "runAfter": {
+                                "Set_Detection_ID_Array_From_User_Input": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "tags",
+                                "value": "@split(body('Post_Detections_List_And_Tags_Input_And_Wait_For_Response')?['data']?['tag-text'], ',')"
+                            }
+                        },
+                        "Terminate_Due_To_Playbook_Triggered_From_Wrong_Incident": {
+                            "runAfter": {
+                                "Parse_JSON_For_Custom_Entities_Mapping_Data": [
+                                    "Failed"
+                                ]
+                            },
+                            "type": "Terminate",
+                            "inputs": {
+                                "runError": {
+                                    "message": "Playbook Triggered from Wrong Incident."
+                                },
+                                "runStatus": "Failed"
+                            }
+                        },
+                        "Until_Retry_Count_is_Zero_For_Detections_Data": {
+                            "actions": {
+                                "Condition_To_Verify_Detections_Associated_With_Entity_Fetched_Successfully": {
+                                    "actions": {
+                                        "Condition_To_Check_If_Count_is_Zero": {
+                                            "actions": {
+                                                "Set_Break_Loop_True_For_Count_is_Zero": {
+                                                    "runAfter": {
+                                                        "Set_Retry_Count_As_Zero": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "break_loop",
+                                                        "value": "@true"
+                                                    }
+                                                },
+                                                "Set_Retry_Count_As_Zero": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "retry_count",
+                                                        "value": 0
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Parse_JSON_For_Detections_Data": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Condition_To_Verify_If_Next_is_Null": {
+                                                        "actions": {
+                                                            "Set_Break_Loop_True_For_Next_is_Null": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "break_loop",
+                                                                    "value": "@true"
+                                                                }
+                                                            },
+                                                            "Set_Retry_Count_As_Zero_For_Next_is_Null": {
+                                                                "runAfter": {
+                                                                    "Set_Break_Loop_True_For_Next_is_Null": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "retry_count",
+                                                                    "value": 0
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "For_Each_Detection_in_Detections_Data": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Increment_Page_Number": {
+                                                                    "runAfter": {},
+                                                                    "type": "IncrementVariable",
+                                                                    "inputs": {
+                                                                        "name": "page",
+                                                                        "value": 1
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@body('Parse_JSON_For_Detections_Data')?['next']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "For_Each_Detection_in_Detections_Data": {
+                                                        "foreach": "@body('Parse_JSON_For_Detections_Data')?['results']",
+                                                        "actions": {
+                                                            "Append_Detection_To_Detections_Array": {
+                                                                "runAfter": {
+                                                                    "Set_Detection_Object": [
+                                                                        "Succeeded"
+                                                                    ]
+                                                                },
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "detections",
+                                                                    "value": "@variables('detection')"
+                                                                }
+                                                            },
+                                                            "Set_Detection_Object": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "detection",
+                                                                    "value": {
+                                                                        "title": "@{items('For_Each_Detection_in_Detections_Data')?['id']} - @{items('For_Each_Detection_in_Detections_Data')?['detection']} - @{items('For_Each_Detection_in_Detections_Data')?['detection_category']}",
+                                                                        "value": "@items('For_Each_Detection_in_Detections_Data')?['id']"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "type": "Foreach",
+                                                        "runtimeConfiguration": {
+                                                            "concurrency": {
+                                                                "repetitions": 1
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@body('Parse_JSON_For_Detections_Data')?['count']",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Parse_JSON_For_Detections_Data": {
+                                            "runAfter": {},
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_Request_To_Fetch_Detections_Data_For_Associated_Entity')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "count": {
+                                                            "type": "integer"
+                                                        },
+                                                        "next": {
+                                                            "type": [
+                                                                "string",
+                                                                "null"
+                                                            ]
+                                                        },
+                                                        "previous": {
+                                                            "type": [
+                                                                "string",
+                                                                "null"
+                                                            ]
+                                                        },
+                                                        "results": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "assigned_date": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "assigned_to": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "c_score": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "category": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "certainty": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "created_timestamp": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "custom_detection": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "data_source": {
+                                                                        "properties": {},
+                                                                        "type": "object"
+                                                                    },
+                                                                    "description": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "detection": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "detection_category": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "detection_type": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "detection_url": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "filtered_by_ai": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "filtered_by_rule": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "filtered_by_user": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "first_timestamp": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "grouped_details": {
+                                                                        "items": {
+                                                                            "properties": {},
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "groups": {
+                                                                        "items": {
+                                                                            "properties": {},
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "id": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "is_custom_model": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "is_marked_custom": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "is_targeting_key_asset": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "is_triaged": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "last_timestamp": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "note": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "note_modified_by": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "note_modified_timestamp": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "notes": {
+                                                                        "items": {
+                                                                            "properties": {},
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "sensor": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "sensor_name": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "src_account": {
+                                                                        "properties": {},
+                                                                        "type": [
+                                                                            "object",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "src_host": {
+                                                                        "properties": {},
+                                                                        "type": [
+                                                                            "object",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "src_ip": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "state": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "summary": {
+                                                                        "properties": {},
+                                                                        "type": "object"
+                                                                    },
+                                                                    "t_score": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "tags": {
+                                                                        "items": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "type": "array"
+                                                                    },
+                                                                    "targets_key_asset": {
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "threat": {
+                                                                        "type": "integer"
+                                                                    },
+                                                                    "triage_rule_id": {
+                                                                        "type": [
+                                                                            "integer",
+                                                                            "null"
+                                                                        ]
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "url": {
+                                                                        "type": [
+                                                                            "string",
+                                                                            "null"
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "summary",
+                                                                    "data_source",
+                                                                    "sensor",
+                                                                    "detection",
+                                                                    "filtered_by_ai",
+                                                                    "filtered_by_user",
+                                                                    "is_custom_model",
+                                                                    "custom_detection",
+                                                                    "is_targeting_key_asset",
+                                                                    "c_score",
+                                                                    "note_modified_timestamp",
+                                                                    "note",
+                                                                    "description",
+                                                                    "note_modified_by",
+                                                                    "triage_rule_id",
+                                                                    "filtered_by_rule",
+                                                                    "assigned_date",
+                                                                    "category",
+                                                                    "src_account",
+                                                                    "src_ip",
+                                                                    "targets_key_asset",
+                                                                    "is_marked_custom",
+                                                                    "notes",
+                                                                    "groups",
+                                                                    "tags",
+                                                                    "sensor_name",
+                                                                    "last_timestamp",
+                                                                    "detection_url",
+                                                                    "detection_category",
+                                                                    "assigned_to",
+                                                                    "t_score",
+                                                                    "state",
+                                                                    "detection_type",
+                                                                    "first_timestamp",
+                                                                    "id",
+                                                                    "created_timestamp",
+                                                                    "certainty",
+                                                                    "url",
+                                                                    "threat",
+                                                                    "is_triaged",
+                                                                    "src_host",
+                                                                    "type",
+                                                                    "grouped_details"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "HTTP_Request_To_Fetch_Detections_Data_For_Associated_Entity": [
+                                            "Succeeded",
+                                            "TimedOut",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Condition_To_Generate_New_Access_Token": {
+                                                "actions": {
+                                                    "Condition_To_Verify_Access_Token_Generated_Successfully": {
+                                                        "actions": {
+                                                            "Decrement_Retry_Count": {
+                                                                "runAfter": {},
+                                                                "type": "DecrementVariable",
+                                                                "inputs": {
+                                                                    "name": "retry_count",
+                                                                    "value": 1
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "GenerateAccessTokenVectra": [
+                                                                "Succeeded",
+                                                                "TimedOut",
+                                                                "Failed"
+                                                            ]
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Decrement_Retry_Count_For_Error_While_Generating_Access_Token": {
+                                                                    "runAfter": {
+                                                                        "Set_Error_True_While_Generating_Access_Token": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type": "DecrementVariable",
+                                                                    "inputs": {
+                                                                        "name": "retry_count",
+                                                                        "value": 1
+                                                                    }
+                                                                },
+                                                                "Set_Error_True_While_Generating_Access_Token": {
+                                                                    "runAfter": {},
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "access_token_generate_error",
+                                                                        "value": "@true"
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "equals": [
+                                                                        "@body('GenerateAccessTokenVectra')?['status']",
+                                                                        "success"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    },
+                                                    "GenerateAccessTokenVectra": {
+                                                        "runAfter": {},
+                                                        "type": "Workflow",
+                                                        "inputs": {
+                                                            "host": {
+                                                                "triggerName": "manual",
+                                                                "workflow": {
+                                                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Logic/workflows/',trim(parameters('GenerateAccessCredPlaybookName')))]"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "else": {
+                                                    "actions": {
+                                                        "Set_Break_Loop_True_For_Data_Fetch_Error": {
+                                                            "runAfter": {
+                                                                "Set_Retry_Count_As_Zero_For_Data_Fetch_Error": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "break_loop",
+                                                                "value": "@true"
+                                                            }
+                                                        },
+                                                        "Set_Data_Fetch_Error_True": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "fetch_error",
+                                                                "value": "@true"
+                                                            }
+                                                        },
+                                                        "Set_Retry_Count_As_Zero_For_Data_Fetch_Error": {
+                                                            "runAfter": {
+                                                                "Set_Data_Fetch_Error_True": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "retry_count",
+                                                                "value": 0
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@outputs('HTTP_Request_To_Fetch_Detections_Data_For_Associated_Entity')['statusCode']",
+                                                                401
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@outputs('HTTP_Request_To_Fetch_Detections_Data_For_Associated_Entity')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_Access_Token": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/secrets/@{encodeURIComponent('Vectra-Access-Token')}/value"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "secureData": {
+                                            "properties": [
+                                                "inputs",
+                                                "outputs"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "HTTP_Request_To_Fetch_Detections_Data_For_Associated_Entity": {
+                                    "runAfter": {
+                                        "Get_Access_Token": [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Authorization": "Bearer @{body('Get_Access_Token')?['value']}"
+                                        },
+                                        "method": "GET",
+                                        "queries": {
+                                            "entity_id": "@{int(variables('entity_id'))}",
+                                            "page": "@{variables('page')}"
+                                        },
+                                        "uri": "@{variables('base_url')}/api/@{variables('api_version')}/detections"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Set_Entity_ID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(if(or(if(equals(variables('break_loop'), true), true, false), if(equals(variables('retry_count'), 0), true, false)), true, false), true)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "VectraAddTagToEntitySelectedDetections",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2017-07-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[trim(parameters('TenantId'))]",
+                    "token:grantType": "code",
+                    "vaultName": "[trim(parameters('KeyVaultName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('TeamsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Teams')]"
+                }
+            }
+        }
+    ]
+}
