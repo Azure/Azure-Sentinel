@@ -66,40 +66,48 @@ def main(mytimer: func.TimerRequest):
 
     last_ts = None
     with sentinel:
-        # Retry logic with exponential backoff for handling 429 errors
-        retry = Retry(
-            predicate=lambda exc: isinstance(exc, TooManyRequests),
-            initial=1.0,
-            maximum=30.0,
-            multiplier=2.0,
-        )
-        try:
-            entries = gcp_cli.list_entries(
-                resource_names=get_recource_names(),
-                filter_=filt,
-                order_by='timestamp',
-                page_size=1000,
-                retry=retry  # Apply retry settings
-            )
-            for entry in entries:
-                event = parse_entry(entry)
-                sentinel.send(event)
-                last_ts = event['timestamp']
-                if sentinel.is_empty():
-                    logging.info('Saving last timestamp - {}'.format(last_ts))
-                    state_manager.post(last_ts)
-                    if check_if_script_runs_too_long(start_ts):
-                        logging.info(
-                            'Script is running too long. Saving progress and exit.')
-                        break
-        except TooManyRequests as e:
-            logging.error(
-                f"Encountered a 429 error: {str(e)}. Retrying with exponential backoff...")
+         # Initialize variables for retry mechanism
+       retries = 0
+       max_retries = 5
+       backoff_factor = 2
+       wait_time = 1  # Initial wait time in seconds
+       while retries < max_retries:
+           try:
+               # Attempt to list entries from Google Cloud Logging
+               entries = gcp_cli.list_entries(
+                   resource_names=get_resource_names(),
+                   filter_=filt,
+                   order_by='timestamp',
+                   page_size=1000
+               )
+               for entry in entries:
+                   event = parse_entry(entry)
+                   sentinel.send(event)
+                   last_ts = event['timestamp']
+                   if sentinel.is_empty():
+                       logging.info('Saving last timestamp - {}'.format(last_ts))
+                       state_manager.post(last_ts)
+                       # Check if script is running too long
+                       if check_if_script_runs_too_long(start_ts):
+                           logging.info('Script is running too long. Saving progress and exiting.')
+                           return  # Exit the loop and function gracefully
+               # If successful, break out of the retry loop
+               break
+           except TooManyRequests as e:
+               retries += 1
+               logging.warning(f"Attempt {retries}/{max_retries}: Encountered a 429 error: {str(e)}. Retrying in {wait_time} seconds...")
+               time.sleep(wait_time)
+               wait_time *= backoff_factor  # Exponential backoff
+       # Log if maximum retries have been exhausted
+       if retries == max_retries:
+           logging.error("Exceeded maximum retries due to rate limits. Exiting script.")
+           if last_ts:
+               state_manager.post(last_ts)
+           return func.HttpResponse("Script encountered quota limits and exited gracefully.", status_code=429)
 
     if last_ts:
-        last_ts = event['timestamp']
-        logging.info('Saving last timestamp - {}'.format(last_ts))
-        state_manager.post(last_ts)
+       logging.info('Saving last timestamp - {}'.format(last_ts))
+       state_manager.post(last_ts)
 
     remove_credentials_file()
     logging.info('Script finished. Sent events number: {}'.format(sentinel.successfull_sent_events_number))
