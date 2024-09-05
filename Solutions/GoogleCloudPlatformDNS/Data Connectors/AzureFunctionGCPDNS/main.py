@@ -8,7 +8,6 @@ import time
 import azure.functions as func
 from dateutil.parser import parse as parse_date
 from google.api_core.exceptions import TooManyRequests
-from google.api_core.retry import Retry
 
 from .sentinel_connector import AzureSentinelConnector
 from .state_manager import StateManager
@@ -75,7 +74,7 @@ def main(mytimer: func.TimerRequest):
            try:
                # Attempt to list entries from Google Cloud Logging
                entries = gcp_cli.list_entries(
-                   resource_names=get_resource_names(),
+                   resource_names=get_recource_names(),
                    filter_=filt,
                    order_by='timestamp',
                    page_size=1000
