@@ -75,7 +75,7 @@ def main(mytimer: func.TimerRequest):
         )
         try:
             entries = gcp_cli.list_entries(
-                resource_names=get_resource_names(),
+                resource_names=get_recource_names(),
                 filter_=filt,
                 order_by='timestamp',
                 page_size=1000,
