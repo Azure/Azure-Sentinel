@@ -69,7 +69,7 @@ def main(mytimer: func.TimerRequest):
        retries = 0
        max_retries = 5
        backoff_factor = 2
-       wait_time = 20  # Initial wait time in seconds
+       wait_time = 45  # Initial wait time in seconds
        while retries < max_retries:
            try:
                # Attempt to list entries from Google Cloud Logging
