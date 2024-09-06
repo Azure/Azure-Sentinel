@@ -10,7 +10,7 @@ The size and number of indicators imported is limited by logic apps file size an
 ## RecordedFuture-ThreatIntelligenceImport
 Type: Detection\
 Included in Recorded Future Intelligence Solution: Yes\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
+Requires authorization of **/azuresentinel** connector - [Documentation on Microsoft power platform connectors](https://learn.microsoft.com/en-us/connectors/azuresentinel/)
 
 The parameter WorkspaceID can be found in Azure portal in the overview page of the Log Analytics Workspace. 
 
@@ -59,3 +59,47 @@ Retrieves the [Microsoft Sentinel URL Recently Reported by Insikt Group Risk Lis
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-URL-IndicatorImport%2Fazuredeploy.json)
 [![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-URL-IndicatorImport%2Fazuredeploy.json)
+
+# Configuration 
+## Risk list activation and configuration 
+Verify that the **ThreatIntelligenceImport** logic app is installed and active in your environment before installing the TIProcessing risk lists.
+
+From ```Automation -> Playbook Template```  Select any Recorded Future playbook that ends with IndicatorImport, like **RecordedFuture-IP-IndicatorImport**, press create playbook.
+Note that it is possible to deploy several instances of the same template by giving them unique names. This is how you can pull several risk lists of the same type.
+
+![](../Images/2023-04-19-16-49-53.png)
+
+The parameter **PlaybookNameBatching** is the name of the ThreatIntelligenceImport playbook that will handle batch processing of indicators into Microsoft Sentinel. In the last step press **Create and continue to designer**.
+![](../Images/2023-04-19-16-51-12.png)
+
+In the designer, locate all steps that show a warning and authenticate these steps. Authentication looks different for each connection. More information on this can be found in the chapter above called Connector Authorization. [More information about playbook authentication](https://learn.microsoft.com/en-us/azure/sentinel/authenticate-playbooks-to-sentinel).
+
+<img src="../Images/2023-04-18-14-39-40.png" width="500" />
+
+## Change Risk List 
+To can change Risk List to pull in to your environment. This can be done in the default playbook or you can install several instances of one playbook. 
+Example: You would like to use both ```Actively Communicating Validated C&C Server``` and ```Recent Phishing Host``` ip Risk Lists. 
+Select the **RecordedFuture-IP-IndicatorImport** template from ```Automation -> Playbook``` twice and save with different names like ```Recorded Future - Actively Communicating Validated C&C Server - IndicatorImport``` and ```Recorded Future - Phishing Host - IndicatorImport```. 
+
+Change the Risk List to download and modify the description in the ```RecordedFuture-Threatlntelligencelmport``` step in the logic app. 
+![](../Images/2023-09-08-12-01-37.png)
+
+## Configure Cadence of Risk List Ingestion 
+Its possible to adjust the cadence of Risk List download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
+
+The first step of IndicatorImport Playbooks is a recurrence step, adjust the cadence by modifying the interval and frequency parameters.\
+<img src="../Images/2023-12-12-10-00-53.png" width="500">
+
+It is critical that you also adjust the expirationDateTime parameter in the final block of that logic app to be synchronized with the recurrence timing. Failure to do so can result in either:
+* Duplication of indicators.
+* Having no active Recorded Future indicators the majority of the time. 
+
+If you are unsure of how to do this, please consult Recorded Future.
+
+![](../Images/2023-12-12-10-02-11.png)
+
+## Verify deployment
+After successfully running indicator import, there should exist data in  the ThreatIntelligenceIndicator table.
+![](../Images/2023-04-18-16-39-00.png)
+
+
