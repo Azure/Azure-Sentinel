@@ -10,7 +10,7 @@ from tabulate import tabulate
 
 # Constants
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
-SAMPLE_DATA_PATH = '/Sample%20Data/ASIM/'
+SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
 parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
@@ -173,7 +173,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
             datetime.strptime(last_updated, '%b %d, %Y')
             results.append((last_updated, 'This value exist in LastUpdated property', 'Pass'))
         except ValueError:
-            results.append((f'{RED}' + str(last_updated) + f'{RESET}', f'{RED}"LastUpdated" property exists but is not correct format. The expected format is, for example, "June 29, 2024"{RESET}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}' + str(last_updated) + f'{RESET}', f'{RED}"LastUpdated" property exists but is not correct format. The expected format is, for example, "Jun 29, 2024"{RESET}', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}LastUpdated{RESET}', f'{RED}LastUpdated not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
     
