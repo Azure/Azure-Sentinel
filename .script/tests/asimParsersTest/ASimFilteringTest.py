@@ -800,7 +800,7 @@ all_schemas_parameters = {
         "targetappname_has_any" : "TargetAppName",
         "username_has_any" : "User"
     },
-    "Dhcp" :
+    "DhcpEvent" :
     {
         "disabled" : "",
         "eventresult" : "EventResult",
