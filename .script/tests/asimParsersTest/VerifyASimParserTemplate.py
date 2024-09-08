@@ -184,7 +184,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
                 results.append((schema, f'ASIM schema name "{schema}" is correct', 'Pass'))
                 break
         else:
-            results.append((f'{RED}' + str(schema) + f'{RESET}', f'{RED}ASIM schema name "{schema}" is incorrect{RESET}. Please re-check Schema name', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}' + str(schema) + f'{RESET}', f'{RED}ASIM schema name "{schema}" is incorrect. Please re-check Schema name{RESET}.', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}Schema{RESET}', f'{RED}ASIM schema name {info['SchemaName']} not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
     
