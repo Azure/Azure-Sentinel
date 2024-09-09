@@ -15,9 +15,6 @@ Recorded Future also provide standalone Playbooks in this repository for EntraID
 **Recorded Future for Identity**
 - [Recorded Future Identity](../Recorded%20Future%20Identity/Playbooks/readme.md)
 
-# Best practices / quick start
-[Enrichment quick start guide](Playbooks/Enrichment/quickstart.md).
-
 # About Recorded Future
 
 Recorded Future is the world's largest provider of intelligence for enterprise security. By seamlessly combining automated data collection, pervasive analytics, and expert human analysis, Recorded Future delivers timely, accurate, and actionable intelligence.

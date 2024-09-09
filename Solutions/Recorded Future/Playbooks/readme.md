@@ -84,7 +84,7 @@ Some playbooks are not included in the Content Hub Solution and can be installed
 | Detect | [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md) |
 | SOC Efficiency | [Alert Playbooks](Alerts/readme.md) |
 | Sandbox | [Sandbox Playbooks](./Sandboxing/readme.md) |
-| Threat Hunt  | Threat Hunt Playbooks](./ThreatHunting/readme.md) |
+| Threat Hunt  | [Threat Hunt Playbooks](./ThreatHunting/readme.md) |
 | Custom connectors | [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md) |
 | Deprecated playbooks | [Deprecated Risk List Playbooks](Deprecated/readme.md) |
 
