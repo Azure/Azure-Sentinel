@@ -56,47 +56,57 @@ There are two options for installing playbooks and starting automate threat resp
 
 1. Installing the solution inside Microsoft Sentinel Content Hub. (Recommended)
 
-2. It's possible to install some of the playbooks one by one by directly from this Readme further down.
-
 ## 1. Content Hub Installation
 
 1. Locate the `Recorded Future Intelligence Solution` in Microsoft Sentinel Content Hub.
 ![](Images/2023-04-18-08-39-58.png)
 1. Press **Install**  and continue to configure the solution. 
 
-1. If the installation was completed successfully, you will now have Workbook templates, Automation Playbook templates and Analytic Rules templates.
-
-Note that the solution  install templates and you have to use the templates to install workbooks, playbooks and analytic rules. 
+> [!NOTE] 
+> The Content Hub installation provides templates and you have to create playbooks, workbooks, and analytic rules based on the templates. 
 ![](Images/2023-11-20-12-13-25.png)
 
-When installing playbooks from templates, read the description and look for dependencies that have to be installed. Example, install a custom connector that is included in the solution together with the playbook.
+When installing playbooks from templates, read the description and look for dependencies that have to be installed. Example, install a custom connector that is included in the solution together with the playbook. Read the documentation for each playbook in subfolders listed [here](#playbooks)
 ![](Images/2023-11-20-12-34-15.png)
 
 After pressing the "Create Playbook" specify Subscription, Resource Gorup and Workspace. This is needed when installing any of the Playbooks.
 
 ![](Images/2023-04-18-08-43-42.png)
 
-## 2. Individual Playbook installation
-To install individual playbooks, use the buttons next to the descriptions of the [Playbooks further down in this document](#Playbooks).
-
 # Playbooks
-All playbooks are not included in the Content Hub Solution. It is stated in the description of each playbook as 'Included in Solution: Yes/No'. Some of the playbooks are provided as previews or examples of how to automate use cases.   
+Some playbooks are not included in the Content Hub Solution and can be installed from this README. It is stated in the description of each playbook as 'Included in Solution: Yes/No'. Playbooks not included in the Content Hub installation are provided as previews or examples of how to automate use cases.   
 
-Playbooks in subfolders:
-- [Enrichment Playbooks](Enrichment/readme.md)
-- [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md)
-- [Alert Playbooks](Alerts/readme.md)
-- [Sandbox Playbooks](./Sandboxing/readme.md)
-- [Threat Hunt Playbooks](./ThreatHunting/readme.md)
-- [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md)
-- [Deprecated Risk List Playbooks](Deprecated/readme.md)
-
-
+<a id="playbooks"></a>
+## Playbooks:
+|Use case| Playbook |
+|-|-|
+|Response| [Enrichment Playbooks](Enrichment/readme.md) |
+| Detect | [Indicator Import/Risk List Playbooks](IndicatorImport/readme.md) |
+| SOC Efficiency | [Alert Playbooks](Alerts/readme.md) |
+| Sandbox | [Sandbox Playbooks](./Sandboxing/readme.md) |
+| Threat Hunt  | Threat Hunt Playbooks](./ThreatHunting/readme.md) |
+| Custom connectors | [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md) |
+| Deprecated playbooks | [Deprecated Risk List Playbooks](Deprecated/readme.md) |
 
 # Workboooks
 
-# Analytic Rules
+Workbook templates are installed in Sentinel and can be configures and saved.
+![Workbooks](images/workbook.png)
 
+### Recorded Future - Alerts Overview
+Dashboard for Recorded Future Alert imported bu the RecordedFuture-Alert-Importer playbook.
+<img src="Images/AlertWorkbook.png" alt="Alert Workbook" width="60%"/>
+
+### Recorded Future - Domain Correlation
+Domain correlation dashboad. This dashboard can be used to investigate correlations between imported Recorded Future risk lists and infrastructure loggs ingested to Sentinel.
+### Recorded Future - Hash Correlation
+### Recorded Future - IP Correlation
+### Recorded Future - Malware Threat Hunting
+### Recorded Future - Playbook Alerts Overview
+### Recorded Future - Threat Actor Hunting
+### Recorded Future - URL Correlation
+
+# Analytic Rules
 
 # Upgrade from previous versions
 Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.  
