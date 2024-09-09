@@ -10,7 +10,7 @@ from tabulate import tabulate
 
 # Constants
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
-SAMPLE_DATA_PATH = '/Sample%20Data/ASIM/'
+SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
 parser_exclusion_file_path = '.script/tests/asimParsersTest/ExclusionListForASimTests.csv'
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
@@ -144,7 +144,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
         if parser_name in Union_Parser__file.get('ParserQuery', ''):
             results.append((parser_name, 'Parser entry exists in union parser under "ParserQuery" property', 'Pass'))
         else:
-            results.append((parser_name, 'Parser entry not found in union parser under "ParserQuery" property', '{RED}Fail{RESET}'))
+            results.append(( f'{RED}' + parser_name + f'{RESET}', f'{RED}Parser entry not found in union parser under "ParserQuery" property{RESET}', f'{RED}Fail{RESET}'))
 
     # Check if equivalent_built_in_parser exists in another_yaml_file's 'Parsers'
     if equivalent_built_in_parser:
@@ -157,7 +157,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
     if title:
         results.append((title, 'This value exists in Title property', 'Pass'))
     else:
-        results.append(('Title', 'Title not found in parser YAML', f'{RED}Fail{RESET}'))
+        results.append((f'{RED}Title{RESET}', f'{RED}Title not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
     # Check if version exists in yaml_file's 'Parser'->'Version' and matches the format X.X.X
     if version:
         if re.match(r'^\d+\.\d+\.\d+$', version):
@@ -165,7 +165,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
         else:
             results.append((f'{RED}' + str(version) + f'{RESET}', f'{RED}The parser version should be in a three-digit format, e.g., 0.1.0{RESET}', f'{RED}Fail{RESET}'))
     else:
-        results.append(('Version', 'Parser version not found in parser YAML', f'{RED}Fail{RESET}'))
+        results.append((f'{RED}Version{RESET}', 'f{RED}Parser version not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
 
     # Check if last_updated exists in yaml_file's 'Parser'->'LastUpdated' and matches the format MMM DD YY
     if last_updated:
@@ -173,7 +173,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
             datetime.strptime(last_updated, '%b %d, %Y')
             results.append((last_updated, 'This value exist in LastUpdated property', 'Pass'))
         except ValueError:
-            results.append((f'{RED}' + str(last_updated) + f'{RESET}', f'{RED}"LastUpdated" property exists but is not correct format. The expected format is, for example, "June 29, 2024"{RESET}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}' + str(last_updated) + f'{RESET}', f'{RED}"LastUpdated" property exists but is not correct format. The expected format is, for example, "Jun 29, 2024"{RESET}', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}LastUpdated{RESET}', f'{RED}LastUpdated not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
     
@@ -184,7 +184,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
                 results.append((schema, f'ASIM schema name "{schema}" is correct', 'Pass'))
                 break
         else:
-            results.append((f'{RED}' + str(schema) + f'{RESET}', f'{RED}ASIM schema name "{schema}" is incorrect{RESET}. The correct schema name is {info['SchemaName']}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}' + str(schema) + f'{RESET}', f'{RED}ASIM schema name "{schema}" is incorrect. Please re-check Schema name{RESET}.', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}Schema{RESET}', f'{RED}ASIM schema name {info['SchemaName']} not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
     
@@ -198,7 +198,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
                 else:
                     results.append((f'{RED}' + str(schemaVersion) + f'{RESET}', f'{RED}ASIM schema "{schema}" version "{schemaVersion}" is incorrect. The correct version for ASIM schema "{schema}" is "{info['SchemaVersion']}"{RESET}', f'{RED}Fail{RESET}'))
     else:
-        results.append(('Version', f'ASIM schema {schema} version not found in parser YAML', f'{RED}Fail{RESET}'))
+        results.append((f'{RED}Version{RESET}', f'{RED}ASIM schema {schema} version not found in parser YAML{RESET}', f'{RED}Fail{RESET}'))
 
     # Check if references exist in yaml_file's 'References'
     if references:
@@ -239,29 +239,6 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
             results.append((f'{RED}' + str(equivalent_built_in_parser) + f'{RESET}', f'{RED}EquivalentBuiltInParser is not in correct format. The correct format is "_{FileType}_{schema}_ProductName"{RESET}', f'{RED}Fail{RESET}'))
     else:
         results.append((f'{RED}EquivalentBuiltInParser{RESET}', f'{RED}"EquivalentBuiltInParser" property not found in parser{RESET}', f'{RED}Fail{RESET}'))
-
-    # Multi-line comment
-    '''
-    # Check if tester files exists or not
-    
-    # Construct ASim DataTest.csv filename
-    DataTestFileName = f'{event_vendor}_{event_product}_{FileType}{schema}_DataTest.csv'
-    # Construct ASim SchemaTest.csv filename
-    SchemaTestFileName = f'{event_vendor}_{event_product}_{FileType}{schema}_SchemaTest.csv'
-    Testerfilenames = [DataTestFileName, SchemaTestFileName]
-    # Parse the URL
-    parsed_url = urlparse(ParserUrl)
-    # Extract everything except the filename
-    url_without_filename = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path.rsplit('/', 2)[0]
-    for filename in Testerfilenames:
-        # DataTest.csv full URL construct
-        DataTestUrl = url_without_filename + "//Tests//" + filename
-        response = requests.get(DataTestUrl)
-        if response.status_code == 200:
-            results.append((filename, 'Tester file exists', 'Pass'))
-        else:
-            results.append((f'{RED}' + str(filename) + f'{RESET}', f'{RED}Tester file does not exist{RESET}', f'{RED}Fail{RESET}'))
-    '''
     
     # Check if sample data files exists or not (Only applicable for ASim FileType)
     
@@ -274,7 +251,7 @@ def extract_and_check_properties(Parser_file, Union_Parser__file, FileType, Pars
         if response.status_code == 200:
             results.append((SampleDataFile, 'Sample data file exists', 'Pass'))
         else:
-            results.append((f'{RED}' + str(SampleDataFile) + f'{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{event_vendor}_{event_product}_{schema}_IngestedLogs.csv"{RESET}', f'{RED}Fail{RESET}'))
+            results.append((f'{RED}Expected sample file not found{RESET}', f'{RED}Sample data file does not exist or may not be named correctly. Please include sample data file "{event_vendor}_{event_product}_{schema}_IngestedLogs.csv"{RESET}', f'{RED}Fail{RESET}'))
     return results
 
 def filter_yaml_files(modified_files):
