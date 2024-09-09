@@ -10,8 +10,8 @@ Threat hunting is the proactive and iterative process of searching for and detec
 # Playbooks
 
 ## RecordedFuture-ThreatMap-Importer
-Type: Threat Hunt\
-Included in Recorded Future Intelligence Solution: Yes\
+Type: **Threat Hunt**\
+Included in Recorded Future Intelligence Solution: **Yes**\
 Requires [**/RecordedFuture-CustomConnector**](../Connectors/RecordedFuture-CustomConnector/readme.md) and API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ThreatMap-Importer%2Fazuredeploy.json)
@@ -22,8 +22,8 @@ Import Recorded Future Threat Map data and stores it in a custom table. Display 
 ![](Images/2023-10-26-19-49-18.png)
 
 ## RecordedFuture-ThreatMapMalware-Importer
-Type: Threat Hunt\
-Included in Recorded Future Intelligence Solution: Yes\
+Type: **Threat Hunt**\
+Included in Recorded Future Intelligence Solution: **Yes**\
 Requires [**/RecordedFuture-CustomConnector**](../Connectors/RecordedFuture-CustomConnector/readme.md) and API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ThreatMapMalware-Importer%2Fazuredeploy.json)
@@ -35,8 +35,8 @@ Import Recorded Future Malware Threat Map data and stores it in a custom table. 
 
 
 ## RecordedFuture-ActorThreatHunt-IndicatorImport
-Type: Threat Hunt\
-Included in Recorded Future Intelligence Solution: Yes\
+Type: **Threat Hunt**\
+Included in Recorded Future Intelligence Solution: **Yes**\
 Requires [**/RecordedFuture-CustomConnector**](../Connectors/RecordedFuture-CustomConnector/readme.md) and API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-ActorThreatHunt-IndicatorImport%2Fazuredeploy.json)
@@ -54,8 +54,8 @@ Setup the Analytic Rules shipped in the Solution to correlate this data with you
 
 
 ## RecordedFuture-MalwareThreatHunt-IndicatorImport
-Type: Threat Hunt\
-Included in Recorded Future Intelligence Solution: Yes\
+Type: **Threat Hunt**\
+Included in Recorded Future Intelligence Solution: **Yes**\
 Requires [**/RecordedFuture-CustomConnector**](../Connectors/RecordedFuture-CustomConnector/readme.md) and API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FThreatHunting%2FRecordedFuture-MalwareThreatHunt-IndicatorImport%2Fazuredeploy.json)

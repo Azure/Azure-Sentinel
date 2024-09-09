@@ -3,8 +3,8 @@
 More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../readme.md).
 
 ## RecordedFuture-IOC_Enrichment
-Type: Response\
-Included in Recorded Future Intelligence Solution: Yes\
+Type: **Response**\
+Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 Enriches IOCs (IPs, Domains, URLs and hashes) in Microsoft Sentinel incidents with Recorded Future Intelligence. The Playbook adds the following data for all IOCs an incident: 

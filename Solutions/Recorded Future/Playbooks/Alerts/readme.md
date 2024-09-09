@@ -3,8 +3,8 @@
 More information about Recorded Future Intelligence Solution for Microsoft Sentinel can be found in the main [readme](../readme.md).
 
 ## RecordedFuture-Alert-Importer
-Type: Alerting\
-Included in Recorded Future Intelligence Solution: Yes\
+Type: **Alerting**\
+Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 Retrieves Alerts and stores them in a custom log in the Log Analytic Workspace. More information on [Alerts](https://support.recordedfuture.com/hc/en-us/articles/115002151327-Setting-up-Event-Alerts) (requires login)
@@ -18,8 +18,8 @@ The Alert importer playbook can create sentinel incidents when receiving alerts.
 
 
 ## RecordedFuture-Playbook-Alert-Importer
-Type: Alerting\
-Included in Recorded Future Intelligence Solution: Yes\
+Type: **Alerting**\
+Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
 Retrieves Playbook Alerts and stores them in a custom log in the Log Analytic Workspace. More information on [Playbook Alerts](https://support.recordedfuture.com/hc/en-us/articles/13152506878739-Playbook-Alerting-Rules-) (requires login)

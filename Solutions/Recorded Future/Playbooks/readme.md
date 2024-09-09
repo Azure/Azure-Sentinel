@@ -72,14 +72,12 @@ Note that the solution  install templates and you have to use the templates to i
 When installing playbooks from templates, read the description and look for dependencies that have to be installed. Example, install a custom connector that is included in the solution together with the playbook.
 ![](Images/2023-11-20-12-34-15.png)
 
+After pressing the "Create Playbook" specify Subscription, Resource Gorup and Workspace. This is needed when installing any of the Playbooks.
 
 ![](Images/2023-04-18-08-43-42.png)
 
 ## 2. Individual Playbook installation
-To install individual playbooks, use the buttons next to the descriptions of the [Playbooks [further down in this document](#Playbooks).
-
-> [!IMPORTANT] 
-> **Due to internal dependencies, always deploy and activate the ThreatIntelligenceImport playbook before any of the \*-IndicatorImport playbooks.**
+To install individual playbooks, use the buttons next to the descriptions of the [Playbooks further down in this document](#Playbooks).
 
 # Playbooks
 All playbooks are not included in the Content Hub Solution. It is stated in the description of each playbook as 'Included in Solution: Yes/No'. Some of the playbooks are provided as previews or examples of how to automate use cases.   

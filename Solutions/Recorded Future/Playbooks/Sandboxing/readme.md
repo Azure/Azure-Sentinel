@@ -8,8 +8,8 @@ Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The 
 ![](../Images/2023-06-26-10-04-42.png)
 
 ## RecordedFuture-Sandbox_Enrichment-Url
-Type: Response\
-Included in Recorded Future Intelligence Solution: Yes\
+Type: **Response**\
+Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json)
@@ -27,8 +27,8 @@ To set up automatic enrichment, map alerts to a [custom analytic rule](https://l
 
 
 ## RecordedFuture-Sandbox_Outlook_Attachment
-Type: Response\
-Included in Recorded Future Intelligence Solution: No\
+Type: **Response**\
+Included in Recorded Future Intelligence Solution: **No**\
 Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json)
@@ -49,8 +49,8 @@ To set up automatic enrichment, map alerts to a [custom analytic rule](https://l
 ![](../Images/2023-05-05-15-37-58.png)
 
 ## RecordedFuture-Sandbox_StorageAccount
-Type: Response\
-Included in Recorded Future Intelligence Solution: No\
+Type: **Response**\
+Included in Recorded Future Intelligence Solution: **No**\
 Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json)
