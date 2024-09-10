@@ -149,7 +149,9 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
         if check_if_script_runs_too_long(start_ts):
             logging.info('Script is running too long. Saving progress and exit.')
             break
-        cursor = get_response.headers["opc-next-cursor"]
+        cursor = get_response.headers.get('opc-next-cursor') # Update cursor to get  next cursor
+        if not cursor:       # Brake the loop if no more messages
+            break
 
 
 def check_if_script_runs_too_long(start_ts):
