@@ -21,30 +21,59 @@ relevantTechniques:
   - T1098
   - T1562
 query: |
-  let opList = OfficeActivity 
-  | summarize by Operation
-  //| where Operation startswith "Remove-" or Operation startswith "Disable-"
-  | where Operation has_any ("Remove", "Disable")
-  | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
-  | summarize make_set(Operation, 500);
-  OfficeActivity
-  // Only admin or global-admin can disable/remove policy
-  | where RecordType =~ "ExchangeAdmin"
-  | where UserType in~ ("Admin","DcAdmin")
-  // Pass in interesting Operation list
-  | where Operation in~ (opList)
-  | extend ClientIPOnly = case( 
-  ClientIP has ".", tostring(split(ClientIP,":")[0]), 
-  ClientIP has "[", tostring(trim_start(@'[[]',tostring(split(ClientIP,"]")[0]))),
-  ClientIP
-  )  
-  | extend Port = case(
-  ClientIP has ".", (split(ClientIP,":")[1]),
-  ClientIP has "[", tostring(split(ClientIP,"]:")[1]),
-  ClientIP
-  )
-  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  // Generate the list of operations for Enriched Logs
+    let opListEnriched = EnrichedMicrosoft365AuditLogs 
+        | summarize by Operation
+        | where Operation has_any ("Remove", "Disable")
+        | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
+        | summarize make_set(Operation, 500);
+    // Generate the list of operations for Office Logs
+    let opListOffice = OfficeActivity 
+        | summarize by Operation
+        | where Operation has_any ("Remove", "Disable")
+        | where Operation contains "AntiPhish" or Operation contains "SafeAttachment" or Operation contains "SafeLinks" or Operation contains "Dlp" or Operation contains "Audit"
+        | summarize make_set(Operation, 500);
+    // Query for EnrichedMicrosoft365AuditLogs
+    let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+        | where RecordType == "ExchangeAdmin"
+        | where UserType in~ ("Admin", "DcAdmin")
+        | where Operation in~ (opListEnriched)
+        | extend ClientIPOnly = case( 
+            ClientIp has ".", tostring(split(ClientIp, ":")[0]), 
+            ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))),
+            ClientIp
+          )  
+        | extend Port = case(
+            ClientIp has ".", tostring(split(ClientIp, ":")[1]),
+            ClientIp has "[", tostring(split(ClientIp, "]:")[1]),
+            ""
+          )
+        | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters = tostring(AdditionalProperties.Parameters)
+        | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+    // Query for OfficeActivity
+        let OfficeEvents = OfficeActivity
+        | where RecordType =~ "ExchangeAdmin"
+        | where UserType in~ ("Admin", "DcAdmin")
+        | where Operation in~ (opListOffice)
+        | extend ClientIPOnly = case( 
+            ClientIP has ".", tostring(split(ClientIP, ":")[0]), 
+            ClientIP has "[", tostring(trim_start(@'[[]', tostring(split(ClientIP, "]")[0]))),
+            ClientIP
+          )  
+        | extend Port = case(
+            ClientIP has ".", tostring(split(ClientIP, ":")[1]),
+            ClientIP has "[", tostring(split(ClientIP, "]:")[1]),
+            ""
+          )
+        | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() by Operation, UserType, UserId, ClientIP = ClientIPOnly, Port, ResultStatus, Parameters
+        | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+        // Combine and Deduplicate Office and Enriched Logs
+            let CombinedEvents = OfficeEvents
+            | union EnrichedEvents
+            | summarize arg_min(StartTimeUtc, *) by Operation, UserId, ClientIP;
+        // Final Output
+        CombinedEvents
+        | project StartTimeUtc, EndTimeUtc, Operation, UserType, UserId, ClientIP, Port, ResultStatus, Parameters, AccountName, AccountUPNSuffix
 entityMappings:
   - entityType: Account
     fieldMappings:
