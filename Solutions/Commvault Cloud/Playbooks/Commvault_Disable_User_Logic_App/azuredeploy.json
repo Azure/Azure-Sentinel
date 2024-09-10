@@ -2,9 +2,9 @@
     "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion":  "1.0.0.0",
     "metadata":  {
-        "title":  "Commvault Disable SAML Provider Logic App Playbook",
+        "title":  "Commvault Disable User Logic App Playbook",
         "description":  "This Logic App executes when called upon by an Automation Rule. Accessing the KeyVault to retrieve various credentials, it executes a specific runbook depending on the use case.",
-        "prerequisites":  ["1. Administrative access to your Commvault/Metallic environment.",
+        "prerequisites":  ["1. Administrative access to your Commvault environment.",
         "2. Administrative access to your Azure Resource Group and Subscription.",
         "3. A Microsoft Sentinel instance in the aforementioned Azure Resource Group.",
         "4. A Keyvault and an Automation Account configured as mentioned in the documentation here :- (https://github.com/Cv-securityIQ/Azure-Integration/blob/master/Solutions/Commvault%20Security%20IQ/README.md)"],
@@ -27,7 +27,7 @@
     },
     "parameters":  {
         "PlaybookName":  {
-            "defaultValue":  "logic-app-disable-saml-provider",
+            "defaultValue":  "logic-app-disable-user",
             "type":  "string"
         },
 		"Automation-Account": {
@@ -93,9 +93,9 @@
                                 "path":  "/secrets/@{encodeURIComponent('access-token')}/value"
                             }
                         },
-                        "Disable_IDP":  {
+                        "Disable_User":  {
                             "actions":  {
-                                "Disable_IDP_Job":  {
+                                "Disable_User_Job":  {
                                     "runAfter":  {
                                     },
                                     "type":  "ApiConnection",
@@ -104,6 +104,7 @@
                                             "properties":  {
                                                 "parameters":  {
                                                     "EnvironmentEndpointURL":  "@body('Environment_Endpoint_URL')?['value']",
+                                                    "UserIdentity":  "@variables('da_user_name')",
                                                     "apiAccessToken":  "@body('Access_Token')?['value']"
                                                 }
                                             }
@@ -116,15 +117,15 @@
                                         "method":  "put",
                                         "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
                                         "queries":  {
-                                            "runbookName":  "Commvault_Disable_IDP",
+                                            "runbookName":  "Commvault_Disable_User",
                                             "wait":  true,
                                             "x-ms-api-version":  "2015-10-31"
                                         }
                                     }
                                 },
-                                "Disable_IDP_Job_Output":  {
+                                "Disable_User_Job_Output":  {
                                     "runAfter":  {
-                                        "Disable_IDP_Job":  [
+                                        "Disable_User_Job":  [
                                             "Succeeded"
                                         ]
                                     },
@@ -136,7 +137,7 @@
                                             }
                                         },
                                         "method":  "get",
-                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_IDP_Job')?['properties']?['jobId'])}/output",
+                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_User_Job')?['properties']?['jobId'])}/output",
                                         "queries":  {
                                             "x-ms-api-version":  "2015-10-31"
                                         }
@@ -144,7 +145,7 @@
                                 }
                             },
                             "runAfter":  {
-                                "Environment_Endpoint_URL":  [
+                                "For_each":  [
                                     "Succeeded"
                                 ]
                             },
@@ -152,9 +153,9 @@
                                 "and":  [
                                     {
                                         "not":  {
-                                            "contains":  [
+                                            "startsWith":  [
                                                 "@triggerBody()?['object']?['properties']?['description']",
-                                                "IDP"
+                                                "User"
                                             ]
                                         }
                                     }
@@ -177,6 +178,111 @@
                                 },
                                 "method":  "get",
                                 "path":  "/secrets/@{encodeURIComponent('environment-endpoint-url')}/value"
+                            }
+                        },
+                        "For_each":  {
+                            "foreach":  "@body('Parse_JSON')",
+                            "actions":  {
+                                "Set_variable":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "SetVariable",
+                                    "inputs":  {
+                                        "name":  "da_user_name",
+                                        "value":  "@items('For_each')?['properties']?['hostName']"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Parse_JSON":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Initialize_variable":  {
+                            "runAfter":  {
+                                "Environment_Endpoint_URL":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "entities",
+                                        "type":  "array",
+                                        "value":  "@triggerBody()?['object']?['properties']?['relatedEntities']"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_2":  {
+                            "runAfter":  {
+                                "Initialize_variable":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "da_user_name",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON":  {
+                            "runAfter":  {
+                                "Initialize_variable_2":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@variables('entities')",
+                                "schema":  {
+                                    "items":  {
+                                        "properties":  {
+                                            "id":  {
+                                                "type":  "string"
+                                            },
+                                            "kind":  {
+                                                "type":  "string"
+                                            },
+                                            "name":  {
+                                                "type":  "string"
+                                            },
+                                            "properties":  {
+                                                "properties":  {
+                                                    "friendlyName":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "hostName":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "netBiosName":  {
+                                                        "type":  "string"
+                                                    }
+                                                },
+                                                "type":  "object"
+                                            },
+                                            "type":  {
+                                                "type":  "string"
+                                            }
+                                        },
+                                        "required":  [
+                                            "id",
+                                            "name",
+                                            "type",
+                                            "kind",
+                                            "properties"
+                                        ],
+                                        "type":  "object"
+                                    },
+                                    "type":  "array"
+                                }
                             }
                         }
                     },
@@ -224,7 +330,7 @@
             "type":  "Microsoft.Logic/workflows",
             "location":  "[resourceGroup().location]",
             "tags":  {
-                "hidden-SentinelTemplateName":  "logic-app-disable-saml-provider",
+                "hidden-SentinelTemplateName":  "logic-app-disable-user",
                 "hidden-SentinelTemplateVersion":  "1.0"
             },
             "identity":  {

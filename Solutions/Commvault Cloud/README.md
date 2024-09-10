@@ -3,10 +3,10 @@ This Sentinel integration enables Commvault users to ingest alerts and other dat
 
 ### Key Features
 - Using Azure KeyVault, Commvault access tokens are automatically rotated, providing enhanced security. 
-- Perform automated actions such as disabling IDP, specific users, or data aging on your Commvault/Metallic environment from inside Sentinel.
+- Perform automated actions such as disabling IDP, specific users, or data aging on your Commvault environment from inside Sentinel.
 
 ## Prerequisites
-- Administrative access to your Commvault/Metallic environment.
+- Administrative access to your Commvault environment.
 - Administrative access to your Azure Resource Group and Subscription.
 - A Microsoft Sentinel instance in the aforementioned Azure Resource Group.
 - An Azure Log Analytic Workspace in the aformentioned Azure Resource Group.
@@ -17,19 +17,19 @@ The following Azure assets need to all be created in order for this integration 
 - **Commvault-Automation-Account:** This is where the runbooks are stored.
 ### Runbooks
 All runbooks are stored in the Automation Account *Commvault-Automation-Account*.
-- **Commvault_Cycle_Token:** Used in the *CommvaultTokenCycle* Logic App to execute the API calls that generate a new Commvault/Metallic access token.
+- **Commvault_Cycle_Token:** Used in the *CommvaultTokenCycle* Logic App to execute the API calls that generate a new Commvault access token.
 - **Commvault_Disable_Data_Aging:** Used in the *Commvault-Logic-App* Logic App to execute the API calls that disable data aging for a specific client. 
 - **Commvault_Disable_IDP:** Used in the *Commvault-Logic-App* Logic App to execute the API calls that disable the IDP in your environment.
 - **Commvault_Disable_User:** Used in the *Commvault-Logic-App* Logic App to execute the API calls that disable a specific user given their email address.
 ### Logic Apps
 - **Commvault-Logic-App:** This Logic App (also referred to as a *Playbook*) executes when called upon by an Automation Rule. Accessing the KeyVault to retrieve various credentials, it executes a specific runbook depending on the use case.
-- **CommvaultTokenCycle:** This Logic App (also referred to as a *Playbook*) executes periodically to generate a new Commvault/Metallic access token and securely overwrites the old access token in your KeyVault.
+- **CommvaultTokenCycle:** This Logic App (also referred to as a *Playbook*) executes periodically to generate a new Commvault access token and securely overwrites the old access token in your KeyVault.
 ### KeyVaults
 - **Commvault-Integration-KV:** This KeyVault stores all required credentials as *secrets*.
 ### KeyVault Secrets
 All of these secrets are stored in the *Commvault-IntegrationKV* KeyVault. For the first time setup, their values need to be manually retrieved.
-- **access-token:** The access token for Commvault/Metallic.
-- **environment-endpoint-url:** The URL of your Commvault/Metallic endpoint.
+- **access-token:** The access token for Commvault.
+- **environment-endpoint-url:** The URL of your Commvault endpoint.
 - **keyvault-url:** The URL of your Azure KeyVault. 
 - **client-id:** The ID of the Azure App Registration client.
 - **tenant-id:** The ID of your Azure Tenant.
@@ -39,9 +39,9 @@ All of these secrets are stored in the *Commvault-IntegrationKV* KeyVault. For t
 - **Commvault_Token_Cycle_App:** An Azure Active Directory App Registration used for authorized KeyVault access. 
 ### Sentinel Analytic Rules
 Each of these Analytic Rules run on a continuous basis and are querying for the manually triggered Sentinel incident. Once it discovers a specific incident, a new incident is created that triggers the corresponding Automation Rule. 
-- **IDP Compromised:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a compromised Commvault/Metallic IDP. 
-- **User Compromised:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a compromised Commvault/Metallic user. 
-- **Data Aging:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a request to disable data aging on a specific Commvault/Metallic client. 
+- **IDP Compromised:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a compromised Commvault IDP. 
+- **User Compromised:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a compromised Commvault user. 
+- **Data Aging:** The Sentinel Analytic Rule that continuously searches for a manually created Sentinel Incident pertaining to a request to disable data aging on a specific Commvault client. 
 
 ## Installation
 ### Create the Runbooks
@@ -101,7 +101,7 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
   * Name: 
     * access-token
   * Secret Value:
-    * (Your Commvault/Metallic access token)
+    * (Your Commvault access token)
   * Enabled:
     * Yes
   * Click "Create"
@@ -111,7 +111,7 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
   * Name: 
     * environment-endpoint-url
   * Secret Value:
-    * (Your Commvault/Metallic endpoint's URL)
+    * (Your Commvault endpoint's URL)
   * Enabled:
     * Yes
   * Click "Create"
@@ -548,7 +548,7 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
     * In the top left corner, click "Save"
 
 ## Example Usage
-### Disable a compromised Commvault/Metallic IDP from Sentinel
+### Disable a compromised Commvault IDP from Sentinel
 * Go to Sentinel -> (The name of your Sentinel instance) -> Incidents (under Threat Management) -> Create Incident
   * Title:
     * Cvlt Alert
@@ -566,7 +566,7 @@ Each of these Analytic Rules run on a continuous basis and are querying for the 
     * Sort the rows by start time by clicking the "Start Time" column header
     * The latest run should say "Succeeded". Click it. 
     * Check to see the result of the runbook at the end of the logic app chain.
-### Disable a compromised Commvault/Metallic User from Sentinel
+### Disable a compromised Commvault User from Sentinel
 * Go to Sentinel -> (The name of your Sentinel instance) -> Incidents (under Threat Management) -> Create Incident
   * Title:
     * Cvlt Alert

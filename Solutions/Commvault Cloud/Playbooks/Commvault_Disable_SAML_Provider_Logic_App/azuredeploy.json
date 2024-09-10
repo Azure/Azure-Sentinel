@@ -2,9 +2,9 @@
     "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion":  "1.0.0.0",
     "metadata":  {
-        "title":  "Commvault Disable Data Aging Logic App Playbook",
+        "title":  "Commvault Disable SAML Provider Logic App Playbook",
         "description":  "This Logic App executes when called upon by an Automation Rule. Accessing the KeyVault to retrieve various credentials, it executes a specific runbook depending on the use case.",
-        "prerequisites":  ["1. Administrative access to your Commvault/Metallic environment.",
+        "prerequisites":  ["1. Administrative access to your Commvault environment.",
         "2. Administrative access to your Azure Resource Group and Subscription.",
         "3. A Microsoft Sentinel instance in the aforementioned Azure Resource Group.",
         "4. A Keyvault and an Automation Account configured as mentioned in the documentation here :- (https://github.com/Cv-securityIQ/Azure-Integration/blob/master/Solutions/Commvault%20Security%20IQ/README.md)"],
@@ -27,7 +27,7 @@
     },
     "parameters":  {
         "PlaybookName":  {
-            "defaultValue":  "logic-app-disable-data-aging",
+            "defaultValue":  "logic-app-disable-saml-provider",
             "type":  "string"
         },
 		"Automation-Account": {
@@ -93,9 +93,9 @@
                                 "path":  "/secrets/@{encodeURIComponent('access-token')}/value"
                             }
                         },
-                        "Disable_Data_Aging":  {
+                        "Disable_IDP":  {
                             "actions":  {
-                                "Disable_Data_Aging_Job":  {
+                                "Disable_IDP_Job":  {
                                     "runAfter":  {
                                     },
                                     "type":  "ApiConnection",
@@ -103,7 +103,6 @@
                                         "body":  {
                                             "properties":  {
                                                 "parameters":  {
-                                                    "ClientName":  "@variables('da_client_name')",
                                                     "EnvironmentEndpointURL":  "@body('Environment_Endpoint_URL')?['value']",
                                                     "apiAccessToken":  "@body('Access_Token')?['value']"
                                                 }
@@ -117,15 +116,15 @@
                                         "method":  "put",
                                         "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs",
                                         "queries":  {
-                                            "runbookName":  "Commvault_Disable_Data_Aging",
+                                            "runbookName":  "Commvault_Disable_IDP",
                                             "wait":  true,
                                             "x-ms-api-version":  "2015-10-31"
                                         }
                                     }
                                 },
-                                "Disable_Data_Aging_Job_Output":  {
+                                "Disable_IDP_Job_Output":  {
                                     "runAfter":  {
-                                        "Disable_Data_Aging_Job":  [
+                                        "Disable_IDP_Job":  [
                                             "Succeeded"
                                         ]
                                     },
@@ -137,7 +136,7 @@
                                             }
                                         },
                                         "method":  "get",
-                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_Data_Aging_Job')?['properties']?['jobId'])}/output",
+                                        "path":  "/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/providers/Microsoft.Automation/automationAccounts/@{encodeURIComponent('Commvault-Automation-Account')}/jobs/@{encodeURIComponent(body('Disable_IDP_Job')?['properties']?['jobId'])}/output",
                                         "queries":  {
                                             "x-ms-api-version":  "2015-10-31"
                                         }
@@ -145,7 +144,7 @@
                                 }
                             },
                             "runAfter":  {
-                                "For_each_3":  [
+                                "Environment_Endpoint_URL":  [
                                     "Succeeded"
                                 ]
                             },
@@ -154,8 +153,8 @@
                                     {
                                         "not":  {
                                             "contains":  [
-                                                "@triggerBody()?['object']?['properties']?['owner']",
-                                                "Data"
+                                                "@triggerBody()?['object']?['properties']?['description']",
+                                                "IDP"
                                             ]
                                         }
                                     }
@@ -179,117 +178,6 @@
                                 "method":  "get",
                                 "path":  "/secrets/@{encodeURIComponent('environment-endpoint-url')}/value"
                             }
-                        },
-                        "Extract_client_name_from_the_entities":  {
-                            "runAfter":  {
-                                "Extract_the_entities_from_the_Incident":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
-                                    {
-                                        "name":  "da_client_name",
-                                        "type":  "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "Extract_the_entities_from_the_Incident":  {
-                            "runAfter":  {
-                                "Environment_Endpoint_URL":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "InitializeVariable",
-                            "inputs":  {
-                                "variables":  [
-                                    {
-                                        "name":  "entities",
-                                        "type":  "string"
-                                    }
-                                ]
-                            }
-                        },
-                        "For_each_3":  {
-                            "foreach":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                            "actions":  {
-                                "Condition":  {
-                                    "actions":  {
-                                        "Set_variable_2":  {
-                                            "runAfter":  {
-                                            },
-                                            "type":  "SetVariable",
-                                            "inputs":  {
-                                                "name":  "da_client_name",
-                                                "value":  "@body('Parse_JSON')?['properties']?['hostName']"
-                                            }
-                                        }
-                                    },
-                                    "runAfter":  {
-                                        "Parse_JSON":  [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "expression":  {
-                                        "and":  [
-                                            {
-                                                "equals":  [
-                                                    "@body('Parse_JSON')?['kind']",
-                                                    "Host"
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    "type":  "If"
-                                },
-                                "Parse_JSON":  {
-                                    "runAfter":  {
-                                    },
-                                    "type":  "ParseJson",
-                                    "inputs":  {
-                                        "content":  "@item()",
-                                        "schema":  {
-                                            "properties":  {
-                                                "id":  {
-                                                    "type":  "string"
-                                                },
-                                                "kind":  {
-                                                    "type":  "string"
-                                                },
-                                                "name":  {
-                                                    "type":  "string"
-                                                },
-                                                "properties":  {
-                                                    "properties":  {
-                                                        "friendlyName":  {
-                                                            "type":  "string"
-                                                        },
-                                                        "hostName":  {
-                                                            "type":  "string"
-                                                        },
-                                                        "netBiosName":  {
-                                                            "type":  "string"
-                                                        }
-                                                    },
-                                                    "type":  "object"
-                                                },
-                                                "type":  {
-                                                    "type":  "string"
-                                                }
-                                            },
-                                            "type":  "object"
-                                        }
-                                    }
-                                }
-                            },
-                            "runAfter":  {
-                                "Extract_client_name_from_the_entities":  [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type":  "Foreach"
                         }
                     },
                     "outputs":  {
@@ -336,7 +224,7 @@
             "type":  "Microsoft.Logic/workflows",
             "location":  "[resourceGroup().location]",
             "tags":  {
-                "hidden-SentinelTemplateName":  "logic-app-disable-data-aging",
+                "hidden-SentinelTemplateName":  "logic-app-disable-saml-provider",
                 "hidden-SentinelTemplateVersion":  "1.0"
             },
             "identity":  {

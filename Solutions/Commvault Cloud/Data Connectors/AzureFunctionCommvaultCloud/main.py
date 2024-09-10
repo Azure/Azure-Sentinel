@@ -551,7 +551,7 @@ def post_data(body, chunk_count):
     headers = {
         'content-type': content_type,
         'Authorization': signature,
-        'Log-Type': "CommvaultSecurityIQ_CL",
+        'Log-Type': "CommvaultCloud_CL",
         'x-ms-date': rfc1123date
     }
     logging.info(f"Request URL : {uri}")

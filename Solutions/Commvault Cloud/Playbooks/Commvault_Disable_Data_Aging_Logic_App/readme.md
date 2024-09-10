@@ -3,7 +3,7 @@
 This Logic App executes when called upon by an Automation Rule. Accessing the KeyVault to retrieve various credentials, it executes a specific runbook depending on the use case. 
 
 ## Prerequisites
-- Administrative access to your Commvault/Metallic environment.
+- Administrative access to your Commvault environment.
 - Administrative access to your Azure Resource Group and Subscription.
 - A Microsoft Sentinel instance in the aforementioned Azure Resource Group.
 - A Keyvault and an Automation Account configured as mentioned in the documentation here :- (https://github.com/Cv-securityIQ/Azure-Integration/blob/master/Solutions/Commvault%20Security%20IQ/README.md)
