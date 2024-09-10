@@ -1,0 +1,45 @@
+id: 957cb240-f45d-4491-9ba5-93430a3c08be
+name: Rare and Potentially High-Risk Office Operations
+description: |
+  Identifies Office operations that are typically rare and can provide capabilities useful to attackers.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1098
+  - T1114
+query: |
+    EnrichedMicrosoft365AuditLogs
+    | where Operation in~ ( "Add-MailboxPermission", "Add-MailboxFolderPermission", "Set-Mailbox", "New-ManagementRoleAssignment", "New-InboxRule", "Set-InboxRule", "Set-TransportRule")
+    and not(UserId has_any ('NT AUTHORITY\\SYSTEM (Microsoft.Exchange.ServiceHost)', 'NT AUTHORITY\\SYSTEM (Microsoft.Exchange.AdminApi.NetCore)', 'NT AUTHORITY\\SYSTEM (w3wp)', 'devilfish-applicationaccount') and Operation in~ ( "Add-MailboxPermission", "Set-Mailbox"))
+    | extend ClientIPOnly = tostring(extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?', dynamic(["IPAddress"]), ClientIp)[0])
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIPOnly
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: AppId
+version: 2.0.5
+kind: Scheduled
