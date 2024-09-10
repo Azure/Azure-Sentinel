@@ -10,10 +10,10 @@ Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The 
 ## RecordedFuture-Sandbox_Enrichment-Url
 Type: **Response**\
 Included in Recorded Future Intelligence Solution: **Yes**\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
+Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Enrichment-Url%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 Enables URL submission to Recorded Future's Malware Analysis Sandbox, the playbook will also create a Microsoft Sentinel incident with the following information from the analysis report:
 
@@ -23,16 +23,17 @@ Enables URL submission to Recorded Future's Malware Analysis Sandbox, the playbo
 
 File submission requires a storage account.
 
-To set up automatic enrichment, map alerts to a [custom analytic rule](https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment).
+To set up automatic enrichment, map alerts to a <a href="https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment" target="_blank">custom analytic rule</a>.
 
 
 ## RecordedFuture-Sandbox_Outlook_Attachment
 Type: **Response**\
 Included in Recorded Future Intelligence Solution: **No**\
-Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
+Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_Outlook_Attachment%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
+
 
 Enables submission of file attachments, from Microsoft Outlook emails, to Recorded to Future's Malware Analysis Sandbox. The playbook also creates a Microsoft Sentinel incident with a summary of the analysis report. 
 
@@ -43,7 +44,8 @@ The email address that received the attachment will also receive an email with t
 * signatures
 * A link to the complete analysis report. 
 
-To set up automatic enrichment, map alerts to a [custom analytic rule](https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment).
+
+To set up automatic enrichment, map alerts to a <a href="https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment" target="_blank">custom analytic rule</a>.
 
 
 ![](../Images/2023-05-05-15-37-58.png)
@@ -53,8 +55,8 @@ Type: **Response**\
 Included in Recorded Future Intelligence Solution: **No**\
 Requires **/recordedfuturesanbo** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json)
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
+<a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FSandboxing%2FRecordedFuture-Sandbox_StorageAccount%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
 
 Enables security and IT teams to submit files to Recorded Future's Malware Analysis Sandbox. The playbook will generate a Microsoft Sentinel incident, and add a comment with a the following data from the analysis report:
 
@@ -64,7 +66,7 @@ Enables security and IT teams to submit files to Recorded Future's Malware Analy
 
 This playbook is for file Submission with a storage account.
 
-To set up automatic enrichment, map alerts to a [custom analytic rule](https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment).
+To set up automatic enrichment, map alerts to a <a href="https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment" traget="_blank">custom analytic rule</a>.
 
 
 ![](../Images/2023-05-05-15-29-37.png)
