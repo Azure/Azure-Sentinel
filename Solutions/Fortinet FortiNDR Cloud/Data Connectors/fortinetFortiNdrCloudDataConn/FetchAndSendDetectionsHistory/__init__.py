@@ -10,8 +10,6 @@ from sentinel import post_data
 
 API_TOKEN = os.environ.get("FncApiToken")
 ACCOUNT_UUID = os.environ.get("FncAccountUuid")
-INCLUDE_PDNS = os.environ.get("FncAccountUuid")
-INCLUDE_DHCP = os.environ.get("IncludeDhcp")
 INCLUDE_EVENTS = os.environ.get("IncludeEvents")
 POLLING_DELAY = int(os.environ.get("PollingDelay") or 10)
 DOMAIN = os.environ.get("FncApiDomain")
@@ -110,8 +108,6 @@ def fetch_and_send_detections(ctx: ApiContext, event_type: str, start_date: str)
         "pull_muted_devices": PULL_MUTED,
         "include_description": INCLUDE_DESCRIPTION,
         "include_signature": INCLUDE_SIGNATURE,
-        "include_pdns": INCLUDE_PDNS,
-        "include_dhcp": INCLUDE_DHCP,
         "include_events": INCLUDE_EVENTS,
         "filter_training_detections": True,
         "limit": 100,
