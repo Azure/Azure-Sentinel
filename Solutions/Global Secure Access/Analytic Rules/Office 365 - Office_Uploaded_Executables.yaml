@@ -32,8 +32,8 @@ query: |
     | where TimeGenerated >= ago(endtime)
     | where Operation == uploadOp
     | where SourceFileExtension has_any (execExt)
-    | extend SourceRelativeUrl = iff(isnotempty(SourceRelativeUrl), SourceRelativeUrl, tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)) // Ensure correct field extraction
-    | extend SourceFileName = iff(isnotempty(SourceFileName), SourceFileName, tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)) // Ensure correct field extraction
+    | extend SourceRelativeUrl = iff(isnotempty(SourceRelativeUrl), SourceRelativeUrl, "")
+    | extend SourceFileName = iff(isnotempty(SourceFileName), SourceFileName, "")
     | project TimeGenerated, OfficeId, OfficeWorkload, Operation, UserType, UserKey, UserId, ClientIP, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName
     | join kind=leftanti (
         OfficeActivity
@@ -54,20 +54,17 @@ query: |
     let EnrichedEvents = EnrichedMicrosoft365AuditLogs
     | where TimeGenerated >= ago(endtime)
     | where Operation == uploadOp
-    | extend SourceFileExtension = extract(@"\.([^\./]+)$", 1, tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)) // Extract file extension
+    | extend SourceFileExtension = extract(@"\.([^\./]+)$", 1, SourceFileName)
     | where SourceFileExtension in (execExt)
-    | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
-    | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
-    | extend SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
-    | project TimeGenerated, Id, Workload, Operation, UserType, UserKey, UserId, ClientIp, UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent), Site_Url, SourceRelativeUrl, SourceFileName
+    | extend Site_Url = SiteUrl
+    | project TimeGenerated, Id, Workload, Operation, UserType, UserKey, UserId, ClientIp, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName
     | join kind=leftanti (
         EnrichedMicrosoft365AuditLogs
         | where TimeGenerated between (ago(starttime) .. ago(endtime))
         | where Operation == uploadOp
-        | extend SourceFileExtension = extract(@"\.([^\./]+)$", 1, tostring(parse_json(tostring(AdditionalProperties)).SourceFileName))
+        | extend SourceFileExtension = extract(@"\.([^\./]+)$", 1, SourceFileName)
         | where SourceFileExtension in (execExt)
-        | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
-        | summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000), PrevSeenCount = count() by SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
+        | summarize SourceRelativeUrl = make_set(SourceRelativeUrl, 100000), UserId = make_set(UserId, 100000), PrevSeenCount = count() by SourceFileName
         | mvexpand SourceRelativeUrl, UserId
         | extend SourceRelativeUrl = tostring(SourceRelativeUrl), UserId = tostring(UserId)
     ) on SourceFileName, SourceRelativeUrl, UserId
