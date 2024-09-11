@@ -19,13 +19,29 @@ relevantTechniques:
   - T1485
   - T1489
 query: |
+    // Set the maximum number of deleted teams to flag suspicious activity
     let max_delete_count = 3;
-    EnrichedMicrosoft365AuditLogs
-    | where Workload =~ "MicrosoftTeams"
-    | where Operation =~ "TeamDeleted"
-    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(tostring(AdditionalProperties.TeamName), 1000) by UserId
-    | where array_length(DeletedTeams) > max_delete_count
-    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    // EnrichedMicrosoft365AuditLogs Query
+    let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+        | where Workload =~ "MicrosoftTeams"
+        | where Operation =~ "TeamDeleted"
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(tostring(AdditionalProperties.TeamName), 1000) by UserId
+        | where array_length(DeletedTeams) > max_delete_count
+        | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+    // OfficeActivity Query
+    let OfficeEvents = OfficeActivity
+        | where OfficeWorkload =~ "MicrosoftTeams"
+        | where Operation =~ "TeamDeleted"
+        | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(TeamName, 1000) by UserId
+        | where array_length(DeletedTeams) > max_delete_count
+        | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+    // Combine and Deduplicate Office and Enriched Logs
+    let CombinedEvents = OfficeEvents
+        | union EnrichedEvents
+        | summarize arg_min(StartTime, *) by UserId;
+    // Final Output
+    CombinedEvents
+    | project StartTime, EndTime, DeletedTeams, UserId, AccountName, AccountUPNSuffix
 entityMappings:
   - entityType: Account
     fieldMappings:
