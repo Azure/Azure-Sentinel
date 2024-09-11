@@ -1,0 +1,26 @@
+id: 99713387-9d61-49eb-8edc-f51153d8bb01
+name: Listing Email Remediation Actions via Explorer
+description: |
+  - Track each cases with Network Message ID
+  - Sort the users who got a number of actions 
+  - e.g. Soft Delete, Hard Delete, Move to junk folder, Move to deleted items 
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - EmailEvents
+tactics: []
+query: |
+  EmailEvents
+  | where Timestamp > ago(30d)
+  | where LatestDeliveryAction in ("Hard delete", "Soft delete", "Moved to junk folder", "Moved to deleted items")
+  | summarize HardDelete_NetworkID = make_list_if(strcat(NetworkMessageId, @"\", Timestamp,@"\", Subject), LatestDeliveryAction == "Hard delete"),  
+              SoftDelete_NetworkID = make_list_if(strcat(NetworkMessageId, @"\", Timestamp,@"\", Subject), LatestDeliveryAction == "Soft delete"),
+              MoveToJunk_NetworkID = make_list_if(strcat(NetworkMessageId, @"\", Timestamp,@"\", Subject), LatestDeliveryAction == "Moved to junk folder"),
+              MoveToDelete_NetworkID = make_list_if(strcat(NetworkMessageId, @"\", Timestamp,@"\", Subject), LatestDeliveryAction == "Moved to deleted items") by RecipientEmailAddress
+  | extend HardDelete_case = array_length(HardDelete_NetworkID)
+  | extend SoftDelete_case = array_length(SoftDelete_NetworkID)
+  | extend MoveToJunk_case = array_length(MoveToJunk_NetworkID)
+  | extend MoveToDelete_case = array_length(MoveToDelete_NetworkID)
+  | extend Sum_case = HardDelete_case + SoftDelete_case + MoveToJunk_case + MoveToDelete_case
+  | project RecipientEmailAddress, Sum_case, HardDelete_case, SoftDelete_case, MoveToJunk_case, MoveToDelete_case, HardDelete_NetworkID, SoftDelete_NetworkID, MoveToJunk_NetworkID, MoveToDelete_NetworkID
+  | order by Sum_case desc 
