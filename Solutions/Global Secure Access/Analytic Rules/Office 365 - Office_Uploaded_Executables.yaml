@@ -32,9 +32,9 @@ query: |
     | where TimeGenerated >= ago(endtime)
     | where Operation == uploadOp
     | where SourceFileExtension has_any (execExt)
-    | extend SourceRelativeUrl = SourceRelativeUrl // Ensure this field exists or extract it correctly if it’s in JSON
-    | extend SourceFileName = SourceFileName // Ensure this field exists or extract it from JSON if needed
-    | project TimeGenerated, OfficeId, OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName
+    | extend SourceRelativeUrl = iff(isnotempty(SourceRelativeUrl), SourceRelativeUrl, tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)) // Ensure correct field extraction
+    | extend SourceFileName = iff(isnotempty(SourceFileName), SourceFileName, tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)) // Ensure correct field extraction
+    | project TimeGenerated, OfficeId, OfficeWorkload, Operation, UserType, UserKey, UserId, ClientIP, UserAgent, Site_Url, SourceRelativeUrl, SourceFileName
     | join kind=leftanti (
         OfficeActivity
         | where TimeGenerated between (ago(starttime) .. ago(endtime))
@@ -48,7 +48,7 @@ query: |
     | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
     | extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true, false)
     | summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), UserAgents = make_list(UserAgent, 100000), OfficeIds = make_list(OfficeId, 100000), SourceRelativeUrls = make_list(SourceRelativeUrl, 100000), FileNames = make_list(SourceFileName, 100000)
-    by OfficeWorkload, RecordType, Operation, UserType, UserKey, UserId, ClientIP, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
+    by OfficeWorkload, Operation, UserType, UserKey, UserId, ClientIP, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
     | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
     // EnrichedMicrosoft365AuditLogs Query
     let EnrichedEvents = EnrichedMicrosoft365AuditLogs
@@ -59,7 +59,7 @@ query: |
     | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
     | extend SourceRelativeUrl = tostring(parse_json(tostring(AdditionalProperties)).SourceRelativeUrl)
     | extend SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
-    | project TimeGenerated, Id, Workload, RecordType, Operation, UserType, UserKey, UserId, ClientIp, UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent), Site_Url, SourceRelativeUrl, SourceFileName
+    | project TimeGenerated, Id, Workload, Operation, UserType, UserKey, UserId, ClientIp, UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent), Site_Url, SourceRelativeUrl, SourceFileName
     | join kind=leftanti (
         EnrichedMicrosoft365AuditLogs
         | where TimeGenerated between (ago(starttime) .. ago(endtime))
@@ -75,7 +75,7 @@ query: |
     | extend UserIdUserFolderFormat = tolower(replace_regex(UserId, '@|\\.', '_'))
     | extend UserIdDiffThanUserFolder = iff(Site_Url has '/personal/' and SiteUrlUserFolder != UserIdUserFolderFormat, true, false)
     | summarize TimeGenerated = make_list(TimeGenerated, 100000), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), UserAgents = make_list(UserAgent, 100000), Ids = make_list(Id, 100000), SourceRelativeUrls = make_list(SourceRelativeUrl, 100000), FileNames = make_list(SourceFileName, 100000)
-    by Workload, RecordType, Operation, UserType, UserKey, UserId, ClientIp, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
+    by Workload, Operation, UserType, UserKey, UserId, ClientIp, Site_Url, SiteUrlUserFolder, UserIdUserFolderFormat, UserIdDiffThanUserFolder
     | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
     // Combine and Deduplicate Office and Enriched Logs
     let CombinedEvents = OfficeEvents
@@ -83,7 +83,7 @@ query: |
     | summarize arg_min(StartTime, *) by SourceFileName, SourceRelativeUrl, UserId;
     // Final Output
     CombinedEvents
-    | project StartTime, EndTime, SourceFileName, SourceRelativeUrl, UserId, AccountName, AccountUPNSuffix, UserIdDiffThanUserFolder, Workload, Operation, RecordType, UserType, UserKey, ClientIP, Site_Url, UserAgents, FileNames;
+    | project StartTime, EndTime, SourceFileName, SourceRelativeUrl, UserId, AccountName, AccountUPNSuffix, UserIdDiffThanUserFolder, Workload, Operation, UserType, UserKey, ClientIP, Site_Url, UserAgents, FileNames;
 entityMappings:
   - entityType: Account
     fieldMappings:
