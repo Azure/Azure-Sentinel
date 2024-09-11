@@ -11,26 +11,52 @@ tactics:
 relevantTechniques:
   - T1136
 query: |
-  // If you want to look at user added further than 7 days ago adjust this value
-  // If you want to change the timeframe of how quickly accounts need to be added and removed change this value
-  let time_delta = 1h;
-  EnrichedMicrosoft365AuditLogs
-  | where Workload == "MicrosoftTeams"
-  | where Operation == "MemberAdded"
-  | extend UPN = tostring(parse_json(tostring(AdditionalProperties)).UPN) // Assuming UPN is stored in AdditionalProperties
-  | where UPN contains "#EXT#"
-  | project TimeAdded = TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), TeamGuid = tostring(parse_json(tostring(AdditionalProperties)).TeamGuid)
-  | join kind=innerunique (
-      EnrichedMicrosoft365AuditLogs
+  let time_delta = 1h;  // Timeframe to detect quick additions and removals of external users
+  // EnrichedMicrosoft365AuditLogs Query
+  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
       | where Workload == "MicrosoftTeams"
-      | where Operation == "MemberRemoved"
-      | extend UPN = tostring(parse_json(tostring(AdditionalProperties)).UPN) // Assuming UPN is stored in AdditionalProperties
+      | where Operation == "MemberAdded"
+      | extend UPN = tostring(parse_json(tostring(AdditionalProperties)).UPN)  // Extract UPN
       | where UPN contains "#EXT#"
-      | project TimeDeleted = TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), TeamGuid = tostring(parse_json(tostring(AdditionalProperties)).TeamGuid)
-  ) on UPN, TeamGuid
-  | where TimeDeleted < (TimeAdded + time_delta)
-  | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName, TeamGuid
-  | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1])
+      | project TimeAdded = TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), TeamGuid = tostring(parse_json(tostring(AdditionalProperties)).TeamGuid)
+      | join kind=innerunique (
+          EnrichedMicrosoft365AuditLogs
+          | where Workload == "MicrosoftTeams"
+          | where Operation == "MemberRemoved"
+          | extend UPN = tostring(parse_json(tostring(AdditionalProperties)).UPN)  // Extract UPN
+          | where UPN contains "#EXT#"
+          | project TimeDeleted = TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName), TeamGuid = tostring(parse_json(tostring(AdditionalProperties)).TeamGuid)
+      ) on UPN, TeamGuid
+      | where TimeDeleted < (TimeAdded + time_delta)  // Check if removed within the time_delta
+      | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName, TeamGuid
+      | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1]);
+  // OfficeActivity Query
+  let OfficeEvents = OfficeActivity
+      | where OfficeWorkload =~ "MicrosoftTeams"
+      | where Operation =~ "MemberAdded"
+      | extend UPN = tostring(parse_json(Members)[0].UPN)
+      | where UPN contains "#EXT#"
+      | project TimeAdded = TimeGenerated, Operation, UPN, UserWhoAdded = UserId, TeamName, TeamGuid
+      | join kind=innerunique (
+          OfficeActivity
+          | where OfficeWorkload =~ "MicrosoftTeams"
+          | where Operation =~ "MemberRemoved"
+          | extend UPN = tostring(parse_json(Members)[0].UPN)
+          | where UPN contains "#EXT#"
+          | project TimeDeleted = TimeGenerated, Operation, UPN, UserWhoDeleted = UserId, TeamName, TeamGuid
+      ) on UPN, TeamGuid
+      | where TimeDeleted < (TimeAdded + time_delta)  // Check if removed within the time_delta
+      | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName, TeamGuid
+      | extend AccountName = tostring(split(UPN, "@")[0]), AccountUPNSuffix = tostring(split(UPN, "@")[1])
+      | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix;
+  // Combine Office and Enriched Logs
+  let CombinedEvents = OfficeEvents
+      | union EnrichedEvents
+      | summarize arg_min(TimeAdded, *) by UPN, TeamGuid;
+  // Final Output
+  CombinedEvents
+      | project TimeAdded, TimeDeleted, UPN, UserWhoAdded, UserWhoDeleted, TeamName, TeamGuid, AccountName, AccountUPNSuffix
+      | order by TimeAdded desc
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -38,5 +64,5 @@ entityMappings:
         columnName: AccountName
       - identifier: UPNSuffix
         columnName: AccountUPNSuffix
-version: 2.0.1
+version: 2.0.2
 kind: Scheduled

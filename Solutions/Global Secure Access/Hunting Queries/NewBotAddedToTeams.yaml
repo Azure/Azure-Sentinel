@@ -16,19 +16,41 @@ query: |
   let starttime = todatetime('{{StartTimeISO}}');
   let endtime = todatetime('{{EndTimeISO}}');
   let lookback = starttime - 14d;
-  let historical_bots = 
-    EnrichedMicrosoft365AuditLogs
-    | where TimeGenerated between (lookback .. starttime)
-    | where Workload == "MicrosoftTeams"
-    | extend AddonName = tostring(parse_json(tostring(AdditionalProperties)).AddonName)
-    | where isnotempty(AddonName)
-    | distinct AddonName;
-  EnrichedMicrosoft365AuditLogs
-  | where TimeGenerated between (starttime .. endtime)
-  | where Workload == "MicrosoftTeams"
-  | extend AddonName = tostring(parse_json(tostring(AdditionalProperties)).AddonName)
-  | where AddonName !in (historical_bots)
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+  // Historical bots from EnrichedMicrosoft365AuditLogs
+  let historical_bots_enriched = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated between (lookback .. starttime)
+      | where Workload == "MicrosoftTeams"
+      | extend AddonName = tostring(parse_json(tostring(AdditionalProperties)).AddonName)
+      | where isnotempty(AddonName)
+      | distinct AddonName;
+  // Historical bots from OfficeActivity
+  let historical_bots_office = OfficeActivity
+      | where TimeGenerated between (lookback .. starttime)
+      | where OfficeWorkload == "MicrosoftTeams"
+      | where isnotempty(AddonName)
+      | distinct AddonName;
+  // Find new bots in Enriched Logs
+  let new_bots_enriched = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where Workload == "MicrosoftTeams"
+      | extend AddonName = tostring(parse_json(tostring(AdditionalProperties)).AddonName)
+      | where AddonName !in (historical_bots_enriched)
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  // Find new bots in OfficeActivity
+  let new_bots_office = OfficeActivity
+      | where TimeGenerated between (starttime .. endtime)
+      | where OfficeWorkload == "MicrosoftTeams"
+      | where isnotempty(AddonName)
+      | where AddonName !in (historical_bots_office)
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  // Combine both new bots from Enriched Logs and OfficeActivity
+  let CombinedNewBots = new_bots_enriched
+      | union new_bots_office
+      | summarize arg_min(TimeGenerated, *) by AddonName, UserId;
+  // Final output
+  CombinedNewBots
+      | project TimeGenerated, AddonName, UserId, AccountName, AccountUPNSuffix
+      | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -36,4 +58,4 @@ entityMappings:
         columnName: AccountName
       - identifier: UPNSuffix
         columnName: AccountUPNSuffix
-version: 2.0.1
+version: 2.0.2
