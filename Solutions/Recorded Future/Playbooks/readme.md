@@ -93,28 +93,72 @@ Consider your organisational use cases and install the corresponding playbooks t
 
 # Workboooks
 
-Workbook templates are installed in Sentinel and can be configures and saved.
-![Workbooks](images/workbook.png)
-
+Workbook templates are installed as part of the Solution and and can be saved and configured in Sentinel's Workbook-Template section.
 <details>
-<summary>Expand for Workbook examples and explanation</summary>
+<summary>Expand image</summary>
 
-### Recorded Future - Alerts Overview
-Dashboard for Recorded Future Alert imported bu the RecordedFuture-Alert-Importer playbook.
-<img src="Images/AlertWorkbook.png" alt="Alert Workbook" width="60%"/>
-
-### Recorded Future - Domain Correlation
-Domain correlation dashboad. This dashboard can be used to investigate correlations between imported Recorded Future risk lists and infrastructure loggs ingested to Sentinel.
-### Recorded Future - Hash Correlation
-### Recorded Future - IP Correlation
-### Recorded Future - Malware Threat Hunting
-### Recorded Future - Playbook Alerts Overview
-### Recorded Future - Threat Actor Hunting
-### Recorded Future - URL Correlation
+![Workbooks](images/workbook.png)
 </details>
-<p>
+
+The Recorded Future Solutions contains the following Workbooks. Note that workbooks have dependecies on corresponding Playbooks configured and running. 
+|Use Case|Workbook Name| Playbook dependency|
+|-|-|-|
+|SOC Efficiency|Alerts Overview|Alert-Importer|
+|SOC Efficiency|Playbook Alerts Overview|PlaybookAlert-Importer|
+|Detect|Domain Correlation|Indicator Import/Risk List Playbooks/TAXII Import|
+|Detect|Hash Correlation|Indicator Import/Risk List Playbooks/TAXII Import|
+|Detect|IP Correlation|Indicator Import/Risk List Playbooks/TAXII Import|
+|Detect|URL Correlation|Indicator Import/Risk List Playbooks/TAXII Import|
+|Threat Hunt|Threat Actor Hunting|Threat Hunt Playbooks|
+|Threat Hunt |Malware Threat Hunting|Threat Hunt Playbooks|
 
 # Analytic Rules
+Recorded Future Solution includes Analytic Rule templates. That can be configured to trigger alerts related to our imported risklists och threat hunts.
+<details>
+<summary>Expand image</summary>
+
+![Workbooks](images/analyticrules.png)
+</details>
+
+When creating Analytic Rules from templates, modify the provided KQL to match you infrastructure. The KQL query below is an example where the ASIM imNetworkSession table can be exchanged for any table containing outgoing IP traffic in your infrastructure. 
+
+```JS
+let ioc_lookBack = 1d;
+// The source table (ASimNetworkSessionLogs) can be replaced by any infrastructure table containing ip data.
+// The following workbook: Recorded Future - IP Correlation will help researching available data and selecting tables and columns  
+imNetworkSession
+| where isnotempty(DstIpAddr)
+| join kind=inner (
+ThreatIntelligenceIndicator
+// Only look for IOCs
+| where isnotempty(NetworkIP)
+// Only look at Recorded Future Threat Hunt Indicators.
+| where Description startswith "Recorded Future - Threat Hunt"
+// Only work with the latest indicators  
+| where TimeGenerated >= ago(ioc_lookBack)
+| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
+| where Active == true and ExpirationDateTime > now()
+) on $left.DstIpAddr == $right.NetworkIP
+// select column from the source table to match with Recorded Future ThreatIntelligenceIndicator $left.DstIpAddr
+| mv-expand RecordedFuturePortalLink=parse_json(tostring(parse_json(Tags)[0]))['RecordedFuturePortalLink']
+| project NetworkIP, Description, Type, TimeGenerated, RecordedFuturePortalLink
+```
+
+The following Analytic rules are provided in the Solution. All of them requires configuration and adaption to your infrastructure. 
+
+|User Case|Analytic Rule|
+|-|-|
+|Detect|DomainMalwareC2inDNSEvents|
+|Detect|DomainMalwareC2inSyslogEvents|
+|Detect|HashObservedInUndergroundinCommonSecurityLog|
+|Detect|IPMalwareC2inAzureActivityEvents|
+|Detect|IPMalwareC2inDNSEvents|
+|Detect|UrlReportedbyInsiktGroupinSyslogEvents|
+|Threat Hunt|RecordedFutureThreatHuntingHashAllActors|
+|Threat Hunt|RecordedFutureThreatHuntingIPAllActors|
+|Threat Hunt|RecordedFutureThreatHuntingDomainAllActors|
+|Threat Hunt|RecordedFutureThreatHuntingUrlAllActors|
+
 
 # Upgrade from previous versions
 Information about latest released version number can be found in Recorded Future Intelligence Solution [release notes](../ReleaseNotes.md). There can be delay to the version available inside the content hub and whats in listed here due to publish/rollout time.  
@@ -150,6 +194,10 @@ ThreatIntelligenceIndicator
 |where Description == "Recorded Future - IP - Actively Communicating C&C Server" and AdditionalInformation contains "Cobalt Strike"
 | take 10
 ```
+
+## URL entities in RecordedFuture-IOC_Enrichment
+If http or https is missing from URL entities a 404 will be returned from Recorded Future api endpoint. Its possible to modify the logic app and add missing https:// but   
+
 
 ### Report isses/errors
 
