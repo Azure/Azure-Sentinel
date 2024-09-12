@@ -1,7 +1,7 @@
 Parser:
   Title: AuditEvent ASIM parser for Infoblox BloxOne
   Version: '0.1.0'
-  LastUpdated: Jun 26 2024
+  LastUpdated: September 11, 2024
 Product:
   Name: Infoblox BloxOne
 Normalization:
@@ -11,7 +11,7 @@ References:
 - Title: ASIM AuditEvent Schema
   Link: https://aka.ms/ASimAuditEventDoc
 - Title: ASIM
-  Link: https:/aka.ms/AboutASIM
+  Link: https://aka.ms/AboutASIM
 - Title: Infoblox BloxOne Documentation
 - Link: https://docs.infoblox.com/space/BloxOneThreatDefense/35406922/DNS+Query%2FResponse+Log+Message+Mapping
 Description: |
@@ -37,6 +37,22 @@ ParserQuery:
       "9", "High",
       "10", "High"
   ];
+  let OperationLookup = datatable (DeviceAction:string, Object:string, ObjectType:string)
+  [
+    "CreateSecurityPolicy", "Security Policy", "Policy Role",
+    "UpdateSecurityPolicy",	"Security Policy",	"Policy",
+    "Create", "Network Resource",	"Service",
+    "Update", "Network Resource",	"Service",
+    "Restore", "Infoblox Resource",	"Service",
+    "CreateOrGetDoHFQDN", "DOHFQDN",	"Service",
+    "CreateOrUpdateDfpService", "Dfp Service",	"Service",
+    "MoveToRecyclebin",	"Recyclebin",	"Other",
+    "CreateCategoryFilter", "Category Filter", "Other",
+    "GetLookalikeThreatCounts", "Lookalike Threat Counts", "Other",
+    "GetLookalikeDomainCounts",	"Lookalike Domain Counts", "Other",
+    "CreateRoamingDeviceGroup",	"Roaming Device Group",	"Configuration Atom",
+    "UpdatePartialRoamingDeviceGroup", "Partial Roaming Device Group",	"Configuration Atom"
+  ];
   let parser = (disabled:bool=false) {
       CommonSecurityLog
       | where not(disabled)
@@ -44,6 +60,7 @@ ParserQuery:
           and DeviceEventClassID has "AUDIT"
       | parse-kv AdditionalExtensions as (InfobloxHTTPReqBody:string, InfobloxHTTPRespBody:string) with (pair_delimiter=";", kv_delimiter="=")
       | lookup EventSeverityLookup on LogSeverity
+      | lookup OperationLookup on DeviceAction
       | invoke _ASIM_ResolveDvcFQDN('CollectorHostName')
       | project-rename
           EventResult = EventOutcome,
@@ -52,7 +69,8 @@ ParserQuery:
           SrcIpAddr = SourceIP,
           EventOriginalSeverity = LogSeverity,
           EventMessage = Message,
-          EventOriginalType = DeviceEventCategory
+          EventOriginalType = DeviceEventCategory,
+          EventUid = _ItemId
       | extend
           Dvc = DvcHostname,
           EventEndTime = TimeGenerated,
