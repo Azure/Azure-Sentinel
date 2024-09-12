@@ -15,36 +15,77 @@ relevantTechniques:
   - T1078
   - T1114
 query: |
-  let starttime = todatetime('{{StartTimeISO}}');
-  let endtime = todatetime('{{EndTimeISO}}');
-  let lookback = starttime - 14d;
-  let historicalActivity=
-  OfficeActivity
-  | where TimeGenerated between(lookback..starttime)
-  | where RecordType=="ExchangeAdmin" and UserType in ("Admin","DcAdmin")
-  | summarize historicalCount=count() by UserId;
-  let recentActivity = OfficeActivity
-  | where TimeGenerated between(starttime..endtime)
-  | where UserType in ("Admin","DcAdmin")
-  | summarize recentCount=count() by UserId;
-  recentActivity | join kind = leftanti (
-     historicalActivity
-  ) on UserId
-  | project UserId,recentCount
-  | order by recentCount asc, UserId
-  | join kind = rightsemi
-  (OfficeActivity
-  | where TimeGenerated between(starttime..endtime)
-  | where RecordType == "ExchangeAdmin" | where UserType in ("Admin","DcAdmin"))
-  on UserId
-  | summarize StartTime = max(TimeGenerated), EndTime = min(TimeGenerated), count() by RecordType, Operation, UserType, UserId, OriginatingServer, ResultStatus
-  | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
-  | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
-  | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
-  | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '')
-  | extend Account_0_Name = AccountName
-  | extend Account_0_UPNSuffix = AccountUPNSuffix
-  | extend Account_0_NTDomain = AccountNTDomain
+    let starttime = todatetime('{{StartTimeISO}}');
+    let endtime = todatetime('{{EndTimeISO}}');
+    let lookback = starttime - 14d;
+    // Historical activity from both sources
+    let historicalActivity = 
+        union isfuzzy=true
+        (
+            EnrichedMicrosoft365AuditLogs
+            | where TimeGenerated between (lookback .. starttime)
+            | where RecordType == "ExchangeAdmin" and UserType in ("Admin", "DcAdmin")
+            | extend SourceType = "EnrichedLogs"
+        ),
+        (
+            OfficeActivity
+            | where TimeGenerated between (lookback .. starttime)
+            | where RecordType == "ExchangeAdmin" and UserType in ("Admin", "DcAdmin")
+            | extend SourceType = "OfficeActivity"
+        )
+        | summarize historicalCount = count() by UserId;
+    // Recent activity from both sources
+    let recentActivity = 
+        union isfuzzy=true
+        (
+            EnrichedMicrosoft365AuditLogs
+            | where TimeGenerated between (starttime .. endtime)
+            | where UserType in ("Admin", "DcAdmin")
+            | extend SourceType = "EnrichedLogs"
+        ),
+        (
+            OfficeActivity
+            | where TimeGenerated between (starttime .. endtime)
+            | where UserType in ("Admin", "DcAdmin")
+            | extend SourceType = "OfficeActivity"
+        )
+        | summarize recentCount = count() by UserId;
+    // Identify new admin activity
+    let newAdminActivity = recentActivity
+        | join kind=leftanti (historicalActivity) on UserId
+        | project UserId, recentCount, Operation, OriginatingServer;
+    // Combine recent activity data from both sources, prioritizing EnrichedEvents
+    let combinedActivity = 
+        union isfuzzy=true
+        (
+            EnrichedMicrosoft365AuditLogs
+            | where TimeGenerated between (starttime .. endtime)
+            | where RecordType == "ExchangeAdmin" and UserType in ("Admin", "DcAdmin")
+            | extend SourceType = "EnrichedLogs", OriginatingServer = ""
+        ),
+        (
+            OfficeActivity
+            | where TimeGenerated between (starttime .. endtime)
+            | where RecordType == "ExchangeAdmin" and UserType in ("Admin", "DcAdmin")
+            | extend SourceType = "OfficeActivity"
+        )
+        | join kind=rightsemi (newAdminActivity) on UserId;
+    // Final summarization and output
+    combinedActivity
+    | summarize arg_min(TimeGenerated, *) by UserId, Operation, OriginatingServer
+    | summarize StartTime = min(TimeGenerated), 
+                EndTime = max(TimeGenerated), 
+                count() by RecordType, Operation, UserType, UserId, OriginatingServer, ResultStatus
+    | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
+    | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+    | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
+    | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '')
+    | extend Account_0_Name = AccountName,
+             Account_0_UPNSuffix = AccountUPNSuffix,
+             Account_0_NTDomain = AccountNTDomain
+    | project StartTime, EndTime, RecordType, Operation, UserType, UserId, OriginatingServer, ResultStatus, 
+              Account_0_Name, Account_0_UPNSuffix, Account_0_NTDomain, Count = count_
+    | order by StartTime desc
 entityMappings:
   - entityType: Account
     fieldMappings:

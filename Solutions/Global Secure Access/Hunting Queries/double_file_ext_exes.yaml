@@ -27,31 +27,38 @@ query: |
             | where RecordType =~ "SharePointFileOperation" and (Operation =~ "FileDownloaded" or Operation =~ "FileAccessed")
             | where SourceFileExtension !in~ (known_ext)
         ) on OfficeObjectId
-        | where UserId1 !in~ (excluded_users)
-        | extend userBag = bag_pack(UserId1, ClientIP1)
-        | summarize make_set(UserId1, 10000), make_bag(userBag), Start = max(TimeGenerated), End = min(TimeGenerated)
+        | where UserId1 !in (excluded_users)
+        | extend userBag = pack(UserId1, ClientIP1)
+        | summarize make_set(UserId1, 10000), userBag = make_bag(userBag), Start = max(TimeGenerated), End = min(TimeGenerated)
         by UserId, OfficeObjectId, SourceFileName, Extension
-        | extend NumberOfUsers = array_length(bag_keys(bag_userBag))
-        | project UploadTime = Start, Uploader = UserId, FileLocation = OfficeObjectId, FileName = SourceFileName, AccessedBy = bag_userBag, Extension, NumberOfUsers
+        | extend NumberOfUsers = array_length(bag_keys(userBag))
+        | project UploadTime = Start, Uploader = UserId, FileLocation = OfficeObjectId, FileName = SourceFileName, AccessedBy = userBag, Extension, NumberOfUsers
         | extend UploaderName = tostring(split(Uploader, "@")[0]), UploaderUPNSuffix = tostring(split(Uploader, "@")[1])
         | extend Account_0_Name = UploaderName, Account_0_UPNSuffix = UploaderUPNSuffix;
     // EnrichedMicrosoft365AuditLogs Query
     let EnrichedEvents = EnrichedMicrosoft365AuditLogs
         | where RecordType == "SharePointFileOperation" and isnotempty(ObjectId)
-        | where ObjectId has ".exe." and not(ObjectId endswith ".lnk") and not(ObjectId endswith ".log")
-            and not(ObjectId endswith ".option") and not(ObjectId endswith ".config")
-            and not(ObjectId endswith ".manifest") and not(ObjectId endswith ".partial")
+        | where ObjectId has ".exe." 
+            and not(ObjectId endswith ".lnk") 
+            and not(ObjectId endswith ".log")
+            and not(ObjectId endswith ".option") 
+            and not(ObjectId endswith ".config")
+            and not(ObjectId endswith ".manifest") 
+            and not(ObjectId endswith ".partial")
         | extend Extension = extract("[^.]*\\.[^.]*$", 0, ObjectId)
         | extend SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
         | join kind=leftouter (
             EnrichedMicrosoft365AuditLogs
             | where RecordType == "SharePointFileOperation" and (Operation == "FileDownloaded" or Operation == "FileAccessed")
-            | where not(ObjectId endswith ".lnk") and not(ObjectId endswith ".log")
-                and not(ObjectId endswith ".option") and not(ObjectId endswith ".config")
-                and not(ObjectId endswith ".manifest") and not(ObjectId endswith ".partial")
+            | where not(ObjectId endswith ".lnk") 
+                and not(ObjectId endswith ".log")
+                and not(ObjectId endswith ".option") 
+                and not(ObjectId endswith ".config")
+                and not(ObjectId endswith ".manifest") 
+                and not(ObjectId endswith ".partial")
         ) on ObjectId
         | where UserId1 !in (excluded_users)
-        | extend userBag = bag_pack("UserId", UserId1, "ClientIp", ClientIp1)
+        | extend userBag = pack("UserId", UserId1, "ClientIp", ClientIp1)
         | summarize make_set(UserId1, 10000), userBag = make_bag(userBag), UploadTime = max(TimeGenerated)
         by UserId, ObjectId, SourceFileName, Extension
         | extend NumberOfUsers = array_length(bag_keys(userBag))
@@ -63,8 +70,8 @@ query: |
         | summarize arg_min(UploadTime, *) by FileLocation, Uploader;
     // Final Output
     CombinedEvents
-        | project UploadTime, Uploader, FileLocation, FileName, AccessedBy, Extension, NumberOfUsers, UploaderName, UploaderUPNSuffix
-        | order by UploadTime desc;
+    | project UploadTime, Uploader, FileLocation, FileName, AccessedBy, Extension, NumberOfUsers, UploaderName, UploaderUPNSuffix
+    | order by UploadTime desc
 entityMappings:
   - entityType: Account
     fieldMappings:
