@@ -29,7 +29,7 @@ Recorded Future is the world's largest provider of intelligence for enterprise s
 
 [Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here!](https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta)
 
-
+<a id="keyfeatures"></a>
 # Key Features
 Recorded Future for Microsoft Sentinel offers a range of powerful intelligence capabilities, some of the key features include:
 ## **IOC Detection (Detect)**

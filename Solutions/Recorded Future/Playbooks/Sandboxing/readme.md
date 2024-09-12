@@ -18,7 +18,7 @@ Requires **/recordedfuturesanbo** API keys as described in the [Connector author
 Enables URL submission to Recorded Future's Malware Analysis Sandbox, the playbook will also create a Microsoft Sentinel incident with the following information from the analysis report:
 
 * Severity Score
-* signatures
+* Signatures
 * A link to the complete analysis report 
 
 File submission requires a storage account.

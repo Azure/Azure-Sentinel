@@ -3,7 +3,7 @@ More information about Recorded Future Intelligence Solution for Microsoft Senti
 
 ## RecordedFuture-CustomConnector
 Type: Logic-app custom connector\
-Included in Recorded Future Intelligence Solution: Yes\
+Included in Recorded Future Intelligence Solution: **Yes**
 
 Logic app custom connector used by Recorded Future logic apps for communication with backend API. This connector is used by other logic apps in this solution and are listed as a prerequisite in dependant logic apps. 
 

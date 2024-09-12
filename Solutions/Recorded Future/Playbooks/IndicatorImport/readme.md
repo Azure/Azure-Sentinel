@@ -74,6 +74,7 @@ Note that it is possible to deploy several instances of the same template by giv
 ![](../Images/2023-04-19-16-49-53.png)
 
 The parameter **PlaybookNameBatching** is the name of the ThreatIntelligenceImport playbook that will handle batch processing of indicators into Microsoft Sentinel. In the last step press **Create and continue to designer**.
+
 ![](../Images/2023-04-19-16-51-12.png)
 
 In the designer, locate all steps that show a warning and authenticate these steps. Authentication looks different for each connection. More information on this can be found in the chapter above called Connector Authorization. [More information about playbook authentication](https://learn.microsoft.com/en-us/azure/sentinel/authenticate-playbooks-to-sentinel).

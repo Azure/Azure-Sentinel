@@ -7,7 +7,7 @@ Type: **Alerting**\
 Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md#connectors-authorization) section. 
 
-Retrieves Alerts and stores them in a custom log in the Log Analytic Workspace. More information on <a href="https://support.recordedfuture.com/hc/en-us/articles/115002151327-Setting-up-Event-Alerts" target="_blank">Alerts</a> (requires login)
+Retrieves Alerts and stores them in a custom log in the Log Analytic Workspace. More information on <a href="https://support.recordedfuture.com/hc/en-us/articles/115002151327-Setting-up-Event-Alerts" target="_blank">Alerts</a> (requires Recorded Future login)
 
 The Alert importer playbook can create sentinel incidents when receiving alerts. Its possible to turn off incident generation by setting the logic app parameter create_incident to false.
 
@@ -22,7 +22,7 @@ Type: **Alerting**\
 Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](#connectors-authorization) section. 
 
-Retrieves Playbook Alerts and stores them in a custom log in the Log Analytic Workspace. More information on <a href="https://support.recordedfuture.com/hc/en-us/articles/13152506878739-Playbook-Alerting-Rules" target="_blank">Playbook Alerts</a> (requires login)
+Retrieves Playbook Alerts and stores them in a custom log in the Log Analytic Workspace. More information on <a href="https://support.recordedfuture.com/hc/en-us/articles/13152506878739-Playbook-Alerting-Rules" target="_blank">Playbook Alerts</a> (requires Recorded Future login)
 
 The Playbook Alert importer playbook can create sentinel incidents when receiving alerts. Its possible to turn off incident generation by setting the logic app parameter create_incident to false.
 

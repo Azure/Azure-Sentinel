@@ -3,7 +3,7 @@
 
 ## Prerequisites  
 
-### Solution Dependecies 
+### Solution Dependencies  
 
 The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be installed for indicators to be forwarded to Microsoft Sentinel ThreatIntelligenceIndicator log table. The Threat Intelligence Solution contains both the deprecated **Threat Intelligence Platforms Data Connector** and the new **Threat Intelligence Upload Indicators API**.
 
@@ -40,7 +40,7 @@ The Recorded Future solution uses the following connectors:
 
 - **/azuresentinel** - <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors</a>
 
-- **/microsoftgraphsecurity** - <a href="https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/" target="_blank">Documenation on Microsoft power platform connectors</a>. The playbooks using this API is being DEPRECATED and will transition to new playbooks using /azuresentinel api.
+- **/microsoftgraphsecurity** - <a href="https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/" target="_blank">Documentation on Microsoft power platform connectors</a>. The playbooks using this API is being DEPRECATED and will transition to new playbooks using **/azuresentinel** API.
 
 ## Ingestion and Operational costs
 Playbook(Logic apps) may result in additional ingestion or operational costs:
@@ -53,33 +53,38 @@ Recorded Futures risk lists are generated at different cadences as described in 
 
 # Installation
 
-There are two options for installing playbooks and starting automate threat response:
+The recommended way of installing the solution is via Microsoft Sentinel Content Hub, as it will provide templates for Playbooks, Workbooks and Analytic Rules.
 
-1. Installing the solution inside Microsoft Sentinel Content Hub. (Recommended)
+It is possible to install specific playbooks as specified in the [Playbooks](#playbooks) section, as there are some playbooks not included in the content pack. This information is specified in their respective READMEs. Installing a specific playbook is a way to get bugfixes for a specific module.
+
 
 ## 1. Content Hub Installation
 
 1. Locate the `Recorded Future Intelligence Solution` in Microsoft Sentinel Content Hub.
 ![](Images/2023-04-18-08-39-58.png)
-1. Press **Install**  and continue to configure the solution. 
+Press **Install**  and continue to configure the solution. 
 
 > [!NOTE] 
 > The Content Hub installation provides templates and you have to create playbooks, workbooks, and analytic rules based on the templates. 
+
 ![](Images/2023-11-20-12-13-25.png)
 
-When installing playbooks from templates, read the description and look for dependencies that have to be installed. Example, install a custom connector that is included in the solution together with the playbook. Read the documentation for each playbook in subfolders listed [here](#playbooks)
+When installing playbooks from templates, read the description and look for dependencies that have to be installed. 
+
+Example, install a custom connector that is included in the solution together with the playbook. Read the documentation for each playbook in sub folders listed [here](#playbooks)
+
 ![](Images/2023-11-20-12-34-15.png)
 
-After pressing the "Create Playbook" specify Subscription, Resource Gorup and Workspace. This is needed when installing any of the Playbooks.
+After pressing the "Create Playbook" specify Subscription, Resource Group and Workspace. This is needed when installing any of the Playbooks.
 
 ![](Images/2023-04-18-08-43-42.png)
 
 # Playbooks
-Some playbooks are not included in the Content Hub Solution and can be installed from this README. It is stated in the description of each playbook as 'Included in Solution: Yes/No'. Playbooks not included in the Content Hub installation are provided as previews or examples of how to automate use cases.   
+Some playbooks are not included in the Content Hub Solution and can be installed from this README. It is stated in the description of each playbook as **'Included in Solution: Yes/No'**. Playbooks not included in the Content Hub installation are provided as previews or examples of how to automate use cases.   
 
 <a id="playbooks"></a>
 ## Playbooks:
-Consider your organisational use cases and install the corresponding playbooks to fit your needs.
+Consider your organizational use cases and install the corresponding playbooks to fit your needs. For examples and explanations of the use cases, see the [Key Features](../readme.md#key-features) section. 
 
 |Use case| Playbook |
 |-|-|
@@ -91,7 +96,7 @@ Consider your organisational use cases and install the corresponding playbooks t
 | Custom connectors | [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md) |
 | Deprecated playbooks | [Deprecated Risk List Playbooks](Deprecated/readme.md) |
 
-# Workboooks
+# Workbooks
 
 Workbook templates are installed as part of the Solution and and can be saved and configured in Sentinel's Workbook-Template section.
 <details>
@@ -100,7 +105,7 @@ Workbook templates are installed as part of the Solution and and can be saved an
 ![Workbooks](images/workbook.png)
 </details>
 
-The Recorded Future Solutions contains the following Workbooks. Note that workbooks have dependecies on corresponding Playbooks configured and running. 
+The Recorded Future Solutions contains the following Workbooks. Note that workbooks have dependencies on corresponding Playbooks configured and running. 
 |Use Case|Workbook Name| Playbook dependency|
 |-|-|-|
 |SOC Efficiency|Alerts Overview|Alert-Importer|
@@ -113,7 +118,7 @@ The Recorded Future Solutions contains the following Workbooks. Note that workbo
 |Threat Hunt |Malware Threat Hunting|Threat Hunt Playbooks|
 
 # Analytic Rules
-Recorded Future Solution includes Analytic Rule templates. That can be configured to trigger alerts related to our imported risklists och threat hunts.
+Recorded Future Solution includes Analytic Rule templates. That can be configured to trigger alerts related to our imported risk lists och threat hunts.
 <details>
 <summary>Expand image</summary>
 
@@ -196,10 +201,12 @@ ThreatIntelligenceIndicator
 ```
 
 ## URL entities in RecordedFuture-IOC_Enrichment
-If http or https is missing from URL entities a 404 will be returned from Recorded Future api endpoint. Its possible to modify the logic app and add missing https:// but   
+If `http` or `https` is missing from URL entities a 404 will be returned from Recorded Future api endpoint. Its possible to modify the logic app and add missing `https://` ... **ADD MORE HERE**
+
+Another way to handle the issue is addressing it at the source, depending on from where the incident is generated from, modify it to keep `http`or `https` when creating a incident. Changes in Analytic Rules might also fix the problem based on which column the URL is fetched from.
 
 
-### Report isses/errors
+### Report issues/errors
 
 When reporting issues or errors to Recorded Future on logic apps. Please include logic app version identifier that can be found in the version section in the azure portal.
 

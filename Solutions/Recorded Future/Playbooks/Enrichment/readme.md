@@ -16,7 +16,7 @@ Enriches IOCs (IPs, Domains, URLs and hashes) in Microsoft Sentinel incidents wi
 * Previous detections 
 * Link to the IOC Intelligence Card in the Recorded Future portal.  
   
-Data is added as a comment in the incident.
+Data is added as a **comment** in the incident.
 
 Enable automatic enrichment by mapping enrichments to alerts using a <a href="https://learn.microsoft.com/en-us/azure/sentinel/detect-threats-custom#alert-enrichment" target="_blank">custom analytics rule</a>
 
