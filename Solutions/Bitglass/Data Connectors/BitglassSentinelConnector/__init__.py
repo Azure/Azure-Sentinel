@@ -13,10 +13,12 @@ import re
 import time
 from .state_manager import StateManager
 
-bitglass_token = os.environ['BitglassToken']
+
 bitglass_serviceURL = os.environ['BitglassServiceURL']
 customer_id = os.environ['WorkspaceID']
 shared_key = os.environ['WorkspaceKey']
+bitglass_username = os.environ['BITGLASS_USERNAME']
+bitglass_password = os.environ['BITGLASS_PASSWORD']
 connection_string = os.environ['AzureWebJobsStorage']
 logAnalyticsUri = os.environ.get('logAnalyticsUri')
 table_name = "BitglassLogs"
@@ -26,23 +28,29 @@ if ((logAnalyticsUri in (None, '') or str(logAnalyticsUri).isspace())):
     logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
 pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-match = re.match(pattern,str(logAnalyticsUri))
-if(not match):
+match = re.match(pattern, str(logAnalyticsUri))
+if (not match):
     raise Exception("Bitglass: Invalid Log Analytics Uri.")
+
 
 class BG_CASB():
 
     def __init__(self, type):
         self.event_type = type
-        filepath=f'{self.event_type}_funcstatemarkerfile'
-        self.token = bitglass_token
+        filepath = f'{self.event_type}_funcstatemarkerfile'
+        self.username = bitglass_username
+        self.password = bitglass_password
         self.url = f'{bitglass_serviceURL}/api/bitglassapi/logs/v1/'
+        self.credentials = f"{bitglass_username}:{bitglass_password}"
+        self.encoded_credentials = base64.b64encode(
+            self.credentials.encode('utf-8')).decode('utf-8')
 
         self.headers = {
-            'Authorization': 'Bearer {}'.format(self.token),
+            'Authorization': f'Basic {self.encoded_credentials}',
             'Content-Type': 'application/json'
         }
-        self.state = StateManager(connection_string=connection_string, share_name='funcstatemarkershare', file_path=filepath)
+        self.state = StateManager(connection_string=connection_string,
+                                  share_name='funcstatemarkershare', file_path=filepath)
         self.from_time = self.generate_date()
 
     def get_query(self, url, token):
@@ -77,11 +85,13 @@ class BG_CASB():
             if r.status_code == 200:
                 return r.json()
             elif r.status_code == 401:
-                logging.error("The authentication credentials are incorrect or missing. Error code: {}".format(r.status_code))
+                logging.error(
+                    "The authentication credentials are incorrect or missing. Error code: {}".format(r.status_code))
             else:
                 logging.error("Something wrong. Error: {}".format(r.text))
         except Exception as err:
-            logging.error("Something wrong. Exception error text: {}".format(err))
+            logging.error(
+                "Something wrong. Exception error text: {}".format(err))
 
     def get_result(self):
         result_array = []
@@ -104,9 +114,11 @@ class BG_CASB():
             time = event["time"]
             time_array.append(time)
         if len(time_array) > 0:
-            sortedArray = sorted(time_array, key=lambda x: datetime.datetime.strptime(x, '%d %b %Y %H:%M:%S'), reverse=True)
+            sortedArray = sorted(time_array, key=lambda x: datetime.datetime.strptime(
+                x, '%d %b %Y %H:%M:%S'), reverse=True)
             last_time = sortedArray[0]
-            last_time = datetime.datetime.strptime(last_time, '%d %b %Y %H:%M:%S').strftime("%Y-%m-%dT%H:%M:%SZ")
+            last_time = datetime.datetime.strptime(
+                last_time, '%d %b %Y %H:%M:%S').strftime("%Y-%m-%dT%H:%M:%SZ")
             self.state.post(last_time)
         return result_array
 
@@ -114,11 +126,15 @@ class BG_CASB():
         current_time = datetime.datetime.utcnow()
         past_time = self.state.get()
         if past_time is not None:
-            logging.info("The last time point for \"{}\" log type is: {}".format(self.event_type,past_time))
+            logging.info("The last time point for \"{}\" log type is: {}".format(
+                self.event_type, past_time))
         else:
-            logging.info("There is no last time point for \"{}\" log type , trying to get logs for last 24 hour.".format(self.event_type))
-            past_time = (current_time - datetime.timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            logging.info("There is no last time point for \"{}\" log type , trying to get logs for last 24 hour.".format(
+                self.event_type))
+            past_time = (current_time - datetime.timedelta(hours=24)
+                         ).strftime("%Y-%m-%dT%H:%M:%SZ")
         return (past_time)
+
 
 class Sentinel:
 
@@ -149,7 +165,9 @@ class Sentinel:
 
     def build_signature(self, date, content_length, method, content_type, resource):
         x_headers = 'x-ms-date:' + date
-        string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
+        string_to_hash = method + "\n" + \
+            str(content_length) + "\n" + content_type + \
+            "\n" + x_headers + "\n" + resource
         bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
         decoded_key = base64.b64decode(shared_key)
         encoded_hash = base64.b64encode(
@@ -177,8 +195,10 @@ class Sentinel:
             logging.info("Chunk was processed({} events)".format(chunk_count))
             self.success_processed = self.success_processed + chunk_count
         else:
-            logging.info("Error during sending events to Azure Sentinel. Response code:{}".format(response.status_code))
+            logging.info("Error during sending events to Azure Sentinel. Response code:{}".format(
+                response.status_code))
             self.fail_processed = self.fail_processed + chunk_count
+
 
 def main(mytimer: func.TimerRequest) -> None:
     utc_timestamp = datetime.datetime.utcnow().replace(
@@ -186,14 +206,14 @@ def main(mytimer: func.TimerRequest) -> None:
     if mytimer.past_due:
         logging.info("The timer is past due!")
     logging.info("Python timer trigger function ran at %s", utc_timestamp)
-    logging.info("Starting program") 
+    logging.info("Starting program")
     logs_type_array = [
-                    "cloudaudit", "access",
-                    "admin", "swgweb",
-                    "swgwebdlp", "healthproxy",
-                    "healthapi"
-                    ]
-    map_iterator = map(lambda x: BG_CASB(x),logs_type_array)
+        "cloudaudit", "access",
+        "admin", "swgweb",
+        "swgwebdlp", "healthproxy",
+        "healthapi"
+    ]
+    map_iterator = map(lambda x: BG_CASB(x), logs_type_array)
     for elem in map_iterator:
         results_array = elem.get_result()
         sentinel = Sentinel()
@@ -201,10 +221,10 @@ def main(mytimer: func.TimerRequest) -> None:
             sentinel.gen_chunks(results_array)
             sentinel_class_vars = vars(sentinel)
             success_processed, fail_processed = sentinel_class_vars["success_processed"], \
-                                                sentinel_class_vars["fail_processed"]
+                sentinel_class_vars["fail_processed"]
             logging.info('Logs type: {}. Total events processed successfully: {}, failed: {}. Period from : {}'
-                  .format(elem.event_type, success_processed, fail_processed, elem.from_time))
+                         .format(elem.event_type, success_processed, fail_processed, elem.from_time))
         else:
             logging.info('Logs type: {}. There are no events for processing. Period from: {}'
-                  .format(elem.event_type, elem.from_time))
+                         .format(elem.event_type, elem.from_time))
         time.sleep(3)
