@@ -91,7 +91,6 @@ ParserQuery: |
           and (array_length(operation_has_any) == 0 or DeviceAction has_any (operation_has_any))
           and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SourceIP, srcipaddr_has_any_prefix))
           and (array_length(actorusername_has_any) == 0 or SourceUserName has_any (actorusername_has_any))
-          and array_length(object_has_any) == 0
           and array_length(newvalue_has_any) == 0
       | parse-kv AdditionalExtensions as (InfobloxHTTPReqBody:string, InfobloxHTTPRespBody:string) with (pair_delimiter=";", kv_delimiter="=")
       | extend EventType = case(
@@ -102,8 +101,11 @@ ParserQuery: |
                   DeviceAction has "delete",
                   "Delete",
                   "Other"
-              )
+              ),
+        Object = iff(isempty(Object), "Infoblox Network Resource", Object),
+        ObjectType = iff(isempty(ObjectType), "Service", ObjectType)
       | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))
+      | where (array_length(object_has_any) == 0 or Object has_any (object_has_any))
       | lookup EventSeverityLookup on LogSeverity
       | lookup OperationLookup on DeviceAction
       | invoke _ASIM_ResolveDvcFQDN('CollectorHostName')
@@ -114,7 +116,7 @@ ParserQuery: |
           SrcIpAddr = SourceIP,
           EventOriginalSeverity = LogSeverity,
           EventMessage = Message,
-          EventOriginalType = DeviceEventCategory,
+          EventOriginalType = DeviceEventClassID,
           EventUid = _ItemId
       | extend
           Dvc = DvcHostname,
