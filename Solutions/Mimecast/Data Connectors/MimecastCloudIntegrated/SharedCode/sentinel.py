@@ -238,7 +238,7 @@ async def post_data_async(index, body, session: aiohttp.ClientSession, log_type)
             "{}(method={}) : {} : Maximum Retry count of {} exceeded, hence stopping execution.".format(
                 consts.LOGS_STARTS_WITH,
                 __method_name,
-                consts.AUDIT_FUNCTION_NAME,
+                consts.CLOUD_INTEGRATED_FUNCTION_NAME,
                 consts.SENTINEL_RETRY_COUNT,
             )
         )
