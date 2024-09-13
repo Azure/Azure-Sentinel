@@ -24,7 +24,7 @@ This playbook will add pre-defined or user customizable comment to an incident g
   * BaseURL: Enter baseurl of your Vectra account.
   * IncidentComment: Enter comment you want to add in incident create based on tag.
   * EntityNote: Enter a note you want to add in Vectra Entity.
-  * GenerateAccessTokenPlaybookName: Playbook name which is deployed as part of prerequisites.
+  * GenerateAccessCredPlaybookName: Playbook name which is deployed as part of prerequisites.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraDecorateIncidentBasedOnTag%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraDecorateIncidentBasedOnTag%2Fazuredeploy.json)
 

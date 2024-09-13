@@ -26,7 +26,7 @@ This playbook resolves the assignment for an entity in Vectra and adds a note fo
    * KeyVaultName: Name of the Key Vault where secrets are stored.
    * TenantId: Tenant ID where the Key Vault is located.
    * BaseURL: Enter the base URL of your Vectra account.
-   * GenerateAccessTokenPlaybookName: Playbook name which is deployed as part of prerequisites.
+   * GenerateAccessCredPlaybookName: Playbook name which is deployed as part of prerequisites.
    * TeamsGroupId: Enter Id of the Teams Group where the adaptive card will be posted.
    * TeamsChannelId: Enter Id of the Teams Channel where the adaptive card will be posted.
    * EntityNote: Enter a note you want to add in Vectra Entity for assignment.
