@@ -68,9 +68,8 @@ To provide access to our application, we have to create a Service Principal in A
 
    ![Add Delegate permissions](media/delegate02.png)
 
-1. In the new blade, select the "_Azure Sentinel Responder_” role, then select the Service Principal we created before, and click on the “Save” button
+1. In the new blade, select the "_Microsoft Sentinel Responder_” role, then select the Service Principal we created before, and click on the “Save” button.
 
-   ![Add role assignment](media/delegate03.png)
 
 We are now done with the Azure configuration part.
 
