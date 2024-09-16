@@ -20,8 +20,8 @@ class AzureSentinelConnectorCLv2Async:
         self.AZURE_CLIENT_ID = azure_client_id
         self.AZURE_CLIENT_SECRET = azure_client_secret
         self.AZURE_TENANT_ID = azure_tenant
-        self.MONITOR_RESOURCE = "https://monitor.azure.com"
-        self.access_token_uri = "https://login.microsoftonline.com/{}/oauth2/token".format(self.AZURE_TENANT_ID)
+        self.MONITOR_RESOURCE = "https://monitor.azure.us"
+        self.access_token_uri = "https://login.microsoftonline.us/{}/oauth2/token".format(self.AZURE_TENANT_ID)
         self.DCR_DATA_INGESTION_URL = "{}/dataCollectionRules/{}/streams/{}?api-version=2021-11-01-preview"
 
     # This method returns an access token for required resource
