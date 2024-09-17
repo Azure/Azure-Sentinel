@@ -133,7 +133,7 @@ ParserQuery: |
       'labels.delete', 'Labels deleted', 'Cloud Resource', 'Labels', 'Delete',
       'ldap_config.create', 'LDAP configuration created', 'Other', 'Ldap_config', 'Create',
       'ldap_config.delete', 'LDAP configuration deleted', 'Other', 'Ldap_config', 'Delete',
-      'ldap_config.update', 'LDAP configuration updated', 'Other', 'Ldap_config', 'Set',
+      'ldap_config.update', 'LDAP configuration updated', 'Other', 'Ldap_config', 'Set',
       'ldap_config.verify_connection', 'LDAP server connection verified', 'Other', 'Ldap_config', 'Other',
       'license.delete', 'License deleted', 'Other', 'License', 'Delete',
       'license.update', 'License updated', 'Other', 'License', 'Set',
@@ -174,7 +174,7 @@ ParserQuery: |
       'nfc.activate', 'Network function controller created', 'Other', 'Nfc', 'Other',
       'nfc.delete', 'Network function controller deleted', 'Other', 'Nfc', 'Delete',
       'nfc.update_discovered_virtual_servers', 'Network function controller virtual servers discovered', 'Cloud Resource', 'Nfc', 'Set',
-      'nfc.update_policy_status', 'Network function controller policy status ', 'Other', 'Nfc', 'Set',
+      'nfc.update_policy_status', 'Network function controller policy status', 'Other', 'Nfc', 'Set',
       'nfc.update_slb_state', 'Network function controller SLB state updated', 'Other', 'Nfc', 'Set',
       'org.create', 'Organization created', 'Other', 'Org', 'Create',
       'org.recalc_rules', 'Rules for organization recalculated', 'Other', 'Org', 'Other',
@@ -215,7 +215,7 @@ ParserQuery: |
       'saml_sp_config.create', 'SAML Service Provider created', 'Cloud Resource', 'Saml_sp_config', 'Create',
       'saml_sp_config.delete', 'SAML Service Provider deleted', 'Cloud Resource', 'Saml_sp_config', 'Delete',
       'saml_sp_config.update', 'SAML Service Provider updated', 'Cloud Resource', 'Saml_sp_config', 'Set',
-      'sec_policy.create', 'Security policy created ', 'Other', 'Sec_policy', 'Create',
+      'sec_policy.create', 'Security policy created', 'Other', 'Sec_policy', 'Create',
       'sec_policy_pending.delete', 'Pending security policy deleted', 'Other', 'Sec_policy_pending', 'Delete',
       'sec_policy.restore', 'Security policy restored', 'Other', 'Sec_policy', 'Other',
       'sec_rule.create', 'Security policy rules created', 'Policy Rule', 'Sec_rule', 'Create',
@@ -241,8 +241,8 @@ ParserQuery: |
       'services.delete', 'Services deleted', 'Other', 'Services', 'Delete',
       'settings.update', 'Explorer settings updated', 'Other', 'Settings', 'Set',
       'slb.create', 'Server load balancer created', 'Other', 'Slb', 'Create',
-      'slb.delete', 'Server load balancer deleted', 'Other', 'Slb', 'Delete',
-      'slb.update', 'Server load balancer updated', 'Other', 'Slb', 'Set',
+      'slb.delete', 'Server load balancer deleted', 'Other', 'Slb', 'Delete',
+      'slb.update', 'Server load balancer updated', 'Other', 'Slb', 'Set',
       'support_report.upload', 'Support report uploaded', 'Other', 'Support_report', 'Other',
       'syslog_destination.create', 'syslog remote destination created', 'Other', 'Syslog_destination', 'Create',
       'syslog_destination.delete', 'syslog remote destination deleted', 'Other', 'Syslog_destination', 'Delete',
@@ -365,13 +365,12 @@ ParserQuery: |
     ){
       Illumio_Auditable_Events_CL 
       | where not(disabled)
-      | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime))       
-      | where (eventresult == "*" or EventResult =~ eventresult)
-          and (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))          
-          and (array_length(eventtype_in) == 0 or EventType in (eventtype_in))          
       | lookup EventTypeLookup on event_type // fetch Object, ObjectType,EventType, Operation from lookup
       | lookup EventSeverityLookup on severity // fetch EventSeverity from lookup
       | lookup EventResultLookup on status // fetch EventResult from lookup
+      | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime))             
+          and (array_length(eventtype_in) == 0 or EventType in (eventtype_in))          
+      | where (eventresult == "*" or EventResult =~ eventresult)
       | extend 
           ActorUsername = case(
               isnotnull(created_by.system), "System",
@@ -379,6 +378,7 @@ ParserQuery: |
               isnotnull(created_by.agent), created_by.agent.hostname,
               "Unknown"
           )
+      | where (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))
       | mv-expand parse_json(resource_changes)
       | mv-expand parse_json(action)
       | mv-expand parse_json(notifications)
@@ -420,4 +420,15 @@ ParserQuery: |
           pce_fqdn, // used by Dvc
           href // used by EventOriginalUid,
   };
-  parser(disabled=false);
+  parser (
+      starttime = starttime,
+      endtime = endtime,
+      srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+      actorusername_has_any = actorusername_has_any,
+      eventtype_in = eventtype_in,
+      eventresult = eventresult,
+      operation_has_any = operation_has_any,
+      object_has_any=object_has_any,
+      newvalue_has_any=newvalue_has_any,
+      disabled=disabled
+  )

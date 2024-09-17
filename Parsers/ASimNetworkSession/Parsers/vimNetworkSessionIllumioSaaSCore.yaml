@@ -245,20 +245,37 @@ ParserQuery: |
         eventresult:string='*', 
         disabled:bool=false)
   {
+      let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+      let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix);  
       Illumio_Flow_Events_CL 
       | where not(disabled)
       // ***** parser filter params *****
+      | where
+            (isnull(dstportnumber) or (dst_port == dstportnumber))              
+      | extend temp_isSrcMatch=has_any_ipv4_prefix(src_ip,src_or_any)
+            , temp_isDstMatch=has_any_ipv4_prefix(dst_ip,dst_or_any)
+      | extend ASimMatchingIpAddr = case(
+              array_length(src_or_any) == 0 and array_length(dst_or_any) == 0, "-" // match not requested: probably most common case
+              , (temp_isSrcMatch and temp_isDstMatch), "Both" // has to be checked before the individual 
+              , temp_isSrcMatch, "SrcIpAddr"
+              , temp_isDstMatch, "DstIpAddr"
+              , "No match"
+      )
+      | project-away temp_*
+      | where ASimMatchingIpAddr != "No match"      
       | where (isnull(starttime) or TimeGenerated>=starttime) 
         and (isnull(endtime) or TimeGenerated<=endtime)
-      | where  (eventresult=='*' or eventresult=='Success' or eventresult=='Failure')
-          and (array_length(hostname_has_any)==0) 
-          and (array_length(dvcaction) ==0  )     /// if filtered by action return nothing
+      | where (array_length(hostname_has_any)==0)           
       // ***** parser filter params *****
       | lookup ProtocolLookup on proto
       | lookup NetworkProtocolVersionLookup on version
       | lookup DvcActionLookup on pd //set DvcAction
-      | lookup EventResultLookup on DvcAction // set EventResult
+      | extend EventResult = iff(DvcAction == "Deny", "Failure", "Success")
       | lookup ClassLookup on class
+      // ***** parser filter params *****
+      | where  (array_length(dvcaction) == 0 or DvcAction in (dvcaction)) 
+        and eventresult=='*' or (eventresult == EventResult)     
+      // ***** parser filter params *****        
       | extend
           EventCount = flow_count,
           EventStartTime = TimeGenerated, 
@@ -274,18 +291,18 @@ ParserQuery: |
           dir=='O', 'Outbound',
           'Unknown'
       ),
-          NetworkDuration = interval_sec,
-          DstBytes = dst_dbo,
-          SrcBytes = dst_dbi,
-          DstIpAddr = dst_ip,
-          SrcIpAddr = src_ip,
-          DstPortNumber = dst_port,
-          DstHostname = dst_hostname,
-          SrcHostname = src_hostname,
-          EventSeverity = case( 
-              DvcAction=='Deny', 'Low',
-              'Informational'        
-          )
+        NetworkDuration = interval_sec,
+        DstBytes = dst_dbo,
+        SrcBytes = dst_dbi,
+        DstIpAddr = dst_ip,
+        SrcIpAddr = src_ip,
+        DstPortNumber = dst_port,
+        DstHostname = dst_hostname,
+        SrcHostname = src_hostname,
+        EventSeverity = case( 
+            DvcAction=='Deny', 'Low',
+            'Informational'        
+        )
       | extend 
         SrcProcessName = iif(dir=='O', pn, ''),
         DstProcessName = iif(dir=='I', pn, ''),
