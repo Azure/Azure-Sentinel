@@ -368,33 +368,39 @@ ParserQuery: |
       | lookup EventTypeLookup on event_type // fetch Object, ObjectType,EventType, Operation from lookup
       | lookup EventSeverityLookup on severity // fetch EventSeverity from lookup
       | lookup EventResultLookup on status // fetch EventResult from lookup
-      | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime))             
-          and (array_length(eventtype_in) == 0 or EventType in (eventtype_in))          
-      | where (eventresult == "*" or EventResult =~ eventresult)
+      | extend temp_resource_changes = parse_json(resource_changes)
+      | extend temp_action = parse_json(action)
+      | extend temp_notifications = parse_json(notifications)
+      | extend
+          NewValue = case(
+              isnotnull(temp_resource_changes), temp_resource_changes[0].changes,
+              'Unknown'
+          ),
+          EventMessage = case(
+              isnotnull(temp_resource_changes), temp_resource_changes[0].resource,
+              'Unknown'
+          ),
+          SrcIpAddr = case(
+              isnotnull(temp_action), temp_action.src_ip,
+              'Unknown'
+          )
       | extend 
           ActorUsername = case(
               isnotnull(created_by.system), "System",
               isnotnull(created_by.user), created_by.user.username,
               isnotnull(created_by.agent), created_by.agent.hostname,
               "Unknown"
-          )
-      | where (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any))
-      | mv-expand parse_json(resource_changes)
-      | mv-expand parse_json(action)
-      | mv-expand parse_json(notifications)
+          )          
+      // ***** parser filter params *****
+      | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime))             
+          and (array_length(eventtype_in) == 0 or EventType in (eventtype_in))          
+      | where (eventresult == "*" or EventResult =~ eventresult) and (array_length(actorusername_has_any) == 0 or ActorUsername has_any (actorusername_has_any)) 
+      and (array_length(srcipaddr_has_any_prefix) == 0 or  has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+      and (array_length(operation_has_any) == 0 or Operation has_any (operation_has_any))
+      and (array_length(object_has_any) == 0 or Object has_any (object_has_any))
+      //and (array_length(newvalue_has_any) == 0 or NewValue has_any (newvalue_has_any))
+      // ***** parser filter params *****
       | extend
-          NewValue = case(
-              isnotnull(resource_changes), resource_changes.changes,
-              'Unknown'
-          ),
-          EventMessage = case(
-              isnotnull(resource_changes), resource_changes.resource,
-              'Unknown'
-          ),
-          SrcIpAddr = case(
-              isnotnull(action), action.src_ip,
-              'Unknown'
-          ),
           EventCount = int(1),
           EventStartTime = TimeGenerated, 
           EventEndTime= TimeGenerated,
@@ -407,7 +413,9 @@ ParserQuery: |
           EventOriginalUid = href
       | project-away 
           event_type, // used by EventType
-          severity, // used by EventSeverity        
+          TenantId,
+          severity, // used by EventSeverity  
+          temp_*,      
           resource_changes, // used by NewValue and EventMessage
           notifications,
           version, // simply drop version, no need to translate
