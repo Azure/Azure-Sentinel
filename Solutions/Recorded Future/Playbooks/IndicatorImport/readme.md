@@ -93,7 +93,7 @@ Change the Risk List to download and modify the description in the ```RecordedFu
 Its possible to adjust the cadence of Risk List download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
 
 The first step of IndicatorImport Playbooks is a recurrence step, adjust the cadence by modifying the interval and frequency parameters.\
-<img src="../Images/2023-12-12-10-00-53.png" width="500">
+<img src="../Images/2023-12-12-10-00-53.png" width="1000">
 
 It is critical that you also adjust the expirationDateTime parameter in the final block of that logic app to be synchronized with the recurrence timing. Failure to do so can result in either:
 * Duplication of indicators.

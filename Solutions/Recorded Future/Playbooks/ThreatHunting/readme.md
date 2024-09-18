@@ -19,8 +19,6 @@ Requires [**/RecordedFuture-CustomConnector**](../Connectors/RecordedFuture-Cust
 
 Import Recorded Future Threat Map data and stores it in a custom table. Display the report in the workbook imported from the Recorded Future Threat Intelligence Solution. The Workbook shows Threat Actors from Recorded Future, their intent towards your company, and their opportunity. 
 
-![](Images/2023-10-26-19-49-18.png)
-
 ## RecordedFuture-ThreatMapMalware-Importer
 Type: **Threat Hunt**\
 Included in Recorded Future Intelligence Solution: **Yes**\
@@ -31,8 +29,6 @@ Requires [**/RecordedFuture-CustomConnector**](../Connectors/RecordedFuture-Cust
 
 
 Import Recorded Future Malware Threat Map data and stores it in a custom table. Display the report in the workbook imported from the Recorded Future Threat Intelligence Solution. The Workbook shows Malware Threat from Recorded Future, their intent towards your company, and their opportunity. 
-
-![](Images/2023-12-21-00-18-07.png)
 
 
 ## RecordedFuture-ActorThreatHunt-IndicatorImport
@@ -66,8 +62,22 @@ Fetch malware threat information from the threat actor map. The logic app will r
 
 ![](Images/2023-10-26-20-56-47.png)
 
-Match the recurrence and valid_until_delta_hours to avoid duplicates in the ThreatIntelligenceIndicator table and duplicate detections leading to multiple incidents created.
+Setup the Analytic Rules shipped in the Solution to correlate this data with your infrastructure and if incidents are created implement  [Recorded Future Enrichment](../Enrichment/readme.md#recordedfuture-ioc_enrichment) to enhance incident information. 
 
-Setup the Analytic Rules shipped in the Solution to correlate this data with your infrastructure and if incidents are created implement  [Recorded Future Enrichment](../Enrichment/readme.md#recordedfuture-ioc_enrichment) to enhance triage. 
 
-![](Images/2023-12-21-00-59-26.png)
+## Configure Threat Map Import Playbooks
+Malware and actor threat map import playbooks are configured with defaults that will retrieve the maps presented in Recorded Future Portal without any modifications. 
+
+For advance use cases it's possible to restrict hunts by actor or malware by ID You can find individual Ids the treat map workbook once it setup.
+
+<img src="Images/ThreatMapConfig.png" alt="Threat Map Config" width="80%"/>
+
+## Configure Threat Indicator Import Playbooks
+Malware and actor indicator import playbooks are configured with defaults that will retrive url,ip,domain and hach -indicators linked to entities on the threat map.  
+
+Risk scores can be modified to restrict number of indicators returned from the API. 
+
+Match the recurrence and Valid Until Delta Hour to avoid duplicates in the ThreatIntelligenceIndicator table and duplicate detections leading to multiple incidents created.
+
+
+<img src="images/ActorIndicators.png" alt="Threat Indicator Import Config" width="80%"/>
