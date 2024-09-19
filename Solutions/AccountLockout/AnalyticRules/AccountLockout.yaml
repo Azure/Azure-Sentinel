@@ -1,0 +1,46 @@
+let startHour = 20; // Start of the working hours (8 PM)
+let endHour = 8;  // End of the working hours (8 AM)
+let workingDays = 5;
+let endTime = now();
+let startTime = endTime - 30d; // A sufficiently large range to capture the last 5 working days plus today
+// Get all days in the range and filter out weekends
+let allDays = range x from startofday(startTime) to endofday(endTime) step 1d
+    | extend DayOfWeek = dayofweek(x)
+    | where DayOfWeek != 6d and DayOfWeek != 0d; // Exclude weekends
+// Get the last 5 working days including today
+let last5WorkingDays = allDays
+    | sort by x desc
+    | take workingDays;
+// Determine the exact start time for the last 5 working days including today
+let workingDaysStart = toscalar(last5WorkingDays | summarize min(x));
+let workingDaysEnd = endTime;
+// Retrieve and process lockout events
+let lockouts = 
+    SecurityEvent
+    | extend pacific_dt = datetime_utc_to_local(TimeGenerated, 'US/Pacific') // converting the time zone to US/Pacific Time Zone
+    | extend DayOfWeek = dayofweek(pacific_dt)
+    | where DayOfWeek != 6d and DayOfWeek != 0d // Exclude weekends
+    | where EventID == 4740 // Account lockout event
+    | where pacific_dt between (workingDaysStart .. workingDaysEnd)
+    | extend Time = format_datetime(pacific_dt, "HH")
+    // Handle the time range that crosses midnight
+    | extend hourOfDay = datetime_part("hour", pacific_dt)
+    | where (hourOfDay >= startHour or hourOfDay < endHour)
+    | summarize lockoutCount = count(),TargetUserName = make_set(TargetUserName) by bin(pacific_dt, 1d), hourOfDay, Time;
+// Calculate the average lockouts per hour over the last 5 working days
+let rollingAverageLockoutsPerHour = 
+    lockouts
+    | summarize avgLockouts = avg(lockoutCount) by hourOfDay,Time;
+// Get lockouts by hour for each of the last 5 working days including today
+let workingDayLockoutsPerHour = 
+    lockouts
+    | summarize dailyLockoutCount = sum(lockoutCount),TargetUserName = make_set(TargetUserName) by bin(pacific_dt, 1d), hourOfDay, Time
+    | project pacific_dt, hourOfDay, dailyLockoutCount, TargetUserName;
+// Join with the rolling average lockouts per hour
+workingDayLockoutsPerHour
+| join kind=inner (rollingAverageLockoutsPerHour) on hourOfDay
+| extend Time = strcat(format_datetime(pacific_dt, "yyyy-MM-dd"), " ", tostring(Time), ":00")
+| project Time, dailyLockoutCount, avgLockouts, TargetUserName
+| order by Time asc
+| where dailyLockoutCount > avgLockouts * 1.5
+| render timechart with(title="Account Lock Events")
