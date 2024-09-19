@@ -24,7 +24,7 @@
 	
 	![Enter a globally unique name](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/globallyuniquename.png)
 
-	e. **Select a runtime**: Choose Python 3.10.
+	e. **Select a runtime**: Choose Python 3.9.
 
 	![Select a runtime](https://github.com/Azure/Azure-Sentinel/blob/master/DataConnectors/Images/Selectaruntime.png)
 
