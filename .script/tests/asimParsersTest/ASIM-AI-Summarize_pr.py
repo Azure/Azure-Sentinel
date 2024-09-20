@@ -7,6 +7,8 @@ import sys
 # Fetch PR_DIFF environment variable
 pr_diff = os.getenv("PR_DIFF")
 
+print(f"PR_DIFF: {pr_diff}")
+
 # Setup logging
 try:
     logging.basicConfig(
