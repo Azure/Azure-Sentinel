@@ -68,16 +68,40 @@ Setup the Analytic Rules shipped in the Solution to correlate this data with you
 ## Configure Threat Map Import Playbooks
 Malware and actor threat map import playbooks are configured with defaults that will retrieve the maps presented in Recorded Future Portal without any modifications. 
 
-For advance use cases it's possible to restrict hunts by actor or malware by ID You can find individual Ids the treat map workbook once it setup.
 
 <img src="Images/ThreatMapConfig.png" alt="Threat Map Config" width="80%"/>
+<br/>
+<br/>
+<details>
+<summary>Expand Advance parameters</summary>
+It's possible to restrict hunts by actor or malware. 
+
+![alt text](Images/AdvancedParameters.png)
+
+Find individual Ids the treat map workbook once it setup by open `Open Generic Details`.
+
+![alt text](Images/GenericDetails.png)
+</details>
 
 ## Configure Threat Indicator Import Playbooks
-Malware and actor indicator import playbooks are configured with defaults that will retrive url,ip,domain and hach -indicators linked to entities on the threat map.  
+Malware and actor indicator import playbooks are configured with defaults that will retrive url, ip, domain and hash -indicators linked to entities on the threat map.  
 
 Risk scores can be modified to restrict number of indicators returned from the API. 
 
 Match the recurrence and Valid Until Delta Hour to avoid duplicates in the ThreatIntelligenceIndicator table and duplicate detections leading to multiple incidents created.
 
 
-<img src="images/ActorIndicators.png" alt="Threat Indicator Import Config" width="80%"/>
+<img src="Images/ActorIndicators.png" alt="Threat Indicator Import Config" width="80%"/>
+
+<br/>
+<br/>
+<details>
+<summary>Expand Advance parameters</summary>
+It's possible to restrict indicators downloaded by actor or malware. If several downloads are running use the `Threat Hunt description` field to keep them apart. 
+
+![alt text](Images/advanceindicatorconfig.png)
+
+Find individual Ids the treat map workbook once it setup by open `Open Generic Details`.
+
+![alt text](Images/GenericDetails.png)
+</details>
