@@ -18,7 +18,7 @@ client = AzureOpenAI(
 pr_diff = os.getenv("PR_DIFF")
 
 completion = client.chat.completions.create(
-    model="gpt-4",  # Replace with your deployment model
+    model=deployment,
     messages= [
         {
             "role": "system",
@@ -29,7 +29,6 @@ completion = client.chat.completions.create(
             "content": f"Summarize the following PR changes: {pr_diff}"
         }
     ],
-    past_messages=15,
     max_tokens=4096,
     temperature=0,
     top_p=1,
