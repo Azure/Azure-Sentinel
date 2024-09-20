@@ -3,14 +3,8 @@ from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 # Initialize Azure OpenAI client with Entra ID authentication
-credential = DefaultAzureCredential()
-
-# Retrieve the access token
-access_token = credential.get_token("https://cognitiveservices.azure.com/.default").token
-
-# Initialize Azure OpenAI client with Entra ID authentication
 token_provider = get_bearer_token_provider(
-    credential,
+    DefaultAzureCredential(),
     "https://cognitiveservices.azure.com/.default"
 )
 
@@ -20,21 +14,15 @@ client = AzureOpenAI(
     api_version="2024-05-01-preview",
 )
 
-# Get the PR diff from the environment
-pr_diff = os.getenv("PR_DIFF")
-
 completion = client.chat.completions.create(
-    model="ASIM-gpt-4o",  # Replace with your deployment model
+    model="ASIM-gpt-4o",
     messages= [
-        {
-            "role": "system",
-            "content": "You are an AI assistant that helps people by writing and reviewing Microsoft Sentinel ASIM parsers. You can answer queries related to ASIM normalization."
-        },
-        {
-            "role": "user",
-            "content": f"Summarize the following PR changes: {pr_diff}"
-        }
-    ],
+    {
+        "role": "system",
+        "content": "You are an AI assistant that helps people by writing and reviewing Microsoft Sentinel ASIM parsers. You can answer queries related to ASIM normalization."
+    }
+],
+    past_messages=15,
     max_tokens=4096,
     temperature=0,
     top_p=1,
@@ -49,8 +37,7 @@ completion = client.chat.completions.create(
                     "endpoint": os.environ["AZURE_AI_SEARCH_ENDPOINT"],
                     "index_name": os.environ["AZURE_AI_SEARCH_INDEX"],
                     "authentication": {
-                        "type": "access_token",
-                        "token": access_token
+                        "type": "azure_ad"
                     }
                 }
             }
@@ -58,6 +45,5 @@ completion = client.chat.completions.create(
     }
 )
 
-# Print the result to the console
-result = completion.model_dump_json(indent=2)
-print("PR Summary:\n", result)
+print(completion.model_dump_json(indent=2))
+
