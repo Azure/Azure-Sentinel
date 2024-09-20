@@ -26,7 +26,7 @@ def get_git_diff():
     GetModifiedFiles = f"git diff upstream/master {current_directory}/../../../Parsers/"
     try:
         Changes = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
-        print(f"Changes: {Changes.stdout}")
+        #print(f"Changes: {Changes.stdout}")
     except subprocess.CalledProcessError as e:
         print(f"::error::An error occurred while executing the command: {e}")
         sys.stdout.flush()  # Explicitly flush stdout
@@ -43,6 +43,7 @@ def get_git_diff():
 
 # Fetch the git diff
 git_diff = get_git_diff()
+print(f"git_diff: {git_diff.stdout}")
 
 # Setup logging
 try:
@@ -78,7 +79,7 @@ completion = client.chat.completions.create(
     },
         {
             "role": "user",
-            "content": f"Summarize the following PR changes: {git_diff}"
+            "content": f"Summarize the following PR changes: {git_diff.stdout}"
         }
 ],
     max_tokens=4096,
