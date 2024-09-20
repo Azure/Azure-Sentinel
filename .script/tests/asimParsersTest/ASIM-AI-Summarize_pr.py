@@ -26,20 +26,11 @@ def get_git_diff():
     GetModifiedFiles = f"git diff upstream/master {current_directory}/../../../Parsers/"
     try:
         Changes = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
+        return Changes.stdout
         #print(f"Changes: {Changes.stdout}")
     except subprocess.CalledProcessError as e:
         print(f"::error::An error occurred while executing the command: {e}")
         sys.stdout.flush()  # Explicitly flush stdout
-    
-        # Check if the command succeeded
-        if Changes.returncode != 0:
-            print(f"Error fetching git diff: {Changes.stderr}")
-            return None
-
-        return Changes.stdout
-    except Exception as e:
-        print(f"Exception occurred while fetching git diff: {str(e)}")
-        return None
 
 # Fetch the git diff
 git_diff = get_git_diff()
