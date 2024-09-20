@@ -1,0 +1,209 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Send Microsoft Sentinel Incident To Cyware Orchestrate",
+        "description":  "Send Microsoft Sentinel Incident To Cyware Orchestrate",
+        "prerequisites":  "To use the Logic App, you will need a valid webhook URL from Cyware Orchestrate as detailed in the [documentation](https://techdocs.cyware.com/en/299672-359051-configure-webhooks.html)",
+        "postDeployment":  [
+            "After deployment, open the playbook to configure all connections and press save. Then also configure the required tags to trigger the playbook on Cyware Orchestrate as detailed [here](https://techdocs.cyware.com/en/299672-359051-configure-webhooks.html#299672-359051-configure-webhooks)"
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime": "2024-06-18T00:00:00.000Z",
+        "entities":  [
+        ],
+       "tags": [ "Threat Hunting" ],
+        "support":  {
+            "tier":  "partner"
+        },
+        "author":  {
+            "name":  "Cyware Labs"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Send-Incident-To-Cyware-Orchestrate",
+            "type":  "string"
+        },
+        "COWebHookURL":  {
+            "type":  "String",
+            "metadata":  {
+                "description":  "Enter value for COWebHookURL"
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "COWebHookURL":  {
+                            "defaultValue":  "[parameters('COWebHookURL')]",
+                            "type":  "String"
+                        }
+                    },
+                    "triggers":  {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "HTTP":  {
+                            "runAfter":  {
+                                "Parse_JSON":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "body":  "@triggerBody()",
+                                "method":  "POST",
+                                "uri":  " @{parameters('COWebHookURL')}"
+                            }
+                        },
+                        "Parse_JSON":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@triggerBody()",
+                                "schema":  {
+                                    "properties":  {
+                                        "properties":  {
+                                            "properties":  {
+                                                "body":  {
+                                                    "properties":  {
+                                                        "type":  {
+                                                            "type":  "string"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                },
+                                                "description":  {
+                                                    "properties":  {
+                                                        "type":  {
+                                                            "type":  "string"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                },
+                                                "firstActivityTimeUtc":  {
+                                                    "properties":  {
+                                                        "type":  {
+                                                            "type":  "string"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                },
+                                                "incidentNumber":  {
+                                                    "properties":  {
+                                                        "type":  {
+                                                            "type":  "string"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                },
+                                                "severity":  {
+                                                    "properties":  {
+                                                        "type":  {
+                                                            "type":  "string"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                },
+                                                "title":  {
+                                                    "properties":  {
+                                                        "type":  {
+                                                            "type":  "string"
+                                                        }
+                                                    },
+                                                    "type":  "object"
+                                                }
+                                            },
+                                            "type":  "object"
+                                        },
+                                        "type":  {
+                                            "type":  "string"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Send-Incident-To-Cyware-Orchestrate",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

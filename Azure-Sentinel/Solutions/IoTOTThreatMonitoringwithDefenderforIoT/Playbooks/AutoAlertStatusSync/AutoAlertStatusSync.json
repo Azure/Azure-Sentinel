@@ -1,0 +1,433 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"metadata": {
+		"title": "AD4IoT-AutoAlertStatusSync", 
+		"description": "This playbook updates alert statuses in Defender for IoT whenever a related alert in Microsoft Sentinel has a Status update.",
+		"prerequisites": ["None"],
+		"lastUpdateTime": "2022-08-05T00:00:00.000Z", 
+		"entities": [], 
+		"tags": [],
+		"support": {
+			"tier": "community"
+		},
+		"author": {
+			"name": "Rogier Dijkman"
+		},
+		"releaseNotes": [
+		{
+		  "version": "1.0.1",
+		  "title": "AD4IoT-AutoAlertStatusSync",
+		  "notes": [
+			"Initial version"
+		  ]
+		}
+		]
+	},
+	"parameters": {
+		"PlaybookName": {
+			"defaultValue": "AD4IoT-AutoAlertStatusSync",
+			"type": "String"
+		}
+	},
+	"variables": {
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+		"AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+	},
+	"resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureMonitorLogsConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('AzureMonitorLogsConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Logic/workflows",
+			"apiVersion": "2017-07-01",
+			"name": "[parameters('PlaybookName')]",
+			"location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]"
+			],
+			"properties": {
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						}
+					},
+					"triggers": {
+						"Microsoft_Sentinel_incident": {
+							"type": "ApiConnectionWebhook",
+							"inputs": {
+								"body": {
+									"callback_url": "@{listCallbackUrl()}"
+								},
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['azuresentinel']['connectionId']"
+									}
+								},
+								"path": "/incident-creation"
+							}
+						}
+					},
+					"actions": {
+						"Extract_incident_status_and_convert_to_MD4IoT_alert_status": {
+							"actions": {
+								"Set_variable_-_InProgress": {
+									"runAfter": {},
+									"type": "SetVariable",
+									"inputs": {
+										"name": "MD4IoTAlertStatus",
+										"value": "InProgress"
+									}
+								}
+							},
+							"runAfter": {
+								"MD4IoTAlertManagementUris": [
+									"Succeeded"
+								]
+							},
+							"else": {
+								"actions": {
+									"Set_variable_-_New_or_Closed": {
+										"runAfter": {},
+										"type": "SetVariable",
+										"inputs": {
+											"name": "MD4IoTAlertStatus",
+											"value": "@triggerBody()?['object']?['properties']?['status']"
+										}
+									}
+								}
+							},
+							"expression": {
+								"and": [
+									{
+										"equals": [
+											"@triggerBody()?['object']?['properties']?['status']",
+											"Active"
+										]
+									}
+								]
+							},
+							"type": "If"
+						},
+						"Get_IncidentAlertSystemIDs": {
+							"foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+							"actions": {
+								"Append_To_IncidentAlertIds": {
+									"runAfter": {},
+									"type": "AppendToArrayVariable",
+									"inputs": {
+										"name": "IncidentAlertIds",
+										"value": "'@{items('Get_IncidentAlertSystemIDs')?['properties']?['systemAlertId']}'"
+									}
+								}
+							},
+							"runAfter": {
+								"Extract_incident_status_and_convert_to_MD4IoT_alert_status": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach"
+						},
+						"IncidentAlertIds": {
+							"runAfter": {},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "IncidentAlertIds",
+										"type": "array",
+										"value": []
+									}
+								]
+							}
+						},
+						"MD4IoTAlertManagementUris": {
+							"runAfter": {
+								"MD4IoTAlertStatus": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "MD4IoTAlertManagementUris",
+										"type": "array",
+										"value": []
+									}
+								]
+							}
+						},
+						"MD4IoTAlertStatus": {
+							"runAfter": {
+								"IncidentAlertIds": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "MD4IoTAlertStatus",
+										"type": "string",
+										"value": "\"\""
+									}
+								]
+							}
+						},
+						"Parse_Alerts_to_JSON": {
+							"runAfter": {
+								"Run_query_-_GetAlerts": [
+									"Succeeded"
+								]
+							},
+							"type": "ParseJson",
+							"inputs": {
+								"content": "@body('Run_query_-_GetAlerts')?['value']",
+								"schema": {
+									"items": {
+										"properties": {
+											"ExtendedProperties": {
+												"type": "string"
+											},
+											"ProviderName": {
+												"type": "string"
+											}
+										},
+										"required": [
+											"ProviderName",
+											"ExtendedProperties"
+										],
+										"type": "object"
+									},
+									"type": "array"
+								}
+							}
+						},
+						"Run_query_-_GetAlerts": {
+							"runAfter": {
+								"Get_IncidentAlertSystemIDs": [
+									"Succeeded"
+								]
+							},
+							"type": "ApiConnection",
+							"inputs": {
+								"body": "SecurityAlert\n| where SystemAlertId in(@{join(variables('IncidentAlertIds'), ',')}) \n| summarize arg_max(TimeGenerated, *) by SystemAlertId",
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+									}
+								},
+								"method": "post",
+								"path": "/queryData",
+								"queries": {
+									"resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+									"resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+									"resourcetype": "Log Analytics Workspace",
+									"subscriptions": "@triggerBody()?['workspaceInfo']?['SubscriptionId']",
+									"timerange": "Last 365 days"
+								}
+							}
+						},
+						"Send_HTTP_status_update": {
+							"foreach": "@variables('MD4IoTAlertManagementUris')",
+							"actions": {
+								"HTTP": {
+									"runAfter": {},
+									"type": "Http",
+									"inputs": {
+										"authentication": {
+											"type": "ManagedServiceIdentity"
+										},
+										"body": {
+											"properties": {
+												"status": "@variables('MD4IoTAlertStatus')"
+											}
+										},
+										"method": "PATCH",
+										"uri": "@{items('Send_HTTP_status_update')}"
+									}
+								}
+							},
+							"runAfter": {
+								"Switch_on_first_alert_ProviderName": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach"
+						},
+						"Switch_on_first_alert_ProviderName": {
+							"runAfter": {
+								"Parse_Alerts_to_JSON": [
+									"Succeeded"
+								]
+							},
+							"cases": {
+								"Case_-_ASI_Scheduled": {
+									"case": "ASI Scheduled Alerts",
+									"actions": {
+										"For_each_ASI_Scheduled_alert": {
+											"foreach": "@body('Parse_Alerts_to_JSON')",
+											"actions": {
+												"Append_to_-_MD4IoTAlertManagementUris": {
+													"runAfter": {
+														"Parse_JSON_-_CustomDetails": [
+															"Succeeded"
+														]
+													},
+													"type": "AppendToArrayVariable",
+													"inputs": {
+														"name": "MD4IoTAlertManagementUris",
+														"value": "@first(body('Parse_JSON_-_CustomDetails')?['AlertManagementUri'])"
+													}
+												},
+												"Parse_JSON_-_CustomDetails": {
+													"runAfter": {
+														"Parse_JSON_-_ExtendedProperties_with_CustomDetails": [
+															"Succeeded"
+														]
+													},
+													"type": "ParseJson",
+													"inputs": {
+														"content": "@body('Parse_JSON_-_ExtendedProperties_with_CustomDetails')?['Custom Details']",
+														"schema": {
+															"properties": {
+																"AlertManagementUri": {
+																	"items": {
+																		"type": "string"
+																	},
+																	"type": "array"
+																}
+															},
+															"type": "object"
+														}
+													}
+												},
+												"Parse_JSON_-_ExtendedProperties_with_CustomDetails": {
+													"runAfter": {},
+													"type": "ParseJson",
+													"inputs": {
+														"content": "@items('For_each_ASI_Scheduled_alert')['ExtendedProperties']",
+														"schema": {
+															"properties": {
+																"Custom Details": {
+																	"type": "string"
+																}
+															},
+															"type": "object"
+														}
+													}
+												}
+											},
+											"runAfter": {},
+											"type": "Foreach"
+										}
+									}
+								},
+								"Case_-_IoTSecurity": {
+									"case": "IoTSecurity",
+									"actions": {
+										"For_each_IoTSecurity_alert": {
+											"foreach": "@body('Parse_Alerts_to_JSON')",
+											"actions": {
+												"Append_to_MD4IoTAlertManagementUris": {
+													"runAfter": {
+														"Parse_JSON_-_ExtendedProperties": [
+															"Succeeded"
+														]
+													},
+													"type": "AppendToArrayVariable",
+													"inputs": {
+														"name": "MD4IoTAlertManagementUris",
+														"value": "@body('Parse_JSON_-_ExtendedProperties')?['AlertManagementUri']"
+													}
+												},
+												"Parse_JSON_-_ExtendedProperties": {
+													"runAfter": {},
+													"type": "ParseJson",
+													"inputs": {
+														"content": "@items('For_each_IoTSecurity_alert')['ExtendedProperties']",
+														"schema": {
+															"properties": {
+																"AlertManagementUri": {
+																	"type": "string"
+																}
+															},
+															"type": "object"
+														}
+													}
+												}
+											},
+											"runAfter": {},
+											"type": "Foreach"
+										}
+									}
+								}
+							},
+							"default": {
+								"actions": {}
+							},
+							"expression": "@first(body('Parse_Alerts_to_JSON'))?['ProviderName']",
+							"type": "Switch"
+						}
+					},
+					"outputs": {}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuremonitorlogs": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+								"connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+							},
+							"azuresentinel": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+								"connectionName": "[variables('AzureSentinelConnectionName')]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+							}
+						}
+					}
+				}
+			}
+		}
+	]
+}

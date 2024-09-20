@@ -1,0 +1,43 @@
+let maxSpeed = 1000;
+SigninLogs
+| where ResultType == "0"
+| extend latitude_ = todouble(parse_json(tostring(LocationDetails.geoCoordinates)).latitude)
+| extend longitude_ = todouble(parse_json(tostring(LocationDetails.geoCoordinates)).longitude)
+| extend countryOrRegion = tostring(LocationDetails.countryOrRegion)
+| extend state = tostring(LocationDetails.state)
+| extend location = strcat(state,' - ', countryOrRegion)
+| where location <> ' - '
+| extend browser = tostring(DeviceDetail.browser)
+| summarize Count=count(),IP=any(IPAddress),Last=max(TimeGenerated) by UserDisplayName, latitude_, longitude_, Locations=tostring(location), browser,AppDisplayName, UserPrincipalName, Location,state
+| extend coordinates = pack_array(latitude_,longitude_)
+| summarize coordinates=any(coordinates),StateCountries=makeset(Locations),Last=max(Last),IP=any(IP),Apps=makeset(AppDisplayName),Browsers=makeset(browser), Locations=makeset(Locations) by UserDisplayName, UserPrincipalName, Location,state
+| summarize Coordinates=makeset(coordinates),NumberOfCountries=dcount(Location), Country = make_set(Location) ,NumberOfState=dcount(state),StateCountries=make_set(Locations),Timestamps=makeset(Last),IPs=makeset(IP),Apps=makeset(Apps),Browsers=makeset(Browsers) by UserDisplayName, UserPrincipalName
+| where NumberOfCountries > 1  or NumberOfState >2
+| extend distance = round(geo_distance_2points(todouble(Coordinates[1]),todouble(Coordinates[0]),todouble(Coordinates[3]),todouble(Coordinates[2]))/1000,0)
+| extend hours = abs(datetime_diff('hour', todatetime(Timestamps[1]),todatetime(Timestamps[0])))
+| where hours > 0
+| extend speedKmPerHour = round(distance/hours,0)
+| where speedKmPerHour > maxSpeed
+| sort by UserPrincipalName asc
+| extend Speed = round(0,0)
+| extend IPs = replace('[\\[|\\|\\\\|"\\]]','',tostring(IPs))
+| extend if_3_countries_or_3_state = iff((NumberOfCountries == 3 or NumberOfState == 3), true, false)
+| extend if_4_countries_or_4_state = iff((NumberOfCountries == 4 or NumberOfState == 4), true, false)
+| extend if_5_countries_or_5_state = iff((NumberOfCountries == 5 or NumberOfState == 5), true, false)
+// if 3 countries or 3 states are present then
+| extend distance2 = iff(if_3_countries_or_3_state == true, (round(geo_distance_2points(todouble(Coordinates[3]),todouble(Coordinates[2]),todouble(Coordinates[5]),todouble(Coordinates[4]))/1000,0)), Speed)
+| extend hours2 = iff(if_3_countries_or_3_state == true,(abs(datetime_diff('hour', todatetime(Timestamps[2]),todatetime(Timestamps[1])))),0)
+| extend speedKmPerHour2 = iff(if_3_countries_or_3_state == true,round(distance2/hours2,0),Speed)
+// if 4 countries or 4 states are present then
+| extend distance3 = iff(if_4_countries_or_4_state == true, (round(geo_distance_2points(todouble(Coordinates[5]),todouble(Coordinates[4]),todouble(Coordinates[7]),todouble(Coordinates[6]))/1000,0)), Speed)
+| extend hours3 = iff(if_4_countries_or_4_state == true,(abs(datetime_diff('hour', todatetime(Timestamps[3]),todatetime(Timestamps[2])))),0)
+| extend speedKmPerHour3 = iff(if_3_countries_or_3_state == true,(round(distance3/hours3,0)),Speed)
+// if 5 countries or 5 states are present then
+| extend distance4 = iff(if_5_countries_or_5_state == true, (round(geo_distance_2points(todouble(Coordinates[7]),todouble(Coordinates[6]),todouble(Coordinates[9]),todouble(Coordinates[8]))/1000,0)), Speed)
+| extend hours4 = iff(if_5_countries_or_5_state == true,(abs(datetime_diff('hour', todatetime(Timestamps[4]),todatetime(Timestamps[3])))),0)
+| extend speedKmPerHour4 = iff(if_5_countries_or_5_state == true,(round(distance4/hours4,0)),Speed)
+// calvulating total time, and distance
+| extend ["Total Hours"] = ( hours + hours2 + hours3 + hours4 )
+| extend ["Total Distance"] = distance + distance2 + distance3 + distance4
+| extend IN_US = iff(((NumberOfCountries == 1 or NumberOfCountries == 2) and (Country has "IN" and Country has "US")), true , false )
+| project-away if_3_countries_or_3_state,if_4_countries_or_4_state,if_5_countries_or_5_state,Speed

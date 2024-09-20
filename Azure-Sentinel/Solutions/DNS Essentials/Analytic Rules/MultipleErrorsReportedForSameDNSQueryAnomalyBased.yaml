@@ -1,0 +1,121 @@
+id: cf687598-5a2c-46f8-81c8-06b15ed489b1
+name: Detect DNS queries reporting multiple errors from different clients - Anomaly Based (ASIM DNS Solution)
+description: |
+  'This rule makes use of the series decompose anomaly method to generate an alert when multiple clients report errors for the same DNS query. This rule monitors DNS traffic over a period of 14 days to detect possible similar C2 communication originating from different clients. It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+  - T1573
+  - T1008
+query: |
+  let threshold = 2.5;
+  let min_t = ago(14d);
+  let max_t = now();
+  let dt = 1d;
+  let Errors = dynamic(['NXDOMAIN', 'SERVFAIL', 'REFUSED']);
+  // calculate avg. eps(events per second)
+  let eps = materialize (_Im_Dns | project TimeGenerated | where TimeGenerated > ago(5m) | count | extend Count = Count/300);
+  let maxSummarizedTime = toscalar (
+    union isfuzzy=true 
+        (
+            DNS_Summarized_Logs_ip_CL 
+                | where EventTime_t >= min_t
+                | summarize max_TimeGenerated=max(EventTime_t)
+                | extend max_TimeGenerated = datetime_add('hour',1,max_TimeGenerated)
+        ),
+        (
+            print(min_t)
+            | project max_TimeGenerated = print_0
+        )
+      | summarize maxTimeGenerated = max(max_TimeGenerated) 
+    );
+    let summarizationexist = materialize(
+              union isfuzzy=true 
+                (
+                    DNS_Summarized_Logs_ip_CL
+                    | where EventTime_t > ago(1d) 
+                    | project v = int(2)
+                ),
+                (
+                    print int(1) 
+                    | project v = print_0
+                )
+                | summarize maxv = max(v)
+                | extend sumexist = (maxv > 1)
+              );
+  let allData = union isfuzzy=true
+  (
+    (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) > 1000 | join (summarizationexist) on sumexist) | join (
+    _Im_Dns(starttime=todatetime(ago(2d)), endtime=now())
+    | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
+    | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
+    | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+    ) on exists
+    | project-away exists, maxv, sum*
+  ),
+  (
+    (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) between (501 .. 1000) | join (summarizationexist) on sumexist) | join (
+    _Im_Dns(starttime=todatetime(ago(3d)), endtime=now())
+    | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
+    | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
+    | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+    ) on exists
+    | project-away exists, maxv, sum*
+  ),
+  (
+    (datatable(exists:int, sumexist:bool)[1,false] | where toscalar(eps) <= 500 | join (summarizationexist) on sumexist) | join (
+    _Im_Dns(starttime=todatetime(ago(4d)), endtime=now())
+    | where TimeGenerated > maxSummarizedTime and EventResultDetails in (Errors)
+    | summarize Count=count() by SrcIpAddr, DnsQuery, bin(TimeGenerated,1h)
+    | extend EventTime = TimeGenerated, Count = toint(Count), exists=int(1)
+    ) on exists
+    | project-away exists, maxv, sum*
+  ),
+  (
+        DNS_Summarized_Logs_ip_CL
+        | where EventTime_t > min_t and EventResultDetails_s in (Errors)
+        | project-rename SrcIpAddr=SrcIpAddr_s, DnsQuery=DnsQuery_s, Count=count__d, EventTime=EventTime_t
+        | extend Count = toint(Count) 
+  );
+  allData
+  | make-series TotalIPCount=dcount(SrcIpAddr) on EventTime from min_t to max_t step dt by DnsQuery
+  | extend (anomalies, score, baseline) = series_decompose_anomalies(TotalIPCount, threshold, -1, 'linefit')
+  | mv-expand anomalies, score, baseline, EventTime, TotalIPCount
+  | extend
+    anomalies = toint(anomalies),
+    score = toint(score),
+    baseline = toint(baseline),
+    EventTime = todatetime(EventTime),
+    TotalIPs = tolong(TotalIPCount)
+  | where EventTime >= ago(dt)
+  | where score >= threshold * 2
+  | join kind=inner(allData | where TimeGenerated>ago(dt) | summarize SrcIps = make_set(SrcIpAddr,1000) by DnsQuery) on DnsQuery
+  | project-away DnsQuery1
+entityMappings:
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DnsQuery
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  SrcIps: SrcIps
+  AnomalyScore: score
+  baseline: baseline
+  TotalIPs: TotalIPs
+alertDetailsOverride:
+  alertDisplayNameFormat: "[Anomaly] Multiple errors for the same DNS query has been detected - '{{DnsQuery}}'"
+  alertDescriptionFormat: "Multiple errors were detected on different clients for the same DNS query. These unsuccessful responses can be an indication of C2 communication. \n\nBaseline for total clients reporting errors for this DNS query: '{{baseline}}'\n\nCurrent count of clients reporting errors for this DNS query: '{{TotalIPs}}'\n\nClients requesting this DNS query include:\n'{{SrcIps}}'"
+version: 1.0.2
+kind: Scheduled

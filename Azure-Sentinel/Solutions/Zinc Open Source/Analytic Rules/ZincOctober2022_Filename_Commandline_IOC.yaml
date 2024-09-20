@@ -1,0 +1,105 @@
+id: 9a7f6651-801b-491c-a548-8b454b356eaa
+name: Zinc Actor IOCs files - October 2022
+description: | 
+  'Identifies a match across filename and commandline IOC's related to an actor tracked by Microsoft as Zinc.
+  Reference: https://www.microsoft.com/security/blog/2022/09/29/zinc-weaponizing-open-source-software/'
+severity: High 
+status: Available
+requiredDataConnectors:                
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceNetworkEvents
+      - DeviceFileEvents
+      - DeviceEvents
+      - DeviceProcessEvents
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents          
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - Persistence
+relevantTechniques:
+  - T1546
+tags:
+  - Zinc
+query:  |
+  let iocs = externaldata(DateAdded:string,IoC:string,Type:string) [@"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ZincOctober2022IOCs.csv"] with (format="csv", ignoreFirstRecord=True);
+  let file_path = (iocs | where Type =~ "filepath" | project IoC);
+  let commandline = (iocs | where Type =~ "commandline" | project IoC);
+  (union isfuzzy=true 
+  (DeviceNetworkEvents
+  | where  InitiatingProcessFolderPath has_any (file_path) or InitiatingProcessCommandLine has_any (commandline)
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, LocalIP, Type
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName
+  ),
+  (Event
+  | where Source =~ "Microsoft-Windows-Sysmon"
+  | where EventID == 1
+  | extend EvData = parse_xml(EventData)
+  | extend EventDetail = EvData.DataItem.EventData.Data
+  | extend Image = EventDetail.[4].["#text"],  CommandLine = EventDetail.[10].["#text"]
+  | where Image has_any (file_path)  or   CommandLine has_any (commandline)
+  | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, CommandLine, Image
+  | extend Type = strcat(Type, ": ", Source)
+  | extend timestamp = TimeGenerated, HostEntity = Computer , AccountEntity = UserName, ProcessEntity = tostring(split(Image, '\\', -1)[-1])
+  ),  
+  (DeviceProcessEvents
+  | where  ( InitiatingProcessCommandLine has_any (file_path)) or ( InitiatingProcessCommandLine has_any (commandline))  or (InitiatingProcessFolderPath has_any (file_path)) or (InitiatingProcessFolderPath has_any (commandline)) or (FolderPath  has_any (file_path)) or (FolderPath has_any (commandline))
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, FolderPath, Type
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = InitiatingProcessAccountName, ProcessEntity = InitiatingProcessFileName
+  ),
+  (DeviceFileEvents
+  | where  (InitiatingProcessFolderPath has_any (file_path)) or (InitiatingProcessFolderPath has_any (commandline)) or (FolderPath  has_any (file_path)) or (FolderPath  has_any (commandline)) or ( InitiatingProcessCommandLine has_any (commandline)) or ( InitiatingProcessCommandLine has_any (file_path))
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RequestAccountName, RequestSourceIP, InitiatingProcessSHA256, FolderPath, Type
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = RequestAccountName, ProcessEntity = InitiatingProcessFileName, AlgorithmEntity = "SHA256", FileHashEntity = InitiatingProcessSHA256
+  ),
+  (DeviceEvents
+  | where  ( InitiatingProcessCommandLine has_any (file_path)) or ( InitiatingProcessCommandLine has_any (commandline)) or (InitiatingProcessFolderPath has_any (file_path)) or (InitiatingProcessFolderPath has_any (commandline)) or (FolderPath  has_any (file_path)) or (FolderPath has_any (commandline))
+  | project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, FolderPath, Type
+  | extend CommandLine = InitiatingProcessCommandLine
+  | extend timestamp = TimeGenerated, HostEntity = DeviceName , AccountEntity = InitiatingProcessAccountName, ProcessEntity = InitiatingProcessFileName
+  ),
+  (SecurityEvent
+  | where EventID == 4688
+  | where ( CommandLine has_any (file_path)) or ( CommandLine has_any (commandline))  or (NewProcessName has_any (file_path)) or (NewProcessName has_any (commandline)) or (ParentProcessName has_any (file_path)) or (ParentProcessName has_any (commandline))
+  | project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type
+  | extend timestamp = TimeGenerated, HostEntity = Computer , AccountEntity = Account, ProcessEntity = NewProcessName
+  )
+  )
+  | extend HostName = tostring(split(HostEntity, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(HostEntity, '.'), 1, -1), '.'))
+  | extend Name = tostring(split(AccountEntity, '@', 0)[0]), UPNSuffix = tostring(split(AccountEntity, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: RemoteIP 
+  - entityType: Process
+    fieldMappings:
+      - identifier: ProcessId
+        columnName: ProcessEntity
+  - entityType: FileHash
+    fieldMappings:
+      - identifier: Algorithm
+        columnName: AlgorithmEntity
+      - identifier: Value
+        columnName: FileHashEntity     
+version: 1.0.3
+kind: Scheduled

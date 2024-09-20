@@ -1,0 +1,89 @@
+﻿id: 0febd8cc-1b8d-45ed-87b3-e1e8a57d14cd
+name: Create Incident for XDR Alerts
+description: |
+  'This Query creates an incident based on Trend Vision One Workbench Alerts and maps the impacted entities for Microsoft Sentinel usage.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: TrendMicroXDR
+    dataTypes:
+      - TrendMicro_XDR_WORKBENCH_CL
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+relevantTechniques:
+suppressionDuration: 5h
+suppressionEnabled: false
+query: |
+  TrendMicro_XDR_WORKBENCH_CL
+  | extend Severity = case(severity_s == "low", "Informational",
+                          severity_s == "medium", "Low",
+                          severity_s == "high", "Medium",
+                          "High"
+                          )
+  | extend 
+      UserAccountName_s = todynamic(column_ifexists("UserAccountName_s", "[]")),
+      UserAccountNTDomain_s = todynamic(column_ifexists("UserAccountNTDomain_s", "[]")),
+      FileName_s = todynamic(column_ifexists("FileName_s", "[]")),
+      FileDirectory_s = todynamic(column_ifexists("FileDirectory_s", "[]")),
+      ProcessCommandLine_s = todynamic(column_ifexists("ProcessCommandLine_s", "[]")),
+      RegistryKey_s = todynamic(column_ifexists("RegistryKey_s", "[]")),
+      RegistryValue_s = todynamic(column_ifexists("RegistryValue_s", "[]")),
+      RegistryValueName_s = todynamic(column_ifexists("RegistryValueName_s", "[]"))
+alertRuleTemplateName: null
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5m
+    matchingMethod: Selected
+    groupByCustomDetails: 
+      - WorkbenchID
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserAccountName_s
+      - identifier: NTDomain
+        columnName: UserAccountNTDomain_s
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName_s
+      - identifier: Directory
+        columnName: FileDirectory_s
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine_s
+  - entityType: RegistryKey
+    fieldMappings:
+      - identifier: Key
+        columnName: RegistryKey_s
+  - entityType: RegistryValue
+    fieldMappings:
+      - identifier: Name
+        columnName: ProcessCommandLine_s
+      - identifier: Value
+        columnName: RegistryValue_s
+alertDetailsOverride:
+  alertDisplayNameFormat: '{{workbenchName_s}}'
+  alertDescriptionFormat: '{{description_s}}'
+  alertSeverityColumnName: Severity
+customDetails:
+  XDRCustomerID: xdrCustomerID_g
+  WorkbenchID: workbenchId_s
+  WorkbenchName: workbenchName_s
+  WorkbenchLink: workbenchLink_s
+  PriorityScore: priorityScore_d
+  CreatedAt: createdTime_t
+  Severity: severity_s
+  ImpactScopeSummary: impactScope_Summary_s
+  Provider: alertProvider_s
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.4
+kind: Scheduled

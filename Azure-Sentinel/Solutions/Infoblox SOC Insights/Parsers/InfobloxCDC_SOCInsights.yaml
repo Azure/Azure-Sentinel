@@ -1,0 +1,43 @@
+id: bf7ad23f-4f9e-4a00-bb1a-363b950405b6
+Function:
+  Title: Parser for InfobloxCDC_SOCInsights
+  Version: '1.0.0'
+  LastUpdated: '2024-03-06'
+Category: Microsoft Sentinel Parser
+FunctionName: InfobloxCDC_SOCInsights
+FunctionAlias: InfobloxCDC_SOCInsights
+FunctionQuery: |
+    CommonSecurityLog
+    | where DeviceVendor == "Infoblox" and DeviceProduct == "Data Connector" and DeviceEventClassID == "BloxOne-InsightsNotification-Log"
+    | extend AdditionalExtensions = strcat(AdditionalExtensions, ";")
+    | extend 
+    // SOC Insights
+    BlockedCount = toint(extract("InfobloxEventsBlockedCount=(.*?);", 1, AdditionalExtensions)),
+    NotBlockedCount = toint(extract("InfobloxEventsNotBlockedCount=(.*?);", 1, AdditionalExtensions)),
+    InfobloxInsightID = extract("InfobloxInsightId=(.*?);", 1, AdditionalExtensions),
+    ThreatType = extract("InfobloxInsightThreatType=(.*?);", 1, AdditionalExtensions),
+    ThreatClass = extract("InfobloxThreatClass=(.*?);", 1, AdditionalExtensions),
+    ThreatProperty = extract("InfobloxThreatFamily=(.*?);", 1, AdditionalExtensions),
+    ThreatFamily = extract("InfobloxThreatFamily=(.*?);", 1, AdditionalExtensions),
+    Status = extract("status=(.*?);", 1, AdditionalExtensions),
+    FeedSource = extract("InfobloxInsightFeedSource=(.*?);", 1, AdditionalExtensions),
+    Comment = extract("InfobloxInsightUserComment=(.*?);", 1, AdditionalExtensions),
+    Description = extract("InfobloxInsightDescription=(.*?);", 1, AdditionalExtensions),
+    InfobloxInsightLogType = "Insight",
+    ThreatConfidence_Score = toint(extract("InfobloxThreatConfidence=(.*?);", 1, AdditionalExtensions))
+    | extend ThreatConfidence= case(ThreatConfidence_Score==3, "High",
+                       ThreatConfidence_Score==2, "Medium",
+                       ThreatConfidence_Score==1, "Low",
+                       ThreatConfidence_Score == 0,"Info",
+                       "N/A" ),
+    ThreatLevel_Score = toint(extract("InfobloxThreatLevel=(.*?);", 1, AdditionalExtensions))
+    | extend ThreatLevel= case(ThreatLevel_Score==3, "High",
+                       ThreatLevel_Score==2, "Medium",
+                       ThreatLevel_Score==1, "Low",
+                       ThreatLevel_Score == 0,"Info",
+                       "N/A" )
+    | extend IncidentSeverity= case(ThreatLevel_Score==3, "High",
+                       ThreatLevel_Score==2, "Medium",
+                       ThreatLevel_Score==1, "Low",
+                       ThreatLevel_Score == 0,"Informational",
+                       "N/A" )

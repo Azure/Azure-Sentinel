@@ -1,0 +1,64 @@
+id: 4e78daf1-8bba-4b5d-8a8b-c75fe9bbc2d9
+name: New PowerShell scripts encoded on the commandline
+description: |
+  'Identify and decode new encoded powershell scripts this week versus previous 14 days'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+  - CommandAndControl
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*3);
+  let midlookback = totimespan((endtime-starttime)*2);
+  let ProcessCreationEvents=() {
+  let processEvents=SecurityEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4688
+  | where NewProcessName has_any ("powershell.exe","pwsh.exe")
+  | project TimeGenerated, Computer, Account, NewProcessName, FileName=tostring(split(NewProcessName, '\\')[-1]), ProcessCommandLine = CommandLine, ParentProcessName;
+  processEvents};
+  let encodedPSScripts =
+  ProcessCreationEvents
+  | where TimeGenerated between(ago(midlookback)..starttime)
+  | where FileName in~ ("powershell.exe","pwsh.exe")
+  | where ProcessCommandLine has "-encodedCommand";
+  encodedPSScripts
+  | where TimeGenerated between(starttime..endtime)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by Computer, Account, NewProcessName, FileName, ProcessCommandLine, ParentProcessName
+  | parse kind=regex flags=i ProcessCommandLine with * "-EncodedCommand " encodedCommand
+  | extend decodedCommand = base64_decode_tostring(substring(encodedCommand, 0, strlen(encodedCommand) - (strlen(encodedCommand) %8)))
+  | join kind=leftanti (
+    encodedPSScripts
+    | where TimeGenerated between(ago(lookback)..starttime)
+    | summarize count() by ProcessCommandLine
+    | parse kind=regex flags=i ProcessCommandLine with * "-EncodedCommand " encodedCommand
+    | extend decodedCommand = base64_decode_tostring(substring(encodedCommand, 0, strlen(encodedCommand) - (strlen(encodedCommand) %8)))
+  ) on encodedCommand, decodedCommand
+  | extend timestamp = StartTime
+  | extend NTDomain = tostring(split(Account,'\\',0)[0]), Name = tostring(split(Account,'\\',1)[0])
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain
+entityMappings:
+  - entityType: Account
+    fieldMappings: 
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 2.0.1

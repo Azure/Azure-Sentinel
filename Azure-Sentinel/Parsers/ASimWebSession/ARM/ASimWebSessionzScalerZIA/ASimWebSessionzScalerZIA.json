@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimWebSessionZscalerZIA",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM parser for Zscaler ZIA",
+            "category": "ASIM",
+            "FunctionAlias": "ASimWebSessionZscalerZIA",
+            "query": "let parser=(disabled:bool=false){\nlet DvcActionLookup = datatable (DeviceAction:string, DvcAction: string) \n[\n  'Allowed', 'Allow',\n  'Blocked', 'Deny'\n]; \nCommonSecurityLog | where not(disabled)\n| where DeviceVendor == \"Zscaler\"\n| where DeviceProduct == \"NSSWeblog\"\n// Event fields\n| extend \n  EventCount=int(1), \n  EventStartTime=TimeGenerated,  \n  EventVendor = \"Zscaler\", \n  EventProduct = \"ZIA Proxy\", \n  EventSchema = \"WebSession\", \n  EventSchemaVersion=\"0.2.3\", \n  EventType = 'HTTPsession',\n  EventEndTime=TimeGenerated\n| project-rename\n  EventProductVersion = DeviceVersion,\n  NetworkApplicationProtocol = ApplicationProtocol,\n  HttpContentType = FileType,\n  HttpUserAgent = RequestClientApplication,\n  HttpRequestMethod = RequestMethod,\n  DstAppName = DestinationServiceName,\n  DstIpAddr = DestinationIP,\n  DstFQDN = DestinationHostName,\n  SrcIpAddr = SourceIP,\n  SrcUsername = SourceUserName,\n  SrcNatIpAddr= SourceTranslatedAddress,\n  SrcUserDepartment = SourceUserPrivileges, // Not part of the standard schema\n  UrlCategory = DeviceCustomString2,\n  ThreatName = DeviceCustomString5,\n  FileMD5 = DeviceCustomString6,\n  EventOriginalSeverity = LogSeverity,\n  EventMessage = Message\n// -- Parse\n| parse AdditionalExtensions with \n    * \"rulelabel=\" RuleName:string \";\"\n    \"ruletype=\" ruletype:string \";\"\n    \"urlclass=\" urlclass:string \";\"\n    \"devicemodel=\" * \n// -- Calculated fields\n| lookup DvcActionLookup on DeviceAction\n| extend\n  // -- Adjustment to support both old and new CSL fields.\n  EventOriginalResultDetails = coalesce(\n    column_ifexists(\"Reason\", \"\"),\n    extract(@'reason=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))\n  ),\n  EventResultDetails = coalesce(\n    column_ifexists(\"EventOutcome\", \"\"),\n    extract(@'outcome=(.*?)(?:;|$)',1, AdditionalExtensions, typeof(string))\n  ),\n  ThreatRiskLevel = coalesce(\n    toint(column_ifexists(\"FieldDeviceCustomNumber1\", int(null))),\n    toint(column_ifexists(\"DeviceCustomNumber1\",int(null)))\n  ),\n  DvcHostname = tostring(Computer),\n  SrcBytes = tolong(SentBytes),\n  DstBytes = tolong(ReceivedBytes),\n  Url = iff (RequestURL == \"\", \"\", strcat (tolower(NetworkApplicationProtocol), \"://\", url_decode(RequestURL))),\n  UrlCategory = strcat (urlclass, \"/\", UrlCategory),\n  ThreatCategory = iff(DeviceCustomString4 == \"None\", \"\", strcat (DeviceCustomString3, \"/\", DeviceCustomString4)),\n  RuleName = iff (RuleName == \"None\", \"\", strcat (ruletype, \"/\", RuleName)),\n  FileMD5 = iff (FileMD5 == \"None\", \"\", FileMD5),\n  HttpReferrer = iff (RequestContext == \"None\", \"\", url_decode(RequestContext)),\n  DstAppName = iff (DstAppName == \"General Browsing\", \"\", DstAppName),\n  DstFQDNparts = split (DstFQDN, \".\"),\n  DstHostnameNotAddr = DstIpAddr != DstFQDN\n| extend\n  DstHostname = iff (DstHostnameNotAddr, tostring(DstFQDNparts[0]), DstFQDN),\n  DstDomain = iff (DstHostnameNotAddr, strcat_array(array_slice(DstFQDNparts,1,-1),\".\"), \"\"),\n  DstFQDN = iff (DstHostnameNotAddr, DstFQDN, \"\") \n// -- Enrichment\n| extend\n  EventResult = iff (EventResultDetails == \"NA\" or toint(EventResultDetails) >= 400, \"Failure\", \"Success\"),\n  EventSeverity = case (ThreatRiskLevel > 90, \"High\", ThreatRiskLevel > 60, \"Medium\", ThreatRiskLevel > 10, \"Low\",  \"Informational\"),\n  DstAppType = \"SaaS application\",\n  DstDomainType = iff (DstHostnameNotAddr, \"FQDN\", \"\"),\n  SrcUsernameType = \"UPN\"\n// -- Aliases\n| extend\n  Dvc = DvcHostname,\n  Hostname = DstHostname,\n  UserAgent = HttpUserAgent,\n  User = SrcUsername,\n  HttpStatusCode = EventResultDetails,\n  IpAddr = SrcNatIpAddr,\n  Hash = FileMD5,\n  FileHashType = iff(FileMD5 == \"\", \"\", \"MD5\")\n| project-away DstFQDNparts\n| project-away AdditionalExtensions, CommunicationDirection, Computer, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, Protocol, ReceiptTime, ReceivedBytes, Remote*, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, Activity, EventOutcome, FieldDevice*, ExtID, Reason, ReportReferenceLink, urlclass, ruletype, DstHostnameNotAddr\n};\nparser (disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

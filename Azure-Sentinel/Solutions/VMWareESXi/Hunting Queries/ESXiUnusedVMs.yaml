@@ -1,0 +1,57 @@
+id: d69f0373-f424-4f17-a34a-8379974fec6e
+name: VMware ESXi - List of unused VMs
+description: |
+  'Query searches for unused VMs.'
+severity: Low
+requiredDataConnectors:
+  - connectorId: VMwareESXi
+    dataTypes:
+      - VMwareESXi
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+query: |
+  let vm_p_off =
+  VMwareESXi
+  | where TimeGenerated > ago(30d)
+  | where SyslogMessage has ('VmPoweredOffEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | summarize LastPowerOffTime=max(TimeGenerated) by DstHostname
+  | where datetime_diff('day', datetime(now), LastPowerOffTime) >= 20; 
+  let vm_p_on =
+  VMwareESXi
+  | where TimeGenerated > ago(30d)
+  | where SyslogMessage has ('VmPoweredOnEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | summarize LastPowerOnTime=max(TimeGenerated) by DstHostname
+  | where datetime_diff('day',datetime(now),LastPowerOnTime) >= 20;
+  let off_vms =
+  vm_p_on
+  | join (vm_p_off) on DstHostname
+  | where LastPowerOffTime > LastPowerOnTime
+  | summarize p_off_vm = makeset(DstHostname)
+  | extend k=1;
+  let p_on_vms =
+  VMwareESXi
+  | where TimeGenerated between (ago(24h) .. datetime(now))
+  | where SyslogMessage has ('VmPoweredOnEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | extend k=1
+  | join (off_vms) on k
+  | where p_off_vm !has DstHostname
+  | summarize rec_p_on = makeset(DstHostname)
+  | extend k=1;
+  VMwareESXi
+  | where TimeGenerated between (ago(24h) .. datetime(now))
+  | where SyslogMessage has ('VmPoweredOnEvent')
+  | extend DstHostname = extract(@'\[\d+\]\s+\[(.*?)\s+on', 1, SyslogMessage)
+  | extend k=1
+  | join (p_on_vms) on k
+  | where  rec_p_on !has DstHostname
+  | extend HostCustomEntity = DstHostname
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: HostCustomEntity

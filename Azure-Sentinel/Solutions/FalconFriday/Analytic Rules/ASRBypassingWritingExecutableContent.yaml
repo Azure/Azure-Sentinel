@@ -1,0 +1,53 @@
+id: efe4efef-5ca7-4b51-a53e-0e96492ce97a
+name: ASR Bypassing Writing Executable Content
+description: |
+  The query checks for any file which has been created/written by an Office application and shortly after renamed to one of the deny-listed "executable extensions" which are text files. (e.g. ps1, .js, .vbs).
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1211
+query: |
+  let timeframe = 1d;
+  let executableExtensions = dynamic([".js", ".hta", ".lnk", ".application", ".vb", ".vba", ".vbs", ".ps", ".ps1", ".bat", ".cmd"]);
+  DeviceFileEvents
+  | where Timestamp >= ago(timeframe)
+  | where InitiatingProcessFileName in~ ("winword.exe", "excel.exe", "outlook.exe", "powerpnt.exe")
+  | where ActionType == "FileRenamed"
+  // The mv-apply is less performance compared to doing a full written out !endswith. We kept the mv-apply since We don't hit any limits and get more readable/maintainable code.
+  | mv-apply ext=executableExtensions to typeof(string) on
+  (
+      where PreviousFileName !endswith ext and FileName endswith ext
+  )
+  | project-reorder PreviousFileName, FileName
+  // Begin allow-list.
+  // End allow-list.
+
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: InitiatingProcessAccountSid
+      - identifier: Name
+        columnName: InitiatingProcessAccountName
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+version: 1.0.0
+kind: Scheduled

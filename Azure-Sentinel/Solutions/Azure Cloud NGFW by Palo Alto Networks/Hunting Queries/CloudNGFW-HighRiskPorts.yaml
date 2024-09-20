@@ -1,0 +1,113 @@
+id: 0a57accf-3548-4e38-a861-99687c958f59
+name: Palo Alto - high-risk ports
+description: |
+  'Identifies network connections whose ports are frequent targets of attacks and should not cross network boundaries or reach untrusted public networks.
+  Consider updating the firewall policies to block the connections.'
+requiredDataConnectors:
+  - connectorId: CloudNgfwByPAN
+    dataTypes:
+      - fluentbit_CL
+tactics:
+  - InitialAccess
+  - Discovery
+query: |
+  let HighRiskPorts = datatable (Port:int, Protocol:string, RiskType:string, RiskDescription:string)[
+  13,"udp","3rd Party Attacks","Daytime protocol used in reflection/amplification attacks",
+  17,"udp","3rd Party Attacks","QOTD protocol, reflection/amplification attacks",
+  19,"udp","3rd Party Attacks","Chargen protocol, reflection/amplification attacks",
+  20,"tcp","Unencrypted","Unencrypted FTP Traffic",
+  21,"tcp","Unencrypted","Unencrypted FTP Traffic",
+  22,"tcp","Management","SSH, brute force attacks common",
+  23,"tcp","Management","Telnet, allows unauthenticated and/or unencrypted",
+  53,"udp","3rd Party Attacks","DNS, reflection/amplification attacks",
+  69,"udp","Management","TFTP, allows unauthenticated and/or unencrypted",
+  111,"udp","Management","RPC, unencrypted authentication allowed",
+  111,"tcp","Management","RPC, unencrypted authentication allowed",
+  119,"tcp","Unsecure","NNTP, unencrypted authentication",
+  123,"udp","3rd Party Attacks","Network Time Protocol, reflection/amplification attacks",
+  135,"tcp","Management","End Point Mapper, multiple remote management srvcs",
+  135,"udp","Management","End Point Mapper, multiple remote management srvcs",
+  137,"tcp","Hacker Recon","Netbios Name Service",
+  137,"udp","Hacker Recon","Netbios Name Service",
+  138,"tcp","Hacker Recon","Netbios Datagram Service",
+  138,"udp","Hacker Recon","Netbios Datagram Service",
+  139,"tcp","Hacker Recon","Netbios Session Service",
+  161,"tcp","Unsecure/3rd Party Attacks","SNMP, unsecure / no authentication UDP Reflection attacks",
+  161,"udp","Unsecure/3rd Party Attacks","SNMP, unsecure / no authentication UDP Reflection attacks",
+  162,"tcp","Unsecure","SNMP Trap, unsecure / no authentication",
+  162,"udp","Unsecure","SNMP Trap, unsecure / no authentication",
+  389,"tcp","Hacker Recon/3rd Party Attacks","LDAP/CLDAP",
+  389,"udp","Hacker Recon/3rd Party Attacks","LDAP/CLDAP",
+  443,"udp","3rd Party Attacks","UDP Reflection / Amplification attacks",
+  445,"tcp","Unsecure","SMB - well known attack vector",
+  512,"tcp","Management","Rexec on Linux, remote commands w/o encrypt auth",
+  514,"tcp","Management","Remote Shell, remote commands w/o auth or encrypt",
+  593,"tcp","Management","HTTP RPC EPMAP, unencrypted remote procedure call",
+  593,"udp","Management","HTTP RPC EPMAP, unencrypted remote procedure call",
+  636,"tcp","Hacker Recon","Lightweight Directory Access Protocol",
+  873,"tcp","Management","Rsync, unencrypted file transfer",
+  1433,"tcp","Data Access/Mgmt","MS SQL Management & Data Access",
+  1434,"udp","Data Access/Mgmt","MS SQL Monitor Port",
+  1900,"udp","Hacker Recon/3rd Party Attacks","Simple Service Discovery Protocol, unencrypted",
+  2049,"tcp","Unsecure","Network File System",
+  2049,"udp","Unsecure","Network File System",
+  2301,"tcp","Hacker Recon","Compaq Management Service, no recent incidents",
+  2381,"tcp","Management","Compaq Management Service, no recent incidents",
+  3268,"tcp","Hacker Recon","Microsoft Global Catalog LDAP",
+  3306,"tcp","Data Access/Mgmt","MySQL Database Management Port",
+  3389,"tcp","Management/3rd Party Attacks","RDP, Common brute force attack port",
+  3389,"udp","Management/3rd Party Attacks","RDP, Common brute force attack port",
+  4333,"tcp","Data Access/Mgmt","MSql",
+  5353,"udp","3rd Party Attacks","mDNS",
+  5432,"tcp","Data Access/Mgmt","PostgresSQL Database Management",
+  5800,"tcp","Management","VNC Remote Frame Buffer over HTTP",
+  5900,"tcp","Management","VNC Remote Frame Buffer over HTTP",
+  5985,"tcp","Management","Windows Powershell",
+  5986,"tcp","Management","Windows Powershell",
+  6379,"tcp","Data Access/Mgmt","Redis",
+  7000,"tcp","Data Access/Mgmt","Cassandra",
+  7001,"tcp","Data Access/Mgmt","Cassandra",
+  7199,"tcp","Data Access/Mgmt","Cassandra",
+  9042,"tcp","Data Access/Mgmt","Cassandra",
+  9160,"tcp","Data Access/Mgmt","Cassandra",
+  9200,"tcp","Data Access/Mgmt","Elastic Search",
+  9300,"tcp","Data Access/Mgmt","Elastic Search",
+  9987,"udp","3rd Party Attack","DSM/SCM Target Interface",
+  11211,"udp","Unencrypted","Memcached",
+  16379,"tcp","Data Access/Mgmt","Redis",
+  26379,"tcp","Data Access/Mgmt","Redis",
+  27017,"tcp","Data Access/Mgmt","MongoDB",
+  ];
+  HighRiskPorts
+  | join kind=inner (
+    fluentbit_CL
+    | where FirewallName_s == "palocloudfw" and ident_s == "TRAFFIC" and Message.action != "deny"
+    | extend DestinationIP = tostring(parse_json(Message).dst_ip), DestinationPort = toint(parse_json(Message).dport), Protocol = tostring(parse_json(Message).proto), SourceIP = tostring(parse_json(Message).src_ip)
+    | where isnotempty(DestinationIP) and isnotempty(SourceIP)
+    //Remove private IP communication from DestinationIP
+    | extend result = ipv4_is_private(DestinationIP) 
+    | where result == 0
+    | summarize
+        Count = count(),
+        StartTime = min(TimeGenerated),
+        EndTime = max(TimeGenerated)
+        by 
+        FirewallName_s,
+        SourceIP,
+        DestinationIP,
+        DestinationPort,
+        Protocol
+  ) on $left.Port == $right.DestinationPort and $left.Protocol == $right.Protocol
+  | project-away Protocol1, Port
+  | order by FirewallName_s asc, SourceIP asc, DestinationIP asc, DestinationPort asc
+  | extend timestamp = StartTime, IPCustomEntity = SourceIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+version: 1.0.2

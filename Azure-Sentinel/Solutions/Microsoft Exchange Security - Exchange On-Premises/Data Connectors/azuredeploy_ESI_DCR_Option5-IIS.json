@@ -1,0 +1,95 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+    "dcrName": {
+      "type": "string",
+      "defaultValue": "DCR-Option5-IISLogs",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of the data collection rule"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for data collection rule"
+      }
+    },
+    "workspacename": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The log analitycs workspace name"
+      }
+    },
+    "dataCollectionEndpointName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "The Data collection Endpoint name of Exchange Servers like 'ESI-ExchangeServers'"
+      }
+    }
+    },
+    "variables": {
+        "dataCollectionEndpointId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.operationalinsights/dataCollectionEndpoints/',parameters('dataCollectionEndpointName'))]",
+        "workspaceResourceId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.operationalinsights/workspaces/',parameters('workspacename'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2021-09-01-preview",
+            "name": "[parameters('dcrName')]",
+            "location": "[parameters('location')]",
+            "kind": "Windows",
+            "properties": {
+                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+                "streamDeclarations": {
+                    "Custom-MyTable_CL": {
+                        "columns": [
+                            {
+                                "name": "TimeGenerated",
+                                "type": "datetime"
+                            },
+                            {
+                                "name": "RawData",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                "dataSources": {
+                    "iisLogs": [
+                        {
+                            "streams": [
+                                "Microsoft-W3CIISLog"
+                            ],
+                            "name": "iisLogsDataSource"
+                        }
+                    ]
+                },
+                "destinations": {
+                    "logAnalytics": [
+                        {
+                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                            "name": "la-data-destination"
+                        }
+                    ]
+                },
+                "dataFlows": [
+                    {
+                        "streams": [
+                            "Microsoft-W3CIISLog"
+                        ],
+                        "destinations": [
+                            "la-data-destination"
+                        ],
+                        "transformKql": "source",
+                        "outputStream": "Microsoft-W3CIISLog"
+                    }
+                ]
+            }
+        }
+    ]
+}

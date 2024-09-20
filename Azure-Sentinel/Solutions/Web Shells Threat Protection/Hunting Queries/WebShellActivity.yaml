@@ -1,0 +1,64 @@
+id: e0c947c3-fe83-46ff-bbda-a43224a785fd
+name: Web Shell Activity
+description: |
+  This query detects web shells by analyzing the distribution of commonly-used scripts against regular scripts for public client IPs with no W3CIIS activity in a fixed lookback period.
+description-detailed: |
+  'Web shells are scripts that, when uploaded to a web server, can be used to provide a backdoor to a compromised network.
+  Attackers can use this entry point to leave malicious implants, such as obtaining unauthorized access, escalating privilege, and further compromising the environment.
+
+  This query hunts for web shells by analysing the distribution of commonly-used web shell scripts against regular scripts for those public client IPs which have not observed any W3CIIS activity in a fixed lookback period.
+  The results obtained summarise the public client IPs, user agents, and the distribution of the above scripts between the start and end time.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+tactics:
+  - Persistence
+  - InitialAccess
+relevantTechniques:
+  - T1505
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - (3d);
+  let script_extensions = dynamic([".asp", ".aspx", ".armx", ".asax", ".ashz", ".asmx", ".axd", ".cshtml", ".php", ".phps", ".php3", ".php4", ".php5", ".php7", ".jsp", ".jspx", ".cfm", ".cfml", ".phtml"]);
+  let ignore_uristems = dynamic(["/ews/exchange.asmx"]);
+  let lookback_period = (
+  W3CIISLog
+  | where TimeGenerated between (lookback .. starttime)
+  //Exclude local addresses, using the ipv4_is_private operator
+  | where ipv4_is_private(cIP) == false and  cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127."
+  | summarize count() by cIP, csUserAgent
+  | project cIP, csUserAgent
+  );
+  let potential_webshell_activity = (W3CIISLog
+  | where TimeGenerated between (starttime .. endtime)
+  | extend csUriStem = tolower(csUriStem)
+  | where csUriStem matches regex "\\.[a-zA-Z][a-zA-Z0-9]+$"
+  | where csUriStem !in~ (ignore_uristems) // Remove noisy uri stems in the final results by editing the ignore_uristems variable
+  | extend suffix = strcat(".", split(split(csUriStem, "/")[-1], ".")[-1])
+  | extend is_script = iff(suffix in (script_extensions), 1, 0)
+  //Exclude local addresses using ipv4_is_private operator
+  |where ipv4_is_private(cIP) == false and  cIP !startswith "fe80" and cIP !startswith "::" and cIP !startswith "127."
+  | extend status_xx = strcat(substring(tostring(scStatus), 0, 1), 'XX')
+  | serialize cIP, csUserAgent, TimeGenerated
+  | extend SessionStarted = row_window_session(TimeGenerated, 30s, 3s, (cIP != prev(cIP)) and (csUserAgent != prev(csUserAgent))));
+  let dynamic_scripts = (potential_webshell_activity
+  | where is_script == 1
+  | summarize set_dynamic_scripts = make_set(csUriStem) by cIP, csUserAgent, SessionStarted);
+  let non_dynamic_scripts = (potential_webshell_activity
+  | where is_script == 0
+  | summarize set_non_dynamic_scripts = make_set(csUriStem) by cIP, csUserAgent, SessionStarted);
+  potential_webshell_activity
+  | summarize num_non_dyn_scripts = count() - sum(is_script), num_dynamic_scripts = sum(is_script) by cIP, csUserAgent, SessionStarted
+  | join kind=leftanti (lookback_period) on cIP, csUserAgent
+  | join kind=inner (dynamic_scripts) on cIP, csUserAgent, SessionStarted
+  | join kind=leftouter (non_dynamic_scripts) on cIP, csUserAgent, SessionStarted
+  | extend dyn_to_non_dyn_ratio = iff(num_non_dyn_scripts == 0, 10000.0, 1.0 * num_dynamic_scripts/num_non_dyn_scripts)
+  | project cIP, csUserAgent, SessionStarted,  num_dynamic_scripts, set_dynamic_scripts, num_non_dyn_scripts, set_non_dynamic_scripts,  dyn_to_non_dyn_ratio
+  | sort by dyn_to_non_dyn_ratio desc, num_dynamic_scripts desc
+  | extend summary = pack('IPCustomEntity', cIP, 'user_agent', csUserAgent, 'num_dynamic_scripts', num_dynamic_scripts, 'set_dynamic_scripts', set_dynamic_scripts, 'num_non_dyn_scripts', num_non_dyn_scripts, 'set_non_dynamic_scripts', set_non_dynamic_scripts, 'ratio', dyn_to_non_dyn_ratio, 'Session_StartTime', SessionStarted)
+  | summarize summaries=make_list(summary), num_of_sessions_on_day = count() by cIP, csUserAgent
+  | sort by num_of_sessions_on_day asc
+version: 1.0.0

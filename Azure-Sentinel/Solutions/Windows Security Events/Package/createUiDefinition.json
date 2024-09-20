@@ -1,0 +1,1173 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src ='https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Azure_Sentinel.svg' width='75px' height='75px'>\n\n**Note:** Please refer to the following before installing the solution: \n\n• Review the solution [Release Notes](https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Windows%20Security%20Events/ReleaseNotes.md)\n\n • There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing.\n\nThe Windows Security Events solution for Microsoft Sentinel allows you to ingest Security events from your Windows machines using the Windows Agent into Microsoft Sentinel. This solution includes two (2) data connectors to help ingest the logs.\n\r\n1. **Windows Security Events via AMA** - This data connector helps in ingesting Security Events logs into your Log Analytics Workspace using the new Azure Monitor Agent. Learn more about ingesting using the new Azure Monitor Agent [here](https://learn.microsoft.com/azure/sentinel/connect-cef-ama). **Microsoft recommends using this Data Connector**.\n\r\n2. **Security Events via Legacy Agent** - This data connector helps in ingesting Security Events logs into your Log Analytics Workspace using the legacy Log Analytics agent.\n\n<P style=\"color:red\">**NOTE:** Microsoft recommends installation of Windows Security Events via AMA Connector. Legacy connector uses the Log Analytics agent which is about to be deprecated by **Aug 31, 2024,** and thus should only be installed where AMA is not supported.</p>\n\n**Data Connectors:** 2, **Workbooks:** 2, **Analytic Rules:** 20, **Hunting Queries:** 50\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors1-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This Solution installs the data connector for Windows Security Events. You can get Windows Security Events custom log data in your Microsoft Sentinel workspace. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            }
+          },
+          {
+            "name": "dataconnectors-link2",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more about connecting data sources",
+                "uri": "https://docs.microsoft.com/azure/sentinel/connect-data-sources"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "Event Analyzer",
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The Event Analyzer workbook allows to explore, audit and speed up analysis of Windows Event Logs, including all event details and attributes, such as security, application, system, setup, directory service, DNS and others."
+                }
+              }
+            ]
+          },
+          {
+            "name": "workbook2",
+            "type": "Microsoft.Common.Section",
+            "label": "Identity & Access",
+            "elements": [
+              {
+                "name": "workbook2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Gain insights into Identity and access operations by collecting and analyzing security logs, using the audit and sign-in logs to gather insights into use of Microsoft products.\nYou can view anomalies and trends across login events from all users and machines. This workbook also identifies suspicious entities from login and access events."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "ADFS Database Named Pipe Connection",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection uses Sysmon telemetry to detect suspicious local connections via a named pipe to the AD FS configuration database (Windows Internal Database).\nIn order to use this query you need to be collecting Sysmon EventIdD 18 (Pipe Connected).\nIf you do not have Sysmon data in your workspace this query will raise an error stating:\nFailed to resolve scalar expression named \"[@Name]\""
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "AD FS Remote Auth Sync Connection",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection uses Security events from the \"AD FS Auditing\" provider to detect suspicious authentication events on an AD FS server. The results then get correlated with events from the Windows Filtering Platform (WFP) to detect suspicious incoming network traffic on port 80 on the AD FS server.\nThis could be a sign of a threat actor trying to use replication services on the AD FS server to get its configuration settings and extract sensitive information such as AD FS certificates. In order to use this query you need to enable AD FS auditing on the AD FS Server.\nReferences:\nhttps://docs.microsoft.com/windows-server/identity/ad-fs/troubleshooting/ad-fs-tshoot-logging\nhttps://twitter.com/OTR_Community/status/1387038995016732672"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "AD FS Remote HTTP Network Connection",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection uses Sysmon events (NetworkConnect events) to detect incoming network traffic on port 80 on AD FS servers. This could be a sign of a threat actor trying to use replication services on the AD FS server to get its configuration settings and extract sensitive information such as AD FS certificates.\nIn order to use this query you need to enable Sysmon telemetry on the AD FS Server.\nReference: https://twitter.com/OTR_Community/status/1387038995016732672\n"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Excessive Windows Logon Failures",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies user accounts which has over 50 Windows logon failures today and at least 33% of the count of logon failures over the previous 7 days."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Exchange OAB Virtual Directory Attribute Containing Potential Webshell",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query uses Windows Event ID 5136 in order to detect potential webshell deployment by exploitation of CVE-2021-27065.\nThis query looks for changes to the InternalHostName or ExternalHostName properties of Exchange OAB Virtual Directory objects in AD Directory Services where the new objects contain potential webshell objects."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Gain Code Execution on ADFS Server via SMB + Remote Service or Scheduled Task",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects instances where an attacker has gained the ability to execute code on an ADFS Server through SMB and Remote Service or Scheduled Task."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "Microsoft Entra ID Local Device Join Information and Transport Key Registry Keys Access",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection uses Windows security events to detect suspicious access attempts by the same process to registry keys that provide information about an Microsoft Entra ID joined or registered devices and Transport keys (tkpub / tkpriv).\n This information can be used to export the Device Certificate (dkpub / dkpriv) and Transport key (tkpub/tkpriv).\n These set of keys can be used to impersonate existing Microsoft Entra ID joined devices.\n This detection requires an access control entry (ACE) on the system access control list (SACL) of the following securable objects:\n HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CloudDomainJoin (Microsoft Entra ID joined devices)\n HKCU:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\WorkplaceJoin (Microsoft Entra ID registered devices)\n HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Cryptography\\Ngc\\KeyTransportKey (Transport Key)\n Make sure you set the SACL to propagate to its sub-keys. You can find more information in here https://github.com/OTRF/Set-AuditRule/blob/master/rules/registry/aad_connect_health_service_agent.yml\n Reference: https://o365blog.com/post/deviceidentity/"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "SecurityEvent - Multiple authentication failures followed by a success",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies accounts who have failed to logon to the domain multiple times in a row, followed by a successful authentication within a short time frame. Multiple failed attempts followed by a success can be an indication of a brute force attempt or possible mis-configuration of a service account within an environment.\nThe lookback is set to 2h and the authentication window and threshold are set to 1h and 5, meaning we need to see a minimum of 5 failures followed by a success for an account within 1 hour to surface an alert."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic9",
+            "type": "Microsoft.Common.Section",
+            "label": "New EXE deployed via Default Domain or Default Domain Controller Policies",
+            "elements": [
+              {
+                "name": "analytic9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection highlights executables deployed to hosts via either the Default Domain or Default Domain Controller Policies. These policies apply to all hosts or Domain Controllers and best practice is that these policies should not be used for deployment of files.\nA threat actor may use these policies to deploy files or scripts to all hosts in a domain."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic10",
+            "type": "Microsoft.Common.Section",
+            "label": "Non Domain Controller Active Directory Replication",
+            "elements": [
+              {
+                "name": "analytic10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects potential attempts by non-computer accounts (non domain controllers) to retrieve/synchronize an active directory object leveraging directory replication services (DRS).\nA Domain Controller (computer account) would usually be performing these actions in a domain environment. Another detection rule can be created to cover domain controllers accounts doing at rare times.\nA domain user with privileged permissions to use directory replication services is rare."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic11",
+            "type": "Microsoft.Common.Section",
+            "label": "NRT Base64 Encoded Windows Process Command-lines",
+            "elements": [
+              {
+                "name": "analytic11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection identifies instances of a base64 encoded PE file header seen in the process command line parameter."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic12",
+            "type": "Microsoft.Common.Section",
+            "label": "NRT Process executed from binary hidden in Base64 encoded file",
+            "elements": [
+              {
+                "name": "analytic12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Encoding malicious software is a technique used to obfuscate files from detection.\nThe first CommandLine component is looking for Python decoding base64.\nThe second CommandLine component is looking for Bash/sh command line base64 decoding.\nThe third one is looking for Ruby decoding base64."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic13",
+            "type": "Microsoft.Common.Section",
+            "label": "NRT Security Event log cleared",
+            "elements": [
+              {
+                "name": "analytic13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Checks for event id 1102 which indicates the security event log was cleared.\nIt uses Event Source Name \"Microsoft-Windows-Eventlog\" to avoid generating false positives from other sources, like AD FS servers for instance."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic14",
+            "type": "Microsoft.Common.Section",
+            "label": "AD user enabled and password not set within 48 hours",
+            "elements": [
+              {
+                "name": "analytic14-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when an account is enabled with a default password and the password is not set by the user within 48 hours.\nEffectively, there is an event 4722 indicating an account was enabled and within 48 hours, no event 4723 occurs which\nindicates there was no attempt by the user to set the password. This will show any attempts (success or fail) that occur\nafter 48 hours, which can indicate too long of a time period in setting the password to something that only the user knows.\nIt is recommended that this time period is adjusted per your internal company policy."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic15",
+            "type": "Microsoft.Common.Section",
+            "label": "Potential Fodhelper UAC Bypass",
+            "elements": [
+              {
+                "name": "analytic15-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection looks for the steps required to conduct a UAC bypass using Fodhelper.exe. By default this detection looks for the setting of the required registry keys and the invoking of the process within 1 hour - this can be tweaked as required."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic16",
+            "type": "Microsoft.Common.Section",
+            "label": "Potential re-named sdelete usage",
+            "elements": [
+              {
+                "name": "analytic16-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection looks for command line parameters associated with the use of Sysinternals sdelete (https://docs.microsoft.com/sysinternals/downloads/sdelete) to delete multiple files on a host's C drive.\nA threat actor may re-name the tool to avoid detection and then use it for destructive attacks on a host."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic17",
+            "type": "Microsoft.Common.Section",
+            "label": "Scheduled Task Hide",
+            "elements": [
+              {
+                "name": "analytic17-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects attempts by malware to hide the scheduled task by deleting the SD (Security Descriptor) value. Removal of SD value results in the scheduled task disappearing from schtasks /query and Task Scheduler.\n The query requires auditing to be turned on for HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Schedule\\TaskCache\\Tree registry hive as well as audit policy for registry auditing to be turned on.\n Reference: https://www.microsoft.com/security/blog/2022/04/12/tarrask-malware-uses-scheduled-tasks-for-defense-evasion/\n Reference: https://4sysops.com/archives/audit-changes-in-the-windows-registry/"
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic18",
+            "type": "Microsoft.Common.Section",
+            "label": "Sdelete deployed via GPO and run recursively",
+            "elements": [
+              {
+                "name": "analytic18-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query looks for the Sdelete process being run recursively after being deployed to a host via GPO. Attackers could use this technique to deploy Sdelete to multiple host and delete data on them."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic19",
+            "type": "Microsoft.Common.Section",
+            "label": "Starting or Stopping HealthService to Avoid Detection",
+            "elements": [
+              {
+                "name": "analytic19-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects events where an actor is stopping or starting HealthService to disable telemetry collection/detection from the agent.\n The query requires a SACL to audit for access request to the service."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic20",
+            "type": "Microsoft.Common.Section",
+            "label": "Process Execution Frequency Anomaly",
+            "elements": [
+              {
+                "name": "analytic20-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection identifies anomalous spike in frequency of executions of sensitive processes which are often leveraged as attack vectors.\nThe query leverages KQL's built-in anomaly detection algorithms to find large deviations from baseline patterns.\nSudden increases in execution frequency of sensitive processes should be further investigated for malicious activity.\nTune the values from 1.5 to 3 in series_decompose_anomalies for further outliers or based on custom threshold values for score."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "Commands executed by WMI on new hosts - potential Impacket",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query identifies hosts with WMI command runs, absent in last 7 days and filters for Impacket wmiexec arguments. Impacket filters can be adjusted for targeted hunting. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "Crash dump disabled on host",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This detection looks the prevention of crash dumps being created. This can be used to limit reporting by malware, look for suspicious processes setting this registry key. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "Cscript script daily summary breakdown",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "breakdown of scripts running in the environment This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "VIP account more than 6 failed logons in 10",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "VIP Account with more than 6 failed logon attempts in 10 minutes, include your own VIP list in the table below\n NTSTATUS codes - https://docs.microsoft.com/openspecs/windows_protocols/ms-erref/596a1078-e883-4972-9bbc-49e60bebca55 This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "Decoy User Account Authentication Attempt",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The query detects authentication attempts from a decoy user account. \nA decoy user account is explicitly created and monitored to alert the SOC, indicating a malicious activity when the account is in use. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Discord download invoked from cmd line",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query looks for hosts that have attempted to interact with the Discord CDN. This activity is not normally invoked from the command line and could indicate C2, exfiltration, or malware delivery activity. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery7",
+            "type": "Microsoft.Common.Section",
+            "label": "Enumeration of users and groups",
+            "elements": [
+              {
+                "name": "huntingquery7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Finds attempts to list users or groups using the built-in Windows 'net' tool  This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery8",
+            "type": "Microsoft.Common.Section",
+            "label": "Exchange PowerShell Snapin Added",
+            "elements": [
+              {
+                "name": "huntingquery8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "The Exchange Powershell Snapin was loaded on a host, this allows for a Exchange server management via PowerShell. Whilst this is a legitimate administrative tool it is abused by attackers to performs actions on a compromised Exchange server. Hunt for unusual activity related to this Snapin including it being added on new hosts or by new accounts. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery9",
+            "type": "Microsoft.Common.Section",
+            "label": "Summary of failed user logons by reason of failure",
+            "elements": [
+              {
+                "name": "huntingquery9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "A summary of failed logons can be used to infer lateral movement with the intention of discovering credentials and sensitive data This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery10",
+            "type": "Microsoft.Common.Section",
+            "label": "Group added to Built in Domain Local or Global Group",
+            "elements": [
+              {
+                "name": "huntingquery10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "A Group created in the last 7 days was added to a privileged built in domain local group or global group such as the\nEnterprise Admins, Cert Publishers or DnsAdmins.  Be sure to verify this is an expected addition This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery11",
+            "type": "Microsoft.Common.Section",
+            "label": "Host Exporting Mailbox and Removing Export",
+            "elements": [
+              {
+                "name": "huntingquery11-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query detects mailbox exports from on-prem Exchange servers, followed by export removal from same host within a short time window. This is a common attack pattern used by attackers when exfiltrating emails from a target environment. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery12",
+            "type": "Microsoft.Common.Section",
+            "label": "Hosts with new logons",
+            "elements": [
+              {
+                "name": "huntingquery12-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Shows new accounts that have logged onto a host for the first time - this may clearly be benign activity but an account\nlogging onto multiple hosts for the first time can also be used to look for evidence of that account being used to move\nlaterally across a network. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery13",
+            "type": "Microsoft.Common.Section",
+            "label": "Invoke-PowerShellTcpOneLine Usage.",
+            "elements": [
+              {
+                "name": "huntingquery13-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Invoke-PowerShellTcpOneLine is a PowerShell script to create a simple and small reverse shell. It can be abused by attackers to exfiltrate data. This query looks for command line activity similar to Invoke-PowerShellTcpOneLine. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery14",
+            "type": "Microsoft.Common.Section",
+            "label": "Least Common Parent And Child Process Pairs",
+            "elements": [
+              {
+                "name": "huntingquery14-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Looks across your environment for least common Parent/Child process combinations.\nWill possibly find some malicious activity disguised as well known process names.\nBy ZanCo This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery15",
+            "type": "Microsoft.Common.Section",
+            "label": "Least Common Processes by Command Line",
+            "elements": [
+              {
+                "name": "huntingquery15-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Looks across your environment for least common Process Command Lines, may be noisy and require allowlisting.  By ZanCo This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery16",
+            "type": "Microsoft.Common.Section",
+            "label": "Least Common Processes Including Folder Depth",
+            "elements": [
+              {
+                "name": "huntingquery16-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Looks across your environment for least common Process Command Lines, may be noisy and require allowlisting.  By ZanCo This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery17",
+            "type": "Microsoft.Common.Section",
+            "label": "Masquerading files",
+            "elements": [
+              {
+                "name": "huntingquery17-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Malware writers often use windows system process names like svchost.exe to hide malicious activities. Query searches for execution of process svchost.exe, filtering out execution by well-known SIDs and from legitimate path. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery18",
+            "type": "Microsoft.Common.Section",
+            "label": "Potential Exploitation of MS-RPRN printer bug",
+            "elements": [
+              {
+                "name": "huntingquery18-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects potential attempts to remotely access to the print spooler service on Active Directory Domain Controllers which could indicate an exploitation of MS-RPRN printer bug from a server that is configured with unconstrained delegation. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery19",
+            "type": "Microsoft.Common.Section",
+            "label": "Multiple Explicit Credential Usage - 4648 events",
+            "elements": [
+              {
+                "name": "huntingquery19-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query identifies credential abuse across hosts, using Security Event 4648 to detect multiple account connections to various machines, indicative of Solorigate-like patterns. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery20",
+            "type": "Microsoft.Common.Section",
+            "label": "New Child Process of W3WP.exe",
+            "elements": [
+              {
+                "name": "huntingquery20-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Hunting Query detects unusual child processes of w3wp.exe not seen in 14 days, signaling potential web server compromise and web shell installation. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery21",
+            "type": "Microsoft.Common.Section",
+            "label": "New processes observed in last 24 hours",
+            "elements": [
+              {
+                "name": "huntingquery21-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "New processes in stable environments may indicate malicious activity. Analyzing logon sessions where these binaries ran can help identify attacks. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery22",
+            "type": "Microsoft.Common.Section",
+            "label": "Nishang Reverse TCP Shell in Base64",
+            "elements": [
+              {
+                "name": "huntingquery22-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query searches for Base64-encoded commands associated with the Nishang reverse TCP shell.\nRef: https://github.com/samratashok/nishang/blob/master/Shells/Invoke-PowerShellTcp.ps1 This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery23",
+            "type": "Microsoft.Common.Section",
+            "label": "Summary of users created using uncommon/undocumented commandline switches",
+            "elements": [
+              {
+                "name": "huntingquery23-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Summarizes uses of uncommon & undocumented commandline switches to create user accounts. User accounts may be created to achieve persistence on a machine. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery24",
+            "type": "Microsoft.Common.Section",
+            "label": "Powercat Download",
+            "elements": [
+              {
+                "name": "huntingquery24-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Powercat is a PowerShell implementation of netcat. Whilst it can be used as a legitimate administrative tool it can be abused by attackers to exfiltrate data. This query looks for command line activity downloading PowerCat. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery25",
+            "type": "Microsoft.Common.Section",
+            "label": "PowerShell downloads",
+            "elements": [
+              {
+                "name": "huntingquery25-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Finds PowerShell execution events that could involve a download This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery26",
+            "type": "Microsoft.Common.Section",
+            "label": "New PowerShell scripts encoded on the commandline",
+            "elements": [
+              {
+                "name": "huntingquery26-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identify and decode new encoded powershell scripts this week versus previous 14 days This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery27",
+            "type": "Microsoft.Common.Section",
+            "label": "Entropy for Processes for a given Host",
+            "elements": [
+              {
+                "name": "huntingquery27-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query tracks rare processes on hosts, using entropy to highlight unusual activity. Lower Weight/ProcessEntropy scores suggest higher interest. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery28",
+            "type": "Microsoft.Common.Section",
+            "label": "Rare Processes Run by Service Accounts",
+            "elements": [
+              {
+                "name": "huntingquery28-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Service accounts normally are supposed to perform a limited set of tasks in a stable environment.\nThe query collects a list of service account and then joins them with rare processes in an environment to detect anomalous behaviours. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery29",
+            "type": "Microsoft.Common.Section",
+            "label": "Rare Process Path",
+            "elements": [
+              {
+                "name": "huntingquery29-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when a process is running from a rare path. This could indicate malicious or unexpected activity as attacks\noften try to use common process names running from non-standard locations This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery30",
+            "type": "Microsoft.Common.Section",
+            "label": "Hosts Running a Rare Process with Commandline",
+            "elements": [
+              {
+                "name": "huntingquery30-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query searches for hosts running a rare process. A rare process has execution requency of less than 1% of the average for 30 days and less than a count of 100 on a given host or less than a 14 count on a given host from the last 7 days This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery31",
+            "type": "Microsoft.Common.Section",
+            "label": "Hosts Running a Rare Process",
+            "elements": [
+              {
+                "name": "huntingquery31-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query searches for hosts running a rare process. A rare process has execution requency of less than 1% of the average for 30 days and less than a count of 100 on a given host or less than a 14 count on a given host from the last 7 days. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery32",
+            "type": "Microsoft.Common.Section",
+            "label": "Service installation from user writable directory",
+            "elements": [
+              {
+                "name": "huntingquery32-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects a service installation that is originated from a user writable directory.\nRef: https://attack.mitre.org/techniques/T1569/002/ This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery33",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspected LSASS Dump",
+            "elements": [
+              {
+                "name": "huntingquery33-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Look for evidence of the LSASS process being dumped either using Procdump or comsvcs.dll. Often used by attackers to access credentials stored on a system. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery34",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious Enumeration using Adfind Tool",
+            "elements": [
+              {
+                "name": "huntingquery34-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query detects Adfind tool use for domain reconnaissance, regardless of executable name, focusing on DC and ADFS servers, to spot potential adversary activity. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery35",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious Windows Login Outside Normal Hours",
+            "elements": [
+              {
+                "name": "huntingquery35-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query identifies unusual logon events outside a user's normal hours by comparing with the last 14 days' logon activity, flagging anomalies based on historical patterns. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery36",
+            "type": "Microsoft.Common.Section",
+            "label": "Uncommon processes - bottom 5%",
+            "elements": [
+              {
+                "name": "huntingquery36-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Query highlights uncommon, rare process runs, to flag new potentially unauthorized binaries in stable environments for potential attack detection. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery37",
+            "type": "Microsoft.Common.Section",
+            "label": "Summary of user logons by logon type",
+            "elements": [
+              {
+                "name": "huntingquery37-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Comparing succesful and nonsuccessful logon attempts can be used to identify attempts to move laterally within the \nenvironment with the intention of discovering credentials and sensitive data. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery38",
+            "type": "Microsoft.Common.Section",
+            "label": "User Account added to Built in Domain Local or Global Group",
+            "elements": [
+              {
+                "name": "huntingquery38-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "User account was added to a privileged built in domain local group or global group such as the Enterprise Adminis, Cert Publishers or DnsAdmins\nBe sure to verify this is an expected addition. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery39",
+            "type": "Microsoft.Common.Section",
+            "label": "Long lookback User Account Created and Deleted within 10mins",
+            "elements": [
+              {
+                "name": "huntingquery39-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "User account created and then deleted within 10 minutes across last 14 days This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery40",
+            "type": "Microsoft.Common.Section",
+            "label": "User account added or removed from a security group by an unauthorized user",
+            "elements": [
+              {
+                "name": "huntingquery40-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "User account added or removed from a security group by an unauthorized user, pass in a list This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery41",
+            "type": "Microsoft.Common.Section",
+            "label": "User created by unauthorized user",
+            "elements": [
+              {
+                "name": "huntingquery41-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "User account created by an unauthorized user, pass in a list This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery42",
+            "type": "Microsoft.Common.Section",
+            "label": "VIP account more than 6 failed logons in 10",
+            "elements": [
+              {
+                "name": "huntingquery42-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "VIP Account with more than 6 failed logon attempts in 10 minutes, include your own VIP list in the table below This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery43",
+            "type": "Microsoft.Common.Section",
+            "label": "Windows System Time changed on hosts",
+            "elements": [
+              {
+                "name": "huntingquery43-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Identifies when the system time was changed on a Windows host which can indicate potential timestomping activities. This hunting query depends on SecurityEvents WindowsSecurityEvents data connector (SecurityEvent SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery44",
+            "type": "Microsoft.Common.Section",
+            "label": "Domain controller installation media creation",
+            "elements": [
+              {
+                "name": "huntingquery44-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query helps to detect attempts to create installation media from domain controllers, either remotely or locally using a commandline tool called ntdsutil. These media are intended to be used in the installation of new domain controllers. This hunting query depends on WindowsSecurityEvents WindowsForwardedEvents data connector (SecurityEvent WindowsEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery45",
+            "type": "Microsoft.Common.Section",
+            "label": "Establishing internal proxies",
+            "elements": [
+              {
+                "name": "huntingquery45-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query helps to detect attempts to create proxies on compromised systems using the \n built-in netsh portproxy command. VoltTyphoon has been seen creating these proxies on compromised hosts to manage command and control communications. This hunting query depends on WindowsSecurityEvents WindowsForwardedEvents data connector (SecurityEvent WindowsEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery46",
+            "type": "Microsoft.Common.Section",
+            "label": "AD Account Lockout",
+            "elements": [
+              {
+                "name": "huntingquery46-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Detects Active Directory account lockouts This hunting query depends on SecurityEvents data connector (SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery47",
+            "type": "Microsoft.Common.Section",
+            "label": "KrbRelayUp Local Privilege Escalation Service Creation",
+            "elements": [
+              {
+                "name": "huntingquery47-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects the default service name created by KrbRelayUp. KrbRelayUp is Local Privilege Escalation tool that combine features of Rubeus and KrbRelay. This hunting query depends on SecurityEvents data connector (Event Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery48",
+            "type": "Microsoft.Common.Section",
+            "label": "Remote Task Creation/Update using Schtasks Process",
+            "elements": [
+              {
+                "name": "huntingquery48-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects a scheduled task, created/updated remotely, using the Schtasks process. This hunting query depends on SecurityEvents data connector (SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery49",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious command line tokens in LolBins or LolScripts",
+            "elements": [
+              {
+                "name": "huntingquery49-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query identifies Microsoft-signed Binaries and Scripts that are not system initiated. This technique is commonly used in phishing attacks. This hunting query depends on SecurityEvents data connector (SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery50",
+            "type": "Microsoft.Common.Section",
+            "label": "Windows System Shutdown/Reboot(Sysmon)",
+            "elements": [
+              {
+                "name": "huntingquery50-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query uses Sysmon telemetry to detect System Shutdown/Reboot (MITRE Technique: T1529). This hunting query depends on SecurityEvents data connector (SecurityEvent Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}

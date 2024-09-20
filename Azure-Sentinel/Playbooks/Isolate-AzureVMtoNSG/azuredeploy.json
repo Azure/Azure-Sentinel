@@ -1,0 +1,663 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This playbook will take host entites from triggered incident and search for matches in the enterprises subscriptions. An email for approval will be sent to isolate Azure VM. Upon approval a new NSG Deny All is created and applied to the Azure VM, The Azure VM is restarted to remove any persisted connections.",
+        "author": "Nathan Swift"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Isolate-AzureVMtoNSG",
+            "type": "String"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "EmailApprovalContact": {
+            "defaultValue": "Email address of a group or person who can approve the isolation of the Azure VM",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('office365ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "emailcontact": {
+                            "defaultValue": "[parameters('EmailApprovalContact')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_hosts": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('HTTP')?['value']",
+                            "actions": {
+                                "For_each_2": {
+                                    "foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
+                                    "actions": {
+                                        "Add_comment_to_incident_(V2)": {
+                                            "runAfter": {
+                                                "HTTP_7": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "Value": "Soc Analyst @{parameters('emailcontact')} has ISOLATED Azure VM: @{variables('vmid')} "
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Comment/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/@{encodeURIComponent('Alert')}/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                            }
+                                        },
+                                        "Condition": {
+                                            "actions": {
+                                                "Set_variable_2": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "nicputrequest",
+                                                        "value": {
+                                                            "location": "@{body('HTTP_4')?['location']}",
+                                                            "properties": {
+                                                                "ipConfigurations": [
+                                                                    {
+                                                                        "name": "ipconfig1",
+                                                                        "properties": {
+                                                                            "publicIPAddress": {
+                                                                                "id": "@{body('HTTP_4')?['properties']?['ipConfigurations'][0]?['properties']?['publicIPAddress']?['id']}"
+                                                                            },
+                                                                            "subnet": {
+                                                                                "id": "@{body('HTTP_4')?['properties']?['ipConfigurations']?[0]?['properties']?['subnet']?['id']}"
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                ],
+                                                                "networkSecurityGroup": {
+                                                                    "id": "@{body('HTTP_5')?['id']}"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_5": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Set_variable_3": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "nicputrequest",
+                                                            "value": {
+                                                                "location": "@{body('HTTP_4')?['location']}",
+                                                                "properties": {
+                                                                    "ipConfigurations": [
+                                                                        {
+                                                                            "name": "ipconfig1",
+                                                                            "properties": {
+                                                                                "subnet": {
+                                                                                    "id": "@{body('HTTP_4')?['properties']?['ipConfigurations']?[0]?['properties']?['subnet']?['id']}"
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    ],
+                                                                    "networkSecurityGroup": {
+                                                                        "id": "@{body('HTTP_5')?['id']}"
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "equals": [
+                                                                "@body('HTTP_4')?['properties']?['ipConfigurations'][0]?['properties']?['publicIPAddress']?['id']",
+                                                                "@null"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "For_each_3": {
+                                            "foreach": "@body('HTTP_2')?['data']?['rows'][0]",
+                                            "actions": {
+                                                "Set_variable_4": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "vmid",
+                                                        "value": "@{items('For_each_3')}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "HTTP_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "HTTP_2": {
+                                            "runAfter": {},
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://management.azure.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "body": {
+                                                    "query": "where type == 'microsoft.compute/virtualmachines' | where name contains '@{items('For_Each_2')?['HostName']}' | project vmid = id",
+                                                    "subscriptions": [
+                                                        "@{items('For_Each')?['subscriptionId']}"
+                                                    ]
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2018-09-01-preview"
+                                            }
+                                        },
+                                        "HTTP_3": {
+                                            "runAfter": {
+                                                "For_each_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://management.azure.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com/@{variables('vmid')}?api-version=2019-07-01"
+                                            }
+                                        },
+                                        "HTTP_4": {
+                                            "runAfter": {
+                                                "Send_approval_email": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://management.azure.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "GET",
+                                                "uri": "https://management.azure.com/@{body('HTTP_3')?['properties']?['networkProfile']?['networkInterfaces'][0]?['id']}?api-version=2019-07-01"
+                                            }
+                                        },
+                                        "HTTP_5": {
+                                            "runAfter": {
+                                                "Parse_JSON": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://management.azure.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "body": {
+                                                    "location": "@{body('HTTP_4')?['location']}",
+                                                    "properties": {
+                                                        "securityRules": [
+                                                            {
+                                                                "name": "Port_AnyInbound",
+                                                                "properties": {
+                                                                    "access": "Deny",
+                                                                    "destinationAddressPrefix": "*",
+                                                                    "destinationAddressPrefixes": [],
+                                                                    "destinationPortRange": "*",
+                                                                    "destinationPortRanges": [],
+                                                                    "direction": "Inbound",
+                                                                    "priority": 1000,
+                                                                    "protocol": "*",
+                                                                    "sourceAddressPrefix": "*",
+                                                                    "sourceAddressPrefixes": [],
+                                                                    "sourcePortRange": "*",
+                                                                    "sourcePortRanges": []
+                                                                }
+                                                            },
+                                                            {
+                                                                "name": "Port_AnyOutbound",
+                                                                "properties": {
+                                                                    "access": "Deny",
+                                                                    "destinationAddressPrefix": "*",
+                                                                    "destinationAddressPrefixes": [],
+                                                                    "destinationPortRange": "*",
+                                                                    "destinationPortRanges": [],
+                                                                    "direction": "Outbound",
+                                                                    "priority": 1000,
+                                                                    "protocol": "*",
+                                                                    "sourceAddressPrefix": "*",
+                                                                    "sourceAddressPrefixes": [],
+                                                                    "sourcePortRange": "*",
+                                                                    "sourcePortRanges": []
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                "method": "PUT",
+                                                "uri": "https://management.azure.com/subscriptions/@{split(body('Parse_JSON')?['id'], '/')[add(length(split(body('Parse_JSON')?['id'], '/')), -7)]}/resourceGroups/@{split(body('Parse_JSON')?['id'], '/')[add(length(split(body('Parse_JSON')?['id'], '/')), -5)]}/providers/Microsoft.Network/networkSecurityGroups/@{guid()}?api-version=2019-11-01"
+                                            }
+                                        },
+                                        "HTTP_6": {
+                                            "runAfter": {
+                                                "Condition": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://management.azure.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "body": "@variables('nicputrequest')",
+                                                "method": "PUT",
+                                                "uri": "https://management.azure.com/@{body('HTTP_3')?['properties']?['networkProfile']?['networkInterfaces'][0]?['id']}?api-version=2019-11-01"
+                                            }
+                                        },
+                                        "HTTP_7": {
+                                            "runAfter": {
+                                                "HTTP_6": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Http",
+                                            "inputs": {
+                                                "authentication": {
+                                                    "audience": "https://management.azure.com/",
+                                                    "type": "ManagedServiceIdentity"
+                                                },
+                                                "method": "POST",
+                                                "uri": "https://management.azure.com/@{variables('vmid')}/restart?api-version=2019-07-01"
+                                            }
+                                        },
+                                        "Parse_JSON": {
+                                            "runAfter": {
+                                                "HTTP_4": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ParseJson",
+                                            "inputs": {
+                                                "content": "@body('HTTP_4')",
+                                                "schema": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "location": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        },
+                                                        "properties": {
+                                                            "properties": {
+                                                                "hostedWorkloads": {
+                                                                    "type": "array"
+                                                                },
+                                                                "ipConfigurations": {
+                                                                    "items": {
+                                                                        "properties": {
+                                                                            "etag": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "id": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "name": {
+                                                                                "type": "string"
+                                                                            },
+                                                                            "properties": {
+                                                                                "properties": {
+                                                                                    "primary": {
+                                                                                        "type": "boolean"
+                                                                                    },
+                                                                                    "privateIPAddress": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "privateIPAddressVersion": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "privateIPAllocationMethod": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "provisioningState": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "publicIPAddress": {
+                                                                                        "properties": {
+                                                                                            "id": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "type": "object"
+                                                                                    },
+                                                                                    "subnet": {
+                                                                                        "properties": {
+                                                                                            "id": {
+                                                                                                "type": "string"
+                                                                                            }
+                                                                                        },
+                                                                                        "type": "object"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": {
+                                                                                "type": "string"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "name",
+                                                                            "id",
+                                                                            "etag",
+                                                                            "type",
+                                                                            "properties"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "type": "array"
+                                                                },
+                                                                "macAddress": {
+                                                                    "type": "string"
+                                                                },
+                                                                "networkSecurityGroup": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "primary": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "tapConfigurations": {
+                                                                    "type": "array"
+                                                                },
+                                                                "virtualMachine": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "type": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "Send_approval_email": {
+                                            "runAfter": {
+                                                "HTTP_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnectionWebhook",
+                                            "inputs": {
+                                                "body": {
+                                                    "Message": {
+                                                        "Body": "A SOC Analyst on Case ID: @{body('Alert_-_Get_incident')?['properties']?['CaseNumber']} for Alert: @{triggerBody()?['AlertDisplayName']}| wants to Isolate a Azure VM. The following VM: @{variables('vmid')} was identified. Isolate VM ?",
+                                                        "Importance": "High",
+                                                        "Options": "Approve, Reject",
+                                                        "Subject": "Approval Request",
+                                                        "To": "@{parameters('emailcontact')}"
+                                                    },
+                                                    "NotificationUrl": "@{listCallbackUrl()}"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                                    }
+                                                },
+                                                "path": "/approvalmail/$subscriptions"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "Initialize_variable_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://management.azure.com/",
+                                    "type": "ManagedServiceIdentity"
+                                },
+                                "method": "GET",
+                                "uri": "https://management.azure.com/subscriptions?api-version=2016-06-01"
+                            }
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Alert_-_Get_hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vmid",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_2": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vmlocation",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_3": {
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "nicputrequest",
+                                        "type": "object",
+                                        "value": {}
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_4": {
+                            "runAfter": {
+                                "Initialize_variable_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "subids",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]",
+                                "connectionName": "office365",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

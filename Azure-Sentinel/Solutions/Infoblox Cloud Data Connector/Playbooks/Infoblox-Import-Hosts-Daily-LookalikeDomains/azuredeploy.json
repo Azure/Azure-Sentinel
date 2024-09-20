@@ -1,0 +1,518 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Infoblox Import Hosts Daily Lookalike Domains",
+        "description":  "Leverages the Infoblox TIDE API to automatically import threat indicators into the ThreatIntelligenceIndicator table. This playbook imports newly detected Lookalike domains on a scheduled daily basis.",
+        "prerequisites":  [
+            "Infoblox TIDE API key."
+        ],        
+        "postDeployment":  [
+            "Authorize connections."
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "2023-08-07T00:00:00.000Z",
+        "entities":  [
+        ],
+        "tags":  [
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Infoblox"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Infoblox-Import-Hosts-Daily-LookalikeDomains",
+            "type":  "string"
+        },
+        "AD Application Secret":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for AD Application Secret"
+            }
+        },
+        "Client ID":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for Client ID"
+            }
+        },
+        "TIDE API Key":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for TIDE API Key"
+            }
+        },
+        "Tenant ID":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for Tenant ID"
+            }
+        }
+    },
+    "variables":  {
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Disabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "AD Application Secret":  {
+                            "defaultValue":  "[parameters('AD Application Secret')]",
+                            "type":  "string"
+                        },
+                        "Client ID":  {
+                            "defaultValue":  "[parameters('Client ID')]",
+                            "type":  "string"
+                        },
+                        "TIDE API Key":  {
+                            "defaultValue":  "[parameters('TIDE API Key')]",
+                            "type":  "string"
+                        },
+                        "Tenant ID":  {
+                            "defaultValue":  "[parameters('Tenant ID')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Recurrence":  {
+                            "recurrence":  {
+                                "frequency":  "Day",
+                                "interval":  1
+                            },
+                            "evaluatedRecurrence":  {
+                                "frequency":  "Day",
+                                "interval":  1
+                            },
+                            "type":  "Recurrence"
+                        }
+                    },
+                    "actions":  {
+                        "For_Each_Indicator_(Threat)":  {
+                            "foreach":  "@body('Parse_JSON')?['threat']",
+                            "actions":  {
+                                "Switch":  {
+                                    "runAfter":  {
+                                    },
+                                    "cases":  {
+                                        "EMAIL":  {
+                                            "case":  "EMAIL",
+                                            "actions":  {
+                                                "Send_Emails_to_Sentinel":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Http",
+                                                    "inputs":  {
+                                                        "authentication":  {
+                                                            "audience":  "https://graph.microsoft.com",
+                                                            "clientId":  "@parameters('Client ID')",
+                                                            "secret":  "@parameters('AD Application Secret')",
+                                                            "tenant":  "@parameters('Tenant ID')",
+                                                            "type":  "ActiveDirectoryOAuth"
+                                                        },
+                                                        "body":  {
+                                                            "action":  "alert",
+                                                            "additionalInformation":  "@{items('For_Each_Indicator_(Threat)')?['extended']?['notes']}",
+                                                            "confidence":  "@items('For_Each_Indicator_(Threat)')?['confidence']",
+                                                            "description":  "Infoblox - @{items('For_Each_Indicator_(Threat)')?['type']} - @{items('For_Each_Indicator_(Threat)')?['class']}",
+                                                            "emailSenderAddress":  "@{items('For_Each_Indicator_(Threat)')?['email']}",
+                                                            "emailSourceDomain":  "@{items('For_Each_Indicator_(Threat)')?['domain']}",
+                                                            "expirationDateTime":  "@items('For_Each_Indicator_(Threat)')?['expiration']",
+                                                            "externalId":  "@{items('For_Each_Indicator_(Threat)')?['id']}",
+                                                            "indicatorProvider":  "Infoblox TIDE",
+                                                            "lastReportedDateTime":  "@items('For_Each_Indicator_(Threat)')?['imported']",
+                                                            "tags":  [
+                                                                "@{items('For_Each_Indicator_(Threat)')?['type']}",
+                                                                "Imported: @{items('For_Each_Indicator_(Threat)')?['imported']}",
+                                                                "Profile: @{items('For_Each_Indicator_(Threat)')?['profile']}",
+                                                                "Property: @{items('For_Each_Indicator_(Threat)')?['property']}",
+                                                                "Threat Level: @{items('For_Each_Indicator_(Threat)')?['threat_level']}"
+                                                            ],
+                                                            "targetProduct":  "Azure Sentinel",
+                                                            "threatType":  "WatchList",
+                                                            "tlpLevel":  "white"
+                                                        },
+                                                        "method":  "POST",
+                                                        "uri":  "https://graph.microsoft.com/beta/security/tiIndicators"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "HASH":  {
+                                            "case":  "HASH",
+                                            "actions":  {
+                                                "Send_Hashes_to_Sentinel":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Http",
+                                                    "inputs":  {
+                                                        "authentication":  {
+                                                            "audience":  "https://graph.microsoft.com",
+                                                            "clientId":  "@parameters('Client ID')",
+                                                            "secret":  "@parameters('AD Application Secret')",
+                                                            "tenant":  "@parameters('Tenant ID')",
+                                                            "type":  "ActiveDirectoryOAuth"
+                                                        },
+                                                        "body":  {
+                                                            "action":  "alert",
+                                                            "additionalInformation":  "@{items('For_Each_Indicator_(Threat)')?['extended']?['notes']}",
+                                                            "confidence":  "@items('For_Each_Indicator_(Threat)')?['confidence']",
+                                                            "description":  "Infoblox - @{items('For_Each_Indicator_(Threat)')?['type']} - @{items('For_Each_Indicator_(Threat)')?['class']}",
+                                                            "expirationDateTime":  "@items('For_Each_Indicator_(Threat)')?['expiration']",
+                                                            "externalId":  "@{items('For_Each_Indicator_(Threat)')?['id']}",
+                                                            "fileHashType":  "@{items('For_Each_Indicator_(Threat)')?['hash_type']}",
+                                                            "fileHashValue":  "@{items('For_Each_Indicator_(Threat)')?['hash']}",
+                                                            "indicatorProvider":  "Infoblox TIDE",
+                                                            "lastReportedDateTime":  "@items('For_Each_Indicator_(Threat)')?['imported']",
+                                                            "tags":  [
+                                                                "@{items('For_Each_Indicator_(Threat)')?['type']}",
+                                                                "Imported: @{items('For_Each_Indicator_(Threat)')?['imported']}",
+                                                                "Profile: @{items('For_Each_Indicator_(Threat)')?['profile']}",
+                                                                "Property: @{items('For_Each_Indicator_(Threat)')?['property']}",
+                                                                "Threat Level: @{items('For_Each_Indicator_(Threat)')?['threat_level']}",
+                                                                "Hash Type: @{items('For_Each_Indicator_(Threat)')?['hash_type']}"
+                                                            ],
+                                                            "targetProduct":  "Azure Sentinel",
+                                                            "threatType":  "WatchList",
+                                                            "tlpLevel":  "white"
+                                                        },
+                                                        "method":  "POST",
+                                                        "uri":  "https://graph.microsoft.com/beta/security/tiIndicators"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "HOST":  {
+                                            "case":  "HOST",
+                                            "actions":  {
+                                                "Send_Hosts_to_Sentinel":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Http",
+                                                    "inputs":  {
+                                                        "authentication":  {
+                                                            "audience":  "https://graph.microsoft.com",
+                                                            "clientId":  "@parameters('Client ID')",
+                                                            "secret":  "@parameters('AD Application Secret')",
+                                                            "tenant":  "@parameters('Tenant ID')",
+                                                            "type":  "ActiveDirectoryOAuth"
+                                                        },
+                                                        "body":  {
+                                                            "action":  "alert",
+                                                            "additionalInformation":  "@{items('For_Each_Indicator_(Threat)')?['extended']?['notes']}",
+                                                            "confidence":  "@items('For_Each_Indicator_(Threat)')?['confidence']",
+                                                            "description":  "Infoblox - @{items('For_Each_Indicator_(Threat)')?['type']} - @{items('For_Each_Indicator_(Threat)')?['class']}",
+                                                            "domainName":  "@{items('For_Each_Indicator_(Threat)')?['host']}",
+                                                            "expirationDateTime":  "@items('For_Each_Indicator_(Threat)')?['expiration']",
+                                                            "externalId":  "@{items('For_Each_Indicator_(Threat)')?['id']}",
+                                                            "indicatorProvider":  "Infoblox TIDE",
+                                                            "lastReportedDateTime":  "@items('For_Each_Indicator_(Threat)')?['imported']",
+                                                            "tags":  [
+                                                                "@{items('For_Each_Indicator_(Threat)')?['type']}",
+                                                                "Imported: @{items('For_Each_Indicator_(Threat)')?['imported']}",
+                                                                "Profile: @{items('For_Each_Indicator_(Threat)')?['profile']}",
+                                                                "Property: @{items('For_Each_Indicator_(Threat)')?['property']}",
+                                                                "Threat Level: @{items('For_Each_Indicator_(Threat)')?['threat_level']}"
+                                                            ],
+                                                            "targetProduct":  "Azure Sentinel",
+                                                            "threatType":  "WatchList",
+                                                            "tlpLevel":  "white"
+                                                        },
+                                                        "method":  "POST",
+                                                        "uri":  "https://graph.microsoft.com/beta/security/tiIndicators"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "IP":  {
+                                            "case":  "IP",
+                                            "actions":  {
+                                                "Send_IPs_to_Sentinel":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Http",
+                                                    "inputs":  {
+                                                        "authentication":  {
+                                                            "audience":  "https://graph.microsoft.com",
+                                                            "clientId":  "@parameters('Client ID')",
+                                                            "secret":  "@parameters('AD Application Secret')",
+                                                            "tenant":  "@parameters('Tenant ID')",
+                                                            "type":  "ActiveDirectoryOAuth"
+                                                        },
+                                                        "body":  {
+                                                            "action":  "alert",
+                                                            "additionalInformation":  "@{items('For_Each_Indicator_(Threat)')?['extended']?['notes']}",
+                                                            "confidence":  "@items('For_Each_Indicator_(Threat)')?['confidence']",
+                                                            "description":  "Infoblox - @{items('For_Each_Indicator_(Threat)')?['type']} - @{items('For_Each_Indicator_(Threat)')?['class']}",
+                                                            "expirationDateTime":  "@items('For_Each_Indicator_(Threat)')?['expiration']",
+                                                            "externalId":  "@{items('For_Each_Indicator_(Threat)')?['id']}",
+                                                            "indicatorProvider":  "Infoblox TIDE",
+                                                            "lastReportedDateTime":  "@items('For_Each_Indicator_(Threat)')?['imported']",
+                                                            "networkIPv4":  "@{items('For_Each_Indicator_(Threat)')?['ip']}",
+                                                            "tags":  [
+                                                                "@{items('For_Each_Indicator_(Threat)')?['type']}",
+                                                                "Imported: @{items('For_Each_Indicator_(Threat)')?['imported']}",
+                                                                "Profile: @{items('For_Each_Indicator_(Threat)')?['profile']}",
+                                                                "Property: @{items('For_Each_Indicator_(Threat)')?['property']}",
+                                                                "Threat Level: @{items('For_Each_Indicator_(Threat)')?['threat_level']}"
+                                                            ],
+                                                            "targetProduct":  "Azure Sentinel",
+                                                            "threatType":  "WatchList",
+                                                            "tlpLevel":  "white"
+                                                        },
+                                                        "method":  "POST",
+                                                        "uri":  "https://graph.microsoft.com/beta/security/tiIndicators"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "URL":  {
+                                            "case":  "URL",
+                                            "actions":  {
+                                                "Send_URLs_to_Sentinel":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "Http",
+                                                    "inputs":  {
+                                                        "authentication":  {
+                                                            "audience":  "https://graph.microsoft.com",
+                                                            "clientId":  "@parameters('Client ID')",
+                                                            "secret":  "@parameters('AD Application Secret')",
+                                                            "tenant":  "@parameters('Tenant ID')",
+                                                            "type":  "ActiveDirectoryOAuth"
+                                                        },
+                                                        "body":  {
+                                                            "action":  "alert",
+                                                            "additionalInformation":  "@{items('For_Each_Indicator_(Threat)')?['extended']?['notes']}",
+                                                            "confidence":  "@items('For_Each_Indicator_(Threat)')?['confidence']",
+                                                            "description":  "Infoblox - @{items('For_Each_Indicator_(Threat)')?['type']} - @{items('For_Each_Indicator_(Threat)')?['class']}",
+                                                            "expirationDateTime":  "@items('For_Each_Indicator_(Threat)')?['expiration']",
+                                                            "externalId":  "@{items('For_Each_Indicator_(Threat)')?['id']}",
+                                                            "indicatorProvider":  "Infoblox TIDE",
+                                                            "lastReportedDateTime":  "@items('For_Each_Indicator_(Threat)')?['imported']",
+                                                            "tags":  [
+                                                                "@{items('For_Each_Indicator_(Threat)')?['type']}",
+                                                                "Imported: @{items('For_Each_Indicator_(Threat)')?['imported']}",
+                                                                "Profile: @{items('For_Each_Indicator_(Threat)')?['profile']}",
+                                                                "Property: @{items('For_Each_Indicator_(Threat)')?['property']}",
+                                                                "Threat Level: @{items('For_Each_Indicator_(Threat)')?['threat_level']}"
+                                                            ],
+                                                            "targetProduct":  "Azure Sentinel",
+                                                            "threatType":  "WatchList",
+                                                            "tlpLevel":  "white",
+                                                            "url":  "@{items('For_Each_Indicator_(Threat)')?['url']}"
+                                                        },
+                                                        "method":  "POST",
+                                                        "uri":  "https://graph.microsoft.com/beta/security/tiIndicators"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default":  {
+                                        "actions":  {
+                                        }
+                                    },
+                                    "expression":  "@items('For_Each_Indicator_(Threat)')?['type']",
+                                    "type":  "Switch"
+                                }
+                            },
+                            "runAfter":  {
+                                "Parse_JSON":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        },
+                        "Get_TIDE_Data":  {
+                            "runAfter":  {
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "headers":  {
+                                    "Authorization":  "Token @{parameters('TIDE API Key')}"
+                                },
+                                "method":  "GET",
+                                "queries":  {
+                                    "fields":  "notes,confidence,type,class,host,expiration,id,imported,type,profile,property,threat_level,extended,email,domain,hash,hash_type,ip,url",
+                                    "property":  "Policy_LookalikeDomains",
+                                    "rlimit":  "90000"
+                                },
+                                "uri":  "https://csp.infoblox.com/tide/api/data/threats/host/daily"
+                            }
+                        },
+                        "Parse_JSON":  {
+                            "runAfter":  {
+                                "Get_TIDE_Data":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ParseJson",
+                            "inputs":  {
+                                "content":  "@body('Get_TIDE_Data')",
+                                "schema":  {
+                                    "properties":  {
+                                        "record_count":  {
+                                            "type":  "integer"
+                                        },
+                                        "threat":  {
+                                            "items":  {
+                                                "properties":  {
+                                                    "batch_id":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "class":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "confidence":  {
+                                                        "type":  "integer"
+                                                    },
+                                                    "confidence_score":  {
+                                                        "type":  "number"
+                                                    },
+                                                    "confidence_score_rating":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "confidence_score_vector":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "detected":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "dga":  {
+                                                    },
+                                                    "domain":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "email":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "expiration":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "extended":  {
+                                                        "properties":  {
+                                                            "ais_consent":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "cyberint_guid":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "no_whitelist":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "notes":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "protocol":  {
+                                                                "type":  "string"
+                                                            },
+                                                            "url_hash":  {
+                                                                "type":  "string"
+                                                            }
+                                                        },
+                                                        "type":  "object"
+                                                    },
+                                                    "hash":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "hash_type":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "host":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "id":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "imported":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "ip":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "profile":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "property":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "received":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "risk_score":  {
+                                                        "type":  "number"
+                                                    },
+                                                    "risk_score_rating":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "risk_score_vector":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "threat_level":  {
+                                                        "type":  "integer"
+                                                    },
+                                                    "threat_score":  {
+                                                        "type":  "number"
+                                                    },
+                                                    "threat_score_rating":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "threat_score_vector":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "tld":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "type":  {
+                                                        "type":  "string"
+                                                    },
+                                                    "up":  {
+                                                    },
+                                                    "url":  {
+                                                        "type":  "string"
+                                                    }
+                                                },
+                                                "required":  [
+                                                    "id"
+                                                ],
+                                                "type":  "object"
+                                            },
+                                            "type":  "array"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Infoblox-Import-Hosts-Daily-LookalikeDomains",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+            ]
+        }
+    ]
+}

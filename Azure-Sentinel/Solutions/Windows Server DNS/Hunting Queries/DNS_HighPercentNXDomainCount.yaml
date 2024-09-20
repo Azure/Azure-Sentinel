@@ -1,0 +1,100 @@
+id: 543e1ec6-ee5e-4368-aaa6-405f0551ba5c
+name: Potential DGA detected
+description: |
+  'Clients with a high NXDomain count could be indicative of a DGA (cycling through possible C2 domains
+  where most C2s are not live). Based on quartile percent analysis algorithm.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DNS
+    dataTypes:
+      - DnsEvents
+queryFrequency: 1d
+queryPeriod: 10d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+  - T1008
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let timeframe = 1d;
+  let excludeTLD = dynamic(["arris","ati","virtusa","unknowndomain","onion","corp","domain","local","localdomain","host","home","gateway","lan",
+  "services","hub","domain.name","WirelessAP","Digicom-ADSL","OpenDNS","dlinkrouter","Dlink","ASUS","device","router","Belkin","DHCP","Cisco"]);
+  let nxDomainDnsEvents = DnsEvents
+  | where TimeGenerated between(starttime..endtime)
+  | where ResultCode == 3 
+  | where QueryType in ("A", "AAAA")
+  | where ipv4_is_match("127.0.0.1", ClientIP) == False
+  | where Name !contains "/"
+  | where Name contains "."
+  | extend mytld = tostring(split(Name, '.')[-1])
+  | where mytld !in~ (excludeTLD)
+  | extend truncatedDomain = iff((strlen(Name) - indexof(Name, tostring(split(Name, ".")[-2])) ) >= 7, 
+  strcat(tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])) , 
+  strcat(tostring(split(Name, ".")[-3]), ".", tostring(split(Name, ".")[-2]), ".", tostring(split(Name, ".")[-1])));
+  let quartileFunctionForIPThreshold = view (mypercentile:long, startTimeSpan:timespan, endTimeSpan:timespan) {
+  (nxDomainDnsEvents
+  | where TimeGenerated between (ago(startTimeSpan)..ago(endTimeSpan))
+  | summarize domainCount = dcount(truncatedDomain) by ClientIP, bin(TimeGenerated, 1d)
+  | project SearchList = (domainCount), ClientIP
+  | summarize qPercentiles = percentiles(SearchList, mypercentile) by ClientIP);
+  };
+  let firstQT = quartileFunctionForIPThreshold(25, 7d, 2d) | project-rename percentile_SearchList_25 = qPercentiles;
+  let thirdQT = quartileFunctionForIPThreshold(75, 7d, 2d) | project-rename percentile_SearchList_75 = qPercentiles;
+  // The IP threshold could be adjusted for based on the skewness of the IPthreshold distribution per IP - https://wis.kuleuven.be/stat/robust/papers/2008/outlierdetectionskeweddata-revision.pdf
+  let threshold = (firstQT
+  | join thirdQT on ClientIP
+  | extend IPthreshold = percentile_SearchList_75 + (1.5*exp(3)*(percentile_SearchList_75 - percentile_SearchList_25))
+  | project ClientIP, IPthreshold);
+  let FilterOnIPThreshold_MainTable = (
+  nxDomainDnsEvents
+  | summarize TotalNXLookups=dcount(truncatedDomain) by ClientIP
+  | sort by TotalNXLookups desc
+  | join ['threshold'] on ClientIP
+  // Comment the line below in order to view results filtered by Global Threshold only. 
+  | where TotalNXLookups > IPthreshold 
+  | join kind = leftouter (nxDomainDnsEvents
+      | where TimeGenerated > ago(timeframe)
+      | summarize domainCount = dcount(Name) by truncatedDomain, ClientIP
+      | project SearchList = strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
+      ) on ClientIP
+  | summarize SLDs_DistinctLookups = make_list(SearchList) by ClientIP, TotalNXLookups, IPthreshold
+  | sort by TotalNXLookups desc);
+  //
+  let quartileFunctionForGlobalThreshold = view (mypercentile:long, startTimeSpan:timespan) {
+  (nxDomainDnsEvents
+  | where TimeGenerated > ago(startTimeSpan)
+  | summarize domainCount = dcount(truncatedDomain) by ClientIP
+  | summarize event_count = count() by domainCount
+  | summarize perc2 = percentilesw(domainCount, event_count, mypercentile));
+  };
+  let firstQ = toscalar(quartileFunctionForGlobalThreshold(25, 1d));
+  let thirdQ = toscalar(quartileFunctionForGlobalThreshold(75, 1d));
+  // The Global threshold could be adjusted for based on the skewness of the GlobalThreshold distribution per IP - https://wis.kuleuven.be/stat/robust/papers/2008/outlierdetectionskeweddata-revision.pdf
+  let GlobalThreshold = toscalar(thirdQ + (1.5*exp(3)*(thirdQ - firstQ)));
+  let FilterOnGlobalThreshold_MainTable = (
+  nxDomainDnsEvents
+  | where TimeGenerated > ago(timeframe)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TotalNXLookups = dcount(truncatedDomain) by ClientIP
+  | sort by TotalNXLookups desc
+  // Comment the line below in order to view results filtered by IPThreshold only. 
+  | where TotalNXLookups > GlobalThreshold 
+  | join kind = leftouter (nxDomainDnsEvents
+      | where TimeGenerated > ago(timeframe)
+      | summarize domainCount = dcount(Name) by truncatedDomain, ClientIP
+      | project truncatedDomain = strcat(truncatedDomain," (",tostring(domainCount),")"), ClientIP
+      ) on ClientIP
+  | summarize StartTime = min(StartTime), EndTime = max(EndTime), SLDs_DistinctLookups = make_list(truncatedDomain), UniqueSLDsCount=dcount(truncatedDomain) by ClientIP, TotalNXLookups, GlobalThreshold
+  | sort by TotalNXLookups desc);
+  FilterOnIPThreshold_MainTable
+  | join FilterOnGlobalThreshold_MainTable on ClientIP
+  | project StartTime, EndTime, ClientIP, TotalNXLookups, IPthreshold, GlobalThreshold, SLDs_DistinctLookups, UniqueSLDsCount
+  | extend IP_0_Address = ClientIP
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP

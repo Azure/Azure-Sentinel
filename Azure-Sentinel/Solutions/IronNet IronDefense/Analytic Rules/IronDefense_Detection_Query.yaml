@@ -1,0 +1,63 @@
+id: 3cf46cb9-99d5-42ee-a43c-7bd88ea394a1
+name: Create Incidents from IronDefense
+description: |
+  'Creates incidents based on behavioral detections from IronDefense.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: IronNetIronDefense
+    dataTypes:
+      - CommonSecurityLog
+queryFrequency: 5m
+queryPeriod: 5m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+relevantTechniques:
+query: |
+  CommonSecurityLog
+  | where DeviceProduct == "IronDefense"
+  | summarize arg_max(TimeGenerated, *) by DeviceCustomString4, DeviceCustomString2
+  | extend Category = coalesce(column_ifexists("DeviceEventCategory",""),extract(@'cat=([^;]+)(\;|$)', 1, AdditionalExtensions))	
+  | extend Subcategory = extract(@'subcat=([^;]+)(\;|$)', 1, AdditionalExtensions)
+  | extend AlertDescription = strcat(Category, ': ', Subcategory)
+  | extend Status = tostring(DeviceCustomString2)
+  | extend IronVueUrl = replace(@'\\', @'', tostring(DeviceCustomString3))
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestinationIP
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIP
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DestinationHostName
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: SourceHostName
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: RequestURL
+customDetails:
+  IronDefenseStatus: Status
+  AnalystRating: LogSeverity
+  AlertCreatedTime: TimeGenerated
+  IronVueUrl: IronVueUrl
+  IronDefenseAlertId: DeviceCustomString4
+  AnalystSeverity: DeviceCustomString1
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+alertDetailsOverride:
+  alertDisplayNameFormat: | 
+    {{Category}}: {{Subcategory}} ({{DeviceCustomString4}})
+  alertDescriptionFormat: | 
+    IronDefense detected suspicious activity on {{TimeGenerated}} and categorized it as "{{AlertDescription}}".  View full details in IronVue: {{IronVueUrl}}
+  alertSeverityColumnName: LogSeverity
+version: 1.0.1
+kind: Scheduled

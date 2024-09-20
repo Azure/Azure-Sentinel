@@ -1,0 +1,29 @@
+id: 49bae199-ea04-4a2e-95a6-e3a1f68ab259
+name: Network ACL deleted
+description: |
+  'An attacker could delete a network ACL and gain access to an instance from anywhere. Verify this action with the entity.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Defense Evasion
+relevantTechniques:
+  - T1562
+query: |
+    AWSCloudTrail
+    | where EventName == 'DeleteNetworkAclEntry' and isempty(ErrorMessage) and isempty(ErrorCode)
+    | extend egress=parse_json(RequestParameters)['egress']
+    | where egress == false
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

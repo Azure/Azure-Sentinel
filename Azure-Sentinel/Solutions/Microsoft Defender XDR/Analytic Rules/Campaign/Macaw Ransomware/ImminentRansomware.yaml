@@ -1,0 +1,63 @@
+id: bb46dd86-e642-48a4-975c-44f5ac2b5033
+name: Imminent Ransomware
+description: |
+  This query checks for a series of commands that are commonly used by attackers to disable security tools and system recovery tools before deploying Macaw ransomware in an organization.
+severity: High
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+  - Persistence
+relevantTechniques:
+  - T1562
+  - T1547
+tags:
+  - Schema: _ASim_ProcessEvent
+    SchemaVersion: 0.1.4
+  - Ransomware Campaign
+  - Macaw Ransomware
+query: |
+  _ASim_ProcessEvent 
+  // Pivot on specific commands 
+  | where CommandLine has_any("-ExclusionPath", "Set-MpPreference", "advfirewall", "-ExclusionExtension", 
+  "-EnableControlledFolderAccess", "windefend", "onstart", "bcdedit", "Startup") 
+  // Making list of found commands 
+  | summarize CommandLine = make_set(CommandLine, 10000) by DvcId, Dvc, bin(TimeGenerated, 6h) 
+  // Extending columns for later aggregration, based on TTP
+  | extend StartUpExclusionPath = iff(CommandLine has_all("-ExclusionPath", "Startup"), 1, 0) 
+  | extend DefenderTamp = iff(CommandLine has "Set-MpPreference" 
+  and CommandLine has_any( 
+  "-SevereThreatDefaultAction 6" 
+  "-HighThreatDefaultAction 6", 
+  "-ModerateThreatDefaultAction 6", 
+  "-LowThreatDefaultAction 6" 
+  "-ScanScheduleDay 8"), 1, 0) 
+  | extend NetshFirewallTampering = iff(CommandLine has_all( "netsh", "advfirewall", "allprofiles state off"), 1, 0) 
+  | extend BatExclusion = iff(CommandLine has_all("-ExclusionExtension", ".bat"), 1, 0) 
+  | extend ExeExclusion = iff(CommandLine has_all("-ExclusionExtension", ".exe"), 1, 0) 
+  | extend DisableControlledFolderAccess = iff(CommandLine has_all("-EnableControlledFolderAccess", "Disabled"), 1, 0) 
+  | extend ScDeleteDefend = iff(CommandLine has_all("sc", "delete", "windefend"), 1, 0) 
+  | extend BootTampering = iff(CommandLine has_all("bcdedit", "default") and CommandLine has_any ("recoveryenabled No", "bootstatuspolicy ignoreallfailures"), 1, 0) 
+  | extend SchTasks = iff(CommandLine has_all("/sc", "onstart", "system", "/create", "/delay"), 1, 0) 
+  // Summarizing found commands 
+  | summarize by NetshFirewallTampering ,BatExclusion, ExeExclusion, DisableControlledFolderAccess, ScDeleteDefend, SchTasks, BootTampering, DefenderTamp, StartUpExclusionPath, DvcId, Dvc, TimeGenerated 
+  // Adding up each piece of evidence 
+  | extend EvidenceCount = NetshFirewallTampering + BatExclusion + ExeExclusion + DisableControlledFolderAccess + ScDeleteDefend + SchTasks + BootTampering + DefenderTamp + StartUpExclusionPath 
+  | where EvidenceCount > 4
+  | extend HostName = iff(Dvc has '.', substring(Dvc, 0, indexof(Dvc, '.')), Dvc)
+  | extend DnsDomain = iff(Dvc has '.', substring(Dvc, indexof(Dvc, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Dvc
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.0
+kind: Scheduled

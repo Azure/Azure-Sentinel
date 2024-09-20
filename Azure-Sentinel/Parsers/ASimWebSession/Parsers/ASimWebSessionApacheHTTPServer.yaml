@@ -1,0 +1,71 @@
+Parser:
+  Title: Web Session ASIM parser for Apache HTTP Server
+  Version: '0.1'
+  LastUpdated: Jun 19, 2023
+Product:
+  Name: Apache HTTP Server
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Apache HTTP Server 
+  Link: https://httpd.apache.org/docs/2.4/logs.html
+Description: |
+  This ASIM parser supports filtering and normalizing Apache HTTP Server logs produced by the Microsoft Sentinel Apache connector to the ASIM Web Session normalized schema.
+ParserName: ASimWebSessionApacheHTTPServer
+EquivalentBuiltInParser: _ASim_WebSession_ApacheHTTPServer
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let Parser=(disabled:bool=false){
+    ApacheHTTPServer_CL
+    | where not(disabled)
+    | project  RawData, TimeGenerated, Computer, _ResourceId, Type, _ItemId
+    | where not (RawData startswith "[") 
+    | where RawData has_any ("GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH")
+    | parse RawData with * '] ' Temp'"' *
+    | extend DstHostname = tostring(split(trim_end(" ",Temp),":",0)[0])
+    | parse RawData with SrcIpAddr " " ClientIdentity " " SrcUsername " [" Date ']' * '"' HttpRequestMethod " " Url " " Protocol '" ' EventResultDetails " " DstBytes:long ' "' HttpReferrer '" "' HttpUserAgent '"' *
+    | project-away RawData, Date, ClientIdentity, Temp
+    | parse _ResourceId with * "/subscriptions/" DvcScopeId "/" *
+    | project-rename 
+        DvcHostname    = Computer,
+        DvcId          = _ResourceId,
+        EventUid       = _ItemId
+    | extend 
+        HttpVersion    = tostring(split(Protocol,"/")[1]),
+        EventStartTime = TimeGenerated,
+        EventEndTime   = TimeGenerated,
+        DvcIdType      = iff (DvcId == "", "", "AzureResourceID")
+    | extend 
+        HttpStatusCode = EventResultDetails,
+        UserAgent      = HttpUserAgent,
+        EventResult    = iff (
+          toint(EventResultDetails) < 400, "Success", 
+          "Failure"
+        ),
+        IpAddr         = SrcIpAddr,
+        Dvc            = DvcHostname,
+        User           = SrcUsername,
+        SrcUsername    = case(SrcUsername == "-", "", SrcUsername),
+        HttpReferrer   = case(HttpReferrer == "-", "", HttpReferrer),
+        HttpUserAgent  = case(HttpUserAgent == "-", "", HttpUserAgent),
+        DstHostname    = case(DstHostname == "-", "", DstHostname)
+    | extend SrcUsernameType = _ASIM_GetUsernameType(SrcUsername)
+    | project-away Protocol
+    | extend
+        EventType          = "WebServerSession", 
+        EventSchema        = "WebSession",
+        EventSchemaVersion = "0.2.6",
+        EventCount         = int(1),
+        EventVendor        = "Apache",
+        EventProduct       = "HTTP Server",
+        EventSeverity      = "Informational"
+  };
+  Parser (disabled=disabled)

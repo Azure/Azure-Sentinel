@@ -1,0 +1,120 @@
+Parser:
+  Title: Network Session ASIM parser for Fortinet FortiGate
+  Version: '0.5'
+  LastUpdated: Dec 11, 2022
+Product:
+  Name: Fortinet FortiGate
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.3'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Fortinet FortiGate logs to the ASIM Web Session normalized schema.
+ParserName: ASimNetworkSessionFortinetFortiGate
+EquivalentBuiltInParser: _ASim_NetworkSession_FortinetFortiGate
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventLookup=datatable(DeviceAction:string,DvcAction:string,EventResult:string,EventResultDetails:string)
+  [
+    "accept","Allow","Success",""
+    , "client-rst","Reset Source","Failure",""
+    , "close","","Success",""
+    , "deny","Deny","Failure",""
+    , "ip-conn","","Failure","IP connection error"
+    , "server-rst","Reset Destination","Failure",""
+    , "timeout","","Failure",""
+  ];
+  // -- See https://docs.fortinet.com/document/fortigate/7.2.4/fortios-log-message-reference/671442/cef-priority-levels
+  let SeverityLookup = datatable (EventOriginalSeverity:string, EventSeverity:string)
+  [
+    "1", "Informational", // Debug
+    "2", "Informational", // Information
+    "3", "Informational", // Notification
+    "4", "Low", // Warning
+    "5", "Low", // Error
+    "6", "Critical", // High
+    "7", "Alert", // Medium
+    "8", "High" // Emergency
+  ];
+  let Parser=(disabled:bool=false){
+     CommonSecurityLog
+    | where not(disabled)
+    | where DeviceVendor == "Fortinet" and DeviceProduct startswith "FortiGate" and (column_ifexists("DeviceEventCategory","") has "traffic"  or AdditionalExtensions has "cat=traffic")
+    | where DeviceAction != "dns" and Activity !has "dns" 
+    | parse Activity with "traffic:forward " temp_DeviceAction:string 
+    | extend DeviceAction = coalesce(DeviceAction, temp_DeviceAction)  
+    | lookup EventLookup on DeviceAction 
+    | project Activity,AdditionalExtensions,DestinationIP,DestinationPort,DeviceAction,DeviceInboundInterface,DeviceOutboundInterface,DeviceProduct,DeviceVersion,LogSeverity,Protocol,ReceivedBytes,SentBytes,SourceIP,SourcePort,TimeGenerated, DeviceExternalID, Type, _ItemId, Computer, EventResult, EventResultDetails, DvcAction
+    | project-rename DstBytes = ReceivedBytes
+      , DstInterfaceName = DeviceOutboundInterface
+      , DstIpAddr = DestinationIP
+      , DstPortNumber = DestinationPort
+      , Dvc = Computer
+      , EventMessage = Activity
+      , EventOriginalSeverity = LogSeverity
+      , EventProduct = DeviceProduct
+      , EventProductVersion = DeviceVersion
+      , SrcBytes = SentBytes
+      , SrcInterfaceName = DeviceInboundInterface
+      , SrcIpAddr = SourceIP
+      , SrcPortNumber = SourcePort
+      , DvcId = DeviceExternalID
+      , EventUid = _ItemId
+    | invoke _ASIM_ResolveNetworkProtocol ('Protocol')
+    | project-rename DvcOriginalAction = DeviceAction
+    | parse-kv AdditionalExtensions as (
+            FortinetFortiGatestart:datetime,
+            FortinetFortiGatesrcintfrole:string,
+            FortinetFortiGatedstintfrole:string,
+            FortinetFortiGateexternalID:string,
+            FortinetFortiGatepolicyid:int,
+            FortinetFortiGatedstcountry:string,
+            FortinetFortiGatesrccountry:string,
+            FortinetFortiGatecrscore:string,
+            FortinetFortiGateduration:int,
+            FortinetFortiGatesentpkt:long,
+            FortinetFortiGatercvdpkt:long
+        ) with (pair_delimiter=';', kv_delimiter='=')
+    | project-rename
+        EventStartTime          = FortinetFortiGatestart,
+        SrcZone                 = FortinetFortiGatesrcintfrole,
+        DstZone                 = FortinetFortiGatedstintfrole,
+        NetworkSessionId        = FortinetFortiGateexternalID,
+        NetworkRuleNumber       = FortinetFortiGatepolicyid,
+        NetworkDuration         = FortinetFortiGateduration,
+        DstGeoCountry           = FortinetFortiGatedstcountry,
+        SrcGeoCountry           = FortinetFortiGatesrccountry,
+        ThreatOriginalRiskLevel = FortinetFortiGatecrscore,
+        SrcPackets              = FortinetFortiGatesentpkt,
+        DstPackets              = FortinetFortiGatercvdpkt
+    | extend EventCount = int(1)
+      , EventSchema = "NetworkSession"
+      , EventSchemaVersion = "0.2.3"
+      , EventType = "NetworkSession"
+      , EventVendor = "Fortinet"
+      , DvcIdType = "Other"
+      , NetworkBytes = DstBytes + SrcBytes
+      , EventEndTime = TimeGenerated
+      , EventStartTime = coalesce(EventStartTime, TimeGenerated)
+      , NetworkProtocolVersion = case(DstIpAddr contains ".", "IPv4"
+          , DstIpAddr contains ":", "IPv6"
+          , "")
+      , NetworkPackets = DstPackets + SrcPackets
+      | lookup SeverityLookup on EventOriginalSeverity
+      | extend 
+          Src = SrcIpAddr,
+          Dst = DstIpAddr,
+          SessionId = NetworkSessionId,
+          IpAddr = SrcIpAddr,
+          Duration = NetworkDuration,
+          Rule = tostring(NetworkRuleNumber)
+    | project-away Protocol, AdditionalExtensions, NetworkProtocolNumber
+  };
+  Parser (disabled=disabled)

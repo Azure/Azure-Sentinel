@@ -1,0 +1,828 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "Rubrik Poll Async Result",
+        "description":  "This playbook is used by other playbooks to poll for results from some of the asynchronous API calls that are invoked by other playbooks.",
+        "prerequisites":  [
+            "1. The Rubrik Security Cloud data connector should be configured to send appropriate events to Microsoft Sentinel.",
+            "2. The Rubrik Security Cloud solution should be configured to [connect to Rubrik Security Cloud API end points using a Service Account](https://docs.rubrik.com/en-us/saas/saas/polaris_api_access_with_service_accounts.html), the service account should be assigned a role that includes the relevant privileges necessary to perform the desired operations (see [Roles and Permissions](https://docs.rubrik.com/en-us/saas/saas/common/roles_and_permissions.html) in the Rubrik Security Cloud user guide).",
+            "3. Rubrik custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.",
+            "4. Store Service account credentials in Key Vault and obtain keyvault name and tenantId",
+                "a. Create a Key Vault with unique name",
+                "b. Go to KeyVault -> secrets -> Generate/import and create 'Rubrik-AS-Int-ClientId' & 'Rubrik-AS-Int-ClientSecret' for storing client_id and client_secret respectively"
+        ],
+        "postDeployment":  [
+            "**a. Authorize connections**",
+            "Once deployment is complete, authorize each connection.",
+            "1. Click the Custom Connector connection resource",
+            "2. Click edit API connection",
+            "3. Click Authorize",
+            "4. Sign in",
+            "5. Click Save",
+            "6. Repeat steps for other connections"
+        ],
+        "prerequisitesDeployTemplateFile": "Azure-Sentinel/Solutions/RubrikSecurityCloud/Playbooks/RubrikCustomConnector/Rubrik_custom_conn.json",
+        "lastUpdateTime":  "2022-01-20T00:00:00.000Z",
+        "entities":  ["account","url"],
+        "tags":  ["Async","Security","Rubrik"],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  "Rubrik"
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "RubrikPollAsyncResult",
+            "type":  "string"
+        },
+        "Rubrik Connector name": {
+            "defaultValue": "RubrikCustomConnector",
+            "type": "String",
+            "metadata": {
+                "description": "Rubrik Custom Connector name"
+            }
+        },
+        "keyvaultName": {
+            "defaultValue": "RubrikSentinelKeyVault",
+            "type": "string"
+        },
+        "tenantId": {
+            "type": "string"
+        }
+    },
+    "variables":  {
+        "RubrikcustomconnectorConnectionName":  "[concat('Rubrikcustomconnector-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName":  "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "manual":  {
+                            "type":  "Request",
+                            "kind":  "Http",
+                            "inputs":  {
+                                "schema":  {
+                                    "properties":  {
+                                        "BaseUrl":  {
+                                            "type":  "string"
+                                        },
+                                        "ClusterId":  {
+                                            "type":  "string"
+                                        },
+                                        "PollingInterval":  {
+                                            "type":  "integer"
+                                        },
+                                        "PollingTimeout":  {
+                                            "type":  "integer"
+                                        },
+                                        "RequestId":  {
+                                            "type":  "string"
+                                        }
+                                    },
+                                    "type":  "object"
+                                }
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Are_the_required_inputs_not_provided":  {
+                            "actions":  {
+                                "Invalid_input_response":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Response",
+                                    "kind":  "Http",
+                                    "inputs":  {
+                                        "body":  {
+                                            "error":  "Error: Required inputs are not provided"
+                                        },
+                                        "statusCode":  400
+                                    }
+                                },
+                                "Terminate":  {
+                                    "runAfter":  {
+                                        "Invalid_input_response":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Terminate",
+                                    "inputs":  {
+                                        "runError":  {
+                                            "code":  "400",
+                                            "message":  "Error: Required inputs are not provided"
+                                        },
+                                        "runStatus":  "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_variable":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@empty(triggerBody()?['ClusterId'])",
+                                            "@true"
+                                        ]
+                                    },
+                                    {
+                                        "equals":  [
+                                            "@empty(triggerBody()?['RequestId'])",
+                                            "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Authentication":  {
+                            "runAfter":  {
+                                "Get_ClientSecret":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "client_id":  "@body('Get_ClientId')?['value']",
+                                    "client_secret":  "@body('Get_ClientSecret')?['value']"
+                                },
+                                "headers":  {
+                                    "Content-Type":  "application/json"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['RubrikCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/api/client_token"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Does_Get_async_results_get_status_code_200":  {
+                            "actions":  {
+                                "Does_Get_async_result_API_response_contain_errors_":  {
+                                    "actions":  {
+                                        "Error_Response_":  {
+                                            "runAfter":  {
+                                                "Set_Get_async_result_API_error_response":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "Response",
+                                            "kind":  "Http",
+                                            "inputs":  {
+                                                "body":  {
+                                                    "error":  "@{variables('APIStatus')}"
+                                                },
+                                                "statusCode":  400
+                                            }
+                                        },
+                                        "Set_Get_async_result_API_error_response":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "SetVariable",
+                                            "inputs":  {
+                                                "name":  "APIStatus",
+                                                "value":  "Error:@{body('Get_Async_Results')?['errors'][0]?['message']}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Parse_JSON_of_Get_async_results":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "ParseJson",
+                                                "inputs":  {
+                                                    "content":  "@body('Get_Async_Results')",
+                                                    "schema":  {
+                                                        "properties":  {
+                                                            "data":  {
+                                                                "properties":  {
+                                                                    "vSphereVMAsyncRequestStatus":  {
+                                                                        "properties":  {
+                                                                            "__typename":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "error":  {
+                                                                            },
+                                                                            "id":  {
+                                                                                "type":  "string"
+                                                                            },
+                                                                            "links":  {
+                                                                                "items":  {
+                                                                                    "properties":  {
+                                                                                        "href":  {
+                                                                                            "type":  "string"
+                                                                                        },
+                                                                                        "rel":  {
+                                                                                            "type":  "string"
+                                                                                        }
+                                                                                    },
+                                                                                    "required":  [
+                                                                                        "href",
+                                                                                        "rel"
+                                                                                    ],
+                                                                                    "type":  "object"
+                                                                                },
+                                                                                "type":  "array"
+                                                                            },
+                                                                            "status":  {
+                                                                                "type":  "string"
+                                                                            }
+                                                                        },
+                                                                        "type":  "object"
+                                                                    }
+                                                                },
+                                                                "type":  "object"
+                                                            }
+                                                        },
+                                                        "type":  "object"
+                                                    }
+                                                }
+                                            },
+                                            "Success_Response":  {
+                                                "runAfter":  {
+                                                    "Parse_JSON_of_Get_async_results":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "Response",
+                                                "kind":  "Http",
+                                                "inputs":  {
+                                                    "body":  "@body('Parse_JSON_of_Get_async_results')?['data']?['vSphereVMAsyncRequestStatus']",
+                                                    "statusCode":  200
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "contains":  [
+                                                    "@body('Get_Async_Results')",
+                                                    "errors"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                }
+                            },
+                            "runAfter":  {
+                                "Get_Async_Results":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                    "Response":  {
+                                        "runAfter":  {
+                                        },
+                                        "type":  "Response",
+                                        "kind":  "Http",
+                                        "inputs":  {
+                                            "body":  {
+                                                "error":  "Error:@{body('Get_Async_Results')?['message']}"
+                                            },
+                                            "statusCode":  "@outputs('Get_Async_Results')['statusCode']"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "equals":  [
+                                            "@outputs('Get_Async_Results')['statusCode']",
+                                            200
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Generic_Polling":  {
+                            "actions":  {
+                                "Does_GPS_Async_Result_get_status_code_200":  {
+                                    "actions":  {
+                                        "Does_GPS_Async_Result_response_contains_errors":  {
+                                            "actions":  {
+                                                "Set_ERROR_status_for_async_result":  {
+                                                    "runAfter":  {
+                                                        "Set_GPS_Async_Result_API_error_status":  [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "AsyncResultStatus",
+                                                        "value":  "ERROR"
+                                                    }
+                                                },
+                                                "Set_GPS_Async_Result_API_error_status":  {
+                                                    "runAfter":  {
+                                                    },
+                                                    "type":  "SetVariable",
+                                                    "inputs":  {
+                                                        "name":  "APIStatus",
+                                                        "value":  "@{body('GPS_Async_Result')?['errors'][0]?['message']}"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter":  {
+                                            },
+                                            "else":  {
+                                                "actions":  {
+                                                    "Parse_JSON_of_GPS_Async_Result":  {
+                                                        "runAfter":  {
+                                                        },
+                                                        "type":  "ParseJson",
+                                                        "inputs":  {
+                                                            "content":  "@body('GPS_Async_Result')",
+                                                            "schema":  {
+                                                                "properties":  {
+                                                                    "data":  {
+                                                                        "properties":  {
+                                                                            "vSphereVMAsyncRequestStatus":  {
+                                                                                "properties":  {
+                                                                                    "__typename":  {
+                                                                                        "type":  "string"
+                                                                                    },
+                                                                                    "error":  {
+                                                                                    },
+                                                                                    "id":  {
+                                                                                        "type":  "string"
+                                                                                    },
+                                                                                    "links":  {
+                                                                                        "items":  {
+                                                                                            "properties":  {
+                                                                                                "href":  {
+                                                                                                    "type":  "string"
+                                                                                                },
+                                                                                                "rel":  {
+                                                                                                    "type":  "string"
+                                                                                                }
+                                                                                            },
+                                                                                            "required":  [
+                                                                                                "href",
+                                                                                                "rel"
+                                                                                            ],
+                                                                                            "type":  "object"
+                                                                                        },
+                                                                                        "type":  "array"
+                                                                                    },
+                                                                                    "status":  {
+                                                                                        "type":  "string"
+                                                                                    }
+                                                                                },
+                                                                                "type":  "object"
+                                                                            }
+                                                                        },
+                                                                        "type":  "object"
+                                                                    }
+                                                                },
+                                                                "type":  "object"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Polling_Interval":  {
+                                                        "runAfter":  {
+                                                            "Update_Async_Result_Status":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "Wait",
+                                                        "inputs":  {
+                                                            "interval":  {
+                                                                "count":  "@if(or(empty(string(triggerBody()?['PollingInterval'])),lessOrEquals(triggerBody()?['PollingInterval'],0)), 5, triggerBody()?['PollingInterval']) ",
+                                                                "unit":  "Minute"
+                                                            }
+                                                        }
+                                                    },
+                                                    "Update_Async_Result_Status":  {
+                                                        "runAfter":  {
+                                                            "Parse_JSON_of_GPS_Async_Result":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "SetVariable",
+                                                        "inputs":  {
+                                                            "name":  "AsyncResultStatus",
+                                                            "value":  "@body('Parse_JSON_of_GPS_Async_Result')?['data']?['vSphereVMAsyncRequestStatus']?['status']"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression":  {
+                                                "and":  [
+                                                    {
+                                                        "contains":  [
+                                                            "@body('GPS_Async_Result')",
+                                                            "errors"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type":  "If"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "GPS_Async_Result":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Set_Async_result_status_as_ERROR":  {
+                                                "runAfter":  {
+                                                    "Set_Error_message_with_status_code":  [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "AsyncResultStatus",
+                                                    "value":  "ERROR"
+                                                }
+                                            },
+                                            "Set_Error_message_with_status_code":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "SetVariable",
+                                                "inputs":  {
+                                                    "name":  "APIStatus",
+                                                    "value":  "StatusCode:@{outputs('GPS_Async_Result')['statusCode']} Error:@{body('GPS_Async_Result')?['message']}"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@outputs('GPS_Async_Result')['statusCode']",
+                                                    200
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                },
+                                "GPS_Async_Result":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Http",
+                                    "inputs":  {
+                                        "body":  {
+                                            "query":  "query VSphereVMAsyncRequestStatus($clusterUuid: UUID!, $vSphereVmAsyncRequestStatusId: String!) {\r\n  vSphereVMAsyncRequestStatus(clusterUuid: $clusterUuid, id: $vSphereVmAsyncRequestStatusId) {\r\n    id\r\n    status\r\n    links {\r\n      href\r\n      rel\r\n    }\r\n    error {\r\n      message\r\n    }\r\n  }\r\n}\r\n",
+                                            "variables":  {
+                                                "clusterUuid":  "@{triggerBody()?['ClusterId']}",
+                                                "vSphereVmAsyncRequestStatusId":  "@{triggerBody()?['RequestId']}"
+                                            }
+                                        },
+                                        "headers":  {
+                                            "Authorization":  "Bearer @{variables('access_token')}",
+                                            "Content-Type":  "application/json"
+                                        },
+                                        "method":  "POST",
+                                        "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Initialize_access_token":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression":  "@not(equals(or(equals(variables('AsyncResultStatus'), 'QUEUED'), or(equals(variables('AsyncResultStatus'), 'RUNNING'), equals(variables('AsyncResultStatus'), 'ACQUIRING'))), true))",
+                            "limit":  {
+                                "timeout":  "@{if(contains(triggerBody(),'PollingTimeout'),concat('PT',triggerBody()['PollingTimeout'],'M'),'PT720M')}"
+                            },
+                            "type":  "Until"
+                        },
+                        "Get_Async_Results":  {
+                            "runAfter":  {
+                                "Generic_Polling":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Http",
+                            "inputs":  {
+                                "body":  {
+                                    "query":  "query VSphereVMAsyncRequestStatus($clusterUuid: UUID!, $vSphereVmAsyncRequestStatusId: String!) {\r\n  vSphereVMAsyncRequestStatus(clusterUuid: $clusterUuid, id: $vSphereVmAsyncRequestStatusId) {\r\n    id\r\n    status\r\n    links {\r\n      href\r\n      rel\r\n    }\r\n    error {\r\n      message\r\n    }\r\n  }\r\n}\r\n",
+                                    "variables":  {
+                                        "clusterUuid":  "@{triggerBody()?['ClusterId']}",
+                                        "vSphereVmAsyncRequestStatusId":  "@{triggerBody()?['RequestId']}"
+                                    }
+                                },
+                                "headers":  {
+                                    "Authorization":  "Bearer @{variables('access_token')}",
+                                    "Content-Type":  "application/json"
+                                },
+                                "method":  "POST",
+                                "uri":  "@{triggerBody()?['BaseUrl']}/api/graphql"
+                            }
+                        },
+                        "Get_ClientId":  {
+                            "runAfter":  {
+                                "Are_the_required_inputs_not_provided":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['keyvault_1']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientId')}/value"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Get_ClientSecret":  {
+                            "runAfter":  {
+                                "Get_ClientId":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['keyvault_1']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/secrets/@{encodeURIComponent('Rubrik-AS-Int-ClientSecret')}/value"
+                            },
+                            "runtimeConfiguration":  {
+                                "secureData":  {
+                                    "properties":  [
+                                        "inputs",
+                                        "outputs"
+                                    ]
+                                }
+                            }
+                        },
+                        "Initialize_API_response_status":  {
+                            "runAfter":  {
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "APIStatus",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_AsyncResultStatus":  {
+                            "runAfter":  {
+                                "Initialize_API_response_status":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "AsyncResultStatus",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Polling_Interval":  {
+                            "runAfter":  {
+                                "Initialize_AsyncResultStatus":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "PollingInterval",
+                                        "type":  "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_access_token":  {
+                            "runAfter":  {
+                                "Is_Authentication_Failed":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "access_token",
+                                        "type":  "string",
+                                        "value":  "@{body('Authentication')?['access_token']}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable":  {
+                            "runAfter":  {
+                                "Initialize_Polling_Interval":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "limit",
+                                        "type":  "integer",
+                                        "value":  1
+                                    }
+                                ]
+                            }
+                        },
+                        "Is_Authentication_Failed":  {
+                            "actions":  {
+                                "Response_2":  {
+                                    "runAfter":  {
+                                    },
+                                    "type":  "Response",
+                                    "kind":  "Http",
+                                    "inputs":  {
+                                        "body":  {
+                                            "error":  "@{body('Authentication')?['message']}"
+                                        },
+                                        "statusCode":  "@outputs('Authentication')['statusCode']"
+                                    }
+                                },
+                                "Terminate_2":  {
+                                    "runAfter":  {
+                                        "Response_2":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type":  "Terminate",
+                                    "inputs":  {
+                                        "runError":  {
+                                            "code":  "@{outputs('Authentication')['statusCode']}",
+                                            "message":  "@{body('Authentication')?['message']}"
+                                        },
+                                        "runStatus":  "Failed"
+                                    }
+                                }
+                            },
+                            "runAfter":  {
+                                "Authentication":  [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            },
+                            "expression":  {
+                                "and":  [
+                                    {
+                                        "not":  {
+                                            "equals":  [
+                                                "@outputs('Authentication')['statusCode']",
+                                                200
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "Response_3":  {
+                            "runAfter":  {
+                                "Does_Get_async_results_get_status_code_200":  [
+                                    "TimedOut",
+                                    "Skipped",
+                                    "Failed"
+                                ]
+                            },
+                            "type":  "Response",
+                            "kind":  "Http",
+                            "inputs":  {
+                                "body":  {
+                                    "error":  "@variables('APIStatus')"
+                                },
+                                "statusCode":  400
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "RubrikCustomConnector":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+                                "connectionName":  "[variables('RubrikcustomconnectorConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+                            },
+                            "keyvault_1":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName":  "[variables('KeyvaultConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "hidden-SentinelTemplateName":  "RubrikPollAsyncResult",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('RubrikcustomconnectorConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('RubrikcustomconnectorConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('RubrikcustomconnectorConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Rubrik Connector name'))]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('KeyvaultConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('KeyvaultConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValues": {
+                    "token:TenantId": "[parameters('tenantId')]",
+                    "token:grantType": "code",
+                    "vaultName": "[parameters('keyvaultName')]"
+                }
+            }
+        }
+    ]
+}

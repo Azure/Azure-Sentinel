@@ -1,0 +1,449 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# IoT Devices asset discovery from Firewall logs By Azure Defender for IoT\r\n**IoT devices are becoming a major security risk.**\r\n\r\nAs a **first step** to address this risk, you need to **get better visabillity** of your **IoT Devices** in the network.\r\n\r\nBy analyzing firewall logs we can identify partially what IoT devices are in your netwrok.\r\n\r\nThis is a very basic and partial anlysis of your security posture of IoT devices in your network. But, can help you see what are those IoT devices and understand their potential risk to your network. \r\n\r\nTo protect your IoT assets, get detailed inventory data, real time threat detection and risk assessment, we recommend using **[Azure Defender for IoT](https://azure.microsoft.com/services/azure-defender-for-iot/)**"
+      },
+      "customWidth": "85",
+      "name": "text - 7"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "97daa1ce-fea0-4742-bc3d-986e9dd5da80",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 1209600000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          }
+        ],
+        "style": "above",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "15",
+      "name": "parameters - 4"
+    },
+    {
+      "type": 11,
+      "content": {
+        "version": "LinkItem/1.0",
+        "style": "tabs",
+        "links": [
+          {
+            "id": "5ddc812c-1dd9-4e4f-84a4-ab9f9a5e7def",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "Destination coutries communication",
+            "subTarget": "countries",
+            "style": "link"
+          },
+          {
+            "id": "de777322-ac20-48b9-8fd3-adf7b17e853b",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "IoT Device details",
+            "subTarget": "details",
+            "style": "link"
+          },
+          {
+            "id": "bb0011be-d85f-4c50-b9a9-8f1cce576124",
+            "cellValue": "selectedTab",
+            "linkTarget": "parameter",
+            "linkLabel": "IoT malicios indiactions",
+            "subTarget": "malicious",
+            "style": "link"
+          }
+        ]
+      },
+      "name": "links - 9"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## IoT Devices details\r\n\r\n---\r\n"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "details"
+      },
+      "name": "text - 10"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## IoT Devices communicating externally to diffrent countries\r\n\r\n---\r\n"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "countries"
+      },
+      "name": "text - 6"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## IoT Devices communicating with malicios sources\r\n\r\n---"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "malicious"
+      },
+      "name": "text - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let IoTData = CommonSecurityLog \r\n|where DeviceVendor == \"Fortinet\"\r\n|where TimeGenerated {TimeRange} \r\n|extend dstcountry = extract(\"dstcountry=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwvendor = extract(\"srchwvendor=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwversion = extract(\"srchwversion=([^;]+)\", 1,AdditionalExtensions)\r\n|extend devtype = extract(\"devtype=([^;]+)\", 1,AdditionalExtensions)\r\n|extend osname = extract(\"osname=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srcswversion = extract(\"srcswversion=([^;]+)\", 1,AdditionalExtensions)\r\n|where dstcountry != 'Reserved' and dstcountry != ''\r\n|where srchwvendor in (\"Yealink\",\"Vivotek\",\"Hisense\",\"Zebra\",\"Konica Minolta\",\"Brother\",\"Vizio\",\"Avaya\",\"Roku\",\"Ricoh\",\"Hikvision\",\"Mitel\",\"Epson\",\"Kyocera\",\"ShoreTel\",\"Ubiquiti\",\"LaCie\" ,\"Canon\" ,\"Polycom\", \"Asix\" ,\"Dahua\") \r\nor devtype in (\"Television\",\"IP Camera\",\"IP Phone\",\"Printer\",\"Raspberry Pi\") or osname in (\"Tizen\",\"Web0S\");\r\nIoTData\r\n|summarize sum(SentBytes), sum(ReceivedBytes), Protocols = make_set(ApplicationProtocol), Countries = make_set(dstcountry) by SourceIP, Type = devtype, Vendor = srchwvendor, DestinationIP\r\n| join ThreatIntelligenceIndicator on $left.DestinationIP == $right.NetworkSourceIP \r\n| project SourceIP, Type, Vendor, TotalBndwitdh = sum_ReceivedBytes + sum_SentBytes, Protocols, Countries, ThreatType, ThreatSeverity, MaliciousIP = DestinationIP, ConfidenceScore",
+        "size": 0,
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalBndwitdh",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "malicious"
+      },
+      "name": "query - 12"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let IoTData = CommonSecurityLog \r\n|where DeviceVendor == \"Fortinet\"\r\n|where TimeGenerated {TimeRange} \r\n|extend dstcountry = extract(\"dstcountry=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwvendor = extract(\"srchwvendor=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwversion = extract(\"srchwversion=([^;]+)\", 1,AdditionalExtensions)\r\n|extend devtype = extract(\"devtype=([^;]+)\", 1,AdditionalExtensions)\r\n|extend osname = extract(\"osname=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srcswversion = extract(\"srcswversion=([^;]+)\", 1,AdditionalExtensions)\r\n|where dstcountry != 'Reserved' and dstcountry != ''\r\n|where srchwvendor in (\"Yealink\",\"Vivotek\",\"Hisense\",\"Zebra\",\"Konica Minolta\",\"Brother\",\"Vizio\",\"Avaya\",\"Roku\",\"Ricoh\",\"Hikvision\",\"Mitel\",\"Epson\",\"Kyocera\",\"ShoreTel\",\"Ubiquiti\",\"LaCie\" ,\"Canon\" ,\"Polycom\", \"Asix\" ,\"Dahua\") \r\nor devtype in (\"Television\",\"IP Camera\",\"IP Phone\",\"Printer\",\"Raspberry Pi\") or osname in (\"Tizen\",\"Web0S\");\r\nIoTData\r\n|summarize sum(SentBytes), sum(ReceivedBytes) by dstcountry | extend  TotalBndwitdh = sum_ReceivedBytes + sum_SentBytes\r\n| project Country = dstcountry",
+        "size": 0,
+        "title": "Country list",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "Country",
+        "exportParameterName": "dstcountry",
+        "exportDefaultValue": "All",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "countries"
+      },
+      "customWidth": "20",
+      "name": "query - 11",
+      "styleSettings": {
+        "margin": "20"
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let IoTData = CommonSecurityLog \r\n|where DeviceVendor == \"Fortinet\"\r\n|where TimeGenerated {TimeRange} \r\n|extend dstcountry = extract(\"dstcountry=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwvendor = extract(\"srchwvendor=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwversion = extract(\"srchwversion=([^;]+)\", 1,AdditionalExtensions)\r\n|extend devtype = extract(\"devtype=([^;]+)\", 1,AdditionalExtensions)\r\n|extend osname = extract(\"osname=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srcswversion = extract(\"srcswversion=([^;]+)\", 1,AdditionalExtensions)\r\n|where srchwvendor in (\"Yealink\",\"Vivotek\",\"Hisense\",\"Zebra\",\"Konica Minolta\",\"Brother\",\"Vizio\",\"Avaya\",\"Roku\",\"Ricoh\",\"Hikvision\",\"Mitel\",\"Epson\",\"Kyocera\",\"ShoreTel\",\"Ubiquiti\",\"LaCie\" ,\"Canon\" ,\"Polycom\", \"Asix\" ,\"Dahua\") \r\nor devtype in (\"Television\",\"IP Camera\",\"IP Phone\",\"Printer\",\"Raspberry Pi\") or osname in (\"Tizen\",\"Web0S\");\r\nIoTData\r\n|where dstcountry != 'Reserved' and dstcountry != ''\r\n| where dstcountry == tostring('{dstcountry}') or 'All' == '{dstcountry}'\r\n|summarize sum(SentBytes), sum(ReceivedBytes) by dstcountry | extend  TotalBndwitdh = sum_ReceivedBytes + sum_SentBytes",
+        "size": 0,
+        "title": "Country map",
+        "timeContext": {
+          "durationMs": 86400000
+        },
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "visualization": "map",
+        "mapSettings": {
+          "locInfo": "CountryRegion",
+          "locInfoColumn": "dstcountry",
+          "sizeSettings": "sum_SentBytes",
+          "sizeAggregation": "Sum",
+          "legendMetric": "sum_SentBytes",
+          "legendAggregation": "Sum",
+          "itemColorSettings": {
+            "nodeColorField": "sum_SentBytes",
+            "colorAggregation": "Sum",
+            "type": "heatmap",
+            "heatmapPalette": "greenRed"
+          }
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "countries"
+      },
+      "customWidth": "80",
+      "name": "query - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let IoTData = CommonSecurityLog \r\n|where DeviceVendor == \"Fortinet\"\r\n|where TimeGenerated {TimeRange} \r\n|extend dstcountry = extract(\"dstcountry=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwvendor = extract(\"srchwvendor=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwversion = extract(\"srchwversion=([^;]+)\", 1,AdditionalExtensions)\r\n|extend devtype = extract(\"devtype=([^;]+)\", 1,AdditionalExtensions)\r\n|extend osname = extract(\"osname=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srcswversion = extract(\"srcswversion=([^;]+)\", 1,AdditionalExtensions)\r\n|where srchwvendor in (\"Yealink\",\"Vivotek\",\"Hisense\",\"Zebra\",\"Konica Minolta\",\"Brother\",\"Vizio\",\"Avaya\",\"Roku\",\"Ricoh\",\"Hikvision\",\"Mitel\",\"Epson\",\"Kyocera\",\"ShoreTel\",\"Ubiquiti\",\"LaCie\" ,\"Canon\" ,\"Polycom\", \"Asix\" ,\"Dahua\") \r\nor devtype in (\"Television\",\"IP Camera\",\"IP Phone\",\"Printer\",\"Raspberry Pi\") or osname in (\"Tizen\",\"Web0S\");\r\nIoTData\r\n|where dstcountry != 'Reserved' and dstcountry != ''\r\n| where dstcountry == tostring('{dstcountry}') or 'All' == '{dstcountry}'\r\n|summarize sum(SentBytes), sum(ReceivedBytes), Protocols = make_set(ApplicationProtocol), Countries = make_set(dstcountry) by SourceIP, Type = devtype, Vendor = srchwvendor\r\n| project SourceIP, Type, Vendor, TotalBndwitdh = sum_ReceivedBytes + sum_SentBytes, Protocols, Countries",
+        "size": 0,
+        "title": "All devices by country",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalBndwitdh",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "countries"
+      },
+      "name": "query - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let IoTData = CommonSecurityLog \r\n|where DeviceVendor == \"Fortinet\"\r\n|where TimeGenerated {TimeRange} \r\n|extend dstcountry = extract(\"dstcountry=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwvendor = extract(\"srchwvendor=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwversion = extract(\"srchwversion=([^;]+)\", 1,AdditionalExtensions)\r\n|extend devtype = extract(\"devtype=([^;]+)\", 1,AdditionalExtensions)\r\n|extend osname = extract(\"osname=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srcswversion = extract(\"srcswversion=([^;]+)\", 1,AdditionalExtensions)\r\n|where srchwvendor in (\"Yealink\",\"Vivotek\",\"Hisense\",\"Zebra\",\"Konica Minolta\",\"Brother\",\"Vizio\",\"Avaya\",\"Roku\",\"Ricoh\",\"Hikvision\",\"Mitel\",\"Epson\",\"Kyocera\",\"ShoreTel\",\"Ubiquiti\",\"LaCie\" ,\"Canon\" ,\"Polycom\", \"Asix\" ,\"Dahua\") \r\nor devtype in (\"Television\",\"IP Camera\",\"IP Phone\",\"Printer\",\"Raspberry Pi\") or osname in (\"Tizen\",\"Web0S\");\r\nIoTData\r\n|summarize sum(SentBytes), sum(ReceivedBytes) by devtype\r\n| project Type = iff(devtype == \"\", \"Unknown\", devtype),  TotalBndwitdh = sum_ReceivedBytes + sum_SentBytes, TotalReceivedBytes = sum_ReceivedBytes, TotalSentBytes = sum_SentBytes, devtype",
+        "size": 0,
+        "title": "Devices by device type",
+        "noDataMessage": "Devices traffic by vendor",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "devtype",
+        "exportParameterName": "devtype",
+        "exportDefaultValue": "All",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalBndwitdh",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            },
+            {
+              "columnMatch": "TotalReceivedBytes",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            },
+            {
+              "columnMatch": "TotalSentBytes",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "devtype",
+              "formatter": 5,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "details"
+      },
+      "customWidth": "50",
+      "name": "query - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let IoTData = CommonSecurityLog \r\n|where DeviceVendor == \"Fortinet\"\r\n|where TimeGenerated {TimeRange};\r\nIoTData \r\n|extend dstcountry = extract(\"FTNTFGTdstcountry=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwvendor = extract(\"srchwvendor=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwversion = extract(\"srchwversion=([^;]+)\", 1,AdditionalExtensions)\r\n|extend devtype = extract(\"devtype=([^;]+)\", 1,AdditionalExtensions)\r\n|extend osname = extract(\"osname=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srcswversion = extract(\"srcswversion=([^;]+)\", 1,AdditionalExtensions)\r\n|extend vd = extract(\"vd=([^;]+)\", 1,AdditionalExtensions)\r\n|extend dev_somthin = strcat(devtype,\"->\",dstcountry)\r\n|extend devcategory = extract(\"devcategory=([^;]+)\", 1,AdditionalExtensions)\r\n|where srchwvendor in (\"Yealink\",\"Vivotek\",\"Hisense\",\"Zebra\",\"Konica Minolta\",\"Brother\",\"Vizio\",\"Avaya\",\"Roku\",\"Ricoh\",\"Hikvision\",\"Mitel\",\"Epson\",\"Kyocera\",\"ShoreTel\",\"Ubiquiti\",\"LaCie\" ,\"Canon\" ,\"Polycom\", \"Asix\" ,\"Dahua\") \r\nor devtype in (\"Television\",\"IP Camera\",\"IP Phone\",\"Printer\",\"Raspberry Pi\") or osname in (\"Tizen\",\"Web0S\")\r\n|summarize sum(SentBytes), sum(ReceivedBytes) by srchwvendor\r\n| project Vendor = iff(srchwvendor == \"\", \"Unknown\", srchwvendor),  TotalBndwitdh = sum_ReceivedBytes + sum_SentBytes, TotalReceivedBytes = sum_ReceivedBytes, TotalSentBytes = sum_SentBytes, srchwvendor",
+        "size": 0,
+        "title": "Devices by vendor",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "exportFieldName": "srchwvendor",
+        "exportParameterName": "srchwvendor",
+        "exportDefaultValue": "All",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalBndwitdh",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal"
+                }
+              }
+            },
+            {
+              "columnMatch": "TotalReceivedBytes",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            },
+            {
+              "columnMatch": "TotalSentBytes",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            },
+            {
+              "columnMatch": "srchwvendor",
+              "formatter": 5,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "details"
+      },
+      "customWidth": "50",
+      "name": "query - 11"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let IoTData = CommonSecurityLog \r\n|where DeviceVendor == \"Fortinet\"\r\n|where TimeGenerated {TimeRange} \r\n|extend dstcountry = extract(\"dstcountry=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwvendor = extract(\"srchwvendor=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srchwversion = extract(\"srchwversion=([^;]+)\", 1,AdditionalExtensions)\r\n|extend devtype = extract(\"devtype=([^;]+)\", 1,AdditionalExtensions)\r\n|extend osname = extract(\"osname=([^;]+)\", 1,AdditionalExtensions)\r\n|extend srcswversion = extract(\"srcswversion=([^;]+)\", 1,AdditionalExtensions)\r\n|where srchwvendor in (\"Yealink\",\"Vivotek\",\"Hisense\",\"Zebra\",\"Konica Minolta\",\"Brother\",\"Vizio\",\"Avaya\",\"Roku\",\"Ricoh\",\"Hikvision\",\"Mitel\",\"Epson\",\"Kyocera\",\"ShoreTel\",\"Ubiquiti\",\"LaCie\" ,\"Canon\" ,\"Polycom\", \"Asix\" ,\"Dahua\") \r\nor devtype in (\"Television\",\"IP Camera\",\"IP Phone\",\"Printer\",\"Raspberry Pi\") or osname in (\"Tizen\",\"Web0S\");\r\nIoTData\r\n| where devtype == '{devtype}' or 'All' == '{devtype}'\r\n| where srchwvendor == '{srchwvendor}' or 'All' == '{srchwvendor}'\r\n| extend dstcountry = iff(dstcountry == \"\" or dstcountry == \"Reserved\", \"Internal\", dstcountry)\r\n|summarize sum(SentBytes), sum(ReceivedBytes), Protocols = make_set(ApplicationProtocol), Countries = make_set(dstcountry) by SourceIP, devtype, srchwvendor\r\n| project SourceIP, Type = iff(devtype == \"\", \"Unknown\", devtype),  Vendor = iff(srchwvendor == \"\", \"Unknown\", srchwvendor), TotalBndwitdh = sum_ReceivedBytes + sum_SentBytes, Protocols, Countries",
+        "size": 0,
+        "title": "All devices",
+        "timeContext": {
+          "durationMs": 0
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "TotalBndwitdh",
+              "formatter": 0,
+              "numberFormat": {
+                "unit": 2,
+                "options": {
+                  "style": "decimal",
+                  "useGrouping": false
+                }
+              }
+            }
+          ]
+        }
+      },
+      "conditionalVisibility": {
+        "parameterName": "selectedTab",
+        "comparison": "isEqualTo",
+        "value": "details"
+      },
+      "name": "query - 11"
+    }
+  ],
+  "fromTemplateId": "sentinel-IoTAssetDiscovery",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

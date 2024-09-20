@@ -1,0 +1,517 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Username Breach Data - SpyCloud Enterprise", 
+        "description": "The SpyCloud Enterprise API is able to provide breach data for a username or set of usernames associated with an incident.",
+        "prerequisites": "SpyCloud Enterprise API Key.",       
+        "lastUpdateTime": "2022-09-05T00:00:00.000Z", 
+        "postDeploymentSteps": ["None"],
+        "entities": ["ACCOUNT"], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "SpyCloud Integrations"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "SpyCloud-Get-Username-Breach-Data-Playbook",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "SpyCloudConnectorName":{
+            "defaultValue": "SpyCloud-Enterprise-Protection",
+            "type": "String",
+            "metadata": {
+                "description": "SpyCloud Enterprise custom connector name"
+            }
+        }
+    },
+    "variables": {
+		"SpyCloudEnterpriseConnectionName": "[concat('spycloudconnector-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('AzureSentinelConnectionName')]",
+				"customParameterValues": {},
+				"parameterValueType": "Alternative",
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('SpyCloudEnterpriseConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[variables('SpyCloudEnterpriseConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('SpyCloudConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('SpyCloudEnterpriseConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident_2": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {
+                                "ip_address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_Each_Incident_Emails": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Check_if_records_exists": {
+                                    "actions": {
+                                        "Add_comment_to_incident_(V3)": {
+                                            "runAfter": {
+                                                "Check_number_of_Records": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                    "message": "<p><span style=\"font-size: 14px\"><strong>SpyCloud Breach Data for username </strong></span><span style=\"font-size: 14px\"><strong>@{variables('username')}</strong></span><span style=\"font-size: 14px\"><strong></strong></span>@{body('Create_HTML_table')}@{variables('more_records_display_text')}</p>"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/Incidents/Comment"
+                                            }
+                                        },
+                                        "Check_number_of_Records": {
+                                            "actions": {
+                                                "set_more_records_display_text": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "more_records_display_text",
+                                                        "value": "Showing @{variables('min_records')} records out of @{variables('total_records')} records, for more information visit https://portal.spycloud.com/"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Create_HTML_table": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@variables('total_records')",
+                                                            "@variables('min_records')"
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Create_HTML_table": {
+                                            "runAfter": {
+                                                "For_each_response": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Table",
+                                            "inputs": {
+                                                "format": "HTML",
+                                                "from": "@variables('username_breach_data_array')"
+                                            }
+                                        },
+                                        "For_each_response": {
+                                            "foreach": "@take(body('Get_Breach_Data_by_Username_Search')?['results'],variables('min_records'))",
+                                            "actions": {
+                                                "Append_to_array_variable": {
+                                                    "runAfter": {
+                                                        "Compose": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "AppendToArrayVariable",
+                                                    "inputs": {
+                                                        "name": "username_breach_data_array",
+                                                        "value": "@outputs('Compose')"
+                                                    }
+                                                },
+                                                "Compose": {
+                                                    "runAfter": {
+                                                        "Condition": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Compose",
+                                                    "inputs": {
+                                                        "Document Id": "@items('For_each_response')?['document_id']",
+                                                        "Domain": "@items('For_each_response')?['domain']",
+                                                        "Email": "@items('For_each_response')?['email']",
+                                                        "IP Addresses": "@substring(variables('ip_address'),0,sub(length(variables('ip_address')),1))",
+                                                        "Infected Machine Id": "@items('For_each_response')?['infected_machine_id']",
+                                                        "Infected Path": "@items('For_each_response')?['infected_path']",
+                                                        "Infected Time": "@items('For_each_response')?['infected_time']",
+                                                        "Password": "@items('For_each_response')?['password']",
+                                                        "Password Plaintext": "@items('For_each_response')?['password_plaintext']",
+                                                        "Severity": "@items('For_each_response')?['severity']",
+                                                        "Source Id": "@items('For_each_response')?['source_id']",
+                                                        "Spycloud Publish Date": "@items('For_each_response')?['spycloud_publish_date']",
+                                                        "Target Domain": "@items('For_each_response')?['target_domain']",
+                                                        "Target Subdomain": "@items('For_each_response')?['target_subdomain']",
+                                                        "Target Url": "@items('For_each_response')?['target_url']",
+                                                        "User Hostname": "@items('For_each_response')?['user_hostname']",
+                                                        "User OS": "@items('For_each_response')?['user_os']",
+                                                        "Username": "@items('For_each_response')?['username']"
+                                                    }
+                                                },
+                                                "Condition": {
+                                                    "actions": {
+                                                        "For_each_ip": {
+                                                            "foreach": "@items('For_each_response')?['ip_addresses']",
+                                                            "actions": {
+                                                                "Append_to_string_variable": {
+                                                                    "runAfter": {},
+                                                                    "type": "AppendToStringVariable",
+                                                                    "inputs": {
+                                                                        "name": "ip_address",
+                                                                        "value": "@{items('For_each_ip')},"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "runAfter": {},
+                                                            "type": "Foreach"
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_variable": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "not": {
+                                                                    "equals": [
+                                                                        "@items('For_each_response')?['ip_addresses']",
+                                                                        "@null"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If"
+                                                },
+                                                "Set_variable": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "ip_address",
+                                                        "value": " "
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_more_records_to_empty": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "Set_array_to_Empty": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "username_breach_data_array",
+                                                "value": []
+                                            }
+                                        },
+                                        "Set_more_records_to_empty": {
+                                            "runAfter": {
+                                                "Set_array_to_Empty": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "more_records_display_text",
+                                                "value": " "
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "set_total_records": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Add_comment_to_incident_(V3)_2": {
+                                                "runAfter": {},
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                        "message": "<p><span style=\"font-size: 14px\"><strong>SpyCloud Breach Data for username </strong></span><span style=\"font-size: 14px\"><strong>@{variables('username')}</strong></span><span style=\"font-size: 14px\"><strong></strong></span><br>\nNo Records Found.</p>"
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "post",
+                                                    "path": "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@variables('total_records')",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_Breach_Data_by_Username_Search": {
+                                    "runAfter": {
+                                        "Set_Username": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['SpyCloud-Enterprise-Connector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/breach/data/usernames/@{encodeURIComponent(variables('username'))}"
+                                    }
+                                },
+                                "Set_Username": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "username",
+                                        "value": "@items('For_Each_Incident_Emails')?['Name']"
+                                    }
+                                },
+                                "set_total_records": {
+                                    "runAfter": {
+                                        "Get_Breach_Data_by_Username_Search": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "total_records",
+                                        "value": "@body('Get_Breach_Data_by_Username_Search')?['hits']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Outputs_Variable": {
+                            "runAfter": {
+                                "Usernames_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "username_breach_data_array",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Usernames_Variable": {
+                            "runAfter": {
+                                "more_records_desplay_text": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "username",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "ip_address": {
+                            "runAfter": {
+                                "Outputs_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ip_address",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "minimum_records": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "min_records",
+                                        "type": "integer",
+                                        "value": 15
+                                    }
+                                ]
+                            }
+                        },
+                        "more_records_desplay_text": {
+                            "runAfter": {
+                                "total_records": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "more_records_display_text",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "total_records": {
+                            "runAfter": {
+                                "minimum_records": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "total_records",
+                                        "type": "integer"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+								"connectionProperties": {
+									"authentication": {
+										"type": "ManagedServiceIdentity"
+									}
+								}
+                            },
+                            "SpyCloud-Enterprise-Connector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('SpyCloudEnterpriseConnectionName'))]",
+                                "connectionName": "[variables('SpyCloudEnterpriseConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('SpyCloudConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

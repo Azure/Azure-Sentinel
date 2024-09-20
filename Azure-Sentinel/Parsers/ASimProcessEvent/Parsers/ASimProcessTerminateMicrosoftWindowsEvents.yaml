@@ -1,0 +1,82 @@
+Parser:
+  Title: Process Terminate Event ASIM parser for WEF Security Events
+  Version: '0.2'
+  LastUpdated: May 1st 2023
+Product:
+  Name: Security Events
+Normalization:
+  Schema: ProcessEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Process Schema
+  Link: https://aka.ms/ASimProcessEventDoc 
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Windows process terminate events (event 4689) collected using the WEF connector (WindowsEvent table) to the ASIM Process Event normalized schema. 
+ParserName: ASimProcessTerminateMicrosoftWindowsEvents
+EquivalentBuiltInParser: _ASim_ProcessEvent_TerminateMicrosoftWindowsEvents
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |    
+    let ASIM_GetFilenamePart = (path:string) { tostring(split(path,@'\')[-1]) };
+    let ASIM_ResolveWindowsUsername = (T:(username:string, domain:string, sid:string)) { 
+        T 
+        | extend 
+             type = case (
+                username == "-", "",
+                domain == "-", "Simple",
+                "Windows"
+            ),
+            username = case (
+              username == "-", "",
+              domain == '-', username,
+              strcat(domain, @"\" , username)
+            )
+    };
+    let parser=(disabled:boolean=false){
+    WindowsEvent
+    | where not(disabled)
+    | where EventID == 4689
+    | project-rename
+        DvcHostname = Computer
+    | extend
+        EventCount = int(1),
+        EventVendor = 'Microsoft',
+        EventProduct = 'Security Events',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'ProcessEvent',
+        EventResult = 'Success',
+        EventStartTime = todatetime(TimeGenerated),
+        EventEndTime = todatetime(TimeGenerated),
+        EventType = 'ProcessTerminated',
+        EventOriginalType = tostring(EventID),
+        DvcOs = 'Windows'
+    | extend 
+        ActorUsername = strcat(EventData.SubjectDomainName, @'\', EventData.SubjectUserName), 
+        SubjectUserSid = tostring(EventData.SubjectUserSid)
+    | extend
+        ActorUserIdType = iff (SubjectUserSid <> "S-1-0-0", "SID", ""),
+        ActorUserId = iff (SubjectUserSid <> "S-1-0-0", SubjectUserSid, ""), 
+        ActorUsernameType = "Windows"
+    | extend 
+        ActorUserSid = ActorUserId,
+        ActorUserType = _ASIM_GetWindowsUserType(ActorUsername, ActorUserId)
+    | extend
+        ActorSessionId = tostring(toint(EventData.SubjectLogonId)),
+        // Processes 
+        TargetProcessId = tostring(toint(tolong(EventData.NewProcessId))),
+        TargetProcessName = tostring(EventData.NewProcessName),
+        TargetProcessStatusCode = tostring(EventData.Status)
+    | extend 
+        TargetProcessFilename = ASIM_GetFilenamePart(TargetProcessName)
+    // -- Aliases
+    | extend
+        User = ActorUsername,
+        Dvc = DvcHostname,
+        Process = TargetProcessName
+    | project-away Channel, EventData, Data, EventID, EventLevelName, EventLevel, Provider, RawEventData, Task, TenantId, ManagementGroupName, SourceSystem, EventOriginId, SubjectUserSid
+    }; 
+    parser(disabled=disabled)

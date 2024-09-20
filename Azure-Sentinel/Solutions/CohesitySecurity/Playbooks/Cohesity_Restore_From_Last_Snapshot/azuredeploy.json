@@ -1,0 +1,375 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Restore From Last Cohesity Snapshot",
+        "description": "This playbook restores the latest good Data Hawk (Helios) snapshot.",
+        "prerequisites": "Deploy the Cohesity configuration and function apps (see details [here](https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/CohesitySecurity/Playbooks/Cohesity_Restore_From_Last_Snapshot/readme.md)).",
+        "postDeployment": [ "Authorize all connections." ],
+        "prerequisitesDeployTemplateFile": "None",
+        "lastUpdateTime": "2023-01-13T10:02:00.000Z",
+        "entities": [ "Malware" ],
+        "tags": [ "DataHawk", "SOAR", "Cohesity", "Threat Response"],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Cohesity"
+        }
+   },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "My_Cohesity_Restore_From_Last_Snapshot",
+            "type": "String"
+        }
+    },
+    "variables": {
+        "AzureblobConnectionName": "[concat('Azureblob-', parameters('PlaybookName'))]",
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "KeyvaultConnectionName": "[concat('Keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [{
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]"
+            ],
+            "tags": {
+                "hidden-SentinelTemplateName": "Cohesity_Restore_From_Last_Snapshot",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Get_cid_from_blob_content": {
+                            "runAfter": {
+                                "Get_jobId_from_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/GetFileContentByPath",
+                                "queries": {
+                                    "inferContentType": true,
+                                    "path": "/cohesity-extra-parameters/@{variables('helioID')}/cid",
+                                    "queryParametersSingleEncoded": true
+                                }
+                            }
+                        },
+                        "Get_entityId_from_blob_content": {
+                            "runAfter": {
+                                "Get_jobInstanceId_from_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/GetFileContentByPath",
+                                "queries": {
+                                    "inferContentType": true,
+                                    "path": "/cohesity-extra-parameters/@{variables('helioID')}/entityId",
+                                    "queryParametersSingleEncoded": true
+                                }
+                            }
+                        },
+                        "Get_jobId_from_blob_content": {
+                            "runAfter": {
+                                "Initialize_HelioID": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/GetFileContentByPath",
+                                "queries": {
+                                    "inferContentType": true,
+                                    "path": "/cohesity-extra-parameters/@{variables('helioID')}/jobId",
+                                    "queryParametersSingleEncoded": true
+                                }
+                            }
+                        },
+                        "Get_jobInstanceId_from_blob_content": {
+                            "runAfter": {
+                                "Get_jobStartTimeUsecs_from_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/GetFileContentByPath",
+                                "queries": {
+                                    "inferContentType": true,
+                                    "path": "/cohesity-extra-parameters/@{variables('helioID')}/jobInstanceId",
+                                    "queryParametersSingleEncoded": true
+                                }
+                            }
+                        },
+                        "Get_jobStartTimeUsecs_from_blob_content": {
+                            "runAfter": {
+                                "Get_cid_from_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/GetFileContentByPath",
+                                "queries": {
+                                    "inferContentType": true,
+                                    "path": "/cohesity-extra-parameters/@{variables('helioID')}/jobStartTimeUsecs",
+                                    "queryParametersSingleEncoded": true
+                                }
+                            }
+                        },
+                        "Get_object_from_blob_content": {
+                            "runAfter": {
+                                "Get_entityId_from_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/GetFileContentByPath",
+                                "queries": {
+                                    "inferContentType": true,
+                                    "path": "/cohesity-extra-parameters/@{variables('helioID')}/object",
+                                    "queryParametersSingleEncoded": true
+                                }
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Get_object_from_blob_content": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/secrets/@{encodeURIComponent('ApiKey')}/value"
+                            }
+                        },
+                        "HTTP": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "name": "Sentinel_triggered_restore_task_@{body('Get_object_from_blob_content')}",
+                                    "objects": [{
+                                        "jobId": "@int(string(body('Get_jobId_from_blob_content')))",
+                                        "jobRunId": "@int(string(body('Get_jobInstanceId_from_blob_content')))",
+                                        "protectionSourceId": "@int(string(body('Get_entityId_from_blob_content')))",
+                                        "sourceName": "@{body('Get_object_from_blob_content')}",
+                                        "startedTimeUsecs": "@int(string(body('Get_jobStartTimeUsecs_from_blob_content')))"
+                                    }],
+                                    "type": "kRecoverVMs",
+                                    "vmwareParameters": {
+                                        "powerOffAndRenameExistingVm": true,
+                                        "poweredOn": true,
+                                        "prefix": "Recover-",
+                                        "recoveryProcessType": "kCopyRecovery",
+                                        "suffix": "-VM"
+                                    }
+                                },
+                                "headers": {
+                                    "Content-Type": "application/json",
+                                    "apiKey": "@body('Get_secret')?['value']",
+                                    "clusterid": "@{body('Get_cid_from_blob_content')}"
+                                },
+                                "method": "POST",
+                                "uri": "https://helios.cohesity.com/irisservices/api/v1/public/restore/recover"
+                            }
+                        },
+                        "Initialize_Description": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [{
+                                    "name": "description",
+                                    "type": "string",
+                                    "value": "@triggerBody()?['object']?['properties']?['description']"
+                                }]
+                            }
+                        },
+                        "Initialize_HelioID": {
+                            "runAfter": {
+                                "Initialize_Description": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [{
+                                    "name": "helioID",
+                                    "type": "string",
+                                    "value": "@{split(variables('description'), 'Helios ID: ')[1]}"
+                                }]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureblob": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureblobConnectionName'))]",
+                                "connectionName": "[variables('AzureblobConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureblob')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyvaultConnectionName'))]",
+                                "connectionName": "[variables('KeyvaultConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureblobConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureblobConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azureblob')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyvaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('KeyvaultConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Keyvault')]"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[concat('cohesitypro', uniqueString(resourceGroup().id))]"
+                },
+                "nonSecretParameterValues": {
+                    "vaultName": "[concat('cohesitypro', uniqueString(resourceGroup().id))]"
+                }
+            }
+        }
+    ]
+}

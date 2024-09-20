@@ -1,0 +1,50 @@
+id: dbc82bc1-c7df-44e3-838a-5846a313cf35
+name: User Accounts - Blocked Accounts
+description: |
+  'An account could be blocked/locked out due to multiple reasons. This hunting query summarize blocked/lockout accounts and checks if most recent signin events for them is after last blocked accounts
+  Ref: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-user-accounts#monitoring-for-successful-unusual-sign-ins'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADNonInteractiveUserSignInLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+tags:
+  - AADSecOpsGuide
+query: |
+  let starttime = totimespan('{{StartTimeISO}}');
+  let endtime = totimespan('{{EndTimeISO}}');
+  let lookback = starttime - 7d;
+  let isGUID = "[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}";
+  let aadFunc = (tableName:string){
+    table(tableName)
+    | where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))
+    | where not(Identity matches regex isGUID)
+  };
+  let aadSignin = aadFunc("SigninLogs");
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs");
+  let blocked_users = 
+  union isfuzzy=true aadSignin, aadNonInt 
+  // Blocked or locked account due to failed attempts for various reasons.
+  | where ResultType != "0"
+  | where ResultDescription has_any ("blocked", "locked")  or ResultType in (50053, 50131, 53003, 500121)
+  | summarize FirstBlockedAttempt = min(TimeGenerated), LastBlockedAttempt = max(TimeGenerated) by UserPrincipalName, ResultDescription, ResultType;
+  blocked_users
+  | join kind= inner (
+  union isfuzzy=true aadSignin, aadNonInt
+  | where ResultType == 0
+  | summarize FirstSuccessfulSignin = min(TimeGenerated), LastSuccessfulSignin = max(TimeGenerated), make_set(IPAddress), make_set(ClientAppUsed), make_set(UserAgent), make_set(AppDisplayName) by UserPrincipalName, UserDisplayName
+  ) on UserPrincipalName
+  | where LastSuccessfulSignin > LastBlockedAttempt //Checking if successul login is after lastblockedattempts
+  | extend timestamp = LastSuccessfulSignin, AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0

@@ -1,0 +1,57 @@
+id: 5a7fccb8-3ed0-44f2-8477-540af3ef4d92
+name: EatonForeseer - Unauthorized Logins
+description: |
+  'Detects Unauthorized Logins into Eaton Foreseer'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 15m
+queryPeriod: 15m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  SecurityEvent
+  // Look for all events relating to user logins
+  | where EventID in (4624,4625,4648,4675,4634,4647)
+  | where AccountType == "User"
+  // Filter for data present
+  | where isnotempty(TargetUserName)
+  // Look for all events that relate to the Eaton Foreseer application
+  | where ProcessName has "Foreseer"
+  // Ignore known user accounts (please edit based on your allowed users)
+  | where TargetUserName !in ("janedoe", "johndoe")
+  // De-duplicate multiple entries for the same user accessing a particular device
+  | summarize TimeGenerated=arg_min(TimeGenerated, *) by TargetUserName, Computer
+  | project
+      TimeGenerated,
+      IPCustomEntity = IpAddress,
+      HostCustomEntity = Computer,
+      UserEntity = TargetUserName,
+      Process,
+      ProcessName
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserEntity
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostCustomEntity
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: Process
+version: 1.0.0
+kind: Scheduled

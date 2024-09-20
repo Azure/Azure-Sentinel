@@ -1,0 +1,35 @@
+id: fcd4d774-a0c2-4d12-9e9f-f51dfc310873
+name: Policy configuration changes for CloudApp Events
+description: |
+  "This query searches for any action type with high frequency that involves adding, modifying, or removing something in cloud app policies. It sees where the properties are modified such that the old value and new value are different for every property except for minor property changes such as Display Name."
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - CloudAppEvents
+tactics:
+  - DomainPolicyModification
+relevantTechniques:
+  - T1484
+query: |
+  CloudAppEvents
+    | where ActionType in ("Update policy.", "Add policy.", "Remove-CrossTenantAccessPolicy", "Add policy to service principal.", "Write PolicyAssignments", "Update authorization policy.", "Delete policy.", "Add owner to policy.", "Write PolicyExemptions", "Remove-LabelPolicy")
+    | mv-expand ActivityObjects
+    | where ActivityObjects.Name != "DisplayName"
+    | where RawEventData["status"] == "Succeeded"
+    | extend AccountMoniker = RawEventData["AccountMoniker"], AccountMonikerLocation = RawEventData["AccountMonikerLocation"], EventName = RawEventData["EventName"], EventNamespace = RawEventData["EventNamespace"], Role = RawEventData["Role"], RoleInstance = RawEventData["RoleInstance"], RoleLocation = RawEventData["RoleLocation"], HttpRequest = RawEventData["httpRequest"]
+    | summarize Count = count() by tostring(AccountMoniker), tostring(AccountMonikerLocation), AccountDisplayName, IPAddress, ActionType, ActivityType, tostring(EventName), tostring(EventNamespace), tostring(Role), tostring(RoleInstance), tostring(RoleLocation), tostring(HttpRequest)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountDisplayName
+      - identifier: UPNSuffix
+        columnName: EntityUPNSuffix
+      - identifier: FullName
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,375 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This playbook is intended to be run from an Microsoft Sentinel Incident. It will generate a PagerDuty Incident with the Microsoft Sentinel Incident information.",
+        "author": "Accelerynt"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-PagerDuty-Integration",
+            "type": "String"
+        },
+        "IntegrationKey": {
+            "defaultValue": "",
+            "type": "SecureString"
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Check_Event_Severity": {
+                            "actions": {
+                                "Set_EventSeverity_-_critical": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "EventSeverity",
+                                        "value": "critical"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Condition_-_Check_For_Entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Condition_-_Set_Event_Severity": {
+                                        "actions": {
+                                            "Set_EventSeverity_-_Warning": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "EventSeverity",
+                                                    "value": "warning"
+                                                }
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "else": {
+                                            "actions": {
+                                                "Set_EventSeverity_-_Info": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "EventSeverity",
+                                                        "value": "info"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "expression": {
+                                            "or": [
+                                                {
+                                                    "equals": [
+                                                        "@triggerBody()?['object']?['properties']?['severity']",
+                                                        "Medium"
+                                                    ]
+                                                },
+                                                {
+                                                    "equals": [
+                                                        "@triggerBody()?['object']?['properties']?['severity']",
+                                                        "Low"
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "type": "If"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@triggerBody()?['object']?['properties']?['severity']",
+                                            "High"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Condition_-_Check_For_Entities": {
+                            "actions": {
+                                "Set_Variable_-_No_Entities": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Entities",
+                                        "value": "No Entities"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "For_Each_-_Entities": {
+                                        "foreach": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                        "actions": {
+                                            "Condition_-_Check_if_IP": {
+                                                "actions": {
+                                                    "Append_IP_Info_to_Entities_String": {
+                                                        "runAfter": {
+                                                            "Parse_JSON_IP_Info": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "AppendToStringVariable",
+                                                        "inputs": {
+                                                            "name": "Entities",
+                                                            "value": "@concat('kind: ', 'ip', '\nvalue: ', items('For_Each_-_Entities')?['properties']?['friendlyName'], '\ncountry: ', body('Parse_JSON_IP_Info')?['country'], '\n\n')"
+                                                        }
+                                                    },
+                                                    "HTTP_-_Get_IP_Info": {
+                                                        "runAfter": {},
+                                                        "type": "Http",
+                                                        "inputs": {
+                                                            "method": "GET",
+                                                            "uri": "http://ip-api.com/json/@{items('For_Each_-_Entities')?['properties']?['friendlyName']}"
+                                                        }
+                                                    },
+                                                    "Parse_JSON_IP_Info": {
+                                                        "runAfter": {
+                                                            "HTTP_-_Get_IP_Info": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "ParseJson",
+                                                        "inputs": {
+                                                            "content": "@body('HTTP_-_Get_IP_Info')",
+                                                            "schema": {
+                                                                "properties": {
+                                                                    "as": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "city": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "country": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "countryCode": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "isp": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "lat": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "lon": {
+                                                                        "type": "number"
+                                                                    },
+                                                                    "org": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "query": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "region": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "regionName": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "status": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "timezone": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "zip": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {},
+                                                "else": {
+                                                    "actions": {
+                                                        "Append_Entity_Info_to_Entities_String": {
+                                                            "runAfter": {},
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "Entities",
+                                                                "value": "@concat('kind: ', items('For_Each_-_Entities')?['kind'], '\nvalue: ', items('For_Each_-_Entities')?['properties']?['friendlyName'], '\n\n')"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "expression": {
+                                                    "and": [
+                                                        {
+                                                            "equals": [
+                                                                "@items('For_Each_-_Entities')?['kind']",
+                                                                "Ip"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type": "If"
+                                            }
+                                        },
+                                        "runAfter": {},
+                                        "type": "Foreach"
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@length(triggerBody()?['object']?['properties']?['relatedEntities'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Create_PagerDuty_Event": {
+                            "runAfter": {
+                                "Condition_-_Check_Event_Severity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "body": {
+                                    "client": "Microsoft Sentinel",
+                                    "client_url": "@triggerBody()?['object']?['properties']?['incidentUrl']",
+                                    "event_action": "trigger",
+                                    "payload": {
+                                        "custom_details": {
+                                            "entities": "@variables('Entities')",
+                                            "severity": "@triggerBody()?['object']?['properties']?['severity']",
+                                            "status": "@triggerBody()?['object']?['properties']?['status']",
+                                            "title": "@triggerBody()?['object']?['properties']?['title']"
+                                        },
+                                        "description": "@triggerBody()?['object']?['properties']?['description']",
+                                        "entities": "entities list",
+                                        "severity": "@variables('EventSeverity')",
+                                        "source": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                        "summary": "@triggerBody()?['object']?['properties']?['title']",
+                                        "timestamp": "@triggerBody()?['object']?['properties']?['createdTimeUtc']"
+                                    },
+                                    "routing_key": "[parameters('IntegrationKey')]"
+                                },
+                                "headers": {
+                                    "Accept": "application/vnd.pagerduty+json;version=2",
+                                    "Content-Type": "application/json"
+                                },
+                                "method": "POST",
+                                "uri": "https://events.pagerduty.com/v2/enqueue"
+                            }
+                        },
+                        "Initialize_Entities": {
+                            "runAfter": {
+                                "Initialize_EventSeverity": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Entities",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_EventSeverity": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "EventSeverity",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

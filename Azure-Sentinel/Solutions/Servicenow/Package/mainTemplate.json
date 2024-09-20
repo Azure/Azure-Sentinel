@@ -1,0 +1,1465 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Servicenow"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-servicenow",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "Create-SNOW-record-alert-trigger": "Create-SNOW-record-alert-trigger",
+    "_Create-SNOW-record-alert-trigger": "[variables('Create-SNOW-record-alert-trigger')]",
+    "playbookVersion1": "1.0",
+    "playbookContentId1": "Create-SNOW-record-alert-trigger",
+    "_playbookContentId1": "[variables('playbookContentId1')]",
+    "playbookId1": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId1'))]",
+    "playbookTemplateSpecName1": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId1')))]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "Create-SNOW-record-incident-trigger": "Create-SNOW-record-incident-trigger",
+    "_Create-SNOW-record-incident-trigger": "[variables('Create-SNOW-record-incident-trigger')]",
+    "playbookVersion2": "1.0",
+    "playbookContentId2": "Create-SNOW-record-incident-trigger",
+    "_playbookContentId2": "[variables('playbookContentId2')]",
+    "playbookId2": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId2'))]",
+    "playbookTemplateSpecName2": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId2')))]",
+    "SNOW-CreateAndUpdateIncident": "SNOW-CreateAndUpdateIncident",
+    "_SNOW-CreateAndUpdateIncident": "[variables('SNOW-CreateAndUpdateIncident')]",
+    "playbookVersion3": "1.0",
+    "playbookContentId3": "SNOW-CreateAndUpdateIncident",
+    "_playbookContentId3": "[variables('playbookContentId3')]",
+    "playbookId3": "[resourceId('Microsoft.Logic/workflows', variables('playbookContentId3'))]",
+    "playbookTemplateSpecName3": "[concat(parameters('workspace'),'-pl-',uniquestring(variables('_playbookContentId3')))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('playbookTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "properties": {
+        "description": "CreateSNOWRecord playbook",
+        "displayName": "CreateSNOWRecord playbook"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('playbookTemplateSpecName1'),'/',variables('playbookVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "CreateSNOWRecord Playbook with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion1')]",
+          "parameters": {
+            "PlaybookName": {
+              "defaultValue": "CreateSNOWRecord",
+              "type": "string",
+              "metadata": {
+                "description": "Alert trigger"
+              }
+            }
+          },
+          "variables": {
+            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
+            "SNOWConnectionName": "[[concat('snow-', parameters('PlaybookName'))]",
+            "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
+            "_connection-1": "[[variables('connection-1')]",
+            "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/service-now')]",
+            "_connection-2": "[[variables('connection-2')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('AzureSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "properties": {
+                "displayName": "[[variables('AzureSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                  "id": "[[variables('_connection-1')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('SNOWConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "properties": {
+                "displayName": "[[variables('SNOWConnectionName')]",
+                "api": {
+                  "id": "[[variables('_connection-2')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2017-07-01",
+              "name": "[[parameters('PlaybookName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "tags": {
+                "hidden-SentinelTemplateName": "CreateSNOWRecord-Alert",
+                "hidden-SentinelTemplateVersion": "1.0",
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[[resourceId('Microsoft.Web/connections', variables('SNOWConnectionName'))]"
+              ],
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    }
+                  },
+                  "triggers": {
+                    "Microsoft_Sentinel_alert": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "path": "/subscribe"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Alert_-_Get_incident": {
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "get",
+                        "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                      }
+                    },
+                    "Create_Record": {
+                      "runAfter": {
+                        "Switch": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "comments": "@body('Alert_-_Get_incident')?['properties']?['incidentUrl']",
+                          "description": "Incident description: @{body('Alert_-_Get_incident')?['properties']?['description']};\nSeverity: @{body('Alert_-_Get_incident')?['properties']?['severity']}",
+                          "impact": "@variables('Severity')",
+                          "number": "@body('Alert_-_Get_incident')?['name']",
+                          "short_description": "@body('Alert_-_Get_incident')?['properties']?['title']",
+                          "urgency": "@variables('Severity')"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['service-now']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/api/now/v2/table/@{encodeURIComponent('incident')}",
+                        "queries": {
+                          "sysparm_display_value": false,
+                          "sysparm_exclude_reference_link": true
+                        }
+                      }
+                    },
+                    "Initialize_Severity_variable": {
+                      "runAfter": {
+                        "Alert_-_Get_incident": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "Severity",
+                            "type": "string",
+                            "value": "3"
+                          }
+                        ]
+                      }
+                    },
+                    "Switch": {
+                      "runAfter": {
+                        "Initialize_Severity_variable": [
+                          "Succeeded"
+                        ]
+                      },
+                      "cases": {
+                        "Case_Severity_High": {
+                          "case": "High",
+                          "actions": {
+                            "Set_Severity_variable_to_High": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Severity",
+                                "value": "1"
+                              }
+                            }
+                          }
+                        },
+                        "Case_Severity_Medium": {
+                          "case": "Medium",
+                          "actions": {
+                            "Set_Severity_variable_to_Medium": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Severity",
+                                "value": "2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "expression": "@body('Alert_-_Get_incident')?['properties']?['severity']",
+                      "type": "Switch"
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                        "connectionName": "[[variables('AzureSentinelConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        }
+                      },
+                      "service-now": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('SNOWConnectionName'))]",
+                        "connectionName": "[[variables('SNOWConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/service-now')]"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId1'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId1')]",
+                "contentId": "[variables('_playbookContentId1')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Servicenow",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "Create SNOW record - Alert trigger",
+            "description": "This playbook will open a Service Now incident when a new incident is opened in Microsoft Sentinel.",
+            "prerequisites": "We will need following data to make SNOW connector: 1. SNOW instance (ex. xyz.service-now.com); 2. Username; 3. Password.; After deployment assign Microsoft Sentinel Reader role to the Playbooks Managed Identity.",
+            "lastUpdateTime": "2022-07-13T00:00:00Z",
+            "tags": [
+              "Sync"
+            ],
+            "releaseNotes": [
+              {
+                "version": "1.0.0",
+                "title": "Create SNOW record",
+                "notes": [
+                  "Initial version"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('playbookTemplateSpecName2')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "properties": {
+        "description": "CreateSNOWRecord playbook",
+        "displayName": "CreateSNOWRecord playbook"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('playbookTemplateSpecName2'),'/',variables('playbookVersion2'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName2'))]"
+      ],
+      "properties": {
+        "description": "CreateSNOWRecord Playbook with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion2')]",
+          "parameters": {
+            "PlaybookName": {
+              "defaultValue": "CreateSNOWRecord",
+              "type": "string",
+              "metadata": {
+                "description": "Incident trigger"
+              }
+            }
+          },
+          "variables": {
+            "AzureSentinelConnectionName": "[[concat('azuresentinel-', parameters('PlaybookName'))]",
+            "SNOWConnectionName": "[[concat('snow-', parameters('PlaybookName'))]",
+            "connection-1": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
+            "_connection-1": "[[variables('connection-1')]",
+            "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/service-now')]",
+            "_connection-2": "[[variables('connection-2')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('AzureSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "properties": {
+                "displayName": "[[variables('AzureSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                  "id": "[[variables('_connection-1')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('SNOWConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "properties": {
+                "displayName": "[[variables('SNOWConnectionName')]",
+                "api": {
+                  "id": "[[variables('_connection-2')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Logic/workflows",
+              "apiVersion": "2017-07-01",
+              "name": "[[parameters('PlaybookName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "tags": {
+                "hidden-SentinelTemplateName": "CreateSNOWRecord-Incident",
+                "hidden-SentinelTemplateVersion": "1.0",
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[[resourceId('Microsoft.Web/connections', variables('SNOWConnectionName'))]"
+              ],
+              "properties": {
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    }
+                  },
+                  "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "path": "/incident-creation"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Create_Record": {
+                      "runAfter": {
+                        "Switch": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "body": {
+                          "comments": "@triggerBody()?['object']?['properties']?['incidentUrl']",
+                          "description": "Incident description: @{triggerBody()?['object']?['properties']?['description']};\nSeverity: @{triggerBody()?['object']?['properties']?['severity']}",
+                          "impact": "@variables('Severity')",
+                          "number": "@triggerBody()?['object']?['name']",
+                          "short_description": "@triggerBody()?['object']?['properties']?['title']",
+                          "urgency": "@variables('Severity')"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['service-now']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/api/now/v2/table/@{encodeURIComponent('incident')}",
+                        "queries": {
+                          "sysparm_display_value": false,
+                          "sysparm_exclude_reference_link": true
+                        }
+                      }
+                    },
+                    "Initialize_variable": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "Severity",
+                            "type": "string",
+                            "value": "3"
+                          }
+                        ]
+                      }
+                    },
+                    "Switch": {
+                      "runAfter": {
+                        "Initialize_variable": [
+                          "Succeeded"
+                        ]
+                      },
+                      "cases": {
+                        "Case_Severity_High": {
+                          "case": "High",
+                          "actions": {
+                            "Set_Severity_variable_to_High": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Severity",
+                                "value": "1"
+                              }
+                            }
+                          }
+                        },
+                        "Case_Severity_Medium": {
+                          "case": "Medium",
+                          "actions": {
+                            "Set_Severity_variable_to_Medium": {
+                              "type": "SetVariable",
+                              "inputs": {
+                                "name": "Severity",
+                                "value": "2"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "expression": "@triggerBody()?['object']?['properties']?['severity']",
+                      "type": "Switch"
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "azuresentinel": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                        "connectionName": "[[variables('AzureSentinelConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/azuresentinel')]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        }
+                      },
+                      "service-now": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('SNOWConnectionName'))]",
+                        "connectionName": "[[variables('SNOWConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/service-now')]"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId2'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId2')]",
+                "contentId": "[variables('_playbookContentId2')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion2')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Servicenow",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "Create SNOW record - Incident trigger",
+            "description": "This playbook will open a Service Now incident when a new incident is opened in Microsoft Sentinel.",
+            "prerequisites": [
+              "1. Existing SNOW instance (ex. xyz.service-now.com)",
+              "2. SNOW credentials: Username and Password"
+            ],
+            "lastUpdateTime": "2022-07-13T00:00:00Z",
+            "tags": [
+              "Sync"
+            ],
+            "releaseNotes": [
+              {
+                "version": "1.0.0",
+                "title": "Create SNOW record",
+                "notes": [
+                  "Initial version"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2022-02-01",
+      "name": "[variables('playbookTemplateSpecName3')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "properties": {
+        "description": "SNOW-CreateAndUpdateIncident playbook",
+        "displayName": "SNOW-CreateAndUpdateIncident playbook"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2022-02-01",
+      "name": "[concat(variables('playbookTemplateSpecName3'),'/',variables('playbookVersion3'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "Playbook"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('playbookTemplateSpecName3'))]"
+      ],
+      "properties": {
+        "description": "SNOW-CreateAndUpdateIncident Playbook with template version 2.0.2",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('playbookVersion3')]",
+          "parameters": {
+            "PlaybookName": {
+              "defaultValue": "SNOW-CreateAndUpdateIncident",
+              "type": "string"
+            }
+          },
+          "variables": {
+            "MicrosoftSentinelConnectionName": "[[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "Service-NowConnectionName": "[[concat('Service-Now-', parameters('PlaybookName'))]",
+            "connection-2": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+            "_connection-2": "[[variables('connection-2')]",
+            "connection-3": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Service-Now')]",
+            "_connection-3": "[[variables('connection-3')]",
+            "workspace-location-inline": "[concat('[resourceGroup().locatio', 'n]')]",
+            "workspace-name": "[parameters('workspace')]",
+            "workspaceResourceId": "[[resourceId('microsoft.OperationalInsights/Workspaces', variables('workspace-name'))]"
+          },
+          "resources": [
+            {
+              "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                  "contentVersion": "1.0.0.0",
+                  "parameters": {
+                    "$connections": {
+                      "type": "Object"
+                    }
+                  },
+                  "triggers": {
+                    "Microsoft_Sentinel_incident": {
+                      "type": "ApiConnectionWebhook",
+                      "inputs": {
+                        "body": {
+                          "callback_url": "@{listCallbackUrl()}"
+                        },
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                          }
+                        },
+                        "path": "/incident-creation"
+                      }
+                    }
+                  },
+                  "actions": {
+                    "Condition_-_create_or_update_incident": {
+                      "actions": {
+                        "Create_Record": {
+                          "runAfter": {
+                            "Switch": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "comments": "@triggerBody()?['object']?['properties']?['incidentUrl']",
+                              "description": "Incident description: @{triggerBody()?['object']?['properties']?['description']};\nSeverity: @{triggerBody()?['object']?['properties']?['severity']};\nTactics: @{join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '; ')};\nAlerts: @{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'],'; ')};",
+                              "impact": "@variables('Creation severity')",
+                              "number": "@triggerBody()?['object']?['name']",
+                              "short_description": "@triggerBody()?['object']?['properties']?['title']",
+                              "urgency": "@variables('Creation severity')"
+                            },
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['service-now']['connectionId']"
+                              }
+                            },
+                            "method": "post",
+                            "path": "/api/now/v2/table/@{encodeURIComponent('incident')}",
+                            "queries": {
+                              "sysparm_display_value": false,
+                              "sysparm_exclude_reference_link": true
+                            }
+                          }
+                        },
+                        "Switch": {
+                          "cases": {
+                            "Case_Severity_High": {
+                              "case": "High",
+                              "actions": {
+                                "Set_Severity_variable_to_High": {
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "Creation severity",
+                                    "value": "1"
+                                  }
+                                }
+                              }
+                            },
+                            "Case_Severity_Medium": {
+                              "case": "Medium",
+                              "actions": {
+                                "Set_Severity_variable_to_Medium": {
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "Creation severity",
+                                    "value": "2"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "expression": "@triggerBody()?['object']?['properties']?['severity']",
+                          "type": "Switch"
+                        },
+                        "Update_incident": {
+                          "runAfter": {
+                            "Create_Record": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ApiConnection",
+                          "inputs": {
+                            "body": {
+                              "incidentArmId": "@triggerBody()?['object']?['id']",
+                              "tagsToAdd": {
+                                "TagsToAdd": [
+                                  {
+                                    "Tag": "SNOW System ID: @{body('Create_Record')?['result']?['sys_id']}"
+                                  }
+                                ]
+                              }
+                            },
+                            "host": {
+                              "connection": {
+                                "name": "@parameters('$connections')['microsoftsentinel']['connectionId']"
+                              }
+                            },
+                            "method": "put",
+                            "path": "/Incidents"
+                          }
+                        }
+                      },
+                      "runAfter": {
+                        "Initialize_variable_-_creation_severity": [
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "For_each": {
+                            "foreach": "@triggerBody()?['object']?['properties']?['labels']",
+                            "actions": {
+                              "Condition": {
+                                "actions": {
+                                  "Condition_-_is_incident_closed": {
+                                    "actions": {
+                                      "Update_Record_-_Incident_closed": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                          "body": {
+                                            "caller_id": "@triggerBody()?['incidentUpdates']?['updatedBy']?['name']",
+                                            "close_code": "Closed/Resolved by Caller",
+                                            "close_notes": "Classification: @{triggerBody()?['object']?['properties']?['classification']}\nClassification reason: @{triggerBody()?['object']?['properties']?['classificationReason']}\nClassification comment: @{triggerBody()?['object']?['properties']?['classificationComment']}",
+                                            "state": "7"
+                                          },
+                                          "host": {
+                                            "connection": {
+                                              "name": "@parameters('$connections')['service-now']['connectionId']"
+                                            }
+                                          },
+                                          "method": "put",
+                                          "path": "/api/now/v2/table/@{encodeURIComponent('incident')}/@{encodeURIComponent(variables('SNOW System ID'))}",
+                                          "queries": {
+                                            "sysparm_display_value": false,
+                                            "sysparm_exclude_reference_link": true
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "runAfter": {
+                                      "Set_variable_-_SNOW_System_ID": [
+                                        "Succeeded"
+                                      ]
+                                    },
+                                    "else": {
+                                      "actions": {
+                                        "Condition_-_alert_updated": {
+                                          "actions": {
+                                            "Compose_alert": {
+                                              "runAfter": {
+                                                "For_each_-_new_alert": [
+                                                  "Succeeded"
+                                                ]
+                                              },
+                                              "type": "Compose",
+                                              "inputs": "Alerts: @{variables('New alert')}"
+                                            },
+                                            "For_each_-_new_alert": {
+                                              "foreach": "@triggerBody()?['incidentUpdates']?['alerts']",
+                                              "actions": {
+                                                "Append_to_string_variable_-_alert": {
+                                                  "type": "AppendToStringVariable",
+                                                  "inputs": {
+                                                    "name": "New alert",
+                                                    "value": "@concat(items('For_each_-_new_alert')?['properties']?['alertDisplayName'], '; ')"
+                                                  }
+                                                }
+                                              },
+                                              "type": "Foreach"
+                                            }
+                                          },
+                                          "runAfter": {
+                                            "Condition_-_comment_updated": [
+                                              "Succeeded"
+                                            ]
+                                          },
+                                          "expression": {
+                                            "and": [
+                                              {
+                                                "contains": [
+                                                  "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                  "Alerts"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "type": "If"
+                                        },
+                                        "Condition_-_comment_updated": {
+                                          "actions": {
+                                            "Compose_comment": {
+                                              "runAfter": {
+                                                "For_each_-_new_comment": [
+                                                  "Succeeded"
+                                                ]
+                                              },
+                                              "type": "Compose",
+                                              "inputs": "Comment: @{variables('New comments')}"
+                                            },
+                                            "For_each_-_new_comment": {
+                                              "foreach": "@triggerBody()?['incidentUpdates']?['comments']",
+                                              "actions": {
+                                                "Append_to_string_variable_-_comment": {
+                                                  "type": "AppendToStringVariable",
+                                                  "inputs": {
+                                                    "name": "New comments",
+                                                    "value": "@concat(items('For_each_-_new_comment')?['properties']?['message'], '; ')"
+                                                  }
+                                                }
+                                              },
+                                              "type": "Foreach"
+                                            }
+                                          },
+                                          "expression": {
+                                            "and": [
+                                              {
+                                                "contains": [
+                                                  "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                  "Comments"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "type": "If"
+                                        },
+                                        "Condition_-_owner_update": {
+                                          "actions": {
+                                            "Append_to_string_variable_-_owner": {
+                                              "type": "AppendToStringVariable",
+                                              "inputs": {
+                                                "name": "New owner",
+                                                "value": "@triggerBody()?['object']?['properties']?['owner']?['assignedTo']"
+                                              }
+                                            },
+                                            "Compose_owner": {
+                                              "runAfter": {
+                                                "Append_to_string_variable_-_owner": [
+                                                  "Succeeded"
+                                                ]
+                                              },
+                                              "type": "Compose",
+                                              "inputs": "Owner: @{variables('New owner')}"
+                                            }
+                                          },
+                                          "runAfter": {
+                                            "Condition_-_tag_updated": [
+                                              "Succeeded"
+                                            ]
+                                          },
+                                          "expression": {
+                                            "and": [
+                                              {
+                                                "contains": [
+                                                  "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                  "Owner"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "type": "If"
+                                        },
+                                        "Condition_-_severity_update": {
+                                          "actions": {
+                                            "Append_to_string_variable_-_severity": {
+                                              "type": "AppendToStringVariable",
+                                              "inputs": {
+                                                "name": "New severity",
+                                                "value": "@triggerBody()?['object']?['properties']?['severity']"
+                                              }
+                                            },
+                                            "Compose_severity": {
+                                              "runAfter": {
+                                                "Append_to_string_variable_-_severity": [
+                                                  "Succeeded"
+                                                ]
+                                              },
+                                              "type": "Compose",
+                                              "inputs": "Severity: @{variables('New severity')}"
+                                            }
+                                          },
+                                          "runAfter": {
+                                            "Condition_-_owner_update": [
+                                              "Succeeded"
+                                            ]
+                                          },
+                                          "expression": {
+                                            "and": [
+                                              {
+                                                "contains": [
+                                                  "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                  "Severity"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "type": "If"
+                                        },
+                                        "Condition_-_status_update": {
+                                          "actions": {
+                                            "Append_to_string_variable_-_status": {
+                                              "type": "AppendToStringVariable",
+                                              "inputs": {
+                                                "name": "New status",
+                                                "value": "@triggerBody()?['object']?['properties']?['status']"
+                                              }
+                                            },
+                                            "Compose_status": {
+                                              "runAfter": {
+                                                "Append_to_string_variable_-_status": [
+                                                  "Succeeded"
+                                                ]
+                                              },
+                                              "type": "Compose",
+                                              "inputs": "Status: @{variables('New status')}"
+                                            }
+                                          },
+                                          "runAfter": {
+                                            "Condition_-_tactics_update": [
+                                              "Succeeded"
+                                            ]
+                                          },
+                                          "expression": {
+                                            "and": [
+                                              {
+                                                "contains": [
+                                                  "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                  "Status"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "type": "If"
+                                        },
+                                        "Condition_-_tactics_update": {
+                                          "actions": {
+                                            "Compose_tactics": {
+                                              "type": "Compose",
+                                              "inputs": "Tactics: @{join(triggerBody()?['incidentUpdates']?['tactics'], '; ')}"
+                                            }
+                                          },
+                                          "runAfter": {
+                                            "Condition_-_severity_update": [
+                                              "Succeeded"
+                                            ]
+                                          },
+                                          "expression": {
+                                            "and": [
+                                              {
+                                                "contains": [
+                                                  "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                  "Tactics"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "type": "If"
+                                        },
+                                        "Condition_-_tag_updated": {
+                                          "actions": {
+                                            "Compose_tag": {
+                                              "runAfter": {
+                                                "For_each_-_new_tag": [
+                                                  "Succeeded"
+                                                ]
+                                              },
+                                              "type": "Compose",
+                                              "inputs": "Tags: @{variables('New tag')}"
+                                            },
+                                            "For_each_-_new_tag": {
+                                              "foreach": "@triggerBody()?['incidentUpdates']?['labels']",
+                                              "actions": {
+                                                "Append_to_string_variable_-_tag": {
+                                                  "type": "AppendToStringVariable",
+                                                  "inputs": {
+                                                    "name": "New tag",
+                                                    "value": "@concat(items('For_each_-_new_tag')?['labelName'], '; ')"
+                                                  }
+                                                }
+                                              },
+                                              "type": "Foreach"
+                                            }
+                                          },
+                                          "runAfter": {
+                                            "Condition_-_alert_updated": [
+                                              "Succeeded"
+                                            ]
+                                          },
+                                          "expression": {
+                                            "and": [
+                                              {
+                                                "contains": [
+                                                  "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                                                  "Labels"
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          "type": "If"
+                                        },
+                                        "Update_Record_-_incident_not_closed": {
+                                          "runAfter": {
+                                            "Condition_-_status_update": [
+                                              "Succeeded"
+                                            ]
+                                          },
+                                          "type": "ApiConnection",
+                                          "inputs": {
+                                            "body": {
+                                              "comments": "Microsoft Sentinel incident is updated:\n\nUpdate fields: @{join(triggerBody()?['incidentUpdates']?['updatedFields'], '; ')}\nUpdate by: @{triggerBody()?['incidentUpdates']?['updatedBy']?['name']}\n\nNew values:\n@{outputs('Compose_alert')}\n@{outputs('Compose_severity')}\n@{outputs('Compose_owner')}\n@{outputs('Compose_status')}\n@{outputs('Compose_tag')}\n@{outputs('Compose_comment')}\n@{outputs('Compose_tactics')}"
+                                            },
+                                            "host": {
+                                              "connection": {
+                                                "name": "@parameters('$connections')['service-now']['connectionId']"
+                                              }
+                                            },
+                                            "method": "put",
+                                            "path": "/api/now/v2/table/@{encodeURIComponent('incident')}/@{encodeURIComponent(variables('SNOW System ID'))}",
+                                            "queries": {
+                                              "sysparm_display_value": false,
+                                              "sysparm_exclude_reference_link": true
+                                            }
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "expression": {
+                                      "and": [
+                                        {
+                                          "equals": [
+                                            "@triggerBody()?['object']?['properties']?['status']",
+                                            "Closed"
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    "type": "If"
+                                  },
+                                  "Set_variable_-_SNOW_System_ID": {
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                      "name": "SNOW System ID",
+                                      "value": "@{split(items('For_each')?['labelName'],': ')[1]}"
+                                    }
+                                  }
+                                },
+                                "expression": {
+                                  "and": [
+                                    {
+                                      "contains": [
+                                        "@items('For_each')?['labelName']",
+                                        "SNOW"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "type": "If"
+                              }
+                            },
+                            "type": "Foreach"
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@triggerBody()?['incidentUpdates']?['updatedFields']",
+                              "@null"
+                            ]
+                          }
+                        ]
+                      },
+                      "type": "If"
+                    },
+                    "Initialize_variable_-_SNOW_System_ID": {
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "SNOW System ID",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_alert": {
+                      "runAfter": {
+                        "Initialize_variable_-_comment": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "New alert",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_comment": {
+                      "runAfter": {
+                        "Initialize_variable_-_SNOW_System_ID": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "New comments",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_creation_severity": {
+                      "runAfter": {
+                        "Initialize_variable_-_status": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "Creation severity",
+                            "type": "string",
+                            "value": "3"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_owner": {
+                      "runAfter": {
+                        "Initialize_variable_-_tag": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "New owner",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_severity": {
+                      "runAfter": {
+                        "Initialize_variable_-_owner": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "New severity",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_status": {
+                      "runAfter": {
+                        "Initialize_variable_-_severity": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "New status",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    },
+                    "Initialize_variable_-_tag": {
+                      "runAfter": {
+                        "Initialize_variable_-_alert": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "InitializeVariable",
+                      "inputs": {
+                        "variables": [
+                          {
+                            "name": "New tag",
+                            "type": "string"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "parameters": {
+                  "$connections": {
+                    "value": {
+                      "microsoftsentinel": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                        "connectionName": "[[variables('MicrosoftSentinelConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Azuresentinel')]",
+                        "connectionProperties": {
+                          "authentication": {
+                            "type": "ManagedServiceIdentity"
+                          }
+                        }
+                      },
+                      "service-now": {
+                        "connectionId": "[[resourceId('Microsoft.Web/connections', variables('Service-NowConnectionName'))]",
+                        "connectionName": "[[variables('Service-NowConnectionName')]",
+                        "id": "[[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('workspace-location-inline'), '/managedApis/Service-Now')]"
+                      }
+                    }
+                  }
+                }
+              },
+              "name": "[[parameters('PlaybookName')]",
+              "type": "Microsoft.Logic/workflows",
+              "location": "[[variables('workspace-location-inline')]",
+              "tags": {
+                "hidden-SentinelTemplateName": "CreateAndUpdateSNOWRecord",
+                "hidden-SentinelTemplateVersion": "1.0",
+                "hidden-SentinelWorkspaceId": "[[variables('workspaceResourceId')]"
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "apiVersion": "2017-07-01",
+              "dependsOn": [
+                "[[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[[resourceId('Microsoft.Web/connections', variables('Service-NowConnectionName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('MicrosoftSentinelConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
+              "properties": {
+                "displayName": "[[variables('MicrosoftSentinelConnectionName')]",
+                "parameterValueType": "Alternative",
+                "api": {
+                  "id": "[[variables('_connection-2')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Web/connections",
+              "apiVersion": "2016-06-01",
+              "name": "[[variables('Service-NowConnectionName')]",
+              "location": "[[variables('workspace-location-inline')]",
+              "kind": "V1",
+              "properties": {
+                "displayName": "[[variables('Service-NowConnectionName')]",
+                "api": {
+                  "id": "[[variables('_connection-3')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('Playbook-', last(split(variables('playbookId3'),'/'))))]",
+              "properties": {
+                "parentId": "[variables('playbookId3')]",
+                "contentId": "[variables('_playbookContentId3')]",
+                "kind": "Playbook",
+                "version": "[variables('playbookVersion3')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Servicenow",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ],
+          "metadata": {
+            "title": "Create And Update Service Now Record",
+            "description": "This playbook will create or update incident in SNOW. When incident is created, playbook will run and create incident in SNOW. When incident is updated, playbook will run and add update to comment section. When incident is closed, playbook will run and close incident in SNOW.",
+            "postDeployment": [
+              "1. Add Microsoft Sentinel Responder role to the playbook's managed identity.",
+              "2. Authorize ServiceNow connection",
+              "3. Create an automation rules for when incident is created or updated and add this playbook as an action."
+            ],
+            "prerequisites": "We will need following data to make Jira connector:\n\n1. SNOW instance (ex. xyz.service-now.com)\n\n2. Username\n\n3. Password",
+            "lastUpdateTime": "2022-07-13T00:00:00Z",
+            "tags": [
+              "Sync",
+              "Incident Update"
+            ],
+            "releaseNotes": [
+              {
+                "version": "1.0.0",
+                "title": "Create And Update Service Now Record",
+                "notes": [
+                  "Initial version"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.2",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Servicenow",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Create-SNOW-record-alert-trigger')]",
+              "version": "[variables('playbookVersion1')]"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_Create-SNOW-record-incident-trigger')]",
+              "version": "[variables('playbookVersion2')]"
+            },
+            {
+              "kind": "Playbook",
+              "contentId": "[variables('_SNOW-CreateAndUpdateIncident')]",
+              "version": "[variables('playbookVersion3')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-09-19",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "IT Operations"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -1,0 +1,148 @@
+id: 4b93c5af-d20b-4236-b696-a28b8c51407f
+name: User account created and deleted within 10 mins
+description: |
+  'Identifies when a user account is created and then deleted within 10 minutes. This can be an indication of compromise and an adversary attempting to hide in the noise.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsForwardedEvents
+    dataTypes:
+      - WindowsEvent
+queryFrequency: 1d
+queryPeriod: 25h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+  let timeframe = 1d;
+  let spanoftime = 10m;
+  let threshold = 0;
+  (union isfuzzy=true
+      (SecurityEvent
+      | where TimeGenerated > ago(timeframe+spanoftime)
+      // A user account was created
+      | where EventID == 4720
+      | where AccountType =~ "User"
+      | project creationTime = TimeGenerated, CreateEventID = EventID, CreateActivity = Activity, Computer = toupper(Computer), 
+      TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, 
+      AccountUsedToCreate = SubjectAccount, CreatedBySubjectUserName = SubjectUserName, CreatedBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToCreate = SubjectUserSid, UserPrincipalName
+      ),
+      (
+      WindowsEvent
+      | where TimeGenerated > ago(timeframe+spanoftime)
+      // A user account was created
+      | where EventID == 4720
+      | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+      | extend AccountType=case(EventData.SubjectUserName endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+      | where AccountType =~ "User"
+      | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+      | extend SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectUserName = tostring(EventData.SubjectUserName)
+      | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+      | extend TargetSid = tostring(EventData.TargetSid)
+      | extend UserPrincipalName = tostring(EventData.UserPrincipalName)
+      | extend Activity = "4720 - A user account was created."
+      | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName) 
+      | project creationTime = TimeGenerated, CreateEventID = EventID, CreateActivity = Activity, Computer = toupper(Computer), 
+      TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, 
+      AccountUsedToCreate = SubjectAccount, CreatedBySubjectUserName = SubjectUserName, CreatedBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToCreate = SubjectUserSid, UserPrincipalName
+      )
+    )
+  | join kind = inner 
+  (
+    (union isfuzzy=true
+      (SecurityEvent
+      | where TimeGenerated > ago(timeframe)
+      // A user account was deleted
+      | where EventID == 4726
+      | where AccountType == "User"
+      | project deletionTime = TimeGenerated, DeleteEventID = EventID, DeleteActivity = Activity, Computer = toupper(Computer), 
+      TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, 
+      AccountUsedToDelete = SubjectAccount, DeletedBySubjectUserName = SubjectUserName, DeletedBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToDelete = SubjectUserSid, UserPrincipalName
+      ),
+      (WindowsEvent
+      | where TimeGenerated > ago(timeframe)
+      // A user account was deleted
+      | where EventID == 4726
+      | extend SubjectUserSid = tostring(EventData.SubjectUserSid)
+      | extend SubjectAccount = strcat(tostring(EventData.SubjectDomainName),"\\", tostring(EventData.SubjectUserName))
+      | extend AccountType=case(SubjectAccount endswith "$" or SubjectUserSid in ("S-1-5-18", "S-1-5-19", "S-1-5-20"), "Machine", isempty(SubjectUserSid), "", "User")
+      | where AccountType == "User"
+      | extend SubjectDomainName = tostring(EventData.SubjectDomainName), SubjectUserName = tostring(EventData.SubjectUserName)
+      | extend TargetSid = tostring(EventData.TargetSid)
+      | extend UserPrincipalName = tostring(EventData.UserPrincipalName)
+      | extend Activity = "4726 - A user account was deleted."
+      | extend TargetUserName = tostring(EventData.TargetUserName), TargetDomainName = tostring(EventData.TargetDomainName) 
+      | extend TargetAccount = strcat(EventData.TargetDomainName,"\\", EventData.TargetUserName)
+      | project deletionTime = TimeGenerated, DeleteEventID = EventID, DeleteActivity = Activity, Computer = toupper(Computer), 
+      TargetAccount = tolower(TargetAccount), TargetUserName, TargetDomainName, TargetSid, 
+      AccountUsedToDelete = SubjectAccount, DeletedBySubjectUserName = SubjectUserName, DeletedBySubjectDomainName = SubjectDomainName, SIDofAccountUsedToDelete = SubjectUserSid, UserPrincipalName
+      )
+    )
+  ) on Computer, TargetAccount
+  | where deletionTime - creationTime < spanoftime
+  | extend TimeDelta = deletionTime - creationTime
+  | where tolong(TimeDelta) >= threshold
+  | project TimeDelta, creationTime, CreateEventID, CreateActivity, Computer, TargetAccount, TargetSid, UserPrincipalName, AccountUsedToCreate, SIDofAccountUsedToCreate,
+  deletionTime, DeleteEventID, DeleteActivity, AccountUsedToDelete, SIDofAccountUsedToDelete, TargetUserName, TargetDomainName, 
+  CreatedBySubjectUserName, CreatedBySubjectDomainName, DeletedBySubjectUserName, DeletedBySubjectDomainName
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | project-away DomainIndex
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUsedToCreate
+      - identifier: Name
+        columnName: CreatedBySubjectUserName
+      - identifier: NTDomain
+        columnName: CreatedBySubjectDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountUsedToDelete
+      - identifier: Name
+        columnName: DeletedBySubjectUserName
+      - identifier: NTDomain
+        columnName: DeletedBySubjectDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetAccount
+      - identifier: Name
+        columnName: TargetUserName
+      - identifier: NTDomain
+        columnName: TargetDomainName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: TargetSid
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
+version: 1.2.2
+kind: Scheduled
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Microsoft Security Research
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Others", "Identity" ]

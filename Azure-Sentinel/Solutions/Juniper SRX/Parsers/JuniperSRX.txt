@@ -1,0 +1,113 @@
+// Title:           Juniper SRX Parser
+// Author:          Microsoft
+// Version:         1.1
+// Last Updated:    10/18/2022
+// Comment:         Optimized 
+//  
+// DESCRIPTION:
+// This parser takes raw Juniper SRX logs from a Syslog stream and parses the logs into a normalized schema.
+//
+// REFERENCES: 
+// Using functions in Azure monitor log queries: https://docs.microsoft.com/azure/azure-monitor/log-query/functions
+// 
+// LOG SAMPLES:
+// This parser assumes the raw log are formatted as follows:
+//
+// <14>Nov 14 06:13:55 JuniperSRX_FW4 RT_FLOW session created 172.20.22.237/161->134.207.87.33/162 0x0 None 155.117.69.171/52344->134.207.87.33/162 0x0 source rule source-nat-rule N/A N/A 17 trust_to_Untrust_Internet trust untrust 25620 N/A(N/A) reth4.0 UNKNOWN UNKNOWN UNKNOWN
+// <37>Nov 14 06:14:33 JuniperSRX_FW1 sshd Login failed for user 'root' from host '123.45.67.89'
+// <38>Nov 14 06:13:47 JuniperSRX_FW2 sshd[42227] Disconnected from 183.13.25.46 [preauth]
+// <14>Nov 14 06:21:12 JuniperSRX_FW1 RT_FLOW session closed TCP FIN: 172.20.21.51/49266->172.20.22.254/80 0x0 junos-http 172.20.21.51/49266->172.20.22.254/80 0x0 N/A N/A N/A N
+//<18-Oct-2022><Sample Log><JuniperSRXStructured_CL.csv> //<TenantId,SourceSystem,TimeGenerated,Computer,EventTime,Facility,HostName,SeverityLevel,SyslogMessage,ProcessID,HostIP,ProcessName,MG,Type,_ResourceId
+//58afdc1d-32c7-497b-926f-94c1d1e9e192,Linux,10/7/2022 18:16,10.151.254.59,10/7/2022 19:27,user,10.151.254.59,info,RT_FLOW_SESSION_CLOSE: session closed TCP //FIN: 10.255.50.101/34494->10.151.254.59/22 junos-ssh 10.255.50.101/34494->10.151.254.59/22 N/A N/A N/A N/A 6 Allow-Intra MGMNT MGMNT 52380767 165(13032) //266(46477) 286 SSH UNKNOWN N/A(N/A) ae1.255 UNKNOWN,,Unknown IP,RT_FLOW,00000000-0000-0000-0000-000000000002,Syslog,>
+//
+
+let LogHeader = Syslog
+| extend Parser = extract_all(@"(\w+)\:?\s([\S\s]+)", dynamic([1,2]),SyslogMessage)
+| mv-expand Parser
+| extend EventTimestamp = EventTime,
+         DvcHostname = HostName,
+         EventType = ProcessName,
+         ProcessId = ProcessID,
+         Message = trim("- ",tostring(Parser[1]))
+| project-away Parser;
+let SshEvents = LogHeader
+| where EventType =~ "sshd"
+| extend Parser = extract_all(@"password\sfor\s(\w+)\sfrom\s([0-9.]+)\sport\s(\d+)",dynamic([1,2,3]), Message)
+| mv-expand Parser
+| extend UserName = tostring(Parser[0]),
+         SrcIpAddr = tostring(Parser[1]),
+         DstIpAddr = "",
+         SrcPortNumber = toint(Parser[2]),
+         DstPortNumber = toint(""),
+         ZoneName = "",
+         InterfaceName = "",
+         Action = ""
+| extend EventName = extract(@"^(\w+\s?\w+?)\s(for|from)",1, Message)
+| extend EventName = extract(@"([\w\s]+\!)",1, Message)
+| extend UserName = iif(isempty(UserName), extract(@"for\suser\s\'(\w+)\'\sfrom\shost\s\'([0-9\.]+)\'",1, Message), UserName)
+| extend UserName = iif(isempty(UserName), extract(@"PAM_USER\:\s(\w+)",1, Message), UserName)
+| extend UserName = iif(isempty(UserName), extract(@"user:\s(\w+)",1, Message), UserName)
+| extend SrcIpAddr = iif(isempty(SrcIpAddr), extract(@"from\s(host)?\s?\'?([0-9.]+)\'?",2, Message), SrcIpAddr)
+| extend SrcIpAddr = iif(isempty(SrcIpAddr), extract(@"source\:\s([0-9.]+)\:",1, Message), SrcIpAddr)
+| extend SrcIpAddr = iif(isempty(SrcIpAddr), extract(@"closed\sby\s([0-9.]+)\s",1, Message), SrcIpAddr)
+| extend DstIpAddr = iif(isempty(DstIpAddr), extract(@"destination\:\s([0-9.]+)\:[0-9]+",1, Message), DstIpAddr)
+| extend DstPortNumber = iif(isempty(DstPortNumber), toint(extract(@"destination\:\s[0-9.]+\:([0-9]+)",1, Message)), DstPortNumber)
+| extend SrcPortNumber = iif(isempty(SrcPortNumber), toint(extract(@"closed\sby\s([0-9.]+)\sport\s([0-9]+)",2, Message)), SrcPortNumber)
+| extend SrcPortNumber = iif(isempty(SrcPortNumber), toint(extract(@"source\:\s[0-9.]+\:([0-9]+)",1, Message)), SrcPortNumber)
+| extend ZoneName = iif(isempty(ZoneName), extract(@"zone\sname\:\s([\w]+)\,\s",1, Message), ZoneName)
+| extend InterfaceName = iif(isempty(InterfaceName), extract(@"interface\sname\:\s([\w\-\.\/]+)\,\s",1, Message), InterfaceName)
+| extend Action = iif(isempty(Action), extract(@"action\:\s([\w]+)",1, Message), Action)
+| project-away Parser;
+let IdsEvents = LogHeader
+| where EventType == "RT_IDS"
+| extend SrcIpAddr = extract(@"source\:\s([0-9.]+)\,?\:?(\d+)?",1, Message),
+         SrcPortNumber = toint(extract(@"source\:\s([0-9.]+)\,?\:?(\d+)?",2, Message)),
+         DstIpAddr = extract(@"destination\:\s([0-9.]+)\,?",1, Message),
+         DstPortNumber = toint(extract(@"destination\:\s([0-9.]+)\,?\:?(\d+)?",2, Message)),
+         ProtocolId = toint(extract(@"protocol-id\:\s([0-9.]+)\,",1, Message)),
+         ZoneName = extract(@"zone\sname\:\s([\w]+)\,",1, Message),
+         InterfaceName = extract(@"interface\sname\:\s([\w\.]+)\,",1, Message),
+         Action = extract(@"action\:\s([\w\-\.]+)",1, Message);
+let FlowEvents = LogHeader
+| where EventType == "RT_FLOW"
+| extend FlowEventName = extract(@"^([\w\s]+)\s(\d.*)",1, Message);
+let FlowDenyEvents = FlowEvents
+| where FlowEventName =~ 'session denied'
+| extend Parser = extract_all(@"^([\w\s\-]+)(\s|\:)\s?([\d\.]+)\/(\d+)\-\>([\d\.]+)\/(\d+)\s(\w+)?\s?([\w\-]+)\s([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9]), Message)
+| mv-expand Parser
+| extend EventName = tostring(Parser[0]),
+         SrcIpAddr = tostring(Parser[2]),
+         SrcPortNumber = toint(Parser[3]),
+         DstIpAddr = tostring(Parser[4]),
+         DstPortNumber = toint(Parser[5]),
+         ServiceName = tostring(Parser[7]),
+         Substring = tostring(Parser[8])
+| project-away Parser, Substring;
+let FlowNotDenyEvents = FlowEvents
+| where FlowEventName !~ 'session denied'
+| extend Parser = extract_all(@"^([\w\s\-]+)(\s|\:)\s?([\d\.]+)\/(\d+)\-\>([\d\.]+)\/(\d+)\s(\w+)?\s?([\w\-]+)\s([\d\.]+)\/(\d+)\-\>([\d\.]+)\/(\d+)\s([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]), Message)
+| mv-expand Parser
+| extend EventName = tostring(Parser[0]),
+         SrcIpAddr = tostring(Parser[2]),
+         SrcPortNumber = toint(Parser[3]),
+         DstIpAddr = tostring(Parser[4]),
+         DstPortNumber = toint(Parser[5]),
+         ServiceName = tostring(Parser[7]),
+         SrcNatIpAddr = tostring(Parser[8]),
+         SrcNatPortNumber = toint(Parser[9]),
+         DstNatIpAddr = tostring(Parser[10]),
+         DstNatPortNumber = toint(Parser[11]),
+         Substring = tostring(Parser[12])
+| extend Parser2 = extract_all(@"(0x0/s)?([\S]+)\s([\S]+)\s([\S]+)\s([\S]+)\s(\d+)\s([\S]+)\s([\S]+)\s([\S]+)\s(\d+)",dynamic([1,2,3,4,5,6,7,8,9,10]), Substring)
+| mvexpand Parser2
+| extend ProtocolId = toint(Parser2[5]),
+         PolicyName = tostring(Parser2[6]),
+         SrcNatRuleName = tostring(Parser2[7]),
+         DstNatRuleName = tostring(Parser2[8]),
+         SessionId = toint(Parser2[9])
+| project-away Parser, Parser2, Substring;
+let AllOtherEvents = LogHeader
+| where EventType !in ("sshd","RT_IDS","RT_FLOW")
+| extend EventName = extract(@"^([\w\s]+)\s(0)",1, Message);
+union SshEvents, IdsEvents, AllOtherEvents, FlowNotDenyEvents, FlowDenyEvents
+| extend EventName = iif(isempty(EventName), extract(@"^([\w\s]+)\s(\d.*)",1, Message), EventName)

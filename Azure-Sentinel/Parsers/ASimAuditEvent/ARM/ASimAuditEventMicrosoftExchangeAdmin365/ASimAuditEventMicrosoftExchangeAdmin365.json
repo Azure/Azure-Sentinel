@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimAuditEventMicrosoftExchangeAdmin365",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Audit Event ASIM parser for Microsoft Exchange 365 administrative activity",
+            "category": "ASIM",
+            "FunctionAlias": "ASimAuditEventMicrosoftExchangeAdmin365",
+            "query": "let usertypes=datatable (ActorOriginalUserType:string, ActorUserType:string)\n[\n // Regular, Regular\n \"Admin\", \"Admin\"\n , \"DcAdmin\", \"Admin\"\n , \"System\", \"System\"\n , \"Application\", \"Application\"\n , \"ServicePrincipal\", \"Service Principal\"\n , \"CustomPolicy\", \"Other\"\n , \"SystemPolicy\", \"Other\"\n , \"Reserved\", \"Other\"\n];\nlet eventtypes=datatable (op:string, EventType:string)\n[\n \"Remove\", \"Delete\",\n \"New\", \"Create\",\n \"Add\", \"Create\",\n \"Enable\", \"Enable\",\n \"Install\", \"Install\",\n \"Set\", \"Set\",\n \"Disable\", \"Disable\",\n \"disable\", \"Disable\"\n];\nlet parser=(disabled:bool=false){\n  OfficeActivity\n  | where not(disabled)\n  | where RecordType  in ('ExchangeAdmin')\n  | project Operation, ResultStatus, Parameters, OrganizationName, OrganizationId, OfficeObjectId, ClientIP, UserId, UserKey, UserAgent, UserType, TimeGenerated, OriginatingServer, SourceRecordId, Type, _ResourceId\n  | extend \n      SplitOp = split (Operation,\"-\")\n  | extend\n      op=tostring(SplitOp[0])\n  | lookup eventtypes on op\n  | project-away op\n  // --\n  // Calculate Object\n  | extend\n      SplitObject = extract_all(@'^(.*?)[\\\\/](.*)$', OfficeObjectId)[0]\n  | extend \n      Object = case (\n          SplitObject[0] == OrganizationName, SplitObject[1], \n          OfficeObjectId == \"\", SplitOp[1],\n          OfficeObjectId\n      )\n  | project-away SplitOp, OfficeObjectId\n  // --\n  // Calculate source IP address and port\n  | extend \n      SplitIpAddr = extract_all(@'^\\[?(.*?)\\]?:(\\d+)$', ClientIP)[0]\n  | extend \n      SrcIpAddr = iff (SplitIpAddr[1] == \"\", ClientIP, SplitIpAddr[0]),\n      SrcPortNumber = toint(iff (SplitIpAddr[1] == \"\", \"\", SplitIpAddr[1]))\n  | parse UserId with ActorUsername \" (\" ActingAppName \")\"\n  | extend \n      ActorUsernameType = iff (ActorUsername == \"\", \"UPN\", \"Windows\"),\n      ActorUsername = iff (ActorUsername == \"\", UserId, ActorUsername),\n      ActingAppType = iff (ActingAppName == \"\", \"\", \"Process\")\n  | project-rename\n      SrcDescription = OriginatingServer,\n      NewValue = Parameters \n  | project-away SplitObject, UserKey, SplitIpAddr, ClientIP, UserId\n  | project-rename\n      HttpUserAgent = UserAgent, \n      ActorOriginalUserType = UserType,\n      ActorScopeId = OrganizationId,\n      ActorScope = OrganizationName,\n      EventOriginalUid = SourceRecordId\n  | lookup usertypes on ActorOriginalUserType\n  | extend\n      EventCount = int(1),\n      EventStartTime = TimeGenerated, \n      EventEndTime= TimeGenerated,\n      EventProduct = 'Exchange 365',\n      EventVendor = 'Microsoft',\n      EventSchemaVersion = '0.1.0',\n      EventSchema = 'AuditEvent',\n      TargetAppName = 'Exchange 365',\n      TargetAppType = 'SaaS application',\n      EventResult = iff(ResultStatus == \"True\", \"Success\", \"Failure\")\n  | project-away \n      ResultStatus\n  | extend\n      EventSeverity = iff(EventResult == \"Failure\", \"Low\", \"Informational\")\n  // -- Aliases\n  | extend \n      User=ActorUsername,\n      IpAddr = SrcIpAddr,\n      Value = NewValue,\n      Application = TargetAppName,\n      Dst = TargetAppName,\n      Src = coalesce (SrcIpAddr, SrcDescription),\n      Dvc = TargetAppName,\n  // -- Entity identifier explicit aliases\n      ActorUserUpn = iif (ActorUsernameType == \"UPN\", ActorUsername, \"\"),\n      ActorWindowsUsername = iif (ActorUsernameType == \"Windows\", ActorUsername, \"\")\n };\n parser (disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+id: 3084b487-fad6-4000-9544-6085b9657290
+name: Hijack Execution Flow - DLL Side-Loading
+description: |
+  This detection tries to identify all DLLs loaded by "high integrity" processes and cross-checks the DLL paths against FileCreate/FileModify events of the same DLL by a medium integrity process.
+  Of course, we need to do some magic to filter out false positives as much as possible. So any FileCreate/FileModify done by "NT Authoriy\System" and the "RID 500" users aren't interesting.
+  Also, we only want to see the FileCreate/FileModify actions which are performed with a default or limited token elevation. If done with a full elevated token, the user is apparently admin already.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceFileEvents
+      - DeviceImageLoadEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - DefenseEvasion
+relevantTechniques:
+  - T1574.002
+query: |
+  let imls = materialize(
+      DeviceImageLoadEvents
+      | where InitiatingProcessIntegrityLevel in ("High", "System") and FileName !endswith ".exe"
+      | project FolderPath=tolower(FolderPath), InitiatingProcessFileName, InitiatingProcessIntegrityLevel, DeviceId, DeviceName
+      | distinct FolderPath, InitiatingProcessFileName, InitiatingProcessIntegrityLevel, DeviceId, DeviceName
+  );
+  imls
+  | join (
+      DeviceFileEvents
+      | where FolderPath in~ ((imls | project FolderPath)) and ActionType in ("FileCreated", "FileModified") and
+      InitiatingProcessIntegrityLevel !in ("High", "System", "") and InitiatingProcessAccountSid != "S-1-5-18" and
+      InitiatingProcessTokenElevation in ("TokenElevationTypeDefault", "TokenElevationTypeLimited") and InitiatingProcessAccountSid !endswith "-500"
+      | extend FolderPath=tolower(FolderPath)
+  ) on FolderPath, DeviceId, DeviceName
+  | project-away FolderPath1
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: InitiatingProcessAccountSid
+      - identifier: Name
+        columnName: InitiatingProcessAccountName
+      - identifier: NTDomain
+        columnName: InitiatingProcessAccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+version: 1.0.1
+kind: Scheduled

@@ -1,0 +1,70 @@
+id: 8b8be25f-1bc0-4d57-81a7-76ef97f1d64f
+name: confluence-weblogic-targeted
+description: |
+  This query was originally published in the threat analytics report, Confluence and WebLogic abuse.
+  2019 has seen several seemingly related campaigns targeting Atlassian Confluence Server and Oracle WebLogic Server. Although these campaigns use different implants and delivery methods, they consistently use the same infrastructure, and exploit the same vulnerabilities.
+  The campaigns have specifically targeted:
+  1. CVE-2019-3396 - Software update
+  2. CVE-2019-2725 - Software update
+  The following query detects activity broadly associated with these campaigns.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+tactics:
+- Vulnerability
+query: |
+  DeviceProcessEvents
+  | where Timestamp >= ago(7d)
+  | where 
+  // "Grandparent" process is Oracle WebLogic or some process loading Confluence
+  InitiatingProcessParentFileName == "beasvc.exe" or 
+  InitiatingProcessFileName == "beasvc.exe" 
+  or InitiatingProcessCommandLine contains "//confluence"
+  // Calculate for Base64 in Commandline
+  | extend Caps = countof(ProcessCommandLine, "[A-Z]", "regex"), 
+  Total = countof(ProcessCommandLine, ".", "regex")
+  | extend Ratio = todouble(Caps) / todouble(Total) 
+  | where
+  (
+      FileName in~ ("powershell.exe" , "powershell_ise.exe") // PowerShell is spawned
+      // Omit known clean processes
+      and ProcessCommandLine !startswith "POWERSHELL.EXE  -C \"GET-WMIOBJECT -COMPUTERNAME"
+      and ProcessCommandLine !contains "ApplicationNo"
+      and ProcessCommandLine !contains "CustomerGroup"
+      and ProcessCommandLine !contains "Cosmos"
+      and ProcessCommandLine !contains "Unrestricted"
+      and
+      (
+          ProcessCommandLine contains "$" // PowerShell variable declaration
+          or ProcessCommandLine contains "-e " // Alias for "-EncodedCommand" parameter
+          or ProcessCommandLine contains "encodedcommand"
+          or ProcessCommandLine contains "wget"
+          //or ( Ratio > 0.4 and Ratio < 1.0) // Presence of Base64 strings
+      )
+  )
+  or
+  (
+      FileName =~ "cmd.exe" // cmd.exe is spawned
+      and ProcessCommandLine contains "@echo" and 
+      ProcessCommandLine contains ">" // Echoing commands into a file
+  )
+  or
+  (
+      FileName =~ "certutil.exe" // CertUtil.exe abuse
+      and ProcessCommandLine contains "-split" 
+      // the "-split" parameter is required to write files to the disk
+  )
+  | project
+         Timestamp,
+         InitiatingProcessCreationTime ,
+         DeviceId ,
+         Grandparent_PID = InitiatingProcessParentId,
+         Grandparent = InitiatingProcessParentFileName,
+         Parent_Account = InitiatingProcessAccountName,
+         Parent_PID = InitiatingProcessId,
+         Parent = InitiatingProcessFileName ,
+         Parent_Commandline = InitiatingProcessCommandLine,
+         Child_PID = ProcessId,
+         Child = FileName ,
+         Child_Commandline = ProcessCommandLine

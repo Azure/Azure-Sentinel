@@ -1,0 +1,88 @@
+id: 4d94d4a9-dc96-410a-8dea-4d4d4584188b
+name: User added to Microsoft Entra ID Privileged Groups
+description: |
+  'This will alert when a user is added to any of the Privileged Groups.
+  For further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.
+  For Administrator role permissions in Microsoft Entra ID please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+tags:
+  - DEV-0537
+query: |
+  let OperationList = dynamic(["Add member to role","Add member to role in PIM requested (permanent)"]);
+  let PrivilegedGroups = dynamic(["UserAccountAdmins","PrivilegedRoleAdmins","TenantAdmins"]);
+  AuditLogs
+  //| where LoggedByService =~ "Core Directory"
+  | where Category =~ "RoleManagement"
+  | where OperationName in~ (OperationList)
+  | mv-apply TargetResource = TargetResources on 
+    (
+        where TargetResource.type =~ "User"
+        | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),
+                 modProps = TargetResource.modifiedProperties
+    )
+  | mv-apply Property = modProps on 
+    (
+        where Property.displayName =~ "Role.WellKnownObjectName"
+        | extend DisplayName = trim('"',tostring(Property.displayName)),
+                 GroupName = trim('"',tostring(Property.newValue))
+    )
+  | extend InitiatingAppId = InitiatedBy.app.appId
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend InitiatingUserRoles = InitiatedBy.user.roles
+  | where GroupName in~ (PrivilegedGroups)
+  // If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.
+  //| where InitiatingAppName != "MS-PIM"
+  | project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppId, InitiatingAppName, InitiatingAppServicePrincipalName, InitiatingAppServicePrincipalId, InitiatingIpAddress, DisplayName, GroupName, InitiatingUserRoles, TargetUserPrincipalName
+  | extend AccountName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), AccountUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+  | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName   
+      - identifier: Name
+        columnName: AccountName      
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: TargetUserPrincipalName   
+      - identifier: Name
+        columnName: TargetName      
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
+version: 1.0.6
+kind: Scheduled

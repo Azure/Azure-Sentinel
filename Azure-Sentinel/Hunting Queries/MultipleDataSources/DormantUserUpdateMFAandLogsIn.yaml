@@ -1,0 +1,48 @@
+id: a67834b0-3359-40be-bf11-71faac93b509
+name: Dormant User Update MFA and Logs In
+description: |
+  'This querys look for users accounts that have not been successfully logged into recently, who then have a MFA method added or updated before logging in.
+  Threat actors may look to re-activate dormant accounts and use them for access by adding MFA methods in the hope that changes to such dormant accounts may go un-noticed.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AuditLogs
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1098
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = endtime - 14d;
+  let active_users = (
+      SigninLogs
+      | where TimeGenerated between(lookback..starttime)
+      | where ResultType == 0
+      | extend UserPrincipalName == tolower(UserPrincipalName)
+      | summarize by UserId);
+  AuditLogs
+  | where TimeGenerated between(starttime..endtime)
+  // Get users where they added MFA
+  | where OperationName =~ "User registered security info"
+  | extend TargetUser = tolower(tostring(TargetResources[0].userPrincipalName))
+  | extend UserId = tostring(TargetResources[0].id)
+  // Check and see if this activity was from a user who is considered not active
+  | where UserId !in (active_users)
+  // Further reduce FP by just looking at users who have successfully logged in recently as well (avoiding hits for users adding MFA but not actually logging in)
+  | join kind=inner (SigninLogs | where TimeGenerated  between(starttime..endtime) | where ResultType == 0 | summarize max(TimeGenerated), make_set(IPAddress), make_set(UserAgent), make_set(LocationDetails) by UserPrincipalName, UserId
+  ) on UserId
+  | extend LogonLocation = set_LocationDetails[0], LogonUserAgent = set_UserAgent[0], LogonIP = set_IPAddress[0]
+  | project-rename MostRecentLogon = max_TimeGenerated
+  | project-reorder TimeGenerated, TargetUser, OperationName, ResultDescription, MostRecentLogon, LogonUserAgent, LogonLocation, LogonIP
+  | extend AccountCustomEntity = TargetUser, IPCustomEntity = LogonIP
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

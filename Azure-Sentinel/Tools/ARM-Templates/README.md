@@ -1,0 +1,1 @@
+# Azure Sentinel Quickstart ARM Templates

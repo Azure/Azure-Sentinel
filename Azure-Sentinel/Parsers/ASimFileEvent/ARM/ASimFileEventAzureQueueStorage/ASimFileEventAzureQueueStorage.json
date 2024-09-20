@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimFileEventAzureQueueStorage",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "File Activity ASIM parser for Azure Queue Storage",
+            "category": "ASIM",
+            "FunctionAlias": "ASimFileEventAzureQueueStorage",
+            "query": "// https://docs.microsoft.comrest/api/storageservices/storage-analytics-logged-operations-and-status-messages\nlet parser=(disabled: bool=false)\n{\n    let queueoperations=datatable(OperationName: string, EventType: string)\n[\n    \"ClearMessages\", \"FileDeleted\"\n        ,\n    \"CreateQueue\", \"FileCreated\"\n        ,\n    \"DeleteQueue\", \"FileDeleted\"\n        ,\n    \"DeleteMessage\", \"FileDeleted\"\n        ,\n    \"GetQueue\", \"FileAccessed\"\n        ,\n    \"GetMessage\", \"FileAccessed\"\n        ,\n    \"GetMessages\", \"FileAccessed\"\n        ,\n    \"PeekMessage\", \"FileAccessed\"\n        ,\n    \"PeekMessages\", \"FileAccessed\"\n        ,\n    \"PutMessage\", \"FileCreated\"\n        ,\n    \"UpdateMessage\", \"FileModified\" \n];\n    StorageQueueLogs\n    | where not(disabled)\n    // **** relevant data filtering;\n    | where OperationName in (queueoperations)\n    //\n    | extend \n        EventCount=int(1)\n        ,\n        EventStartTime=TimeGenerated\n        ,\n        EventEndTime=TimeGenerated\n        //\t, EventType :string  ---> see lookup below\n        ,\n        EventResult=iff(StatusText == 'Success', 'Success', 'Failure') \n        ,\n        EventOriginalUid = CorrelationId\n        ,\n        EventOriginalType=OperationName\n        ,\n        EventProduct='Azure File Storage' \n        ,\n        EventVendor='Microsoft'\n        ,\n        EventSchemaVersion='0.1.0'\n        ,\n        TargetFilePath=tostring(split(Uri, '?')[0]) \n        ,\n        TargetFilePathType='URL'\n        ,\n        TargetUrl=Uri\n        ,\n        SrcIpAddr=tostring(split(CallerIpAddress, ':')[0])\n        ,\n        SrcPortNumber=tostring(split(CallerIpAddress, ':')[0])\n        ,\n        HttpUserAgent=UserAgentHeader\n    | extend TargetFileName=tostring(split(TargetFilePath, '/')[-1])\n    | lookup queueoperations on OperationName\n    // Aliases\n    | extend \n        FilePath=TargetFilePath\n};\nparser (disabled = disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

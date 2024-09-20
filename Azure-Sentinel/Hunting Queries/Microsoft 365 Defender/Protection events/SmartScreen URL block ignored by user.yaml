@@ -1,0 +1,38 @@
+id: 172e5bee-9298-4c59-bd2a-e96d87e8e6d8
+name: SmartScreen URL block ignored by user
+description: |
+  Query for SmartScreen URL blocks, where the user has decided to run the malware nontheless.
+  An additional optional filter is applied to query only for cases where Microsoft Edge has downloaded a file shortly after the ignored block.
+  Read more about SmartScreen here: https://docs.microsoft.com/windows/security/threat-protection/windows-defender-smartscreen/windows-defender-smartscreen-overview.
+  Data availability: These events are available only on Windows 10 version 1703 and onwards.
+  Tags: #SmartScreen.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+  - DeviceFileEvents
+query: |
+  let minTimeRange = ago(7d);
+  let smartscreenUrlBlocks = 
+      DeviceEvents
+      | where ActionType == "SmartScreenUrlWarning" and Timestamp > minTimeRange
+              // Filter out SmartScreen test URLs under https://demo.smartscreen.msft.net/
+              and RemoteUrl !startswith "https://demo.smartscreen.msft.net/" 
+      | extend ParsedFields=parse_json(AdditionalFields)
+      | project Timestamp, DeviceName, BlockedUrl=RemoteUrl, Recommendation=tostring(ParsedFields.Recommendation), Experience=tostring(ParsedFields.Experience), ActivityId=tostring(ParsedFields.ActivityId);
+  // Query for UserDecision events - each one means the user has decided to ignore the warning and run the app.
+  let userIgnoredWarning=
+      DeviceEvents
+      | where ActionType == "SmartScreenUserOverride" and Timestamp > minTimeRange
+      | project DeviceName, ActivityId=extractjson("$.ActivityId", AdditionalFields, typeof(string));
+  // Join the block and user decision event using an ActivityId
+  let ignoredBlocks = smartscreenUrlBlocks | join kind=leftsemi (userIgnoredWarning) on DeviceName, ActivityId | project-away ActivityId;
+  // Optional additional filter - look only for cases where a file was downloaded from Microsoft Edge following the URL block being ignored 
+  let edgeDownloads = 
+      DeviceFileEvents
+      | where Timestamp > minTimeRange and InitiatingProcessFileName =~ "browser_broker.exe"
+      | summarize (DownloadTime, SHA1) = argmax(Timestamp, SHA1) by FileName, DeviceName, FileOriginUrl, FileOriginReferrerUrl;
+  ignoredBlocks
+  | join kind=inner (edgeDownloads) on DeviceName
+  | where DownloadTime - Timestamp between (0min .. 2min)
+  | project-away DeviceName1

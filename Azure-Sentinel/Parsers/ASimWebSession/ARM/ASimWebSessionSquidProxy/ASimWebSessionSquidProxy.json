@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimWebSessionSquidProxy",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM parser for Squid Proxy",
+            "category": "ASIM",
+            "FunctionAlias": "ASimWebSessionSquidProxy",
+            "query": "let parser=(disabled:bool=false){\nSquidProxy_CL | where not(disabled)\n  | extend AccessRawLog = extract_all(@\"^(\\d+\\.\\d+)\\s+(\\d+)\\s(\\S+)\\s([A-Z_]+)\\/(\\d+)\\s(\\d+)\\s([A-Z]+)\\s(\\S+)\\s(\\S+)\\s([A-Z_]+)\\/(\\S+)\\s(\\S+)\",dynamic([1,2,3,4,5,6,7,8,9,10,11,12]),RawData)[0]\n  | project-rename\n    Dvc = Computer\n  | extend\n    EventEndTime = unixtime_milliseconds_todatetime(todouble(tostring(AccessRawLog[0]))*1000), \n    NetworkDuration = toint(AccessRawLog[1]), \n    SrcIpAddr = tostring(AccessRawLog[2]), \n    EventOriginalResultDetails = strcat (tostring(AccessRawLog[3]), \";\", PeerStatus = tostring(AccessRawLog[9])), \n    EventResultDetails = tostring(AccessRawLog[4]), \n    DstBytes = tolong(AccessRawLog[5]), \n    HttpRequestMethod = tostring(AccessRawLog[6]), \n    // -- Squid URL might be shortened by including ellipsis (...) instead of a section in the middle. This may impact the hostname part as well.\n    Url = tostring(AccessRawLog[7]), \n    SrcUsername = tostring(AccessRawLog[8]), \n    DstIpAddr = tostring(AccessRawLog[10]), \n    HttpContentType = tostring(AccessRawLog[11]) \n  // -- Constant fields\n  | extend \n    EventCount = int(1), \n    EventProduct = 'Squid Proxy', \n    EventVendor = 'Squid', \n    EventSchema = 'WebSession', \n    EventSchemaVersion = '0.2.3', \n    EventType = 'HTTPsession' \n  // -- Value normalization\n  | extend\n    SrcUsernameType = \"Unknown\",\n    SrcUsername = iff (SrcUsername == \"-\", \"\", SrcUsername), \n    HttpContentType = iff (HttpContentType in (\":\", \"-\"), \"\", HttpContentType), \n    EventResult = iff (EventOriginalResultDetails has_any ('DENIED', 'INVALID', 'FAIL', 'ABORTED','TIMEOUT') or toint(EventResultDetails) >= 400, \"Failure\", \"Success\"),\n    DstIpAddrIsHost = DstIpAddr matches regex @\"^[^\\:]*[a-zA-Z]$\"\n  | extend \n    FQDN = iif (DstIpAddrIsHost, DstIpAddr, tostring(parse_url(Url)[\"Host\"])),\n    DstIpAddr = iif (DstIpAddr == \"-\" or DstIpAddrIsHost, \"\", DstIpAddr)\n  | extend \n    EventSeverity = iff(EventResult == \"Success\", \"Informational\", \"Low\")\n  | invoke _ASIM_ResolveDstFQDN ('FQDN')\n // -- aliases\n  | extend \n    EventStartTime = EventEndTime,\n    Duration = NetworkDuration,\n    HttpStatusCode = EventResultDetails,\n    User = SrcUsername,\n    IpAddr = SrcIpAddr,\n    Src = SrcIpAddr,\n    Dst = DstHostname,\n    Hostname = DstHostname\n  | project-away AccessRawLog, RawData, *_s, MG, ManagementGroupName, SourceSystem, TenantId, DstIpAddrIsHost\n};\nparser (disabled=disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

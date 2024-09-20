@@ -1,0 +1,54 @@
+id: 3b05727d-a8d1-477d-bbdd-d957da96ac7b
+name: NRT Multiple users email forwarded to same destination
+description: |
+  'Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination.
+  This could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+  OfficeActivity
+  | where OfficeWorkload =~ "Exchange"
+  | where Parameters has_any ("ForwardTo", "RedirectTo", "ForwardingSmtpAddress")
+  | mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))
+  | evaluate bag_unpack(ParsedParameters, columnsConflict='replace_source')
+  | extend DestinationMailAddress = tolower(case(
+      isnotempty(column_ifexists("ForwardTo", "")), column_ifexists("ForwardTo", ""),
+      isnotempty(column_ifexists("RedirectTo", "")), column_ifexists("RedirectTo", ""),
+      isnotempty(column_ifexists("ForwardingSmtpAddress", "")), trim_start(@"smtp:", column_ifexists("ForwardingSmtpAddress", "")),
+      ""))
+  | where isnotempty(DestinationMailAddress)
+  | mv-expand split(DestinationMailAddress, ";")
+  | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
+  | extend ClientIP = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1])
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId, 250), Ports = make_set(Port, 250), EventCount = count() by tostring(DestinationMailAddress), ClientIP
+  | where DistinctUserCount > 1
+  | mv-expand UserId to typeof(string)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.3
+kind: NRT
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Pete Bryan
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Threat Protection" ]

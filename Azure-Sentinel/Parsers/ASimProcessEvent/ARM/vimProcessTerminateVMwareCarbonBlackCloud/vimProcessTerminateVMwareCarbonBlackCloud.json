@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessTerminateVMwareCarbonBlackCloud",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Terminate ASIM parser for VMware Carbon Black Cloud",
+            "category": "ASIM",
+            "FunctionAlias": "vimProcessTerminateVMwareCarbonBlackCloud",
+            "query": "let EventFieldsLookup = datatable(\n  sensor_action_s: string,\n  DvcAction: string,\n  EventResult: string\n)[\n    \"ACTION_ALLOW\", \"Allow\", \"Success\",\n    \"ACTION_BLOCK\", \"Block\", \"Failure\",\n    \"ACTION_TERMINATE\", \"Terminate\", \"Failure\",\n    \"ACTION_BREAK\", \"Break\", \"Failure\",\n    \"ACTION_SUSPEND\", \"Suspend\", \"Failure\",\n    \"\", \"\", \"Success\"\n];\nlet parser = (\n    starttime: datetime=datetime(null),\n    endtime: datetime=datetime(null),\n    commandline_has_any: dynamic=dynamic([]),\n    commandline_has_all: dynamic=dynamic([]),\n    commandline_has_any_ip_prefix: dynamic=dynamic([]),\n    actingprocess_has_any: dynamic=dynamic([]),\n    targetprocess_has_any: dynamic=dynamic([]),\n    parentprocess_has_any: dynamic=dynamic([]),\n    actorusername_has: string='*',\n    dvcipaddr_has_any_prefix: dynamic=dynamic([]),\n    dvchostname_has_any: dynamic=dynamic([]),\n    eventtype: string='*',\n    disabled: bool=false) {\n    CarbonBlackEvents_CL\n    | where not(disabled)\n    | where (isnull(starttime) or TimeGenerated >= starttime)\n        and (isnull(endtime) or TimeGenerated <= endtime)\n        and (eventType_s == \"endpoint.event.procend\" and isnotempty(process_pid_d))\n        and (eventtype == '*' or eventtype == 'ProcessTerminated')\n        and array_length(parentprocess_has_any) == 0\n        and (array_length(dvcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(device_external_ip_s, dvcipaddr_has_any_prefix)) \n        and (actorusername_has == '*' or process_username_s has actorusername_has)  \n        and (array_length(commandline_has_all) == 0 or target_cmdline_s has_all (commandline_has_all) or process_cmdline_s has_all (commandline_has_all))\n        and (array_length(commandline_has_any) == 0 or target_cmdline_s has_any (commandline_has_any) or process_cmdline_s has_any (commandline_has_any)) \n        and (array_length(commandline_has_any_ip_prefix) == 0 or has_any_ipv4_prefix(target_cmdline_s, commandline_has_any_ip_prefix) or has_any_ipv4_prefix(process_cmdline_s, commandline_has_any_ip_prefix)) \n        and (array_length(actingprocess_has_any) == 0 or parent_path_s has_any (actingprocess_has_any)) \n        and (array_length(targetprocess_has_any) == 0 or process_path_s has_any (targetprocess_has_any)) \n        and (array_length(dvchostname_has_any) == 0 or device_name_s has_any (dvchostname_has_any))\n    | parse process_hash_s with * '[\"' TargetProcessMD5: string '\",\"' TargetProcessSHA256: string '\"]'\n    | parse parent_hash_s with * '[\"' ActingProcessMD5: string  '\",\"' ActingProcessSHA256: string '\"]'\n    | lookup EventFieldsLookup on sensor_action_s\n    | extend\n        EventStartTime = todatetime(split(createTime_s, '+')[0]),\n        TargetProcessId = tostring(toint(process_pid_d)),\n        ActingProcessId = tostring(toint(parent_pid_d)),\n        ActorUsername = process_username_s,\n        TargetProcessCommandLine = coalesce(target_cmdline_s, process_cmdline_s),\n        AdditionalFields = bag_pack(\n                    \"org_key\", org_key_s,\n                    \"alert_id\", alert_id_g,\n                    \"process_reputation\", process_reputation_s,\n                    \"parent_reputation\", parent_reputation_s,\n                    \"parent_guid\", parent_guid_s,\n                    \"process_guid\", process_guid_s\n                )\n    | invoke _ASIM_ResolveDvcFQDN('device_name_s')\n    | project-rename \n        TargetProcessName = process_path_s,\n        DvcIpAddr = device_external_ip_s,\n        DvcScope = device_group_s,\n        ActingProcessCommandLine = parent_cmdline_s,\n        DvcId = device_id_s,\n        DvcOriginalAction = sensor_action_s,\n        DvcOs = device_os_s,\n        EventOriginalType = action_s,\n        EventOriginalUid = event_id_g,\n        EventOwner = event_origin_s,\n        ActingProcessName = parent_path_s,\n        EventUid = _ItemId\n    | extend\n        EventCount = int(1),\n        EventProduct = \"Carbon Black Cloud\",\n        EventSchemaVersion = \"0.1.4\",\n        EventType = \"ProcessTerminated\",\n        EventVendor = \"VMware\",\n        EventSchema = \"ProcessEvent\"\n    | extend \n        Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),\n        EventEndTime = EventStartTime,\n        Hash = coalesce(TargetProcessSHA256, TargetProcessMD5),\n        CommandLine = TargetProcessCommandLine,\n        Process = TargetProcessName,\n        User = ActorUsername,\n        DvcIdType = iff(isnotempty(DvcId), \"Other\", \"\"),\n        ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),\n        ActorUserType = _ASIM_GetUserType(ActorUsername, \"\"),\n        HashType = case(\n              isnotempty(TargetProcessSHA256),\n              \"TargetProcessSHA256\",\n              isnotempty(TargetProcessMD5),\n              \"TargetProcessMD5\",\n              \"\"\n          )\n    | project-away\n        *_s,\n        *_d,\n        *_g,\n        *_b,\n        _ResourceId,\n        Computer,\n        MG,\n        ManagementGroupName,\n        RawData,\n        SourceSystem,\n        TenantId\n};\nparser(\n    starttime=starttime, \n    endtime=endtime, \n    commandline_has_any=commandline_has_any,\n    commandline_has_all=commandline_has_all,\n    commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,\n    actingprocess_has_any=actingprocess_has_any,\n    targetprocess_has_any=targetprocess_has_any,\n    parentprocess_has_any=parentprocess_has_any,\n    actorusername_has=actorusername_has,\n    dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,\n    dvchostname_has_any=dvchostname_has_any,\n    eventtype=eventtype,\n    disabled=disabled\n)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),commandline_has_any:dynamic=dynamic([]),commandline_has_all:dynamic=dynamic([]),commandline_has_any_ip_prefix:dynamic=dynamic([]),actingprocess_has_any:dynamic=dynamic([]),targetprocess_has_any:dynamic=dynamic([]),parentprocess_has_any:dynamic=dynamic([]),actorusername_has:string='*',dvcipaddr_has_any_prefix:dynamic=dynamic([]),dvchostname_has_any:dynamic=dynamic([]),eventtype:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

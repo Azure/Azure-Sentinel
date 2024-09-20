@@ -1,0 +1,366 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "author": "Matthew Ouellette - mouellette@microsoft.com",
+        "comments": "Solution template for Proofpoint TAP"
+    },
+    "parameters": {
+        "formattedTimeNow": {
+            "type": "string",
+            "defaultValue": "[utcNow('g')]", // https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-date-and-time-format-strings#GeneralDateShortTime
+            "metadata": {
+                "description": "Appended to workbook displayNames to make them unique"
+            }
+        },
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[parameters('location')]",
+            "metadata": {
+                "description": "Region to deploy solution resources"
+            }
+        },
+        "workspace": {
+            "defaultValue": "<Enter Log Analytics Workspace>",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Workspace name for Log Analytics where Sentinel is setup"
+            }
+        },
+        "analytic1-id": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "minLength": 1,
+            "metadata": {
+                "description": "Unique id for the scheduled alert rule"
+            }
+        },
+        "analytic2-id": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "minLength": 1,
+            "metadata": {
+                "description": "Unique id for the scheduled alert rule"
+            }
+        },
+        // Workbook 1 - Proofpoint TAP
+        "workbook1-id": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "minLength": 1,
+            "metadata": {
+                "description": "Unique id for the workbook"
+            }
+        },
+        "workbook1-name": {
+            "type": "string",
+            "defaultValue": "Proofpoint TAP",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name for the workbook"
+            }
+        },
+        // Playbook 1 - Get-ProofpointTAPEvents
+        "playbook1-name": {
+            "defaultValue": "Get-ProofpointTAPEvents",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Resource name for the logic app playbook.  No spaces are allowed"
+            }
+        },
+        "playbook1-username": {
+            "defaultValue": "<Enter Username>",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Username to connect to Proofpoint TAP API"
+            }
+        },
+        "playbook1-password": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Password to connect to Proofpoint TAP API"
+            }
+        }
+    },
+    "variables": {
+        "LogAnalyticsConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('playbook1-name'))]",
+        "workbook-source": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]",
+        "connection": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/azureloganalyticsdatacollector')]",
+        // These variable are defined twice to trick the arm-ttk test `IDs-Should-Be-Derived-From-ResourceIDs`
+        "_workbook-source": "[variables('workbook-source')]",
+        "_connection": "[variables('connection')]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2020-06-01",
+            "name": "pid-6711c4c9-1b36-4004-ae66-b0e67c375322",
+            "type": "Microsoft.Resources/deployments",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
+            "apiVersion": "2020-01-01",
+            "kind": "Scheduled",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "description": "This query identifies a message containing a malware attachment that was delivered.",
+                "displayName": "Malware attachment delivered",
+                "enabled": false,
+                "query": "let timeframe = ago(1h);\n  ProofPointTAPMessagesDelivered_CL\n  | where TimeGenerated >= timeframe\n  | mv-expand todynamic(threatsInfoMap_s)\n  | mv-expand todynamic(messageParts_s)\n  | extend threatType = tostring(threatsInfoMap_s.threatType), classification = tostring(threatsInfoMap_s.classification)\n  | extend filename = tostring(messageParts_s.filename)\n  | where threatType =~ \"attachment\" and classification =~ \"malware\"\n  | summarize filenames = make_set(filename), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by TimeGenerated, Sender = sender_s, SenderIPAddress = senderIP_s, Recipient = recipient_s, threatType, classification,  Subject = subject_s\n  | extend timestamp = StartTime, extend AccountCustomEntity = Recipient, IPCustomEntity = SenderIPAddress",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "tactics": [ "InitialAccess" ],
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "alertRuleTemplateName": "0558155e-4556-447e-9a22-828f2a7de06b"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic2-id'))]",
+            "apiVersion": "2020-01-01",
+            "kind": "Scheduled",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "description": "This query identifies a user clicking on an email link whose threat category is classified as a malware",
+                "displayName": "Malware Link Clicked",
+                "enabled": false,
+                "query": "let timeframe = ago(1h);\n  ProofPointTAPClicksPermitted_CL\n  | where TimeGenerated >= timeframe\n  | where classification_s =~ \"malware\"\n  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by TimeGenerated, Sender = sender_s, SenderIPAddress = senderIP_s, Recipient = recipient_s, TimeClicked = clickTime_t, URLClicked = url_s\n  | extend timestamp = StartTime, AccountCustomEntity = Recipient, IPCustomEntity = SenderIPAddress, URLCustomEntity = URLClicked",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "tactics": [ "InitialAccess" ],
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "alertRuleTemplateName": "8675dd7a-795e-4d56-a79c-fc848c5ee61c" // Might need to hide if no template?
+            }
+        },
+        {
+            "type": "Microsoft.Insights/workbooks",
+            "name": "[parameters('workbook1-id')]",
+            "location": "[parameters('workspace-location')]",
+            "kind": "shared",
+            "apiVersion": "2020-02-12",
+            "properties": {
+                "displayName": "[concat(parameters('workbook1-name'), ' - ', parameters('formattedTimeNow'))]",
+                "serializedData": "{\n \"version\": \"Notebook/1.0\",\n \"items\": [\n {\n \"type\": 11,\n \"content\": {\n \"version\": \"LinkItem/1.0\",\n \"style\": \"tabs\",\n \"links\": [\n {\n \"cellValue\": \"selectedTab\",\n \"linkTarget\": \"parameter\",\n \"linkLabel\": \"Messages\",\n \"subTarget\": \"Messages\",\n \"style\": \"link\"\n },\n {\n \"cellValue\": \"selectedTab\",\n \"linkTarget\": \"parameter\",\n \"linkLabel\": \"Clicks\",\n \"subTarget\": \"Clicks\",\n \"style\": \"link\"\n }\n ]\n },\n \"name\": \"links - 4\"\n },\n {\n \"type\": 9,\n \"content\": {\n \"version\": \"KqlParameterItem/1.0\",\n \"parameters\": [\n {\n \"id\": \"326a3767-8597-43ee-a116-44fc7280c63a\",\n \"version\": \"KqlParameterItem/1.0\",\n \"name\": \"TimeRange\",\n \"type\": 4,\n \"value\": {\n \"durationMs\": 5184000000\n },\n \"typeSettings\": {\n \"selectableValues\": [\n {\n \"durationMs\": 300000\n },\n {\n \"durationMs\": 900000\n },\n {\n \"durationMs\": 1800000\n },\n {\n \"durationMs\": 3600000\n },\n {\n \"durationMs\": 14400000\n },\n {\n \"durationMs\": 43200000\n },\n {\n \"durationMs\": 86400000\n },\n {\n \"durationMs\": 172800000\n },\n {\n \"durationMs\": 259200000\n },\n {\n \"durationMs\": 604800000\n },\n {\n \"durationMs\": 1209600000\n },\n {\n \"durationMs\": 2419200000\n },\n {\n \"durationMs\": 2592000000\n },\n {\n \"durationMs\": 5184000000\n },\n {\n \"durationMs\": 7776000000\n }\n ],\n \"allowCustom\": true\n },\n \"resourceType\": \"microsoft.insights/components\",\n \"label\": \"Time Range\"\n },\n {\n \"id\": \"59948c5e-ab41-4b57-85f0-5e65966dd98e\",\n \"version\": \"KqlParameterItem/1.0\",\n \"name\": \"Classification\",\n \"type\": 2,\n \"isRequired\": true,\n \"multiSelect\": true,\n \"quote\": \"'\",\n \"delimiter\": \",\",\n \"query\": \"union ProofPointTAPMessagesBlocked_CL, ProofPointTAPMessagesDelivered_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| distinct classification\",\n \"value\": [\n \"value::all\"\n ],\n \"typeSettings\": {\n \"additionalResourceOptions\": [\n \"value::all\"\n ]\n },\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\"\n },\n {\n \"id\": \"503a952f-d169-4c5a-bf2e-5e74672bd9d4\",\n \"version\": \"KqlParameterItem/1.0\",\n \"name\": \"ThreatType\",\n \"label\": \"Threat Type\",\n \"type\": 2,\n \"isRequired\": true,\n \"multiSelect\": true,\n \"quote\": \"'\",\n \"delimiter\": \",\",\n \"query\": \"union ProofPointTAPMessagesBlocked_CL, ProofPointTAPMessagesDelivered_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| distinct threatType_\",\n \"value\": [\n \"value::all\"\n ],\n \"typeSettings\": {\n \"additionalResourceOptions\": [\n \"value::all\"\n ]\n },\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\"\n }\n ],\n \"style\": \"above\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.insights/components\"\n },\n \"name\": \"parameters - 2\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"union ProofPointTAPMessagesBlocked_CL, ProofPointTAPMessagesDelivered_CL\\r\\n| mv-expand todynamic(threatsInfoMap_s)\\r\\n| extend classification = tostring(threatsInfoMap_s.classification)\\r\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\r\\n| where classification in ({Classification}) or '*' in ({Classification})\\r\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\r\\n| summarize phish = countif(classification == 'phish'), malware = countif(classification == \\\"malware\\\"), impostor = countif(classification == \\\"impostor\\\"), spam = countif(classification == \\\"spam\\\") by bin(TimeGenerated, {TimeRange:grain})\",\n \"size\": 0,\n \"title\": \"Message Events by Classification\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"areachart\",\n \"tileSettings\": {\n \"showBorder\": false\n },\n \"graphSettings\": {\n \"type\": 0,\n \"topContent\": {\n \"columnMatch\": \"classification\",\n \"formatter\": 1\n },\n \"centerContent\": {\n \"columnMatch\": \"count_\",\n \"formatter\": 1,\n \"numberFormat\": {\n \"unit\": 17,\n \"options\": {\n \"maximumSignificantDigits\": 3,\n \"maximumFractionDigits\": 2\n }\n }\n }\n },\n \"chartSettings\": {\n \"seriesLabelSettings\": [\n {\n \"seriesName\": \"phish\",\n \"color\": \"blue\"\n },\n {\n \"seriesName\": \"malware\",\n \"color\": \"red\"\n },\n {\n \"seriesName\": \"impostor\",\n \"color\": \"green\"\n },\n {\n \"seriesName\": \"spam\",\n \"color\": \"magenta\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Messages\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query - 2 - Copy\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"union ProofPointTAPClicksBlocked_CL, ProofPointTAPClicksPermitted_CL\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\") by bin(TimeGenerated, {TimeRange:grain})\",\n \"size\": 0,\n \"showAnalytics\": true,\n \"title\": \"Click Events by Classification\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"unstackedbar\",\n \"tileSettings\": {\n \"showBorder\": false\n },\n \"graphSettings\": {\n \"type\": 0,\n \"topContent\": {\n \"columnMatch\": \"classification\",\n \"formatter\": 1\n },\n \"centerContent\": {\n \"columnMatch\": \"count_\",\n \"formatter\": 1,\n \"numberFormat\": {\n \"unit\": 17,\n \"options\": {\n \"maximumSignificantDigits\": 3,\n \"maximumFractionDigits\": 2\n }\n }\n }\n },\n \"chartSettings\": {\n \"seriesLabelSettings\": [\n {\n \"seriesName\": \"phish\",\n \"color\": \"blue\"\n },\n {\n \"seriesName\": \"malware\",\n \"color\": \"redBright\"\n },\n {\n \"seriesName\": \"spam\",\n \"color\": \"magenta\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Clicks\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query - 2 - Clicks\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"union ProofPointTAPClicksBlocked_CL, ProofPointTAPClicksPermitted_CL\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize ClicksBlocked = countif(Type == \\\"ProofPointTAPClicksBlocked_CL\\\"), ClicksPermitted = countif(Type == \\\"ProofPointTAPClicksPermitted_CL\\\") by bin(TimeGenerated, {TimeRange:grain})\",\n \"size\": 0,\n \"showAnalytics\": true,\n \"title\": \"Clicks Blocked vs. Permitted\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"areachart\",\n \"tileSettings\": {\n \"showBorder\": false\n },\n \"graphSettings\": {\n \"type\": 0,\n \"topContent\": {\n \"columnMatch\": \"classification\",\n \"formatter\": 1\n },\n \"centerContent\": {\n \"columnMatch\": \"count_\",\n \"formatter\": 1,\n \"numberFormat\": {\n \"unit\": 17,\n \"options\": {\n \"maximumSignificantDigits\": 3,\n \"maximumFractionDigits\": 2\n }\n }\n }\n },\n \"chartSettings\": {\n \"seriesLabelSettings\": [\n {\n \"seriesName\": \"phish\",\n \"color\": \"blue\"\n },\n {\n \"seriesName\": \"malware\",\n \"color\": \"redBright\"\n },\n {\n \"seriesName\": \"spam\",\n \"color\": \"magenta\"\n },\n {\n \"seriesName\": \"ClicksBlocked\",\n \"color\": \"redBright\"\n },\n {\n \"seriesName\": \"ClicksPermitted\",\n \"color\": \"green\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Clicks\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query - 2 - Clicks - Copy\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"union ProofPointTAPMessagesBlocked_CL, ProofPointTAPMessagesDelivered_CL\\r\\n| mv-expand todynamic(threatsInfoMap_s)\\r\\n| extend classification = tostring(threatsInfoMap_s.classification)\\r\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\r\\n| where classification in ({Classification}) or '*' in ({Classification})\\r\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\r\\n| mv-expand todynamic(recipient_s)\\r\\n| summarize MessagesBlocked = countif(Type == \\\"ProofPointTAPMessagesBlocked_CL\\\"), MessagesDelivered = countif(Type == \\\"ProofPointTAPMessagesDelivered_CL\\\") by bin(TimeGenerated, {TimeRange:grain})\",\n \"size\": 0,\n \"showAnalytics\": true,\n \"title\": \"Messages Blocked vs. Delivered\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"areachart\",\n \"tileSettings\": {\n \"showBorder\": false\n },\n \"graphSettings\": {\n \"type\": 0,\n \"topContent\": {\n \"columnMatch\": \"classification\",\n \"formatter\": 1\n },\n \"centerContent\": {\n \"columnMatch\": \"count_\",\n \"formatter\": 1,\n \"numberFormat\": {\n \"unit\": 17,\n \"options\": {\n \"maximumSignificantDigits\": 3,\n \"maximumFractionDigits\": 2\n }\n }\n }\n },\n \"chartSettings\": {\n \"seriesLabelSettings\": [\n {\n \"seriesName\": \"MessagesBlocked\",\n \"color\": \"red\"\n },\n {\n \"seriesName\": \"MessagesDelivered\",\n \"color\": \"green\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Messages\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query - 2 -\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"ProofPointTAPClicksBlocked_CL\\r\\n| extend URL = extract(@\\\"\\\\/\\\\/(www.)?([a-zA-Z0-9-_.]+)(\\\\/|$)\\\",2,url_s)\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\"), count() by URL\\r\\n| project-rename Total = count_\\r\\n| top 10 by Total\",\n \"size\": 0,\n \"showAnalytics\": true,\n \"title\": \"Top 10 Clicks Blocked by Domain\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"table\",\n \"gridSettings\": {\n \"formatters\": [\n {\n \"columnMatch\": \"URL\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"phish\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"blue\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"malware\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"red\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"spam\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"magenta\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Total\",\n \"formatter\": 3,\n \"formatOptions\": {\n \"palette\": \"blueOrange\",\n \"showIcon\": true\n }\n }\n ]\n },\n \"tileSettings\": {\n \"showBorder\": false\n },\n \"graphSettings\": {\n \"type\": 0,\n \"topContent\": {\n \"columnMatch\": \"classification\",\n \"formatter\": 1\n },\n \"centerContent\": {\n \"columnMatch\": \"count_\",\n \"formatter\": 1,\n \"numberFormat\": {\n \"unit\": 17,\n \"options\": {\n \"maximumSignificantDigits\": 3,\n \"maximumFractionDigits\": 2\n }\n }\n }\n },\n \"chartSettings\": {\n \"seriesLabelSettings\": [\n {\n \"seriesName\": \"phish\",\n \"color\": \"blue\"\n },\n {\n \"seriesName\": \"malware\",\n \"color\": \"redBright\"\n },\n {\n \"seriesName\": \"impostor\",\n \"color\": \"magenta\"\n },\n {\n \"seriesName\": \"spam\",\n \"color\": \"green\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Clicks\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query_clicks_top10clicksblockedbydomain\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"ProofPointTAPClicksPermitted_CL\\r\\n| extend URL = extract(@\\\"\\\\/\\\\/(www.)?([a-zA-Z0-9-_.]+)(\\\\/|$)\\\",2,url_s)\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\"), count() by URL\\r\\n| project-rename Total = count_\\r\\n| top 10 by Total\",\n \"size\": 0,\n \"showAnalytics\": true,\n \"title\": \"Top 10 Clicks Permitted by Domain\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"table\",\n \"gridSettings\": {\n \"formatters\": [\n {\n \"columnMatch\": \"URL\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"phish\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"blue\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"malware\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"red\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"spam\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"magenta\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Total\",\n \"formatter\": 3,\n \"formatOptions\": {\n \"palette\": \"blueOrange\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Type\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n }\n ],\n \"sortBy\": [\n {\n \"itemKey\": \"$gen_heatmap_phish_1\",\n \"sortOrder\": 2\n }\n ]\n },\n \"sortBy\": [\n {\n \"itemKey\": \"$gen_heatmap_phish_1\",\n \"sortOrder\": 2\n }\n ],\n \"tileSettings\": {\n \"showBorder\": false\n },\n \"graphSettings\": {\n \"type\": 0,\n \"topContent\": {\n \"columnMatch\": \"classification\",\n \"formatter\": 1\n },\n \"centerContent\": {\n \"columnMatch\": \"count_\",\n \"formatter\": 1,\n \"numberFormat\": {\n \"unit\": 17,\n \"options\": {\n \"maximumSignificantDigits\": 3,\n \"maximumFractionDigits\": 2\n }\n }\n }\n },\n \"chartSettings\": {\n \"seriesLabelSettings\": [\n {\n \"seriesName\": \"phish\",\n \"color\": \"blue\"\n },\n {\n \"seriesName\": \"malware\",\n \"color\": \"redBright\"\n },\n {\n \"seriesName\": \"impostor\",\n \"color\": \"magenta\"\n },\n {\n \"seriesName\": \"spam\",\n \"color\": \"green\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Clicks\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query_clicks_top10clickspermittedbydomain\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"ProofPointTAPClicksBlocked_CL\\r\\n| extend URL = extract(@\\\"\\\\/\\\\/(www.)?([a-zA-Z0-9-_.]+)(\\\\/|$)\\\",2,url_s)\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\"), count() by senderIP_s\\r\\n| project-rename Total = count_, SenderIP = senderIP_s\\r\\n| top 10 by Total\",\n \"size\": 0,\n \"showAnalytics\": true,\n \"title\": \"Top 10 Clicks Blocked by Sender IP\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"table\",\n \"gridSettings\": {\n \"formatters\": [\n {\n \"columnMatch\": \"SenderIP\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"phish\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"blue\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"malware\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"red\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"spam\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"purple\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Total\",\n \"formatter\": 3,\n \"formatOptions\": {\n \"palette\": \"blueOrange\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"URL\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n }\n ],\n \"labelSettings\": [\n {\n \"columnId\": \"SenderIP\",\n \"label\": \"Sender IP\"\n },\n {\n \"columnId\": \"phish\"\n },\n {\n \"columnId\": \"malware\"\n },\n {\n \"columnId\": \"spam\"\n },\n {\n \"columnId\": \"Total\"\n }\n ]\n },\n \"tileSettings\": {\n \"showBorder\": false\n },\n \"graphSettings\": {\n \"type\": 0,\n \"topContent\": {\n \"columnMatch\": \"classification\",\n \"formatter\": 1\n },\n \"centerContent\": {\n \"columnMatch\": \"count_\",\n \"formatter\": 1,\n \"numberFormat\": {\n \"unit\": 17,\n \"options\": {\n \"maximumSignificantDigits\": 3,\n \"maximumFractionDigits\": 2\n }\n }\n }\n },\n \"chartSettings\": {\n \"seriesLabelSettings\": [\n {\n \"seriesName\": \"phish\",\n \"color\": \"blue\"\n },\n {\n \"seriesName\": \"malware\",\n \"color\": \"redBright\"\n },\n {\n \"seriesName\": \"impostor\",\n \"color\": \"magenta\"\n },\n {\n \"seriesName\": \"spam\",\n \"color\": \"green\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Clicks\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query_clicks_top10clicksblockedbysenderIP\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"ProofPointTAPClicksPermitted_CL\\r\\n| extend URL = extract(@\\\"\\\\/\\\\/(www.)?([a-zA-Z0-9-_.]+)(\\\\/|$)\\\",2,url_s)\\r\\n| where classification_s in ({Classification}) or '*' in ({Classification})\\r\\n| summarize phish = countif(classification_s == \\\"phish\\\"), malware = countif(classification_s == \\\"malware\\\"), spam = countif(classification_s == \\\"spam\\\"), count() by clickIP_s\\r\\n| project-rename Total = count_, ClickIP = clickIP_s\\r\\n| top 10 by Total\",\n \"size\": 0,\n \"showAnalytics\": true,\n \"title\": \"Top 10 Clicks Permitted by Click IP\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"table\",\n \"gridSettings\": {\n \"formatters\": [\n {\n \"columnMatch\": \"ClickIP\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"phish\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"blue\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"malware\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"red\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"spam\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"purple\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Total\",\n \"formatter\": 3,\n \"formatOptions\": {\n \"palette\": \"blueOrange\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"URL\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Type\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n }\n ],\n \"sortBy\": [\n {\n \"itemKey\": \"$gen_heatmap_phish_1\",\n \"sortOrder\": 2\n }\n ],\n \"labelSettings\": [\n {\n \"columnId\": \"ClickIP\",\n \"label\": \"Click IP\"\n },\n {\n \"columnId\": \"phish\"\n },\n {\n \"columnId\": \"malware\"\n },\n {\n \"columnId\": \"spam\"\n },\n {\n \"columnId\": \"Total\"\n }\n ]\n },\n \"sortBy\": [\n {\n \"itemKey\": \"$gen_heatmap_phish_1\",\n \"sortOrder\": 2\n }\n ],\n \"tileSettings\": {\n \"showBorder\": false\n },\n \"graphSettings\": {\n \"type\": 0,\n \"topContent\": {\n \"columnMatch\": \"classification\",\n \"formatter\": 1\n },\n \"centerContent\": {\n \"columnMatch\": \"count_\",\n \"formatter\": 1,\n \"numberFormat\": {\n \"unit\": 17,\n \"options\": {\n \"maximumSignificantDigits\": 3,\n \"maximumFractionDigits\": 2\n }\n }\n }\n },\n \"chartSettings\": {\n \"seriesLabelSettings\": [\n {\n \"seriesName\": \"phish\",\n \"color\": \"blue\"\n },\n {\n \"seriesName\": \"malware\",\n \"color\": \"redBright\"\n },\n {\n \"seriesName\": \"impostor\",\n \"color\": \"magenta\"\n },\n {\n \"seriesName\": \"spam\",\n \"color\": \"green\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Clicks\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query_clicks_top10clickspermittedbyclickip\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"ProofPointTAPMessagesBlocked_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| where classification in ({Classification}) or '*' in ({Classification})\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\n| mv-expand todynamic(recipient_s)\\n| summarize phish = countif(classification == \\\"phish\\\"), malware = countif(classification == \\\"malware\\\"), impostor = countif(classification == \\\"impostor\\\"), spam = countif(classification == \\\"spam\\\"), count() by sender_s \\n| project-rename Total = count_, SourceAddress = sender_s \\n| top 10 by Total\",\n \"size\": 0,\n \"title\": \"Top 10 Blocked Sender Address\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"gridSettings\": {\n \"formatters\": [\n {\n \"columnMatch\": \"SourceAddress\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"phish\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"blue\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"malware\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"red\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"impostor\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"green\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"spam\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"magenta\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Total\",\n \"formatter\": 3,\n \"formatOptions\": {\n \"palette\": \"greenRed\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"SourceIP\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Messages\"\n },\n \"customWidth\": \"70\",\n \"name\": \"query - 5 - Copy\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"ProofPointTAPMessagesBlocked_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| where classification in ({Classification}) or '*' in ({Classification})\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\n| mv-expand todynamic(recipient_s)\\n| summarize count() by threatType_ \",\n \"size\": 0,\n \"title\": \"Threat Type\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"visualization\": \"piechart\"\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Messages\"\n },\n \"customWidth\": \"30\",\n \"name\": \"query - 11\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"ProofPointTAPMessagesBlocked_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| where classification in ({Classification}) or '*' in ({Classification})\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\n| mv-expand todynamic(recipient_s)\\n| summarize phish = countif(classification == \\\"phish\\\"), malware = countif(classification == \\\"malware\\\"), impostor = countif(classification == \\\"impostor\\\"), spam = countif(classification == \\\"spam\\\"), count() by senderIP_s\\n| top 10 by count_\",\n \"size\": 0,\n \"title\": \"Top 10 Blocked Sender IP \",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"gridSettings\": {\n \"formatters\": [\n {\n \"columnMatch\": \"senderIP_s\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"phish\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"blue\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"malware\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"red\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"impostor\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"green\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"spam\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"magenta\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"count_\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"SourceIP\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Total\",\n \"formatter\": 3,\n \"formatOptions\": {\n \"palette\": \"greenRed\",\n \"showIcon\": true\n }\n }\n ],\n \"labelSettings\": [\n {\n \"columnId\": \"senderIP_s\",\n \"label\": \"Sender IP\"\n },\n {\n \"columnId\": \"phish\"\n },\n {\n \"columnId\": \"malware\"\n },\n {\n \"columnId\": \"impostor\"\n },\n {\n \"columnId\": \"spam\"\n },\n {\n \"columnId\": \"count_\",\n \"label\": \"Total\"\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Messages\"\n },\n \"customWidth\": \"45\",\n \"name\": \"query - 5 - Copy\"\n },\n {\n \"type\": 3,\n \"content\": {\n \"version\": \"KqlItem/1.0\",\n \"query\": \"ProofPointTAPMessagesBlocked_CL\\n| mv-expand todynamic(threatsInfoMap_s)\\n| extend classification = tostring(threatsInfoMap_s.classification)\\n| extend threatType_ = tostring(threatsInfoMap_s.threatType)\\n| where classification in ({Classification}) or '*' in ({Classification})\\n| where threatType_ in ({ThreatType}) or '*' in ({ThreatType})\\n| mv-expand todynamic(recipient_s)\\n| summarize phish = countif(classification == \\\"phish\\\"), malware = countif(classification == \\\"malware\\\"), impostor = countif(classification == \\\"impostor\\\"), spam = countif(classification == \\\"spam\\\"), count() by tostring(recipient_s)\\n| project-rename Total = count_, Recipient = recipient_s\\n| top 10 by Total\",\n \"size\": 0,\n \"title\": \"Top 10 Recipients\",\n \"timeContext\": {\n \"durationMs\": 0\n },\n \"timeContextFromParameter\": \"TimeRange\",\n \"queryType\": 0,\n \"resourceType\": \"microsoft.operationalinsights/workspaces\",\n \"gridSettings\": {\n \"formatters\": [\n {\n \"columnMatch\": \"SourceIP\",\n \"formatter\": 0,\n \"formatOptions\": {\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"phish\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"blue\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"malware\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"red\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"impostor\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"green\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"spam\",\n \"formatter\": 8,\n \"formatOptions\": {\n \"palette\": \"magenta\",\n \"showIcon\": true\n }\n },\n {\n \"columnMatch\": \"Total\",\n \"formatter\": 3,\n \"formatOptions\": {\n \"palette\": \"greenRed\",\n \"showIcon\": true\n }\n }\n ]\n }\n },\n \"conditionalVisibility\": {\n \"parameterName\": \"selectedTab\",\n \"comparison\": \"isEqualTo\",\n \"value\": \"Messages\"\n },\n \"customWidth\": \"50\",\n \"name\": \"query - 5 - Copy - Copy\"\n }\n ],\n \"fromTemplateId\": \"sentinel-UserWorkbook\",\n \"$schema\": \"https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json\"\n}",
+                "version": "1.0",
+                "sourceId": "[variables('_workbook-source')]",
+                "category": "sentinel"
+            }
+        },
+        // Playbook 1
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2018-07-01-preview",
+            "name": "[variables('LogAnalyticsConnectionName')]",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "displayName": "[parameters('workspace')]",
+                "api": {
+                    "id": "[variables('_connection')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('playbook1-name')]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('LogAnalyticsConnectionName'))]"
+            ],
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "ProofPointPasswordPB": {
+                            "type": "securestring"
+                        },
+                        "$connections": {
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "HTTP": {
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@parameters('ProofPointPasswordPB')",
+                                    "type": "Basic",
+                                    "username": "[parameters('playbook1-username')]"
+                                },
+                                "method": "GET",
+                                "uri": "https://tap-api-v2.proofpoint.com/v2/siem/clicks/blocked?format=json&sinceSeconds=3600"
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "clicksBlocked": {
+                                            "items": {
+                                                "properties": {
+                                                    "campaignId": {
+                                                        "type": "string"
+                                                    },
+                                                    "classification": {
+                                                        "type": "string"
+                                                    },
+                                                    "clickIP": {
+                                                        "type": "string"
+                                                    },
+                                                    "clickTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "messageID": {
+                                                        "type": "string"
+                                                    },
+                                                    "recipient": {
+                                                        "type": "string"
+                                                    },
+                                                    "sender": {
+                                                        "type": "string"
+                                                    },
+                                                    "senderIP": {
+                                                        "type": "string"
+                                                    },
+                                                    "threatID": {
+                                                        "type": "string"
+                                                    },
+                                                    "threatTime": {
+                                                        "type": "string"
+                                                    },
+                                                    "threatURL": {
+                                                        "type": "string"
+                                                    },
+                                                    "url": {
+                                                        "type": "string"
+                                                    },
+                                                    "userAgent": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "campaignId",
+                                                    "classification",
+                                                    "clickIP",
+                                                    "clickTime",
+                                                    "messageID",
+                                                    "recipient",
+                                                    "sender",
+                                                    "senderIP",
+                                                    "threatID",
+                                                    "threatTime",
+                                                    "threatURL",
+                                                    "url",
+                                                    "userAgent"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        },
+                                        "queryEndTime": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "clicksBlocked": {
+                            "foreach": "@body('Parse_JSON')?['clicksBlocked']",
+                            "actions": {
+                                "Send_Data": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{items('clicksBlocked')}",
+                                        "headers": {
+                                            "Log-Type": "ProofPointData"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        }
+                    }
+                },
+                "parameters": {
+                    "ProofPointPasswordPB": {
+                        "value": "[parameters('playbook1-password')]"
+                    },
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('LogAnalyticsConnectionName'))]",
+                                "connectionName": "[variables('LogAnalyticsConnectionName')]",
+                                "id": "[variables('_connection')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+    }
+}

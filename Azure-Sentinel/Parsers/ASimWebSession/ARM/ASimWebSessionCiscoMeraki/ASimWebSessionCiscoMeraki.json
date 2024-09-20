@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimWebSessionCiscoMeraki",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM filtering parser for Cisco Meraki",
+            "category": "ASIM",
+            "FunctionAlias": "ASimWebSessionCiscoMeraki",
+            "query": "let ActionLookup = datatable (action: string, DvcAction: string, EventResult: string, EventSeverity: string)  [\n  'allow', 'Allow', 'Success', 'Informational',\n  'log', 'Allow', 'Success', 'Informational',\n  'accept', 'Allow', 'Success', 'Informational',\n  'block', 'Deny', 'Failure', 'Low',\n  'deny', 'Deny', 'Failure', 'Low',\n  'quarantine', 'Deny', 'Failure', 'Low'\n  ];\n  let parser=(disabled: bool=false) {\n      let allData = union isfuzzy=true\n          (\n          meraki_CL\n          | project-rename LogMessage =  Message\n          ),\n          (\n          Syslog\n          | where Computer in (_ASIM_GetSourceBySourceType('CiscoMeraki'))\n          | project-rename LogMessage =  SyslogMessage\n          );\n      let PreFilteredData = allData\n          | where not(disabled) and (LogMessage has \"urls\" or LogMessage has_all(\"security_event\", \"security_filtering_file_scanned\"))\n          | extend Parser = extract_all(@\"(\\d+.\\d+)\\s([\\w\\-\\_]+)\\s([\\w\\-\\_]+)\\s([\\S\\s]+)$\", dynamic([1, 2, 3, 4]), LogMessage)[0]\n          | extend\n              LogType = tostring(Parser[2]),\n              Substring = tostring(Parser[3])\n          | where LogType in (\"security_event\", \"urls\");\n      let SecurityEventData = PreFilteredData\n          | where LogType == \"security_event\"\n          | parse Substring with LogSubType: string \" \" temp_RestMessage: string\n          | where LogSubType == \"security_filtering_file_scanned\"\n          | parse-kv Substring as (disposition: string, action: string, sha256: string, name: string) with (pair_delimiter=\" \", kv_delimiter=\"=\", quote=\"'\")\n          | parse Substring with * \" sha256\" fsha256: string \" \"restmessage: string\n          | extend\n              disposition = trim('\"', disposition),\n              action = trim('\"', action),\n              sha256 = trim('\"', sha256),\n              fsha256 = trim('\"', fsha256),\n              name = trim('\"', name)\n          | lookup ActionLookup on action;\n      let UrlsData = PreFilteredData\n          | where LogType == \"urls\"\n          | parse Substring with * \"request:\" request: string \" \" urls: string;\n      union SecurityEventData, UrlsData\n      | parse-kv Substring as (src: string, dst: string, url: string, mac: string, agent: string) with (pair_delimiter=\" \", kv_delimiter=\"=\", quote=\"'\")\n      | extend\n          src = trim('\"', src),\n          dst = trim('\"', dst)\n      | parse src with *  \"[\" temp_srcip: string \"]:\" temp_srcport: string\n      | parse dst with *  \"[\" temp_dstip: string \"]:\" temp_dstport: string\n      | extend\n          Epoch = tostring(Parser[0]),\n          Device = tostring(Parser[1])\n      | extend\n          EventStartTime = unixtime_seconds_todatetime(tolong(split(Epoch, \".\")[0]))\n      | extend agent = trim(\"'\", agent)\n      | extend\n          agent= trim('\"', agent),\n          mac = trim('\"', mac),\n          url = trim('\"', url),\n          urls = trim('\"', urls)\n      | extend Url = coalesce(url, urls)\n      | extend\n          EventResult=case(\n                          LogType == \"urls\", \"Success\",\n                          isempty(EventResult), \"NA\",\n                          EventResult                        \n                      ),\n          EventSeverity=case(\n                  DvcAction == \"Deny\" and disposition == \"malicious\",\n                  \"Medium\",\n                  DvcAction == \"Allow\" and disposition == \"malicious\",\n                  \"High\",\n                  isnotempty(EventSeverity), EventSeverity,\n                  \"Informational\"\n              )\n      | extend SrcIpAddr = iff(\n                              src has \".\",\n                              split(src, \":\")[0], \n                              coalesce(temp_srcip, src)\n                          )\n      | extend SrcPortNumber = toint(\n                            iff (\n                                src has \".\",\n                                split(src, \":\")[1],\n                                temp_srcport\n                            )\n                        )\n      | extend DstIpAddr = iff(\n                              dst has \".\",\n                              split(dst, \":\")[0], \n                              coalesce(temp_dstip, dst)\n                          )\n      | extend DstPortNumber = toint(\n                            iff (\n                                dst has \".\",\n                                split(dst, \":\")[1],\n                                temp_dstport\n                            )\n                        )\n      | extend\n          EventType = \"HTTPsession\",\n          HttpUserAgent = agent,\n          HttpRequestMethod = request,\n          FileSHA256 = coalesce(sha256, fsha256),\n          FileName = name,\n          DvcMacAddr = mac,\n          EventOriginalType = LogType,\n          EventOriginalSubType = LogSubType,\n          EventUid = _ResourceId \n      | invoke _ASIM_ResolveDvcFQDN('Device')\n      | extend\n          Dst = DstIpAddr,\n          Src = SrcIpAddr,\n          Dvc = DvcHostname,\n          IpAddr = SrcIpAddr,\n          UserAgent = HttpUserAgent,\n          EventEndTime = EventStartTime\n      | extend\n          EventCount = int(1),\n          EventProduct = \"Meraki\",\n          EventVendor = \"Cisco\",\n          EventSchema = \"WebSession\",\n          EventSchemaVersion = \"0.2.6\"\n      | project-away\n          LogMessage,\n          Parser,\n          LogType,\n          LogSubType,\n          Epoch,\n          Device,\n          src,\n          dst,\n          mac,\n          url,\n          urls,\n          disposition,\n          action,\n          request,\n          name,\n          sha256,\n          fsha256,\n          agent,\n          restmessage,\n          temp*,\n          Substring,\n          TenantId,\n          SourceSystem,\n          Computer,\n          _ResourceId,\n          MG,\n          ManagementGroupName,\n          RawData,\n          EventTime,\n          Facility,\n          HostName,\n          SeverityLevel,\n          ProcessID,\n          HostIP,\n          ProcessName\n  };\n  parser(disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

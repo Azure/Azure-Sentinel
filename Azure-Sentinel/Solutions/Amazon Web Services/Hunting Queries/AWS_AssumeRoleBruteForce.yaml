@@ -1,0 +1,29 @@
+id: 2b8cecfe-f705-432d-9f38-08207b9473e1
+name: IAM assume role policy brute force
+description: |
+  'Several failed "assume role" attempts occurred on existing roles in the account. This could be an attacker trying to escalate privileges and move laterally by assuming roles in a compromised account. Verify with the user identity that the activity is legitimate.'
+severity: High
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Credential Access
+relevantTechniques:
+  - T1110
+query: |
+    AWSCloudTrail
+    | where EventName == "AssumeRole" and ErrorMessage == "AccessDenied"
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+    | summarize timestamp=arg_max(timestamp,*), failed_roles=dcount(ErrorMessage) by IPCustomEntity, AccountCustomEntity
+    | where failed_roles > 2
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

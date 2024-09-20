@@ -1,0 +1,1018 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block Device Client - Cisco Meraki",
+        "description": "This playbook checks if malicious device client is blocked by Cisco Meraki network.",
+        "mainSteps": [ "1. Fetches a list of potentially device clients", "2. If malicious device client is not blocked by Cisco meraki network then blocks it." ],
+        "prerequisites": [
+            "1. Deploy the Cisco Meraki Custom Connector before the deployment of this playbook under the same subscription and same resource group. Capture the name of the connector during deployment.",
+            "2. Cisco Meraki API Key should be known to establish a connection with Cisco Meraki Custom Connector.",
+            "3. Organization name should be known.",
+            "4. Network name should be known.",
+            "5. Network Group Policy name should be known."
+        ],
+        "prerequisitesDeployTemplateFile": "../../MerakiConnector/azuredeploy.json",
+        "postDeployment": [
+            "**a. Authorize API connection**",
+            "Once deployment is complete, go under deployment details and authorize Cisco Meraki connection.",
+            "1.  Click the Cisco Meraki connection",
+            "2.  Click **Edit API connection**",
+            "3.  Enter API Key",
+            "4.  Click Save",
+            "**b. Configurations in Sentinel**",
+            "- In Microsoft Sentinel analytical rules should be configured to trigger an incident with hosts.",
+            "- Device Client MAC needs to be mapped with hostname in Host entity.",
+            "- Configure the automation rules to trigger the playbook."
+        ],
+        "lastUpdateTime": "2022-08-05T00:00:00.000Z",
+        "entities": [ "Host" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Accenture"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Block Device Client - Cisco Meraki",
+                "notes": [ "Initial version" ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "string",
+            "defaultValue": "Block-Device-Client-Meraki",
+            "metadata": {
+                "description": "Enter name for Block Device Client playbook without spaces"
+            },
+            "minLength": 3
+        },
+        "CiscoMerakiConnectorName": {
+            "type": "string",
+            "defaultValue": "MerakiConnector",
+            "metadata": {
+                "description": "Enter name of Cisco Meraki custom connector without spaces"
+            },
+            "minLength": 3
+        },
+        "OrganizationName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter organization name"
+            },
+            "minLength": 3
+        },
+        "NetworkName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter network name"
+            },
+            "minLength": 3
+        },
+        "GroupPolicy": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter group policy name"
+            },
+            "minLength": 3
+        }
+    },
+    "variables": {
+        "Meraki_Connection": "[concat('Meraki-', parameters('PlaybookName'))]",
+        "AzureSentinel_Connection": "[concat('Azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('Meraki_Connection'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "GroupPolicy": {
+                            "defaultValue": "[parameters('GroupPolicy')]",
+                            "type": "String"
+                        },
+                        "NetworkName": {
+                            "defaultValue": "[parameters('NetworkName')]",
+                            "type": "String"
+                        },
+                        "OrganizationName": {
+                            "defaultValue": "[parameters('OrganizationName')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_if_body_present_in_Azure_Sentinel_incident": {
+                            "actions": {
+                                "Check_if_Organization_exists": {
+                                    "actions": {
+                                        "Check_if_Network_exists": {
+                                            "actions": {
+                                                "Check_if_Group_Policy_exists": {
+                                                    "actions": {
+                                                        "Add_comment_to_incident": {
+                                                            "runAfter": {
+                                                                "Create_incident_HTML_table": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "message": "<p>@{outputs('Cisco_Meraki_Logo')} <strong>Cisco Meraki Block Device Client Playbook</strong><br>\n<br>\nBelow Incident Device Client(s) are found in Microsoft Sentinel have the following status in Network - <strong></strong><strong>@{parameters('NetworkName')}</strong><strong></strong> for Organization - <strong></strong><strong>@{parameters('OrganizationName')}</strong><strong></strong><br>\n@{body('Create_incident_HTML_table')}</p>"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "Compose_Group_Policy": {
+                                                            "runAfter": {},
+                                                            "type": "Compose",
+                                                            "inputs": "@body('Filter_Group_Policy')?[0]"
+                                                        },
+                                                        "Create_incident_HTML_table": {
+                                                            "runAfter": {
+                                                                "For_each_Host": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Table",
+                                                            "inputs": {
+                                                                "columns": [
+                                                                    {
+                                                                        "header": "Incident Device Client",
+                                                                        "value": "@item()?['Host']"
+                                                                    },
+                                                                    {
+                                                                        "header": "Client Id",
+                                                                        "value": "@item()?['ClientId']"
+                                                                    },
+                                                                    {
+                                                                        "header": "MAC",
+                                                                        "value": "@item()?['MAC']"
+                                                                    },
+                                                                    {
+                                                                        "header": "Manufacturer",
+                                                                        "value": "@item()?['Manufacturer']"
+                                                                    },
+                                                                    {
+                                                                        "header": "Client Status",
+                                                                        "value": "@item()?['ClientStatus']"
+                                                                    },
+                                                                    {
+                                                                        "header": "Previous Policy",
+                                                                        "value": "@item()?['PreviousPolicy']"
+                                                                    },
+                                                                    {
+                                                                        "header": "Current Policy",
+                                                                        "value": "@item()?['CurrentPolicy']"
+                                                                    },
+                                                                    {
+                                                                        "header": "Group Policy",
+                                                                        "value": "@item()?['GroupPolicy']"
+                                                                    },
+                                                                    {
+                                                                        "header": "Action",
+                                                                        "value": "@item()?['Action']"
+                                                                    }
+                                                                ],
+                                                                "format": "HTML",
+                                                                "from": "@variables('ConsolidatedAction')"
+                                                            },
+                                                            "description": "To create incident HTML table from consolidated action array"
+                                                        },
+                                                        "For_each_Host": {
+                                                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                                                            "actions": {
+                                                                "Check_if_host_exists_in_network_clients": {
+                                                                    "actions": {
+                                                                        "Check_if_client_policy_exists": {
+                                                                            "actions": {
+                                                                                "Condition_for_client_policy": {
+                                                                                    "runAfter": {},
+                                                                                    "cases": {
+                                                                                        "Case_Blocked": {
+                                                                                            "case": "Blocked",
+                                                                                            "actions": {
+                                                                                                "Append_to_consolidated_action_variable_for_blocked_client_policy": {
+                                                                                                    "runAfter": {
+                                                                                                        "Set_action_variable_for_blocked_client_policy": [
+                                                                                                            "Succeeded"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "type": "AppendToArrayVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "ConsolidatedAction",
+                                                                                                        "value": "@variables('Action')"
+                                                                                                    },
+                                                                                                    "description": " To append action json object"
+                                                                                                },
+                                                                                                "Set_action_variable_for_blocked_client_policy": {
+                                                                                                    "runAfter": {},
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "Action",
+                                                                                                        "value": {
+                                                                                                            "Action": "Blocked using client policy",
+                                                                                                            "ClientId": "@{outputs('Compose_network_client')?['id']}",
+                                                                                                            "ClientStatus": "@{outputs('Compose_network_client')?['status']}",
+                                                                                                            "CurrentPolicy": "@{body('Get_Network_Client_Policy')?['devicePolicy']}",
+                                                                                                            "GroupPolicy": "NA",
+                                                                                                            "Host": "@{items('For_each_Host')?['HostName']}",
+                                                                                                            "MAC": "@{outputs('Compose_network_client')?['mac']}",
+                                                                                                            "Manufacturer": "@{outputs('Compose_network_client')?['manufacturer']}",
+                                                                                                            "PreviousPolicy": "@{body('Get_Network_Client_Policy')?['devicePolicy']}"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "description": " To create action JSON object"
+                                                                                                },
+                                                                                                "Set_classification_reason_variable_for_blocked_client_policy": {
+                                                                                                    "runAfter": {
+                                                                                                        "Append_to_consolidated_action_variable_for_blocked_client_policy": [
+                                                                                                            "Succeeded"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "ClassificationReason",
+                                                                                                        "value": "TruePositive - SuspiciousActivity"
+                                                                                                    },
+                                                                                                    "description": "To store incident closing reason"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "Case_Group_Policy": {
+                                                                                            "case": "Group policy",
+                                                                                            "actions": {
+                                                                                                "Append_to_consolidated_action_variable_for_group_policy": {
+                                                                                                    "runAfter": {
+                                                                                                        "Set_action_variable_for_group_policy": [
+                                                                                                            "Succeeded"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "type": "AppendToArrayVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "ConsolidatedAction",
+                                                                                                        "value": "@variables('Action')"
+                                                                                                    },
+                                                                                                    "description": "To append action json object"
+                                                                                                },
+                                                                                                "Get_Network_Group_Policy": {
+                                                                                                    "runAfter": {},
+                                                                                                    "type": "ApiConnection",
+                                                                                                    "inputs": {
+                                                                                                        "host": {
+                                                                                                            "connection": {
+                                                                                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "method": "get",
+                                                                                                        "path": "/networks/@{encodeURIComponent(outputs('Compose_Network_Id'))}/groupPolicies/@{encodeURIComponent(body('Get_Network_Client_Policy')?['groupPolicyId'])}"
+                                                                                                    }
+                                                                                                },
+                                                                                                "Set_action_variable_for_group_policy": {
+                                                                                                    "runAfter": {
+                                                                                                        "Get_Network_Group_Policy": [
+                                                                                                            "Succeeded"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "Action",
+                                                                                                        "value": {
+                                                                                                            "Action": "Blocked using group policy ",
+                                                                                                            "ClientId": "@{outputs('Compose_network_client')?['id']}",
+                                                                                                            "ClientStatus": "@{outputs('Compose_network_client')?['status']}",
+                                                                                                            "CurrentPolicy": "@{body('Get_Network_Client_Policy')?['devicePolicy']}",
+                                                                                                            "GroupPolicy": "@{body('Get_Network_Group_Policy')?['name']}",
+                                                                                                            "Host": "@{items('For_each_Host')?['HostName']}",
+                                                                                                            "MAC": "@{outputs('Compose_network_client')?['mac']}",
+                                                                                                            "Manufacturer": "@{outputs('Compose_network_client')?['manufacturer']}",
+                                                                                                            "PreviousPolicy": "@{body('Get_Network_Client_Policy')?['devicePolicy']}"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "description": "To store action json object"
+                                                                                                }
+                                                                                            }
+                                                                                        },
+                                                                                        "Case_Whitelisted": {
+                                                                                            "case": "Whitelisted",
+                                                                                            "actions": {
+                                                                                                "Append_to_consolidated_action_variable_for_allowed_client_policy": {
+                                                                                                    "runAfter": {
+                                                                                                        "Set_action_variable_for_allowed_client_policy": [
+                                                                                                            "Succeeded"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    "type": "AppendToArrayVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "ConsolidatedAction",
+                                                                                                        "value": "@variables('Action')"
+                                                                                                    },
+                                                                                                    "description": " To append action json object"
+                                                                                                },
+                                                                                                "Set_action_variable_for_allowed_client_policy": {
+                                                                                                    "runAfter": {},
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "Action",
+                                                                                                        "value": {
+                                                                                                            "Action": "Allowed using client policy",
+                                                                                                            "ClientId": "@{outputs('Compose_network_client')?['id']}",
+                                                                                                            "ClientStatus": "@{outputs('Compose_network_client')?['status']}",
+                                                                                                            "CurrentPolicy": "@{body('Get_Network_Client_Policy')?['devicePolicy']}",
+                                                                                                            "GroupPolicy": "NA",
+                                                                                                            "Host": "@{items('For_each_Host')?['HostName']}",
+                                                                                                            "MAC": "@{outputs('Compose_network_client')?['mac']}",
+                                                                                                            "Manufacturer": "@{outputs('Compose_network_client')?['manufacturer']}",
+                                                                                                            "PreviousPolicy": "@{body('Get_Network_Client_Policy')?['devicePolicy']}"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "description": "To create action JSON object"
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "default": {
+                                                                                        "actions": {
+                                                                                            "Append_to_consolidated_action_variable_for_normal_client_policy": {
+                                                                                                "runAfter": {
+                                                                                                    "Set_action_variable_for_normal_client_policy": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "AppendToArrayVariable",
+                                                                                                "inputs": {
+                                                                                                    "name": "ConsolidatedAction",
+                                                                                                    "value": "@variables('Action')"
+                                                                                                },
+                                                                                                "description": " To append action json object"
+                                                                                            },
+                                                                                            "Set_action_variable_for_normal_client_policy": {
+                                                                                                "runAfter": {
+                                                                                                    "Update_Network_Client_Policy": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "SetVariable",
+                                                                                                "inputs": {
+                                                                                                    "name": "Action",
+                                                                                                    "value": {
+                                                                                                        "Action": "Blocked using group policy by playbook",
+                                                                                                        "ClientId": "@{outputs('Compose_network_client')?['id']}",
+                                                                                                        "ClientStatus": "@{outputs('Compose_network_client')?['status']}",
+                                                                                                        "CurrentPolicy": "@{body('Update_Network_Client_Policy')?['devicePolicy']}",
+                                                                                                        "GroupPolicy": "@{parameters('GroupPolicy')}",
+                                                                                                        "Host": "@{items('For_each_Host')?['HostName']}",
+                                                                                                        "MAC": "@{outputs('Compose_network_client')?['mac']}",
+                                                                                                        "Manufacturer": "@{outputs('Compose_network_client')?['manufacturer']}",
+                                                                                                        "PreviousPolicy": "@{body('Get_Network_Client_Policy')?['devicePolicy']}"
+                                                                                                    }
+                                                                                                },
+                                                                                                "description": " To create action JSON object"
+                                                                                            },
+                                                                                            "Set_classification_reason_variable_for_normal_policy": {
+                                                                                                "runAfter": {
+                                                                                                    "Append_to_consolidated_action_variable_for_normal_client_policy": [
+                                                                                                        "Succeeded"
+                                                                                                    ]
+                                                                                                },
+                                                                                                "type": "SetVariable",
+                                                                                                "inputs": {
+                                                                                                    "name": "ClassificationReason",
+                                                                                                    "value": "TruePositive - SuspiciousActivity"
+                                                                                                },
+                                                                                                "description": "To store incident closing reason"
+                                                                                            },
+                                                                                            "Update_Network_Client_Policy": {
+                                                                                                "runAfter": {},
+                                                                                                "type": "ApiConnection",
+                                                                                                "inputs": {
+                                                                                                    "body": {
+                                                                                                        "devicePolicy": "Group policy",
+                                                                                                        "groupPolicyId": "@{outputs('Compose_Group_Policy')?['groupPolicyId']}"
+                                                                                                    },
+                                                                                                    "headers": {
+                                                                                                        "Content-Type": "application/json"
+                                                                                                    },
+                                                                                                    "host": {
+                                                                                                        "connection": {
+                                                                                                            "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "method": "put",
+                                                                                                    "path": "/networks/@{encodeURIComponent(outputs('Compose_Network_Id'))}/clients/@{encodeURIComponent(outputs('Compose_network_client')?['id'])}/policy"
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    },
+                                                                                    "expression": "@body('Get_Network_Client_Policy')?['devicePolicy']",
+                                                                                    "type": "Switch"
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {
+                                                                                "Get_Network_Client_Policy": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "else": {
+                                                                                "actions": {
+                                                                                    "Append_to_consolidated_action_variable_for_unknown_client_policy": {
+                                                                                        "runAfter": {
+                                                                                            "Set_action_variable_for_unknown_client_policy": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "AppendToArrayVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "ConsolidatedAction",
+                                                                                            "value": "@variables('Action')"
+                                                                                        },
+                                                                                        "description": "To append action json object"
+                                                                                    },
+                                                                                    "Set_action_variable_for_unknown_client_policy": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "Action",
+                                                                                            "value": {
+                                                                                                "Action": "@{outputs('Get_Network_Client_Policy')?['errors']}",
+                                                                                                "ClientId": "@{outputs('Compose_network_client')?['id']}",
+                                                                                                "ClientStatus": "@{outputs('Compose_network_client')?['status']}",
+                                                                                                "CurrentPolicy": "NA",
+                                                                                                "GroupPolicy": "NA",
+                                                                                                "Host": "@{items('For_each_Host')?['HostName']}",
+                                                                                                "MAC": "@{outputs('Compose_network_client')?['mac']}",
+                                                                                                "Manufacturer": "@{outputs('Compose_network_client')?['manufacturer']}",
+                                                                                                "PreviousPolicy": "NA"
+                                                                                            }
+                                                                                        },
+                                                                                        "description": "To create action JSON object for host"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "equals": [
+                                                                                            "@outputs('Get_Network_Client_Policy')?['statusCode']",
+                                                                                            200
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "type": "If",
+                                                                            "description": "Condition to check if network client returns policy details"
+                                                                        },
+                                                                        "Compose_network_client": {
+                                                                            "runAfter": {},
+                                                                            "type": "Compose",
+                                                                            "inputs": "@body('Filter_network_client')?[0]",
+                                                                            "description": "To create network client item"
+                                                                        },
+                                                                        "Get_Network_Client_Policy": {
+                                                                            "runAfter": {
+                                                                                "Compose_network_client": [
+                                                                                    "Succeeded"
+                                                                                ]
+                                                                            },
+                                                                            "type": "ApiConnection",
+                                                                            "inputs": {
+                                                                                "host": {
+                                                                                    "connection": {
+                                                                                        "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                                                    }
+                                                                                },
+                                                                                "method": "get",
+                                                                                "path": "/networks/@{encodeURIComponent(outputs('Compose_Network_Id'))}/clients/@{encodeURIComponent(outputs('Compose_network_client')?['id'])}/policy"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Filter_network_client": [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Append_to_consolidated_action_variable_for_unknow_client": {
+                                                                                "runAfter": {
+                                                                                    "Set_action_variable_for_unknow_client": [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "AppendToArrayVariable",
+                                                                                "inputs": {
+                                                                                    "name": "ConsolidatedAction",
+                                                                                    "value": "@variables('Action')"
+                                                                                },
+                                                                                "description": "To append action object"
+                                                                            },
+                                                                            "Set_action_variable_for_unknow_client": {
+                                                                                "runAfter": {},
+                                                                                "type": "SetVariable",
+                                                                                "inputs": {
+                                                                                    "name": "Action",
+                                                                                    "value": {
+                                                                                        "Action": "Client Not Found",
+                                                                                        "ClientId": "NA",
+                                                                                        "ClientStatus": "NA",
+                                                                                        "CurrentPolicy": "NA",
+                                                                                        "GroupPolicy": "NA",
+                                                                                        "Host": "@{items('For_each_Host')?['HostName']}",
+                                                                                        "MAC": "NA",
+                                                                                        "Manufacturer": "NA",
+                                                                                        "PreviousPolicy": "NA"
+                                                                                    }
+                                                                                },
+                                                                                "description": "To create action JSON object"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "greater": [
+                                                                                    "@length(body('Filter_network_client'))",
+                                                                                    0
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If",
+                                                                    "description": "Condition to check if filter network client returns client object"
+                                                                },
+                                                                "Filter_network_client": {
+                                                                    "runAfter": {},
+                                                                    "type": "Query",
+                                                                    "inputs": {
+                                                                        "from": "@body('Get_Network_Clients')",
+                                                                        "where": "@contains(item()?['mac'], items('For_each_Host')?['HostName'])"
+                                                                    },
+                                                                    "description": "To filter client detail from get network clients action based on host"
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Get_Network_Clients": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "Foreach",
+                                                            "description": "For each loop for host from Microsoft Sentinel",
+                                                            "runtimeConfiguration": {
+                                                                "concurrency": {
+                                                                    "repetitions": 1
+                                                                }
+                                                            }
+                                                        },
+                                                        "Get_Network_Clients": {
+                                                            "runAfter": {
+                                                                "Compose_Group_Policy": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "get",
+                                                                "path": "/networks/@{encodeURIComponent(outputs('Compose_Network_Id'))}/clients",
+                                                                "queries": {
+                                                                    "perPage": 100
+                                                                }
+                                                            }
+                                                        },
+                                                        "Update_incident": {
+                                                            "runAfter": {
+                                                                "Add_comment_to_incident": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "classification": {
+                                                                        "ClassificationAndReason": "@variables('ClassificationReason')"
+                                                                    },
+                                                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                                                    "status": "Closed"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "put",
+                                                                "path": "/Incidents"
+                                                            }
+                                                        }
+                                                    },
+                                                    "runAfter": {
+                                                        "Filter_Group_Policy": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "else": {
+                                                        "actions": {
+                                                            "Terminate_if_group_policy_not_found": {
+                                                                "runAfter": {},
+                                                                "type": "Terminate",
+                                                                "inputs": {
+                                                                    "runError": {
+                                                                        "code": "404",
+                                                                        "message": "Group Policy Not Found in Network"
+                                                                    },
+                                                                    "runStatus": "Failed"
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    "expression": {
+                                                        "and": [
+                                                            {
+                                                                "greater": [
+                                                                    "@length(body('Filter_Group_Policy'))",
+                                                                    0
+                                                                ]
+                                                            }
+                                                        ]
+                                                    },
+                                                    "type": "If",
+                                                    "description": "Condition to check if filter group policy returns policy object"
+                                                },
+                                                "Compose_Network_Id": {
+                                                    "runAfter": {},
+                                                    "type": "Compose",
+                                                    "inputs": "@body('Filter_Network')?[0]?['id']",
+                                                    "description": "To store network id from filter network result"
+                                                },
+                                                "Filter_Group_Policy": {
+                                                    "runAfter": {
+                                                        "Get_Network_Group_Policies": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "Query",
+                                                    "inputs": {
+                                                        "from": "@body('Get_Network_Group_Policies')",
+                                                        "where": "@equals(item()?['name'], parameters('GroupPolicy'))"
+                                                    }
+                                                },
+                                                "Get_Network_Group_Policies": {
+                                                    "runAfter": {
+                                                        "Compose_Network_Id": [
+                                                            "Succeeded"
+                                                        ]
+                                                    },
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "get",
+                                                        "path": "/networks/@{encodeURIComponent(outputs('Compose_Network_Id'))}/groupPolicies"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Filter_Network": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Terminate_if_network_not_found": {
+                                                        "runAfter": {},
+                                                        "type": "Terminate",
+                                                        "inputs": {
+                                                            "runError": {
+                                                                "code": "404",
+                                                                "message": "Network Not Found"
+                                                            },
+                                                            "runStatus": "Failed"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "greater": [
+                                                            "@length(body('Filter_Network'))",
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If",
+                                            "description": "Condition to check if filter network returns network object"
+                                        },
+                                        "Filter_Network": {
+                                            "runAfter": {
+                                                "Get_Networks": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Query",
+                                            "inputs": {
+                                                "from": "@body('Get_Networks')",
+                                                "where": "@equals(item()?['name'], parameters('NetworkName'))"
+                                            },
+                                            "description": "To filter network detail from get networks action based on network name"
+                                        },
+                                        "Get_Networks": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "/organizations/@{encodeURIComponent(body('Filter_Organization')?[0]?['id'])}/networks",
+                                                "queries": {
+                                                    "perPage": 1000
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Filter_Organization": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Terminate_if_organization_not_found": {
+                                                "runAfter": {},
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runError": {
+                                                        "code": "404",
+                                                        "message": "Organization Not Found"
+                                                    },
+                                                    "runStatus": "Failed"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Filter_Organization'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Condition to check if filter organization returns organization object"
+                                },
+                                "Filter_Organization": {
+                                    "runAfter": {
+                                        "Get_Organizations": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('Get_Organizations')",
+                                        "where": "@equals(item()?['name'], parameters('OrganizationName'))"
+                                    },
+                                    "description": "To filter organization detail from get organizations action based on organization name"
+                                },
+                                "Get_Organizations": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['MerakiConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/organizations"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Cisco_Meraki_Logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_if_host_not_found": {
+                                        "runAfter": {},
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runError": {
+                                                "code": "404",
+                                                "message": "Host Not Found in Microsoft Sentinel Incident"
+                                            },
+                                            "runStatus": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "contains": [
+                                            "@outputs('Entities_-_Get_Hosts')",
+                                            "body"
+                                        ]
+                                    },
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_Hosts')?['Hosts'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If",
+                            "description": "Condition to check if body present in the sentinel incident"
+                        },
+                        "Cisco_Meraki_Logo": {
+                            "runAfter": {
+                                "Initialize_classification_reason_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://www.kellerschroeder.com/wp-content/uploads/2017/05/Cisco-Meraki.jpg\" alt=\"CiscoMerakiLogo\" width=\"32\" height=\"32\">",
+                            "description": "To add logo for incident "
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Initialize_action_object_variable": {
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Action",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "To create JSON action object"
+                        },
+                        "Initialize_classification_reason_variable": {
+                            "runAfter": {
+                                "Initialize_consolidated_action_array_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ClassificationReason",
+                                        "type": "string",
+                                        "value": "BenignPositive - SuspiciousButExpected"
+                                    }
+                                ]
+                            },
+                            "description": "To store incident closing reason"
+                        },
+                        "Initialize_consolidated_action_array_variable": {
+                            "runAfter": {
+                                "Initialize_action_object_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ConsolidatedAction",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To create consolidated array variable for HTML incident table"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "MerakiConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Meraki_Connection'))]",
+                                "connectionName": "[variables('Meraki_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('CiscoMerakiConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinel_Connection'))]",
+                                "connectionName": "[variables('AzureSentinel_Connection')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Meraki_Connection')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('CiscoMerakiConnectorName'))]"
+                },
+                "parameterValues": {
+                    "api_key": ""
+                }
+            }
+        },
+        {
+            "type": "MICROSOFT.WEB/CONNECTIONS",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinel_Connection')]",
+            "kind": "V1",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureSentinel_Connection')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/providers/Microsoft.Web/locations/',resourceGroup().location,'/managedApis/azuresentinel')]"
+                }
+            }
+        }
+    ]
+}

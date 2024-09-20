@@ -1,0 +1,134 @@
+Parser:
+  Title: Network Session ASIM parser for Vectra AI Streams
+  Version: '0.2'
+  LastUpdated: Dec 28 2021
+Product:
+  Name: Vectra AI Streams
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.2'
+References:
+  - Title: ASIM Network Session Schema
+    Link: https://aka.ms/ASimNetworkSessionDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Vectra AI Streams logs to the ASIM Network Session normalized schema.
+ParserName: ASimNetworkSessionVectraAI
+EquivalentBuiltInParser: _ASim_NetworkSession_VectraAI
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+  - Name: pack
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (disabled:bool=false, pack:bool=false) 
+  {
+    let NetworkDirectionLookup = datatable(local_orig_b:bool, local_resp_b:bool, NetworkDirection:string)[
+      false, true, 'Inbound',
+      true, false, 'Outbound',
+      true, true, 'Local',
+      false, false, 'External'];
+    let EventSubTypeLookup = datatable(conn_state_s:string, EventSubType:string)[
+      "S1", 'Start',
+      "SF", 'End'];
+    let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
+    VectraStream_CL
+    | where metadata_type_s == 'metadata_isession'
+    | project-away MG, ManagementGroupName, RawData, SourceSystem, TenantId
+    | project-rename
+        DstIpAddr = id_resp_h_s,
+        DvcDescription = hostname_s,
+        DstDescription = resp_hostname_s,
+        SrcDescription = orig_hostname_s,
+        // -- huid does not seem to be unique per device and not mapped for now
+        // DstDvcId = resp_huid_s, 
+        // SrcDvcId = orig_huid_s,
+        DvcId = sensor_uid_s,
+        // -- community id is just a hash of addresses and ports, and not unique for the session
+        // NetworkSessionId = community_id_s,
+        SrcIpAddr = id_orig_h_s,
+        EventUid = _ItemId
+    // -- the domain field may have invalid values. Most of them are IP addresses filtered out, but a small fraction are not filtered.
+    | extend resp_domain_s = iff (ipv4_is_match(resp_domain_s, "0.0.0.0",0), "", resp_domain_s)
+    | extend SplitRespDomain = split(resp_domain_s,".")
+    | extend 
+        DstDomain = tostring(strcat_array(array_slice(SplitRespDomain, 1, -1), '.')),
+        DstFQDN = iif (array_length(SplitRespDomain) > 1, resp_domain_s, ''),
+        DstDomainType = iif (array_length(SplitRespDomain) > 1, 'FQDN', '')
+    | extend
+        DstHostname = case (
+            resp_domain_s != "", tostring(SplitRespDomain[0]),
+            DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "",
+            DstDescription)
+    | project-away SplitRespDomain
+    | extend
+        SrcHostname = iff (SrcDescription startswith "IP-" or not(SrcDescription matches regex HostnameRegex), "", SrcDescription),
+        DvcHostname = iff (DvcDescription startswith "IP-" or not(DvcDescription matches regex HostnameRegex), "", DvcDescription),
+        NetworkApplicationProtocol = toupper(service_s),
+        NetworkProtocol = toupper(protoName_s),
+        NetworkProtocolVersion = toupper(id_ip_ver_s),
+        Dst = DstIpAddr,
+        DstBytes = tolong(resp_ip_bytes_d),
+        DstPackets = tolong(resp_pkts_d),
+        DstPortNumber = toint(id_resp_p_d),
+        DstVlanId = tostring(toint(resp_vlan_id_d)),
+        EventCount = toint(1),
+        EventEndTime = unixtime_milliseconds_todatetime(ts_d),
+        EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),
+        EventProduct = 'Vectra Stream',
+        EventResult = 'Success',
+        EventSchema = 'NetworkSession',
+        EventSchemaVersion='0.2.2',
+        EventSeverity = 'Informational',
+        EventStartTime = unixtime_milliseconds_todatetime(session_start_time_d),
+        EventType = 'NetworkSession',
+        EventVendor = 'Vectra AI',
+        SrcBytes = tolong(orig_ip_bytes_d),
+        SrcPackets = tolong(orig_pkts_d),
+        SrcPortNumber = toint(id_orig_p_d),
+        SrcVlanId = tostring(toint(orig_vlan_id_d)),
+        // -- No ID mapped, since huid found not to be unique
+        // SrcDvcIdType = 'VectraId',
+        // DstDvcIdType = 'VectraId',
+        DvcIdType = 'VectraId',
+        NetworkDuration = toint(duration_d)
+    | extend 
+        Hostname = DstHostname,
+        IpAddr = SrcIpAddr,
+        // SessionId = NetworkSessionId,
+        Src = SrcIpAddr,
+        Dvc = DvcId,
+        Duration = NetworkDuration,
+        InnerVlanId = SrcVlanId,
+        NetworkBytes = SrcBytes + DstBytes,
+        NetworkPackets = SrcPackets + DstPackets,
+        OuterVlanId = DstVlanId
+    | lookup NetworkDirectionLookup on local_orig_b, local_resp_b
+    | lookup EventSubTypeLookup on conn_state_s
+    // -- preserving non-normalized important fields
+    | extend AdditionalFields = iff (
+        pack, 
+        bag_pack (
+          "first_orig_resp_data_pkt", first_orig_resp_data_pkt_s,
+          "first_resp_orig_data_pkt", first_resp_orig_data_pkt_s,
+          "orig_sluid", orig_sluid_s, 
+          "resp_sluid", resp_sluid_s,
+          "orig_huid", orig_huid_s,
+          "resp_huid", resp_huid_s,
+          "community_id", community_id_s,
+          "resp_multihome", resp_multihomed_b,
+          "host_multihomed", host_multihomed_b,
+          "first_orig_resp_data_pkt_time", unixtime_milliseconds_todatetime(first_orig_resp_data_pkt_time_d),
+          "first_orig_resp_pkt_time", unixtime_milliseconds_todatetime(first_orig_resp_pkt_time_d),
+          "first_resp_orig_data_pkt_time", unixtime_milliseconds_todatetime(first_resp_orig_data_pkt_time_d),
+          "first_resp_orig_pkt_time", unixtime_milliseconds_todatetime(first_resp_orig_pkt_time_d)
+        ),
+        dynamic([])
+      )
+    | project-away
+        *_d, *_s, *_b, *_g, Computer
+  };
+  parser (disabled=disabled, pack=pack)

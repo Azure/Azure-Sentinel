@@ -1,0 +1,31 @@
+id: 741fdf32-e002-4577-ac9b-839fb49f128e
+name: Anomalous connection from highly privileged user
+description: |
+  'Shows all users from a given department, which have a high impact on the organization, who connected to a resource for the first time and none of their peers accessed it.'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+      - IdentityInfo
+tactics:
+relevantTechniques:
+query: |
+  let Group = 'Helpdesk'; // Update this value as per your requirement
+  IdentityInfo
+  | summarize arg_max(TimeGenerated, *) by AccountObjectId //get latest information
+  | where Department =~ Group
+  | where BlastRadius =~ 'High'
+  | join kind=inner ( BehaviorAnalytics
+           | where ActivityType =~ 'LogOn'
+           | where ActionType =~ 'ResourceAccess' //filter for specific activties
+           | where ActivityInsights.FirstTimeUserAccessedResource == True
+           | where ActivityInsights.ResourceUncommonlyAccessedAmongPeers == True )
+  on $left.AccountUPN == $right.UserPrincipalName
+  | extend AadUserId = UsersInsights.AccountObjectID
+  | extend Account_0_AadUserId = AadUserId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AadUserId
+version: 2.0.0

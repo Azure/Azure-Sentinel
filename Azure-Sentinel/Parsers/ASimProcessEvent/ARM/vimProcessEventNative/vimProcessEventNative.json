@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimProcessEventNative",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Process Event ASIM filtering parser for Microsoft Sentinel native Process Event table",
+            "category": "ASIM",
+            "FunctionAlias": "vimProcessEventNative",
+            "query": "let parser = (\n  starttime: datetime=datetime(null),\n  endtime: datetime=datetime(null),\n  commandline_has_any: dynamic=dynamic([]),\n  commandline_has_all: dynamic=dynamic([]),\n  commandline_has_any_ip_prefix: dynamic=dynamic([]),\n  actingprocess_has_any: dynamic=dynamic([]),\n  targetprocess_has_any: dynamic=dynamic([]),\n  parentprocess_has_any: dynamic=dynamic([]),\n  targetusername_has: string='*',\n  actorusername_has: string='*',\n  dvcipaddr_has_any_prefix: dynamic=dynamic([]),\n  dvchostname_has_any: dynamic=dynamic([]),\n  eventtype: string='*',\n  hashes_has_any: dynamic=dynamic([]),\n  disabled: bool=false\n  ) {\n  ASimProcessEventLogs \n  | where not(disabled)\n  | where (isnull(starttime) or TimeGenerated >= starttime)\n      and (isnull(endtime) or TimeGenerated <= endtime)\n      and (array_length(dvcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(DvcIpAddr, dvcipaddr_has_any_prefix))\n      and (array_length(commandline_has_all) == 0 or TargetProcessCommandLine has_all (commandline_has_all)) \n      and (array_length(commandline_has_any) == 0 or TargetProcessCommandLine has_any (commandline_has_any)) \n      and (array_length(commandline_has_any_ip_prefix) == 0 or has_any_ipv4_prefix(TargetProcessCommandLine, commandline_has_any_ip_prefix)) \n      and (array_length(actingprocess_has_any) == 0 or ActingProcessName has_any (actingprocess_has_any)) \n      and (array_length(targetprocess_has_any) == 0 or TargetProcessName has_any (targetprocess_has_any)) \n      and (array_length(parentprocess_has_any) == 0 or ParentProcessName has_any (parentprocess_has_any))  \n      and (targetusername_has == '*' or TargetUsername has targetusername_has)\n      and (actorusername_has == '*' or ActorUsername has actorusername_has) \n      and (array_length(dvchostname_has_any) == 0 or DvcHostname has_any (dvchostname_has_any))   \n      and (array_length(hashes_has_any) == 0 or TargetProcessSHA512 has_any (hashes_has_any) or TargetProcessSHA256 has_any (hashes_has_any) or TargetProcessSHA1 has_any (hashes_has_any) or TargetProcessMD5 has_any (hashes_has_any) or TargetProcessIMPHASH has_any (hashes_has_any))\n      and (eventtype == '*' or EventType == eventtype)\n  | project-rename\n      EventUid = _ItemId\n  | extend          \n      EventSchema = \"ProcessEvent\",\n      DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)\n  //  -- Aliases\n  | extend\n      EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),\n      EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),\n      Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),\n      Rule = coalesce(RuleName, tostring(RuleNumber)),\n      User = TargetUsername,\n      Process = TargetProcessName,\n      CommandLine = TargetProcessCommandLine,\n      Hash = coalesce(TargetProcessSHA512, TargetProcessSHA256, TargetProcessMD5, TargetProcessSHA1, TargetProcessIMPHASH)\n  | project-away\n      TenantId,\n      SourceSystem,\n      _SubscriptionId,\n      _ResourceId\n};\nparser (\n    starttime=starttime, \n    endtime=endtime, \n    commandline_has_any=commandline_has_any,\n    commandline_has_all=commandline_has_all,\n    commandline_has_any_ip_prefix=commandline_has_any_ip_prefix,\n    actingprocess_has_any=actingprocess_has_any,\n    targetprocess_has_any=targetprocess_has_any,\n    parentprocess_has_any=parentprocess_has_any,\n    targetusername_has=targetusername_has,\n    actorusername_has=actorusername_has,\n    dvcipaddr_has_any_prefix=dvcipaddr_has_any_prefix,\n    dvchostname_has_any=dvchostname_has_any,\n    eventtype=eventtype,\n    hashes_has_any=hashes_has_any,\n    disabled=disabled\n)\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),commandline_has_any:dynamic=dynamic([]),commandline_has_all:dynamic=dynamic([]),commandline_has_any_ip_prefix:dynamic=dynamic([]),actingprocess_has_any:dynamic=dynamic([]),targetprocess_has_any:dynamic=dynamic([]),parentprocess_has_any:dynamic=dynamic([]),targetusername_has:string='*',actorusername_has:string='*',dvcipaddr_has_any_prefix:dynamic=dynamic([]),dvchostname_has_any:dynamic=dynamic([]),eventtype:string='*',hashes_has_any:dynamic=dynamic([]),disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

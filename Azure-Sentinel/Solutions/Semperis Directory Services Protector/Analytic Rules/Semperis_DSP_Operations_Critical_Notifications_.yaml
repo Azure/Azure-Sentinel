@@ -1,0 +1,53 @@
+id: "8f471e21-3bb2-466f-9bc2-0a0326a60788"
+name: Semperis DSP Operations Critical Notifications 
+description: |
+  'Alerts when there are critical notifications fired in the DSP system.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: SemperisDSP
+    dataTypes:
+      - dsp_parser
+queryFrequency: 30m
+queryPeriod: 30m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - CredentialAccess
+  - ResourceDevelopment
+relevantTechniques:
+  - T1133
+  - T1110
+  - T1584
+query: |
+  Event
+  | where Source == 'Semperis-DSP-Notifications' and EventID == 30001
+  | extend p1Xml = parse_xml(EventData).DataItem.EventData.Data
+  | mv-expand bagexpansion=array p1Xml
+  | evaluate bag_unpack(p1Xml)
+  | extend Name=column_ifexists('@Name', ''), Value=column_ifexists('#text', '')
+  | parse column_ifexists('objectDN', '') with * "CN=" cnName "," *
+  | where "Critical" == column_ifexists('severity', "")
+  | extend NTDomain = tostring(split(UserName, '\\', 0)[0]), LoginUser = tostring(split(UserName, '\\', 1)[0])
+  | extend HostName = tostring(split(Computer, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(Computer, '.'), 1, -1), '.'))
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: LoginUser
+      - identifier: NTDomain
+        columnName: NTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertDisplayNameFormat: Critical Notification -- Alert from Semperis Directory Services Protector
+  alertDescriptionFormat: A critical notification was created in the DSP system.
+version: 1.1.1
+kind: Scheduled

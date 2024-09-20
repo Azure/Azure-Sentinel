@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimNetworkSessionLinuxSysmon",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Network Session ASIM parser for Sysmon for Linux",
+            "category": "ASIM",
+            "FunctionAlias": "ASimNetworkSessionLinuxSysmon",
+            "query": "let DirectionNetworkEvents =\n Syslog | where not(disabled)\n | project SyslogMessage, TimeGenerated, HostIP\n | where SyslogMessage has_all ('<Provider Name=\"Linux-Sysmon\"', '<EventID>3</EventID>')\n | parse SyslogMessage with * '<Data Name=\"SourceIp\">' SrcIpAddr:string '</Data>' *\n | extend outbound = (SrcIpAddr == HostIP or SrcIpAddr in ('127.0.0.1', '0.0.0.0'))\n ;\n let parser = (T: (SyslogMessage: string)) {\n   T \n   | parse SyslogMessage with \n       *\n       '<EventRecordID>' EventOriginalUid:string '</EventRecordID>'\n       *\n       '<Computer>' SysmonComputer:string '</Computer>'\n       *\n       '<Data Name=\"RuleName\">' RuleName:string '</Data>'\n       '<Data Name=\"UtcTime\">' EventEndTime:datetime '</Data>'\n       '<Data Name=\"ProcessGuid\">{' ProcessGuid:string '}</Data>'\n       '<Data Name=\"ProcessId\">' ProcessId:string '</Data>'\n       '<Data Name=\"Image\">' Process:string '</Data>'\n       '<Data Name=\"User\">' User:string '</Data>'\n       '<Data Name=\"Protocol\">' Protocol:string '</Data>' // -- source is lowercase\n       '<Data Name=\"Initiated\">' Initiated:bool '</Data>' \n       '<Data Name=\"SourceIsIpv6\">' SourceIsIpv6:bool '</Data>'\t\t\n       '<Data Name=\"SourceIp\">' * '</Data>'\n       '<Data Name=\"SourceHostname\">' SrcHostname:string '</Data>'\n       '<Data Name=\"SourcePort\">' SrcPortNumber:int '</Data>'\n       '<Data Name=\"SourcePortName\">' SrcPortName:string '</Data>'\n       '<Data Name=\"DestinationIsIpv6\">' DestinationIsIpv6:bool '</Data>'\n       '<Data Name=\"DestinationIp\">' DstIpAddr:string '</Data>'\n       '<Data Name=\"DestinationHostname\">' DstHostname:string '</Data>'\n       '<Data Name=\"DestinationPort\">' DstPortNumber:int '</Data>'\n       '<Data Name=\"DestinationPortName\">' DstPortName:string '</Data>'\n       *\n       | project-away DstPortName, DestinationIsIpv6, Initiated, SourceIsIpv6, SrcPortName, RuleName\n };\n let OutboundNetworkEvents = \n   DirectionNetworkEvents\n   | where outbound\n   | invoke parser ()\n   | extend\n     SrcUsernameType = 'Simple',\n     SrcAppType = 'Process'\n   | project-rename \n     SrcUsername = User,\n     SrcProcessId = ProcessId, \n     SrcProcessGuid = ProcessGuid,\n     SrcProcessName = Process\n   | extend\n     SrcAppName = SrcProcessName\n   | project-away SyslogMessage\n ;\n let InboundNetworkEvents = \n   DirectionNetworkEvents\n   | where not(outbound)\n   | invoke parser ()\n   | extend\n     DstUsernameType = 'Simple',\n     DstAppType = 'Process'\n   | project-rename \n     DstUsername = User,\n     DstProcessId = ProcessId, \n     DstProcessGuid = ProcessGuid,\n     DstProcessName = Process\n   | extend\n     DstAppName = DstProcessName\n   | project-away SyslogMessage\n ; \n let SysmonForLinuxNetwork=\n     union OutboundNetworkEvents, InboundNetworkEvents\n     | extend \n         EventType = 'NetworkSession',\n         EventStartTime = EventEndTime,\n         EventCount = int(1),\n         EventVendor = 'Microsoft',\n         EventSchemaVersion = '0.2.0',\n         EventSchema = 'NetworkSession', \n         EventProduct = 'Sysmon for Linux',\n         EventResult = 'Success',\n         EventSeverity = 'Informational',\n         DvcOs = 'Linux',\n         NetworkProtocol = toupper(Protocol),\n         NetworkDirection = iff(outbound, \"Outbound\", \"Inbound\"),\n         EventOriginalType = '3' // Set with a constant value to avoid parsing\n     | project-away\n         outbound, Protocol\n     | project-rename \n         DvcIpAddr = HostIP,\n         DvcHostname = SysmonComputer\n     | extend // aliases\n         Dvc = DvcHostname,\n         Hostname = DstHostname,\n         IpAddr = SrcIpAddr,\n         Src = SrcIpAddr,\n         Dst = DstIpAddr\n ;\n SysmonForLinuxNetwork",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

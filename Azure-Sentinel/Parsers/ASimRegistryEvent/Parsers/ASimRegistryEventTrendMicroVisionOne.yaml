@@ -1,0 +1,137 @@
+Parser:
+  Title: Registry Event ASIM Parser for Trend Micro Vision One
+  Version: '0.1.0'
+  LastUpdated: Oct 12, 2023
+Product:
+  Name: Trend Micro Vision One
+Normalization:
+  Schema: RegistryEvent
+  Version: '0.1.2'
+References:
+- Title: ASIM Registry Schema
+  Link: https://aka.ms/ASimRegistryEventDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Trend Micro Vision One documentation
+  Link: 
+    https://docs.trendmicro.com/en-us/enterprise/trend-vision-one/xdr-part/search-app/data-mapping-intro/data-mapping-detecti.aspx
+    https://automation.trendmicro.com/xdr/api-v3#tag/Observed-Attack-Techniques-Pipeline/paths/~1v3.0~1oat~1dataPipelines~1%7Bid%7D~1packages~1%7BpackageId%7D/get
+    https://automation.trendmicro.com/xdr/api-v3#tag/Observed-Attack-Techniques/paths/~1v3.0~1oat~1detections/get
+Description: |
+  This ASIM parser supports normalizing Trend Micro Vision One logs to the ASIM Registry Event normalized schema. Trend Micro Vision One events are captured through Trend Vision One data connector which ingests XDR logs into Microsoft Sentinel through the Trend Vision One API.
+ParserName: ASimRegistryEventTrendMicroVisionOne
+EquivalentBuiltInParser: _ASim_RegistryEvent_TrendMicroVisionOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let EventTypeLookup = datatable(detail_eventSubId_s: string, EventType: string)[
+    "TELEMETRY_REGISTRY_CREATE", "RegistryKeyCreated",
+    "TELEMETRY_REGISTRY_SET", "RegistryValueSet",
+    "TELEMETRY_REGISTRY_DELETE", "RegistryKeyDeleted",
+    "TELEMETRY_REGISTRY_RENAME", "RegistryKeyRenamed"
+  ];
+  let RegistryKeyPrefixLookup = datatable(
+      RegistryKeyPrefix: string,
+      RegistryKeyNormalizedPrefix: string
+  )[
+      "HKLM", "HKEY_LOCAL_MACHINE",
+      "HKU", "HKEY_USERS",
+      "HKCU", "HKEY_CURRENT_USER",
+      "HKCR", "HKEY_CLASSES_ROOT",
+      "HKCC", "HKEY_CURRENT_CONFIG"
+  ];
+  let RegistryValueTypeLookup = datatable (detail_objectRegType_d: real, RegistryValueType: string)[
+    0, "Reg_None",
+    1, "Reg_Sz",
+    2, "Reg_Expand_Sz",
+    3, "Reg_Binary",
+    4, "Reg_DWord",
+    5, "Reg_DWord",
+    7, "Reg_Multi_Sz",
+    11, "Reg_QWord"
+  ];
+  let EventSeverityLookup = datatable(detail_filterRiskLevel_s: string, EventSeverity: string)[
+      "low", "Low",
+      "medium", "Medium",
+      "high", "High",
+      "info", "Informational",
+      "critical", "High"
+  ];
+  let parser = (disabled: bool=false) {
+      TrendMicro_XDR_OAT_CL
+      | where not(disabled)
+      | where detail_eventId_s == "TELEMETRY_REGISTRY"
+      | parse filters_s with * "[" filters: string "]"
+      | parse-kv filters as (description: string, name: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
+      | lookup EventTypeLookup on detail_eventSubId_s
+      | lookup RegistryValueTypeLookup on detail_objectRegType_d
+      | lookup EventSeverityLookup on detail_filterRiskLevel_s
+      | invoke _ASIM_ResolveDvcFQDN('detail_endpointHostName_s')
+      | extend RegistryKeyPrefix = tostring(split(detail_objectRegistryKeyHandle_s, @'\')[0])
+      | lookup RegistryKeyPrefixLookup on RegistryKeyPrefix
+      | extend 
+          RegistryKey = replace_string(detail_objectRegistryKeyHandle_s, RegistryKeyPrefix, RegistryKeyNormalizedPrefix),
+          ActingProcessId = tostring(toint(detail_processPid_d)),
+          ParentProcessId = tostring(toint(detail_parentPid_d)),
+          ActorSessionId = tostring(toint(detail_authId_d)),
+          AdditionalFields = bag_pack(
+                        "name", name,
+                        "tags", detail_tags_s,
+                        "objectRegType", detail_objectRegType_d
+                    )
+      | extend
+          EventCount = int(1),
+          EventProduct = "Vision One",
+          EventVendor = "Trend Micro",
+          EventSchema = "RegistryEvent",
+          EventSchemaVersion = "0.1.2",
+          EventResult = "Success",
+          DvcAction = "Allowed"
+      | project-rename
+          ActorUsername = detail_processUser_s,
+          EventStartTime = detail_eventTimeDT_t,
+          RegistryValue = detail_objectRegistryValue_s,
+          RegistryValueData = detail_objectRegistryData_s,
+          ActingProcessName = detail_processName_s,
+          DvcId = detail_endpointGuid_g,
+          DvcOs = detail_osName_s,
+          DvcOsVersion = detail_osVer_s,
+          EventUid = _ItemId,
+          EventOriginalSubType = detail_eventSubId_s,
+          EventOriginalType = detail_eventId_s,
+          EventOriginalUid = detail_uuid_g,
+          EventOriginalSeverity = detail_filterRiskLevel_s,
+          EventProductVersion = detail_pver_s,
+          EventMessage = description
+      | extend
+          User = ActorUsername,
+          ActorUsernameType = iff(isnotempty(ActorUsername), "Simple", ""),
+          ActorUserType = _ASIM_GetUserType(ActorUsername,""),
+          Dvc = coalesce(DvcFQDN, DvcId, DvcHostname),
+          DvcIdType = iff(isnotempty(DvcId), "Other", ""),
+          Process = ActingProcessName,
+          EventEndTime = EventStartTime,
+          RegistryPreviousKey = RegistryKey,
+          RegistryPreviousValue = RegistryValue,
+          RegistryPreviousValueData = RegistryValueData,
+          RegistryPreviousValueType = RegistryValueType
+      | project-away
+          *_d,
+          *_s,
+          *_g,
+          *_t,
+          *_b,
+          _ResourceId,
+          Computer,
+          MG,
+          ManagementGroupName,
+          RawData,
+          SourceSystem,
+          TenantId,
+          name,
+          filters,
+          *Prefix
+  };
+  parser(disabled = disabled)

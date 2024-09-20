@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimWebSessionIIS",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM filtering parser for Windows IIS logs",
+            "category": "ASIM",
+            "FunctionAlias": "vimWebSessionIIS",
+            "query": "let parser=(\n  starttime:datetime=datetime(null), \n  endtime:datetime=datetime(null),\n  srcipaddr_has_any_prefix:dynamic=dynamic([]),\n  ipaddr_has_any_prefix:dynamic=dynamic([]), \n  url_has_any:dynamic=dynamic([]),\n  httpuseragent_has_any:dynamic=dynamic([]),\n  eventresultdetails_in:dynamic=dynamic([]),\n  eventresult:string='*',\n  disabled:bool=false\n)\n{\n      let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); \n      W3CIISLog\n      | where not(disabled)\n      | where (isnull(starttime) or TimeGenerated >= starttime)\n          and (isnull(endtime) or TimeGenerated <= endtime)\n      | extend\n          EventResult = iff ( toint(scStatus) < 400, \"Success\", \"Failure\")\n      | where (eventresult == '*' or EventResult =~ eventresult)\n      | where (array_length(url_has_any) == 0 or csUriStem has_any (url_has_any) or csUriQuery has_any (url_has_any))\n      | where (array_length(httpuseragent_has_any) == 0 or csUserAgent has_any(httpuseragent_has_any))\n      | where (array_length(eventresultdetails_in) == 0 or scStatus has_any (eventresultdetails_in))\n      | extend temp_SrcMatch=has_any_ipv4_prefix(cIP,src_or_any)\n      | extend ASimMatchingIpAddr=case(\n          array_length(src_or_any) == 0 ,\"-\",\n          temp_SrcMatch, \"Both\",\n          temp_SrcMatch, \"SrcIpAddr\",\n          \"No match\"\n      )\n      | where ASimMatchingIpAddr != \"No match\" \n      | project-away temp_*\n      | extend\n              EventResult = iff ( toint(scStatus) < 400, \"Success\", \"Failure\"),\n              EventResultDetails = tostring(scStatus), \n              csUriQuery = iff(csUriQuery == \"-\", \"\", csUriQuery),\n              csUserName = iff(csUserName == \"-\", \"\", csUserName),\n              HttpVersion = iff((csVersion has \"HTTP\"), split(csVersion, \"/\")[1], \"\"), // there is a limited chance that something connects over non-HTTP\n              HttpHost = iff (sSiteName in (\"Default Web Site\", \"-\"), \"\", sSiteName)\n      | project-rename \n              HttpRequestMethod = csMethod,\n              User = csUserName, //probably won't have this one often\n              Dvc = Computer,\n              Dst = sIP,\n              Src = cIP,\n              UserAgent = csUserAgent,\n              ThreatCategory = IndicatorThreatType,\n              SrcGeoCountry = RemoteIPCountry,\n              SrcGeoLatitude = RemoteIPLatitude,\n              SrcGeoLongitude = RemoteIPLongitude,\n              ThreatOriginalConfidence = Confidence,\n              ThreatIpAddr = MaliciousIP,\n              EventReportUrl = ReportReferenceLink,\n              EventUid = _ItemId,\n              DvcId = _ResourceId\n      | extend\n              EventOriginalSeverity = tostring(Severity),\n              ThreatIsActive = tobool(IsActive),\n              ThreatFirstReportedTime = todatetime(FirstReportedDateTime),\n              ThreatLastReportedTime = todatetime(LastReportedDateTime),\n              SrcUsername = iff ( User == \"-\", \"\", User),\n              HttpReferrer = iff ( csReferer == \"-\", \"\", csReferer),\n              DvcIdType = \"AzureResourceId\"\n      | project-away IsActive, FirstReportedDateTime, LastReportedDateTime, Severity, sSiteName\n      | extend \n              SrcUsernameType = _ASIM_GetUsernameType (SrcUsername),\n              DstNatIpAddr = iff(csHost <> \"\", Dst, \"\"),\n              EventType = 'WebServerSession',            \n              EventVendor = 'Microsoft',\n              EventSchemaVersion = '0.2.6',\n              EventSchema = 'WebSession', \n              EventProduct = 'IIS',\n              DvcOs = 'Windows',\n              EventCount = int(1),\n              SrcIpAddr = Src,\n              IpAddr = Src,\n              HttpUserAgent = UserAgent,\n              HttpStatusCode = tostring(EventResultDetails),\n              EventStartTime = ( (TimeGenerated) - (TimeTaken * 1ms)), // TimeTaken field is in Milliseconds \n              EventEndTime =  TimeGenerated,\n              EventSeverity = iff(EventResult == \"Success\", \"Low\", \"Informational\"),\n              Url = iff(csUriQuery == \"\", csUriStem, strcat(csUriStem,\"?\",csUriQuery)),\n              sPort = tostring(sPort),\n              HttpHost = iff ( HttpHost == \"-\", \"\", HttpHost),\n              csHost = iff ( csHost == \"-\", \"\", csHost),  //remove empty values\n              EventOriginalResultDetails = iff(scSubStatus <> \"0\", strcat (scStatus, \".\", scSubStatus), scStatus)\n      | extend \n              ipv6_parts = extract_all (@'^\\[(.+)\\](?:\\:(\\d+))?$',csHost)[0],\n              ipv4_parts = extract_all (@'^(\\d+\\.\\d+\\.\\d+\\.\\d+)(?:\\:(\\d+))?$',csHost)[0],\n              host_parts = extract_all (@'^([^\\\\\\d:]+)(?:\\:(\\d+))?$',csHost)[0]\n      | extend         \n              DstIpAddr = tostring(coalesce(ipv4_parts[0], ipv6_parts[0])),\n              DstPortNumber = toint(coalesce(ipv4_parts[1], ipv6_parts[1], host_parts[1])),\n              HttpHost = tostring(coalesce(host_parts[0], HttpHost))\n      | project-away ipv4_parts, ipv6_parts, host_parts              \n      | extend\n          DstHostname = HttpHost,\n          Hostname = HttpHost\n      | extend \n               ThreatField = case(\n                                  ThreatIpAddr <> \"\" and ThreatIpAddr == SrcIpAddr, \"SrcIpAddr\"\n                                 ,ThreatIpAddr <> \"\" and ThreatIpAddr == DstIpAddr, \"DstIpAddr\"\n                                 ,\"\")\n      | project-away \n              AdditionalInformation,\n              AzureDeploymentID,\n              Date,\n              Description,\n              DvcOs,\n              FileOffset,\n              FileUri,\n              MG, \n              ManagementGroupName,\n              Role*,\n              sComputerName,\n              SourceSystem,\n              TLPLevel,\n              TenantId,\n              TimeTaken,\n              Time,\n              cs*,\n              sPort,\n              sc*,\n              StorageAccount\n};\nparser (starttime=starttime, endtime=endtime, srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, ipaddr_has_any_prefix=ipaddr_has_any_prefix, url_has_any=url_has_any, httpuseragent_has_any=httpuseragent_has_any, eventresultdetails_in=eventresultdetails_in, eventresult=eventresult, disabled=disabled)\n",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr_has_any_prefix:dynamic=dynamic([]),ipaddr_has_any_prefix:dynamic=dynamic([]),url_has_any:dynamic=dynamic([]),httpuseragent_has_any:dynamic=dynamic([]),eventresultdetails_in:dynamic=dynamic([]),eventresult:string='*',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

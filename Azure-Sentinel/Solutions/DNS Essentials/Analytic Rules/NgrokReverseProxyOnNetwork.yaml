@@ -1,0 +1,42 @@
+id: 50b0dfb7-2c94-4eaf-a332-a5936d78c263
+name: Ngrok Reverse Proxy on Network (ASIM DNS Solution)
+description: |
+  'This detection identifies the top four Ngrok domains from DNS resolution. Ngrok reverse proxy can bypass network defense. While not inherently harmful, it has been used for malicious activities recently.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1572
+  - T1090
+  - T1102
+query: |
+  // Define a list of Ngrok domains
+  let NgrokDomains = dynamic(["ngrok.com", "ngrok.io", "ngrok", "tunnel.com", "korgn", "lennut.com"]);
+  // Query the _Im_Dns function for the past 1 hour
+  _Im_Dns(starttime=ago(1h))
+  | where isnotempty(DnsQuery) // Filter out empty DNS queries
+  | where DnsQuery has_any (NgrokDomains) // Filter DNS queries that match any of the Ngrok domains
+  | summarize Starttime = min(EventStartTime),Endtime=max(EventEndTime),EventsCount=sum(EventCount),EventResults=make_set(EventResult,4) by DnsQuery, Domain, SrcIpAddr, Dvc
+  // Summarize the data by Domain, DNS query, source IP address, and device Dvc
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: Domain
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+version: 1.0.0
+kind: Scheduled

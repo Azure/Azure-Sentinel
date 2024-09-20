@@ -1,0 +1,87 @@
+id: d2097370-9cfb-4f52-ab1b-8cb07a033d44
+name: Connectivity Failures by Device
+description: |
+  This query checks for network connection failures to Microsoft Defender for Endpoint URLs.
+  The output includes any device with 1+ connectivity failures, a list of the domains they
+  failed to connect to (including the number of failures), as well as the overall number of
+  failures in the time period. Results are sorted by the total number of connection failures
+  by the device.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkEvents
+tactics:
+- Misconfiguration
+query: |
+  let TargetURLs = dynamic(['crl.microsoft.com',
+  'ctldl.windowsupdate.com',
+  'www.microsoft.com',
+  'events.data.microsoft.com',
+  'login.microsoftonline.com',
+  'login.live.com',
+  'settings-win.data.microsoft.com',
+  'x.cp.wd.microsoft.com',
+  'cdn.x.cp.wd.microsoft.com',
+  'eu-cdn.x.cp.wd.microsoft.com',
+  'wu-cdn.x.cp.wd.microsoft.com',
+  'officecdn-microsoft-com.akamaized.net',
+  'packages.microsoft.com',
+  'login.windows.net  ',
+  'unitedstates.x.cp.wd.microsoft.com',
+  'us.vortex-win.data.microsoft.com',
+  'us-v20.events.data.microsoft.com',
+  'winatp-gw-cus.microsoft.com',
+  'winatp-gw-eus.microsoft.com',
+  'winatp-gw-cus3.microsoft.com',
+  'winatp-gw-eus3.microsoft.com',
+  'automatedirstrprdcus.blob.core.windows.net',
+  'automatedirstrprdeus.blob.core.windows.net',
+  'automatedirstrprdcus3.blob.core.windows.net',
+  'automatedirstrprdeus3.blob.core.windows.net',
+  'ussus1eastprod.blob.core.windows.net',
+  'ussus2eastprod.blob.core.windows.net',
+  'ussus3eastprod.blob.core.windows.net',
+  'ussus4eastprod.blob.core.windows.net',
+  'wsus1eastprod.blob.core.windows.net',
+  'wsus2eastprod.blob.core.windows.net',
+  'ussus1westprod.blob.core.windows.net',
+  'ussus2westprod.blob.core.windows.net',
+  'ussus3westprod.blob.core.windows.net',
+  'ussus4westprod.blob.core.windows.net',
+  'wsus1westprod.blob.core.windows.net',
+  'wsus2westprod.blob.core.windows.net',
+  'europe.x.cp.wd.microsoft.com',
+  'eu.vortex-win.data.microsoft.com',
+  'eu-v20.events.data.microsoft.com',
+  'winatp-gw-neu.microsoft.com',
+  'winatp-gw-weu.microsoft.com',
+  'automatedirstrprdneu.blob.core.windows.net',
+  'automatedirstrprdweu.blob.core.windows.net',
+  'usseu1northprod.blob.core.windows.net',
+  'wseu1northprod.blob.core.windows.net',
+  'usseu1westprod.blob.core.windows.net',
+  'wseu1westprod.blob.core.windows.net',
+  'unitedkingdom.x.cp.wd.microsoft.com',
+  'uk.vortex-win.data.microsoft.com',
+  'uk-v20.events.data.microsoft.com',
+  'winatp-gw-uks.microsoft.com',
+  'winatp-gw-ukw.microsoft.com',
+  'automatedirstrprduks.blob.core.windows.net',
+  'automatedirstrprdukw.blob.core.windows.net',
+  'ussuk1southprod.blob.core.windows.net',
+  'wsuk1southprod.blob.core.windows.net',
+  'ussuk1westprod.blob.core.windows.net',
+  'wsuk1westprod.blob.core.windows.net',
+  'go.microsoft.com ',
+  'definitionupdates.microsoft.com ',
+  'fe3cr.delivery.mp.microsoft.com/ClientWebService/client.asmx',
+  'msdl.microsoft.com',
+  'vortex-win.data.microsoft.com']);
+  DeviceNetworkEvents
+  | where isnotempty(RemoteUrl) and ActionType == 'ConnectionFailed'
+  | extend Domain = case(RemoteUrl contains "//", parse_url(RemoteUrl).Host, RemoteUrl)
+  | where Domain in(TargetURLs)
+  | summarize arg_max(Timestamp, DeviceName), ConnectionFailures = count() by DeviceId, Domain
+  | extend DomainDetails = pack(Domain, ConnectionFailures)
+  | summarize DomainDetails = make_list(DomainDetails), LastConnectionFailure = any(Timestamp), DeviceName = any(DeviceName), TotalConnectionFailures = sum(ConnectionFailures) by DeviceId
+  | order by TotalConnectionFailures desc

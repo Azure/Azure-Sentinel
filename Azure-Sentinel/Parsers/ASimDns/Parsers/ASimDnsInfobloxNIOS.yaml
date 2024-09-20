@@ -1,0 +1,92 @@
+Id: 678b6e84-0308-461c-ae43-6bb287a9d970
+Parser:
+  Title: DNS activity ASIM parser for Infoblox NIOS
+  Version: '0.6.1'
+  LastUpdated: Dec 11 2022
+Product:
+  Name: Infoblox NIOS
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Infoblox NIOS DNS logs to the ASIM Dns normalized schema.
+ParserName: ASimDnsInfobloxNIOS
+EquivalentBuiltInParser: _ASim_Dns_InfobloxNIOS
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+ let SyslogProjected = Syslog | project SyslogMessage, ProcessName, TimeGenerated, Computer, HostIP;
+ let response = (disabled: boolean=false) {
+    SyslogProjected
+    | where not(disabled)
+    | where ProcessName == "named" and SyslogMessage has_all ("client", "query:", "response:")
+    | parse SyslogMessage with *
+        "client " SrcIpAddr: string
+        "#" SrcPortNumber: string
+        " " NetworkProtocol: string
+        ": query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " response: " DnsResponseCodeName: string
+        " " DnsFlags: string
+    | extend DnsResponseNameIndex= indexof(DnsFlags, " ")
+    | extend DnsResponseName =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, DnsResponseNameIndex+1), "")
+    | extend DnsFlags =iif(DnsResponseNameIndex != "-1", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)
+    | extend SrcPortNumber = iif(SrcPortNumber has ':',replace_string(SrcPortNumber,':',''),SrcPortNumber)
+    | extend SrcPortNumber = toint(SrcPortNumber)
+    | extend EventSubType = "response"
+    | project-away SyslogMessage, ProcessName, DnsResponseNameIndex
+  };
+  let request = (disabled: boolean=false) {
+    SyslogProjected 
+    | where not(disabled)
+    | where ProcessName == "named" and SyslogMessage has_all ("client", "query:") and SyslogMessage !has "response:"
+    | extend SyslogMessage = (split(SyslogMessage,"client "))[1]
+    | extend SyslogMessage = iif(SyslogMessage startswith "@", (substring(SyslogMessage, indexof(SyslogMessage, " ")+1)), SyslogMessage)
+    | extend SyslogMessage = replace_string(SyslogMessage,"\\ ","@@@")
+    | parse SyslogMessage with 
+        SrcIpAddr: string
+        "#" SrcPortNumber: int *
+        "query: " DnsQuery: string
+        " " DnsQueryClassName: string
+        " " DnsQueryTypeName: string
+        " " DnsFlags: string
+    | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')
+    | extend DnsFlags= tostring((split(DnsFlags," "))[0])
+    | extend 
+        EventSubType = "request",
+        DnsResponseCodeName = "NA"
+    | project-away SyslogMessage, ProcessName
+  };
+  let parser = (disabled:boolean=false) {
+    union response (disabled), request (disabled)
+    | extend
+        EventCount=int(1),
+        EventStartTime=todatetime(TimeGenerated),
+        EventEndTime=todatetime(TimeGenerated),
+        EventProduct="NIOS",
+        EventVendor="Infoblox",
+        EventSchema="Dns",
+        EventSchemaVersion="0.1.3",
+        EventType="Query", 
+        EventResult=iff(EventSubType=="request" or DnsResponseCodeName=="NOERROR","Success","Failure"),
+        DvcIpAddr=iff (HostIP == "Unknown IP", "", HostIP)
+    // -- Aliases
+    | invoke _ASIM_ResolveDvcFQDN ("Computer")
+    | project-away Computer
+    | extend
+        Dvc=DvcHostname,
+        Domain=DnsQuery,
+        IpAddr=SrcIpAddr,
+        Src=SrcIpAddr,
+        EventResultDetails = DnsResponseCodeName
+    | project-away HostIP
+  };
+  parser (disabled)

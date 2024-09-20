@@ -1,0 +1,53 @@
+id: ded8168e-c806-4772-af30-10576e0a7529
+name: AFD WAF - Code Injection 
+description: | 
+  'Identifies a match for a Code Injection based attack in the AFD WAF logs. The threshold value in the query can be changed as per your infrastructure's requirements.
+  References: https://owasp.org/www-community/attacks/Code_Injection'
+severity: High 
+status: Available
+requiredDataConnectors: 
+  - connectorId: WAF
+    dataTypes: 
+      - AzureDiagnostics
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+tactics: 
+  - DefenseEvasion
+  - Execution
+  - InitialAccess
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1548
+  - T1203
+  - T1190
+  - T1548
+tags:
+  - Code Injection
+query:  | 
+ let Threshold = 3;
+ AzureDiagnostics
+ | where Category =~ "FrontDoorWebApplicationFirewallLog"
+ | where action_s =~ "AnomalyScoring"
+ | where details_msg_s has "Injection" or details_msg_s has "File Inclusion"
+ | parse details_data_s with MessageText "Matched Data:" MatchedData "AND " * "table_name FROM " TableName " " *
+ | project trackingReference_s, host_s, requestUri_s, TimeGenerated, clientIP_s, details_matches_s, details_msg_s, details_data_s, TableName, MatchedData
+ | join kind = inner(
+ AzureDiagnostics
+ | where Category =~ "FrontDoorWebApplicationFirewallLog"
+ | where action_s =~ "Block") on trackingReference_s
+ | summarize URI_s = make_set(requestUri_s,100), Table = make_set(TableName,100), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), TrackingReference = make_set(trackingReference_s,100), Matched_Data = make_set(MatchedData,100), Detail_Data = make_set(details_data_s,100), Detail_Message = make_set(details_msg_s,100), Total_TrackingReference = dcount(trackingReference_s) by clientIP_s, host_s, action_s
+ | where Total_TrackingReference >= Threshold
+# The Threshold value above can be changed as per your infrastructure's requirement
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URI_s
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: clientIP_s 
+version: 1.0.1
+kind: Scheduled

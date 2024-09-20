@@ -1,0 +1,168 @@
+Parser:
+  Title: Network Session ASIM filtering parser for Zscaler ZIA firewall
+  Version: '0.4'
+  LastUpdated: Dec 11, 2022
+Product:
+  Name: Zscaler ZIA Firewall
+Normalization:
+  Schema: NetworkSession
+  Version: '0.2.3'
+References:
+- Title: ASIM Network Session Schema
+  Link: https://aka.ms/ASimNetworkSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: Zscaler Connector
+  Link: https://docs.microsoft.com/azure/sentinel/data-connectors-reference#zscaler
+- Title: Zscaler Sentinel deployment guide
+  Link: https://help.zscaler.com/zia/zscaler-microsoft-azure-sentinel-deployment-guide
+Description: |
+  This ASIM parser supports filtering and normalizing Zscaler ZIA firewall logs produced by the Microsoft Sentinel Zscaler connector to the ASIM Network Session normalized schema.
+ParserName: vimNetworkSessionZscalerZIA
+EquivalentBuiltInParser: _Im_NetworkSession_ZscalerZIA
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dstportnumber
+    Type: int
+    Default: int(null)
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: dvcaction
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let ActionLookup = datatable (DvcOriginalAction: string, DvcAction:string) [
+    // See https://help.zscaler.com/zia/firewall-insights-logs-filters
+    'Allow','Allow',
+    'Allow due to insufficient app data','Allow',
+    'Block/Drop','Drop',
+    'Block/ICMP','Drop ICMP',
+    'Block/Reset', 'Reset',
+    'IPS Drop', 'Drop',
+    'IPS Reset', 'Reset',
+    // Observed in real world events
+    'Block ICMP', 'Drop ICMP',
+    'Drop', 'Drop'
+  ];
+  let parser=  
+    (starttime:datetime=datetime(null)
+    , endtime:datetime=datetime(null)
+    , srcipaddr_has_any_prefix:dynamic=dynamic([])
+    , dstipaddr_has_any_prefix:dynamic=dynamic([])
+    , ipaddr_has_any_prefix:dynamic=dynamic([])
+    , dstportnumber:int=int(null)
+    , hostname_has_any:dynamic=dynamic([])
+    , dvcaction:dynamic=dynamic([])
+    , eventresult:string='*'
+    , disabled:bool=false) {
+    let src_or_any=set_union(srcipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+    let dst_or_any=set_union(dstipaddr_has_any_prefix, ipaddr_has_any_prefix); 
+  CommonSecurityLog 
+  | where (isnull(starttime) or TimeGenerated >= starttime)
+     and  (isnull(endtime) or TimeGenerated <= endtime)
+  | where not(disabled)
+  | where DeviceVendor == "Zscaler"
+  | where DeviceProduct == "NSSFWlog"
+  |where
+    (array_length(hostname_has_any) == 0) // No host name information, so always filter out if hostname filter used. 
+    and   (isnull(dstportnumber) or dstportnumber == DestinationPort) 
+  | extend temp_SrcMatch=has_any_ipv4_prefix(SourceIP,src_or_any), temp_DstMatch=has_any_ipv4_prefix(DestinationIP,dst_or_any)
+  | extend ASimMatchingIpAddr=case(
+                                  array_length(src_or_any) == 0 and array_length(dst_or_any) == 0 ,"-",
+                                  temp_SrcMatch and temp_DstMatch, "Both",
+                                  temp_SrcMatch, "SrcIpAddr",
+                                  temp_DstMatch, "DstIpAddr",
+                                  "No match"
+                              )
+  // -- Pre-filtering
+  | where ASimMatchingIpAddr != "No match"
+  | project-away temp_*
+  | project-rename DvcOriginalAction = DeviceAction
+  | lookup ActionLookup on DvcOriginalAction 
+  | where array_length(dvcaction) == 0 or DvcAction in (dvcaction)
+  | extend EventResult = iff (DvcOriginalAction == "Allow", "Success", "Failure") 
+  | where (eventresult=='*' or EventResult == eventresult)
+  // -- Event fields
+  | extend 
+    EventStartTime=TimeGenerated, 
+    EventVendor = "Zscaler", 
+    EventProduct = "ZIA Firewall", 
+    EventSchema = "NetworkSession", 
+    EventSchemaVersion="0.2.3", 
+    EventType = 'NetworkSession', 
+    EventSeverity = 'Informational',
+    EventEndTime=TimeGenerated 
+  | project-rename
+    DvcHostname = Computer, 
+    EventProductVersion = DeviceVersion, 
+    NetworkProtocol = Protocol, 
+    DstIpAddr = DestinationIP, 
+    DstPortNumber = DestinationPort, 
+    DstNatIpAddr = DestinationTranslatedAddress, 
+    DstNatPortNumber = DestinationTranslatedPort, 
+    DstAppName = DeviceCustomString3, 
+    NetworkApplicationProtocol = DeviceCustomString2, 
+    SrcIpAddr = SourceIP, 
+    SrcPortNumber = SourcePort, 
+    SrcUsername = SourceUserName,
+    SrcNatIpAddr= SourceTranslatedAddress, 
+    SrcNatPortNumber = SourceTranslatedPort, 
+    SrcUserDepartment = DeviceCustomString1,  // Not in standard schema
+    SrcUserLocation = SourceUserPrivileges,  // Not in standard schema
+    ThreatName = DeviceCustomString6, 
+    ThreatCategory = DeviceCustomString5, 
+    NetworkRuleName = Activity,
+    EventOriginalSeverity = LogSeverity,
+    EventMessage = Message 
+  // -- Calculated fields
+  | extend
+    // -- Adjustment to support both old and new CSL fields.
+    EventCount=coalesce(
+      toint(column_ifexists("FieldDeviceCustomNumber2", int(null))), 
+      toint(column_ifexists("DeviceCustomNumber2",int(null)))
+    ),
+    NetworkDuration = coalesce(
+      toint(column_ifexists("FieldDeviceCustomNumber1", int(null))),
+      toint(column_ifexists("DeviceCustomNumber1",int(null)))
+    ),
+    ThreatCategory = iff(DeviceCustomString4 == "None", "", ThreatCategory),
+    SrcUsername = iff (SrcUsername == SrcUserLocation, "", SrcUsername),
+    DstBytes = tolong(ReceivedBytes), 
+    SrcBytes = tolong(SentBytes)
+  // -- Enrichment
+  | extend
+    DstAppType = "Service", 
+    SrcUsernameType = "UPN" 
+  // -- Aliases
+  | extend
+    Dvc = DvcHostname,
+    User = SrcUsername,
+    IpAddr = SrcIpAddr,
+    Src = SrcIpAddr,
+    Dst = DstIpAddr,
+    Rule = NetworkRuleName,
+    Duration = NetworkDuration
+  | project-away AdditionalExtensions, CommunicationDirection, Device*, Destination*, EndTime, ExternalID, File*, Flex*, IndicatorThreatType, Malicious*, Old*, OriginalLogSeverity, Process*, ReceiptTime, ReceivedBytes, Remote*, Request*, Sent*, SimplifiedDeviceAction, Source*, StartTime, TenantId, ThreatConfidence, ThreatDescription, ThreatSeverity, EventOutcome, FieldDevice*, ExtID, Reason, ApplicationProtocol, ReportReferenceLink
+  };
+  parser (starttime, endtime, srcipaddr_has_any_prefix, dstipaddr_has_any_prefix, ipaddr_has_any_prefix, dstportnumber, hostname_has_any, dvcaction, eventresult, disabled)

@@ -1,0 +1,389 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+	"metadata": {
+        "title": "Watchlists - Inform Subscription Owner", 
+        "description": "This playbook leverages Microsoft Sentinel Watchlists in order to get the relevant subscription owner contact details, and inform about an ASC alert that occured in that subscription. It uses Microsoft Teams and Office 365 Outlook as ways to inform the sub owner.",
+        "prerequisites": ["Create a Watchlist that this playbook will query:",
+            "1.Create an input comma-separated value (CSV) file with the following columns: SubscriptionId, SubscriptionName, OwnerName, OwnerEmail, where each row represents a subscription in an Azure tenant.",
+            "2. Upload the table to the Microsoft Sentinel Watchlist area. Make a note of the value you use as the Watchlist Alias, as you'll use it to query this watchlist from the playbook."
+        ],
+        "mainSteps": ["Note: This playbook utilizes two features currently in Preview.",
+            "* Microsoft Sentinel Watchlists",
+            "* Microsoft Sentinel Incident Trigger", 
+            "<img src='https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/Watchlists%20Utilities/Playbooks/Watchlist-InformSubowner-IncidentTrigger/images/designerView.png?raw=true'/>"
+        ],
+        "lastUpdateTime": "2022-07-21T00:00:00.000Z", 
+        "entities": ["AzureResource"], 
+        "tags": ["Notification"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Lior Tamir"
+        },
+        "releaseNotes": [
+        {
+            "version": "1.0.0",
+            "title": "Watchlists - Inform Subscription Owner",
+            "notes": [
+            "Initial version"
+            ]
+        }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "InformSubowner-Watchlists-IncidentTrigger",
+            "type": "string"
+        }
+    },
+    "variables": {
+	"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+	"Office365ConnectionName": "[concat('office365', parameters('PlaybookName'))]",
+	"MicrosoftTeamsConnectionName": "[concat('teams', parameters('PlaybookName'))]",
+    "AzureMonitorLogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]"
+	},	
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+    {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('Office365ConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "displayName": "[variables('Office365ConnectionName')]",
+          "customParameterValues": {
+          },
+          "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+          }
+        }
+      },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[variables('AzureMonitorLogsConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('MicrosoftTeamsConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "properties": {
+          "displayName": "[variables('MicrosoftTeamsConnectionName')]",
+          "customParameterValues": {
+          },
+          "api": {
+            "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+          }
+        }
+      },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+		"tags": {
+		"LogicAppsCategory": "security",
+		"hidden-SentinelTemplateName": "Watchlist-InformSubowner",
+		"hidden-SentinelTemplateVersion": "1.0"
+	    },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",                
+                "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftTeamsConnectionName'))]"
+            ],
+	"identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            },
+                            "type": "ApiConnectionWebhook"
+                        }
+                    },
+        "actions": {
+            "For_each_Alert": {
+                "actions": {
+                    "Condition": {
+                        "actions": {
+                            "Post_a_message_as_the_Flow_bot_to_a_user": {
+                                "inputs": {
+                                    "body": {
+                                        "messageBody": " Hi  @{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['OwnerName']}\n\nA new alert was triggered on your subscription: @{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['SubscriptionName']} by Azure Security Center.\n\nAn incident was created in Microsoft Sentinel.\n\nAlert title: @{items('For_each_Alert')?['properties']?['alertDisplayName']}\n\nDescription: @{items('For_each_Alert')?['properties']?['description']}\n\nThe Azure resource that triggered the alert:\n@{first(body('Filter_array_to_get_AzureResource_identifier'))['resourceId']}\n\nLink to the ASC alert:  @{items('For_each_Alert')?['properties']?['alertLink']}\n\nLink to the Microsoft Sentinel incident: @{triggerBody()?['object']?['properties']?['incidentUrl']}",
+                                        "messageTitle": "New alert from Microsoft Sentinel in your subscription",
+                                        "recipient": {
+                                            "isAlert": true,
+                                            "summary": "New Alert from Microsoft Sentinel in subscription @{body('Parse_JSON_to_get_subscriptionId')?['properties']?['effectiveSubscriptionId']}",
+                                            "to": "@{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['OwnerEmail']}"
+                                        }
+                                    },
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['teams']['connectionId']"
+                                        }
+                                    },
+                                    "method": "post",
+                                    "path": "/flowbot/actions/notification/recipienttypes/user"
+                                },
+                                "runAfter": {},
+                                "type": "ApiConnection"
+                            },
+                            "Send_an_email_(V2)": {
+                                "inputs": {
+                                    "body": {
+                                        "Body": "<p><strong>&nbsp;Hi &nbsp; </strong><strong>@{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['OwnerName']}</strong><strong><br>\n<br>\nA new alert was triggered on your subscription: </strong><strong>@{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['SubscriptionName']}</strong><strong>  by Azure Security Center.<br>\n<br>\nAn incident was created in Microsoft Sentinel.<br>\n<br>\n</strong>Alert title: <strong></strong><strong>@{items('For_each_Alert')?['properties']?['alertDisplayName']}</strong><strong><br>\n<br>\n</strong>Description:<strong> </strong><strong>@{items('For_each_Alert')?['properties']?['description']}</strong><strong><br>\n<br>\n</strong>The <strong>Azure resource</strong> that triggered the alert:<strong><br>\n</strong><strong>@{first(body('Filter_array_to_get_AzureResource_identifier'))['resourceId']}</strong><strong><br>\n<br>\n</strong>Link to the<strong> ASC alert: &nbsp;</strong><strong>@{items('For_each_Alert')?['properties']?['alertLink']}</strong><strong><br>\n<br>\n</strong>Link to the <strong>Microsoft Sentinel incident: </strong><strong>@{triggerBody()?['object']?['properties']?['incidentUrl']}</strong><strong></strong></p>",
+                                        "Subject": "New Alert from Microsoft Sentinel in subscription @{body('Parse_JSON_to_get_subscriptionId')?['properties']?['effectiveSubscriptionId']}",
+                                        "To": "@{body('Run_query_and_list_results_-_Get_Watchlist')?['value'][0]['OwnerEmail']}"
+                                    },
+                                    "host": {
+                                        "connection": {
+                                            "name": "@parameters('$connections')['office365']['connectionId']"
+                                        }
+                                    },
+                                    "method": "post",
+                                    "path": "/v2/Mail"
+                                },
+                                "runAfter": {
+                                    "Post_a_message_as_the_Flow_bot_to_a_user": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "ApiConnection"
+                            }
+                        },
+                        "expression": {
+                            "and": [
+                                {
+                                    "greater": [
+                                        "@length(body('Run_query_and_list_results_-_Get_Watchlist')?['value'])",
+                                        0
+                                    ]
+                                }
+                            ]
+                        },
+                        "runAfter": {
+                            "Run_query_and_list_results_-_Get_Watchlist": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "If"
+                    },
+                    "Filter_array_to_get_AzureResource_identifier": {
+                        "inputs": {
+                            "from": "@items('For_each_Alert')?['properties']?['resourceIdentifiers']",
+                            "where": "@equals(item()['type'], 'AzureResource')"
+                        },
+                        "runAfter": {},
+                        "type": "Query"
+                    },
+                    "Parse_JSON_to_get_subscriptionId": {
+                        "description": "This action parses the additional data of the ASC alert, to get the subscription id field",
+                        "inputs": {
+                            "content": "@items('For_each_Alert')?['properties']?['additionalData']",
+                            "schema": {
+                                "properties": {
+                                    "ActionTaken": {
+                                        "type": "string"
+                                    },
+                                    "Entities": {
+                                        "items": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "kind": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "properties": {
+                                                    "properties": {
+                                                        "address": {
+                                                            "type": "string"
+                                                        },
+                                                        "friendlyName": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "type": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "name",
+                                                "type",
+                                                "kind",
+                                                "properties"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "Hit Count": {
+                                        "type": "string"
+                                    },
+                                    "Management URL": {
+                                        "type": "string"
+                                    },
+                                    "ProcessingData": {
+                                        "type": "string"
+                                    },
+                                    "Source IPs": {
+                                        "type": "string"
+                                    },
+                                    "StoreAlertPublisher": {
+                                        "type": "string"
+                                    },
+                                    "effectiveSubscriptionId": {
+                                        "type": "string"
+                                    },
+                                    "resourceType": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "runAfter": {
+                            "Filter_array_to_get_AzureResource_identifier": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ParseJson"
+                    },
+                    "Run_query_and_list_results_-_Get_Watchlist": {
+                        "inputs": {
+                            "body": "_GetWatchlist('SubOwners')\n| project SubscriptionId, OwnerName, SubscriptionName, OwnerEmail\n| where SubscriptionId == \"@{body('Parse_JSON_to_get_subscriptionId')?['effectiveSubscriptionId']}\"",
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "path": "/queryData",
+                            "queries": {
+                                "resourcegroups": "@triggerBody()?['workspaceInfo']?['ResourceGroupName']",
+                                "resourcename": "@triggerBody()?['workspaceInfo']?['WorkspaceName']",
+                                "resourcetype": "Log Analytics Workspace",
+                                "subscriptions": "@variables('SubscriptionID')",
+                                "timerange": "Last 24 hours"
+                            }
+                        },
+                        "runAfter": {
+                            "Parse_JSON_to_get_subscriptionId": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection"
+                    }
+                },
+                "foreach": "@triggerBody()?['object']?['properties']?['Alerts']",
+                "runAfter": {
+                    "Initialize_variable_-_subscriptionId": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "Initialize_variable_-_subscriptionId": {
+                "description": "The subscription where watchlist is under. Will be used to query watchlist in Azure Monitor Logs",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "SubscriptionID",
+                            "type": "string",
+                            "value": "[subscription().subscriptionId]"
+                        }
+                    ]
+                },
+                "runAfter": {},
+                "type": "InitializeVariable"
+            }
+        },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+				"connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "office365": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName": "[variables('Office365ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftTeamsConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftTeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogsConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorLogsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

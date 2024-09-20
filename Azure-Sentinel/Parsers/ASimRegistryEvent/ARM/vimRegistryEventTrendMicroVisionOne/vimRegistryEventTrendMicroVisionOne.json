@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimRegistryEventTrendMicroVisionOne",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Registry Event ASIM Parser for Trend Micro Vision One",
+            "category": "ASIM",
+            "FunctionAlias": "vimRegistryEventTrendMicroVisionOne",
+            "query": "let EventTypeLookup = datatable(detail_eventSubId_s: string, EventType: string)[\n    \"TELEMETRY_REGISTRY_CREATE\", \"RegistryKeyCreated\",\n    \"TELEMETRY_REGISTRY_SET\", \"RegistryValueSet\",\n    \"TELEMETRY_REGISTRY_DELETE\", \"RegistryKeyDeleted\",\n    \"TELEMETRY_REGISTRY_RENAME\", \"RegistryKeyRenamed\"\n];\nlet RegistryKeyPrefixLookup = datatable(\n    RegistryKeyPrefix: string,\n    RegistryKeyNormalizedPrefix: string\n)[\n    \"HKLM\", \"HKEY_LOCAL_MACHINE\",\n    \"HKU\", \"HKEY_USERS\",\n    \"HKCU\", \"HKEY_CURRENT_USER\",\n    \"HKCR\", \"HKEY_CLASSES_ROOT\",\n    \"HKCC\", \"HKEY_CURRENT_CONFIG\"\n];\nlet RegistryValueTypeLookup = datatable (detail_objectRegType_d: real, RegistryValueType: string)[\n    0, \"Reg_None\",\n    1, \"Reg_Sz\",\n    2, \"Reg_Expand_Sz\",\n    3, \"Reg_Binary\",\n    4, \"Reg_DWord\",\n    5, \"Reg_DWord\",\n    7, \"Reg_Multi_Sz\",\n    11, \"Reg_QWord\"\n];\nlet EventSeverityLookup = datatable(detail_filterRiskLevel_s: string, EventSeverity: string)[\n    \"low\", \"Low\",\n    \"medium\", \"Medium\",\n    \"high\", \"High\",\n    \"info\", \"Informational\",\n    \"critical\", \"High\"\n];\nlet parser = (starttime: datetime=datetime(null), endtime: datetime=datetime(null), eventtype_in: dynamic=dynamic([]), actorusername_has_any: dynamic=dynamic([]), registrykey_has_any: dynamic=dynamic([]), registryvalue_has_any: dynamic=dynamic([]), registryvaluedata_has_any: dynamic=dynamic([]), dvchostname_has_any: dynamic=dynamic([]), disabled: bool=false) {\n    TrendMicro_XDR_OAT_CL\n    | where not(disabled)\n    | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime))\n    | where detail_eventId_s == \"TELEMETRY_REGISTRY\"\n    | where (array_length(actorusername_has_any) == 0 or detail_processUser_s has_any (actorusername_has_any))\n        and (array_length(registryvalue_has_any) == 0 or detail_objectRegistryValue_s has_any (registryvalue_has_any))\n        and (array_length(registryvaluedata_has_any) == 0 or detail_objectRegistryData_s has_any (registryvaluedata_has_any))\n        and (array_length(dvchostname_has_any) == 0 or detail_endpointHostName_s has_any (dvchostname_has_any))\n    | parse filters_s with * \"[\" filters: string \"]\"\n    | parse-kv filters as (description: string, name: string) with (pair_delimiter=\",\", kv_delimiter=\":\", quote='\"')\n    | lookup EventTypeLookup on detail_eventSubId_s\n    | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))\n    | invoke _ASIM_ResolveDvcFQDN('detail_endpointHostName_s')\n    | extend RegistryKeyPrefix = tostring(split(detail_objectRegistryKeyHandle_s, @'\\')[0])\n    | lookup RegistryKeyPrefixLookup on RegistryKeyPrefix\n    | extend \n        RegistryKey = replace_string(detail_objectRegistryKeyHandle_s, RegistryKeyPrefix, RegistryKeyNormalizedPrefix)\n    | where (array_length(registrykey_has_any) == 0 or RegistryKey has_any (registrykey_has_any))\n    | lookup EventSeverityLookup on detail_filterRiskLevel_s\n    | lookup RegistryValueTypeLookup on detail_objectRegType_d\n    | extend \n        ActingProcessId = tostring(toint(detail_processPid_d)),\n        ParentProcessId = tostring(toint(detail_parentPid_d)),\n        ActorSessionId = tostring(toint(detail_authId_d)),\n        AdditionalFields = bag_pack(\n                      \"name\", name,\n                      \"tags\", detail_tags_s,\n                      \"objectRegType\", detail_objectRegType_d\n                  )\n    | extend\n        EventCount = int(1),\n        EventProduct = \"Vision One\",\n        EventVendor = \"Trend Micro\",\n        EventSchema = \"RegistryEvent\",\n        EventSchemaVersion = \"0.1.2\",\n        EventResult = \"Success\",\n        DvcAction = \"Allowed\"\n    | project-rename\n        ActorUsername = detail_processUser_s,\n        EventStartTime = detail_eventTimeDT_t,\n        RegistryValue = detail_objectRegistryValue_s,\n        RegistryValueData = detail_objectRegistryData_s,\n        ActingProcessName = detail_processName_s,\n        DvcId = detail_endpointGuid_g,\n        DvcOs = detail_osName_s,\n        DvcOsVersion = detail_osVer_s,\n        EventUid = _ItemId,\n        EventOriginalSubType = detail_eventSubId_s,\n        EventOriginalType = detail_eventId_s,\n        EventOriginalUid = detail_uuid_g,\n        EventOriginalSeverity = detail_filterRiskLevel_s,\n        EventProductVersion = detail_pver_s,\n        EventMessage = description\n    | extend\n        User = ActorUsername,\n        ActorUsernameType = iff(isnotempty(ActorUsername), \"Simple\", \"\"),\n        ActorUserType = _ASIM_GetUserType(ActorUsername, \"\"),\n        Dvc = coalesce(DvcFQDN, DvcId, DvcHostname),\n        DvcIdType = iff(isnotempty(DvcId), \"Other\", \"\"),\n        Process = ActingProcessName,\n        EventEndTime = EventStartTime,\n        RegistryPreviousKey = RegistryKey,\n        RegistryPreviousValue = RegistryValue,\n        RegistryPreviousValueData = RegistryValueData,\n        RegistryPreviousValueType = RegistryValueType\n    | project-away\n        *_d,\n        *_s,\n        *_g,\n        *_t,\n        *_b,\n        _ResourceId,\n        Computer,\n        MG,\n        ManagementGroupName,\n        RawData,\n        SourceSystem,\n        TenantId,\n        name,\n        filters,\n        *Prefix\n};\nparser(starttime=starttime, endtime=endtime, eventtype_in=eventtype_in, actorusername_has_any=actorusername_has_any, registrykey_has_any=registrykey_has_any, registryvalue_has_any=registryvalue_has_any, registryvaluedata_has_any=registryvaluedata_has_any, dvchostname_has_any=dvchostname_has_any, disabled = disabled)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),eventtype_in:dynamic=dynamic([]),actorusername_has_any:dynamic=dynamic([]),registrykey_has_any:dynamic=dynamic([]),registryvalue_has_any:dynamic=dynamic([]),registryvaluedata_has_any:dynamic=dynamic([]),dvchostname_has_any:dynamic=dynamic([]),disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

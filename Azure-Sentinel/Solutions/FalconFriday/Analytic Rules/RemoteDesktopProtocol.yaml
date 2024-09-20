@@ -1,0 +1,49 @@
+id: cc46e76c-0d04-40b0-9c8b-929aa40513e7
+name: Remote Desktop Protocol - SharpRDP
+description: |
+  This detection monitors for the behavior that SharpRDP exhibits on the target system. The most relevant is leveraging taskmgr.exe to gain elevated execution, which means that taskmgr.exe is creating unexpected child processes.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceLogonEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - LateralMovement
+relevantTechniques:
+  - T1021.001
+query: |
+  let executions = DeviceProcessEvents
+  | where InitiatingProcessFileName contains "taskmgr" and AccountName !contains "_ladm" // Include your LAPS /RID500 admin naming convention here. 
+  // Add the below filter to look for stock SharpRDP behavior. However, with minorchanges to the stock version of SharpRDP the filter below can be bypassed.
+  //| where not(InitiatingProcessCommandLine has_any ("/1","/2","/3","/4"))
+  | where not(FolderPath =~ @"c:\Windows\system32\WerFault.exe" and ProcessCommandLine contains "-u -p")
+  | where not(FolderPath =~ @"c:\windows\system32\mmc.exe" and ProcessCommandLine contains @"C:\WINDOWS\System32\services.msc")
+  | where not(FolderPath =~ @"c:\windows\system32\resmon.exe");
+  executions
+  | join kind=leftsemi  (DeviceLogonEvents
+  | where LogonType in ('Unlock', 'RemoteInteractive') and not (LogonType == 'Unlock' and RemoteIP == '127.0.0.1') and RemoteIP != "" and ActionType == "LogonSuccess") on DeviceId, LogonId
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: AccountSid 
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+kind: Scheduled

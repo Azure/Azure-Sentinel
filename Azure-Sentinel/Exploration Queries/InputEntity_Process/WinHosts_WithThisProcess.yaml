@@ -1,0 +1,57 @@
+Id: 0880a6d7-d914-40f6-91bc-150de4810e4e
+DisplayName: Hosts with this process
+Description: Any host with this same process (set time range to +-1h when running the query)
+InputEntityType: Process
+InputFields:
+  - CommandLine
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 1h
+QueryPeriodAfter: 1h
+DataSources:
+  - SecurityEvent
+  - imProcessCreate
+Tactics:
+  - Execution
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+  let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));  
+    let Legacy = (v_Process_CommandLine:string){
+    let tempFullPath = tostring(split(v_Process_CommandLine, ' ')[0]);
+    let tempFullPath2 = iff(tempFullPath startswith '"', substring(tempFullPath, 1, strlen(tempFullPath)-2), tempFullPath);
+    let v_Process_ImageFile_FullPath = iff(tempFullPath2 startswith '\\??\\', substring(tempFullPath2, 4, strlen(tempFullPath2)-1), tempFullPath2);
+    (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+    | join kind=inner (
+      SecurityEvent
+      | where EventID == 4688
+      | where NewProcessName has v_Process_ImageFile_FullPath
+      | extend info = pack('Account', Account, 'NewProcessName', NewProcessName, 'CommandLine', CommandLine)
+      | summarize min(TimeGenerated), max(TimeGenerated), Host_Aux_info = makeset(info) by Computer, SourceComputerId, _ResourceId
+      | project min_TimeGenerated, max_TimeGenerated, Computer, Host_Aux_info, Host_OMSAgentID=SourceComputerId
+      | top 10 by min_TimeGenerated asc nulls last
+      | project-rename Host_UnstructuredName=Computer, Host_Aux_StartTime=min_TimeGenerated, Host_Aux_EndTime=max_TimeGenerated
+      | extend exists=int(1)
+    ) on exists
+    | project-away exists, exists1 
+    };
+  let Normalized = (v_Process_CommandLine:string){
+  let tempFullPath = tostring(split(v_Process_CommandLine, ' ')[0]);
+  let tempFullPath2 = iff(tempFullPath startswith '"', substring(tempFullPath, 1, strlen(tempFullPath)-2), tempFullPath);
+  let v_Process_ImageFile_FullPath = iff(tempFullPath2 startswith '\\??\\', substring(tempFullPath2, 4, strlen(tempFullPath2)-1), tempFullPath2);
+  let v_Process_ImageFile_FullPath_Array = pack_array(v_Process_ImageFile_FullPath);
+    (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+    | join kind=inner (
+      imProcessCreate(targetprocess_has_any=v_Process_ImageFile_FullPath_Array)
+      | extend info = pack('Account', User, 'NewProcessName', TargetProcessName, 'CommandLine', TargetProcessCommandLine)
+      | summarize min(TimeGenerated), max(TimeGenerated), Host_Aux_info = make_set(info, maxSize=1000) by Dvc, DvcId
+      | project min_TimeGenerated, max_TimeGenerated, Dvc, Host_Aux_info
+      | top 10 by min_TimeGenerated asc nulls last
+      | project-rename Host_UnstructuredName=Dvc, Host_Aux_StartTime=min_TimeGenerated, Host_Aux_EndTime=max_TimeGenerated
+      | extend exists=int(1)
+    ) on exists | project-away exists, exists1
+  };
+    // change <CommandLine> value below
+    union isfuzzy=true Normalized('<CommandLine>'), Normalized('<CommandLine>')
