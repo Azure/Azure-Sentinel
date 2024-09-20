@@ -43,7 +43,7 @@ completion = client.chat.completions.create(
                     "endpoint": os.environ["AZURE_AI_SEARCH_ENDPOINT"],
                     "index_name": os.environ["AZURE_AI_SEARCH_INDEX"],
                     "authentication": {
-                        "type": "azure_ad"
+                        "type": "access_token"
                     }
                 }
             }
