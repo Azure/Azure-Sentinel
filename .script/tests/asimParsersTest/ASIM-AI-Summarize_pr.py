@@ -79,7 +79,7 @@ completion = client.chat.completions.create(
     },
         {
             "role": "user",
-            "content": f"Summarize the following PR changes: {git_diff.stdout}"
+            "content": f"Summarize the following Microsoft ASIM github PR changes: {git_diff.stdout}"
         }
 ],
     max_tokens=4096,
