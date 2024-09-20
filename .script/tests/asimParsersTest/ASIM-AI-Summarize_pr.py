@@ -4,6 +4,7 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 import logging
 import sys
 import subprocess
+import json
 
 # Sentinel Repo URL
 SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
@@ -95,5 +96,13 @@ completion = client.chat.completions.create(
     # }
 )
 
-print(completion.model_dump_json(indent=2))
+# Assuming completion.model_dump_json() returns the response as a string, parse it
+response = json.loads(completion.model_dump_json())
+
+# Extract the actual content from the response
+content = response['choices'][0]['message']['content']
+
+# Print the extracted content in a clean format
+print("\n---- Formatted Summary ----\n")
+print(f"Summary:\n{content.strip()}")
 
