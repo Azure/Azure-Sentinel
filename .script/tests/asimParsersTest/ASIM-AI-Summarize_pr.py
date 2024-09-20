@@ -3,11 +3,45 @@ from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 import logging
 import sys
+import subprocess
 
-# Fetch PR_DIFF environment variable
-pr_diff = os.getenv("PR_DIFF")
+# Sentinel Repo URL
+SentinelRepoUrl = f"https://github.com/Azure/Azure-Sentinel.git"
 
-print(f"PR_DIFF: {pr_diff}")
+# Fetch the PR diff using `gh` CLI command
+def get_git_diff():
+    # Get modified ASIM Parser files along with their status
+    current_directory = os.path.dirname(os.path.abspath(__file__))
+
+    # Add upstream remote if not already present
+    git_remote_command = "git remote"
+    remote_result = subprocess.run(git_remote_command, shell=True, text=True, capture_output=True, check=True)
+    if 'upstream' not in remote_result.stdout.split():
+        git_add_upstream_command = f"git remote add upstream '{SentinelRepoUrl}'"
+        subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    # Fetch from upstream
+    git_fetch_upstream_command = "git fetch upstream"
+    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+
+    GetModifiedFiles = f"git diff upstream/master {current_directory}/../../../Parsers/"
+    try:
+        Changes = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"::error::An error occurred while executing the command: {e}")
+        sys.stdout.flush()  # Explicitly flush stdout
+    
+    # Check if the command succeeded
+        if Changes.returncode != 0:
+            print(f"Error fetching git diff: {Changes.stderr}")
+            return None
+
+        return Changes.stdout
+    except Exception as e:
+        print(f"Exception occurred while fetching git diff: {str(e)}")
+        return None
+
+# Fetch the git diff
+git_diff = get_git_diff()
 
 # Setup logging
 try:
@@ -43,7 +77,7 @@ completion = client.chat.completions.create(
     },
         {
             "role": "user",
-            "content": f"Summarize the following PR changes: {pr_diff}"
+            "content": f"Summarize the following PR changes: {git_diff}"
         }
 ],
     max_tokens=4096,
