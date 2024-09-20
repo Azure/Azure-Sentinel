@@ -21,9 +21,9 @@ def get_git_diff():
         subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
     # Fetch from upstream
     git_fetch_upstream_command = "git fetch upstream"
-    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    #subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
 
-    GetModifiedFiles = f"git diff upstream/master {current_directory}/../../../Parsers/"
+    GetModifiedFiles = f"git diff {current_directory}/../../../Parsers/"
     try:
         Changes = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
     except subprocess.CalledProcessError as e:
