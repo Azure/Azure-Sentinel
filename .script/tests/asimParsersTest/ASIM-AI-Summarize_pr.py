@@ -43,7 +43,7 @@ def get_git_diff():
 
 # Fetch the git diff
 git_diff = get_git_diff()
-print(f"git_diff: {git_diff.stdout}")
+print(f"git_diff: {git_diff}")
 
 # Setup logging
 try:
@@ -79,7 +79,7 @@ completion = client.chat.completions.create(
     },
         {
             "role": "user",
-            "content": f"Summarize the following Microsoft ASIM github PR changes: {git_diff.stdout}"
+            "content": f"Summarize the following Microsoft ASIM github PR changes: {git_diff}"
         }
 ],
     max_tokens=4096,
