@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimWebSessionNative",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Web Session ASIM parser for Microsoft Sentinel native Network Session table",
+            "category": "ASIM",
+            "FunctionAlias": "ASimWebSessionNative",
+            "query": "let parser=(disabled:bool=false) \n{\n  ASimWebSessionLogs  | where not(disabled)\n    // \n    // -- Schema fixed\n    | extend\n        FileSize = tolong(FileSize)\n    //\n    // -- Log Analytics global fields renaming\n    | project-rename\n        EventUid          = _ItemId,\n        DvcScopeId        = _SubscriptionId\n    //\n    // -- ASIM Global fields\n    | extend          \n        EventSchema       = \"WebSession\"\n    | extend\n        //\n        // -- Default values\n        EventEndTime      = coalesce (EventEndTime, TimeGenerated),\n        EventStartTime    = coalesce (EventStartTime, TimeGenerated),\n        //\n        // -- Multi-source aliases\n        Dvc = iff (EventType == 'HTTPSession',\n          coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, DstMacAddr, _ResourceId, strcat (EventVendor,'/', EventProduct)),\n          coalesce (DvcFQDN, DvcHostname, DstFQDN, DstHostname, DvcIpAddr, DstIpAddr, DvcId, DstDvcId, DstMacAddr, _ResourceId, strcat (EventVendor,'/', EventProduct))\n        ),\n        Dst               = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),\n        Src               = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),\n        Rule              = coalesce(RuleName, tostring(RuleNumber)),\n        //\n        // -- Aliases which depend on EventType\n        Hostname = iff  (EventType == \"EndpointNetworkSession\" and NetworkDirection == (\"Inbound\"), SrcHostname, DstHostname),\n        IpAddr = iff  (EventType == \"EndpointNetworkSession\" and NetworkDirection == (\"Inbound\"), DstIpAddr, SrcIpAddr),\n        //\n        // -- Simple aliases\n        Duration          = NetworkDuration,\n        SessionId         = NetworkSessionId,\n        User              = SrcUsername,\n        HttpStatusCode    = EventResultDetails,\n        UserAgent         = HttpUserAgent\n        // --\n        // -- Aliased fields not implemented in ASimWebSessionLogs yet \n        //InnerVlanId     = SrcVlanId,\n        //OuterVlanId     = DstVlanId,\n        //DvcInterface    = coalesce(DvcInterface, DvcInboundInterface, DvcOutboundInterface), \n    | project-away\n        TenantId, SourceSystem, _ResourceId\n};\nparser  (disabled=disabled)\n",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

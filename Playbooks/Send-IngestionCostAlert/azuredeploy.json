@@ -1,0 +1,310 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"metadata": {
+		"title": "Ingestion Cost Alert Playbook",
+		"description": "This playbook sends you an e-mail or Microsoft Teams message alert if a user-defined budget threshold is exceeded",
+		"prerequisites": "Office 365 or Google Mail account or Microsoft Teams",
+		"prerequisitesDeployTemplateFile": "None",
+		"lastUpdateTime": "3/25/2022",
+		"entities": [],
+		"tags": [],
+		"support": {
+			"tier": "community",
+			"armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+		},
+		"author": {
+			"name": "Innocent Wafula"
+		}
+	},
+	"parameters": {
+		"PlaybookName": {
+			"defaultValue": "IngestionCostAlert",
+			"type": "string"
+		}
+	},
+	"variables": {
+		"azuremonitorlogsConnectionName": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+		"office365ConnectionName": "[concat('office365-', parameters('PlaybookName'))]",
+		"teamsConnectionName": "[concat('teams-', parameters('PlaybookName'))]"
+	},
+	"resources": [
+		{
+			"properties": {
+				"provisioningState": "Succeeded",
+				"state": "Enabled",
+				"definition": {
+					"$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+					"contentVersion": "1.0.0.0",
+					"parameters": {
+						"$connections": {
+							"defaultValue": {},
+							"type": "Object"
+						}
+					},
+					"triggers": {
+						"Recurrence": {
+							"recurrence": {
+								"frequency": "Hour",
+								"interval": 6,
+								"timeZone": "Eastern Standard Time"
+							},
+							"evaluatedRecurrence": {
+								"frequency": "Hour",
+								"interval": 6,
+								"timeZone": "Eastern Standard Time"
+							},
+							"type": "Recurrence"
+						}
+					},
+					"actions": {
+						"Days_in_a_month": {
+							"runAfter": {
+								"Price_Per_GB": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "days_in_month",
+										"type": "integer",
+										"value": 31
+									}
+								]
+							}
+						},
+						"For_each": {
+							"foreach": "@body('Run_query_and_list_results')?['value']",
+							"actions": {
+								"Condition": {
+									"actions": {
+										"Post_a_message_in_a_Teams_channel": {
+											"runAfter": {
+												"Send_an_email_": [
+													"Succeeded"
+												]
+											},
+											"type": "ApiConnection",
+											"inputs": {
+												"body": {
+													"messageBody": "The daily cost budget of @{variables('max_per_day')} has been exceeded !",
+													"messageTitle": "Daily Budget Exceeded",
+													"recipient": {
+														"channelId": "19:cdf3ecb0942e44efad002f1126358a8f@thread.tacv2"
+													}
+												},
+												"host": {
+													"connection": {
+														"name": "@parameters('$connections')['teams_1']['connectionId']"
+													}
+												},
+												"method": "post",
+												"path": "/flowbot/actions/notification/recipienttypes/channel",
+												"queries": {
+													"groupId": "0b119fea-49f5-4cd7-b4b6-b7ca747eb391"
+												}
+											}
+										},
+										"Send_an_email_": {
+											"runAfter": {},
+											"type": "ApiConnection",
+											"inputs": {
+												"body": {
+													"Body": "<p>The daily cost budget of @{variables('max_per_day')} has been exceeded !</p>",
+													"Importance": "High",
+													"Subject": "Daily Budget Exceeded",
+													"To": "inwafula@buildseccxpninja.onmicrosoft.com"
+												},
+												"host": {
+													"connection": {
+														"name": "@parameters('$connections')['office365_1']['connectionId']"
+													}
+												},
+												"method": "post",
+												"path": "/v2/Mail"
+											}
+										}
+									},
+									"runAfter": {},
+									"expression": {
+										"and": [
+											{
+												"greater": [
+													"@items('For_each')?['AggregatedValue']",
+													"@variables('max_per_day')"
+												]
+											}
+										]
+									},
+									"type": "If"
+								}
+							},
+							"runAfter": {
+								"Run_query_and_list_results": [
+									"Succeeded"
+								]
+							},
+							"type": "Foreach"
+						},
+						"Monthly_budget": {
+							"runAfter": {
+								"Days_in_a_month": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "monthly_budget",
+										"type": "float",
+										"value": 10
+									}
+								]
+							}
+						},
+						"Price_Per_GB": {
+							"runAfter": {},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "price_per_GB",
+										"type": "float",
+										"value": 4.3
+									}
+								]
+							}
+						},
+						"Run_query_and_list_results": {
+							"runAfter": {
+								"Threshold_per_day": [
+									"Succeeded"
+								]
+							},
+							"type": "ApiConnection",
+							"inputs": {
+								"body": "let price_per_GB = @{variables('price_per_GB')}  ;\nlet how_many_days = @{variables('days_in_month')}   ;\nlet total_funding = @{variables('monthly_budget')} ;\nlet max_per_day = toreal(@{variables('monthly_budget')}) / toreal(@{variables('days_in_month')});\nUsage\n| where TimeGenerated > startofday(ago(1d))\n| where IsBillable == true\n| summarize AggregatedValue= sum(Quantity) * price_per_GB / 1024\n| where AggregatedValue > max_per_day",
+								"host": {
+									"connection": {
+										"name": "@parameters('$connections')['azuremonitorlogs_1']['connectionId']"
+									}
+								},
+								"method": "post",
+								"path": "/queryData",
+								"queries": {
+									"resourcegroups": "CxE-inwafula",
+									"resourcename": "IWSec",
+									"resourcetype": "Log Analytics Workspace",
+									"subscriptions": "1c61ccbf-70b3-45a3-a1fb-848ce46d70a6",
+									"timerange": "Set in query"
+								}
+							}
+						},
+						"Threshold_per_day": {
+							"runAfter": {
+								"Monthly_budget": [
+									"Succeeded"
+								]
+							},
+							"type": "InitializeVariable",
+							"inputs": {
+								"variables": [
+									{
+										"name": "max_per_day",
+										"type": "float",
+										"value": 5
+									}
+								]
+							}
+						}
+					},
+					"outputs": {}
+				},
+				"parameters": {
+					"$connections": {
+						"value": {
+							"azuremonitorlogs_1": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+								"connectionName": "[variables('azuremonitorlogsConnectionName')]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+							},
+							"office365_1": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]",
+								"connectionName": "[variables('office365ConnectionName')]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+							},
+							"teams_1": {
+								"connectionId": "[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]",
+								"connectionName": "[variables('teamsConnectionName')]",
+								"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+							}
+						}
+					}
+				}
+			},
+			"name": "[parameters('PlaybookName')]",
+			"type": "Microsoft.Logic/workflows",
+			"location": "[resourceGroup().location]",
+			"tags": {
+				"createddate": "01/07/2022",
+				"owner": "inwafula",
+				"hidden-SentinelTemplateName": "IngestionCostAlert",
+				"hidden-SentinelTemplateVersion": "1.0"
+			},
+			"identity": {
+				"type": "SystemAssigned"
+			},
+			"apiVersion": "2017-07-01",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('azuremonitorlogsConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('office365ConnectionName'))]",
+				"[resourceId('Microsoft.Web/connections', variables('teamsConnectionName'))]"
+			]
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('azuremonitorlogsConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('azuremonitorlogsConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('office365ConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('office365ConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/office365')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('teamsConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"kind": "V1",
+			"properties": {
+				"displayName": "[variables('teamsConnectionName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+				}
+			}
+		}
+	]
+}

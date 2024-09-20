@@ -1,0 +1,39 @@
+id: eb68b129-5f17-4f56-bf6d-dde48d5e615a
+name: ProofpointPOD - Binary file in attachment
+description: |
+  'Detects when email received with binary file as attachment.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: ProofpointPOD
+    dataTypes:
+      - ProofpointPOD_message_CL
+queryFrequency: 10m
+queryPeriod: 10m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let lbtime = 10m;
+  let binaryTypes = dynamic(['zip', 'octet-stream', 'java-archive', 'rar', 'tar', 'x-7z-compressed', 'x-msdownload', 'portable-executable']);
+  ProofpointPOD
+  | where TimeGenerated > ago(lbtime)
+  | where EventType == 'message'
+  | where NetworkDirection == 'inbound'
+  | where FilterDisposition !in ('reject', 'discard')
+  | extend attachedMimeType = tostring(todynamic(MsgParts)[0]['detectedMime'])
+  | where attachedMimeType has_any (binaryTypes)
+  | project SrcUserUpn, AccountCustomEntity = tostring(parse_json(DstUserUpn)[0]), attachedMimeType, MsgHeaderSubject
+  | extend Name = tostring(split(AccountCustomEntity, "@")[0]), UPNSuffix = tostring(split(AccountCustomEntity, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+version: 1.0.3
+kind: Scheduled

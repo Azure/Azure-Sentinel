@@ -1,0 +1,94 @@
+Parser:
+  Title: File Event ASIM parser for CrowdStrike Falcon Data Replicator
+  Version: '0.1'
+  LastUpdated: Jun 5, 2023
+Product:
+  Name: Falcon Data Replicator
+Normalization:
+  Schema: FileEvent
+  Version: '0.2.1'
+References:
+  - Title: ASIM File Event Schema
+    Link: https://aka.ms/ASimFileEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing CrowdStrike Falcon Data Replicator logs produced by the Microsoft Sentinel AWS S3 connector to the ASIM File Event normalized schema.
+ParserName: ASimFileEventCrowdStrikeFalcon
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+    let EventTypeSimpleNameLookup = parse_json('{"ZipFileWritten": "FileModified",  "XarFileWritten": "FileModified",  "VmdkFileWritten": "FileModified",  "VdiFileWritten": "FileModified",  "TiffFileWritten": "FileModified",  "TarFileWritten": "FileModified",  "SuspiciousPeFileWritten": "FileModified",  "SuspiciousEseFileWritten": "FileModified",  "SldFileWritten": "FileModified",  "SevenZipFileWritten": "FileModified",  "RtfFileWritten": "FileModified",  "RpmFileWritten": "FileModified",  "RarFileWritten": "FileModified",  "RansomwareRenameFile": "FileRenamed",  "RansomwareOpenFile": "FileAccessed",  "RansomwareFileAccessPattern": "FileAccessed",  "RansomwareCreateFile": "FileCreated",  "PngFileWritten": "FileModified", "PeFileWritten": "FileCreated",  "PdfFileWritten": "FileModified",  "OoxmlFileWritten": "FileModified",  "OleFileWritten": "FileModified",  "NewScriptWritten": "FileCreated",  "NewExecutableWritten": "FileCreated",  "NewExecutableRenamed": "FileRenamed",  "MSXlsxFileWritten": "FileModified",  "MSVsdxFileWritten": "FileModified",  "MSPptxFileWritten": "FileModified",  "MsiFileWritten": "FileModified",  "MSDocxFileWritten": "FileModified",  "MachOFileWritten": "FileModified",  "LnkFileWritten": "FileModified",  "JpegFileWritten": "FileModified",  "JavaClassFileWritten": "FileModified",  "JarFileWritten": "FileModified",  "IdwFileWritten": "FileModified",  "GzipFileWritten": "FileModified",  "GifFileWritten": "FileModified",  "GenericFileWritten": "FileModified", "EseFileWritten": "FileModified",  "EmailFileWritten": "FileModified",  "EmailArchiveFileWritten": "FileModified",  "ELFFileWritten": "FileModified",  "DxfFileWritten": "FileModified",  "DwgFileWritten": "FileModified",  "DmpFileWritten": "FileModified",  "DmgFileWritten": "FileModified",  "DirectoryCreate": "FolderCreated",  "CriticalFileModified": "FileModified",  "CriticalFileAccessed": "FileAccessed",  "CabFileWritten": "FileModified",  "BZip2FileWritten": "FileModified",  "BmpFileWritten": "FileModified",  "BlfFileWritten": "FileModified",  "AsepFileChange": "FileModified",  "ArjFileWritten": "FileModified",  "ArcFileWritten": "FileModified"}');
+    let EventSeverityLookup = parse_json('{"SuspiciousPeFileWritten": "Medium","SuspiciousEseFileWritten": "Medium","RansomwareRenameFile": "High","RansomwareOpenFile": "High","RansomwareFileAccessPattern": "High","RansomwareCreateFile": "High","CriticalFileModified": "Medium","CriticalFileAccessed": "Medium"}');
+    let EventResultStatusLookup = parse_json('{0: {"EventResultDetails": "","EventResult": "Success"},538181633: {"EventResultDetails": "Component Enabled","EventResult": "Success"},1611530273: {"EventResultDetails": "Mask Adjusted","EventResult": "Success"},1611726866: {"EventResultDetails": "DEP disabled appcompat","EventResult": "Success"},1611792386: {"EventResultDetails": "No existing credentials","EventResult": "Failure"},1611923478: {"EventResultDetails": "Component Stopped","EventResult": "Success"},1612251168: {"EventResultDetails": "HTTP Visibility enabled","EventResult": "Success"},3221225506: {"EventResultDetails": "Access Denied","EventResult": "Failure"},3221225533: {"EventResultDetails": "Data late error","EventResult": "Failure"},3221225541: {"EventResultDetails": "Invalid page protection","EventResult": "Failure"},3221226347: {"EventResultDetails": "Driver blocked critical","EventResult": "Failure"},3759013928: {"EventResultDetails": "Process Critical","EventResult": "Failure"},3759013929: {"EventResultDetails": "Process Whitelisted","EventResult": "Success"},3759013930: {"EventResultDetails": "Process Microsoft signed","EventResult": "Success"},3759013931: {"EventResultDetails": "Process Apple signed","EventResult": "Success"},3759407166: {"EventResultDetails": "Component Disabled","EventResult": "Failure"}}');
+    let EventResultFileWrittenLookup = parse_json('{0: {"EventResultDetails": "","EventResult": "Success"},1: {"EventResultDetails": "Hash failed","EventResult": "Failure"},2: {"EventResultDetails": "Hash aborted too large","EventResult": "Failure"}}');
+    let EventTypeFileLookup = parse_json('{0: "FileRenamed",1: "FileModified",2: "FileDeleted"}');
+    let EventTypeSystemOperationLookup = parse_json('{1: "FileRenamed",2: "FileDeleted"}');source
+    | extend eventDatetime = datetime_add('Millisecond', tolong(timestamp), todatetime('1970-01-01')),
+             contextDatetime = datetime_add('MilliSecond', tolong(todouble(ContextTimeStamp) * 1000), todatetime('1970-01-01'))
+    | extend TimeGenerated = iff(isnotempty(eventDatetime), eventDatetime, now())
+    | project-rename
+        DvcIpAddr = aip,
+        DvcId = aid,
+        ActorUsername = UserName,
+        EventOriginalType = name,
+        EventOriginalUid = id,
+        EventProductVersion = ConfigBuild,
+        ActingProcessId = ContextProcessId,
+        TargetFilePath = TargetFileName,
+        SrcFileName = SourceFileName,
+        TargetFileDirectory = TargetDirectoryName,
+        ActingProcessCommandLine = CommandLine
+    | extend 
+        DvcOs = case(event_platform == "Win", "Windows", 
+                    event_platform == "Mac", "Macintosh",
+                    event_platform == "Lin", "Linux", 
+                    ""),    
+        ActorUserId = iff(isnotempty(FileOperatorSid), FileOperatorSid, UID),
+        EventStartTime = iff(isnotempty(contextDatetime),contextDatetime,TimeGenerated),
+        TargetFileSize = tolong(Size),
+        TargetFilePathSplit = iff(event_platform == "Win" and ImageFileName == "", 
+                                    split(TargetFilePath,'\\'),
+                                    split(ImageFileName,'\\')
+                                ),
+        TargetFileSHA256 = SHA256HashData
+    | extend EventEndTime = EventStartTime,
+            TargetFileName = tostring(TargetFilePathSplit[array_length(TargetFilePathSplit)-1]),
+            EventSeverity = tostring(EventSeverityLookup[event_simpleName]),
+            EventResultStatus = tostring(EventResultStatusLookup[Status].EventResult),
+            EventResultDetailsStatus = tostring(EventResultStatusLookup[Status].EventResultDetails),
+            EventResultFileWritten = tostring(EventResultFileWrittenLookup[FileWrittenFlags].EventResult),
+            EventResultDetailsFileWritten = tostring(EventResultFileWrittenLookup[FileWrittenFlags].EventResultDetails),
+            EventTypeSimple = tostring(EventTypeSimpleNameLookup[event_simpleName]),
+            EventTypeFile = tostring(EventTypeFileLookup[FileEventType]),
+            EventTypeSystemOperation = tostring(EventTypeSystemOperationLookup[FileSystemOperationType]),
+            ActorUsername = case(isnotempty(ActorUsername), ActorUsername,
+                                ActorUserId == "S-1-5-18", "Local System",
+                                ActorUserId == "S-1-0-0", "Nobody",
+                                "")
+    | extend 
+            AdditionalFields = todynamic(AdditionalFields),
+            TargetFileExtension = tostring(split(TargetFileName,".",1)[0]),
+            TargetFilePathType = iff(DvcOs == "Windows", "Windows Share",""),
+            ActorUsernameType = iff(ActorUsername == "","","Simple"),
+            ActorUserIdType = case(FileOperatorSid != "","SID",
+                                   UID != "","RID",
+                                   ""),
+            HashType = iff(TargetFileSHA256 == "", "", "SHA256"),
+            EventType = case(isnotempty(EventTypeSystemOperation), EventTypeSystemOperation,
+                            isnotempty(EventTypeFile), EventTypeFile,
+                            EventTypeSimple),
+            TargetFileCreationTime = iff(event_simpleName in~ ("RansomwareCreateFile", "PeFileWritten", "NewScriptWritten", "NewExecutableWritten"), EventStartTime, todatetime("")),
+            EventCount = toint(1),
+            EventSchemaVersion = "0.2.1",
+            EventVendor = "CrowdStrike",
+            EventProduct = "Falcon Data Replicator",
+            EventResult = case(isnotempty(EventResultStatus), EventResultStatus,
+                               isnotempty(EventResultFileWritten), EventResultFileWritten,
+                               "Success"),
+            EventResultDetails = case(isnotempty(EventResultDetailsStatus), EventResultDetailsStatus,
+                                    isnotempty(EventResultDetailsFileWritten), EventResultDetailsFileWritten,
+                                    ""),
+            EventSeverity = iff(EventSeverity == "", "Informational", EventSeverity)

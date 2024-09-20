@@ -1,0 +1,133 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "defaultValue": ""
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid(subscription().subscriptionId))]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(subscription().subscriptionId))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "kind": "APIPolling",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "LastPass Enterprise - Reporting (Polling CCP)",
+          "id":"LastPass_Polling",
+          "publisher": "The Collective Consulting BV",
+          "descriptionMarkdown": "The [LastPass Enterprise](https://www.lastpass.com/products/enterprise-password-management-and-sso) connector provides the capability to LastPass reporting (audit) logs into Microsoft Sentinel. The connector provides visibility into logins and activity within LastPass (such as reading and removing passwords).",
+          "graphQueriesTableName": "LastPassNativePoller_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "LastPass Audit Events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Password moved to shared folders",
+              "query": "{{graphQueriesTableName}}\n | where Action_s == \"Move to Shared Folder\"\n | extend AccountCustomEntity = Username_s, IPCustomEntity = IP_Address_s, URLCustomEntity = Data_s, TimestampCustomEntity = todatetime(Time_s) "
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "SentinelKindsV2",
+              "value": [
+                "APIPolling"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true,
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "LastPass API Key and CID",
+                "description": "A LastPass API key and CID are required. [See the documentation to learn more about LastPass API](https://support.logmeininc.com/lastpass/help/use-the-lastpass-provisioning-api-lp010068)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect LastPass Enterprise to Microsoft Sentinel",
+              "description": "Provide the LastPass Provisioning API Key.",
+              "instructions": [
+                {
+                  "parameters": {
+                    "enable": "true",
+                    "userRequestPlaceHoldersInput": [
+                      {
+                        "displayText": "cid",
+                        "requestObjectKey": "queryParametersTemplate",
+                        "placeHolderName": "{{cidPlaceHolder}}"
+                      }
+                    ]
+                  },
+                  "type": "APIKey"
+                }
+              ]
+            }
+          ]
+        },
+        "pollingConfig": {
+          "auth": {
+            "authType": "APIKey",
+            "APIKeyName": "provhash",
+            "IsAPIKeyInPostPayload": true
+          },
+          "request": {
+            "apiEndpoint": "https://lastpass.com/enterpriseapi.php",
+            "rateLimitQPS": 2,
+            "httpMethod": "Post",
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+            "retryCount": 3,
+            "queryWindowInMin": 10,
+            "timeoutInSeconds": 120,
+            "queryParametersTemplate": "{'cid': '{{cidPlaceHolder}}', 'apiuser': 'Microsoft Sentinel CCP', 'cmd': 'reporting', 'data': { 'from': '{_QueryWindowStartTime}', 'to': '{_QueryWindowEndTime}' }, '{_APIKeyName}': '{_APIKey}'}",
+            "isPostPayloadJson": true
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.data"
+            ],
+            "successStatusJsonPath": "$.status",
+            "successStatusValue": "OK",
+            "convertChildPropertiesToArray": true
+          },
+          "paging": {
+            "pagingType": "NextPageToken",
+            "nextPageParaName": "next",
+            "nextPageTokenJsonPath": "$.next"
+          }
+        }
+      }
+    }
+  ]
+}

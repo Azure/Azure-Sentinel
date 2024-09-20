@@ -1,0 +1,92 @@
+id: 0da142a4-b3ad-4bb6-b01d-03b572743fe9
+name: User Granted Access and associated audit activity
+description: |
+  'Identifies when a new user is granted access and any subsequent audit related activity.  This can help you identify rogue or malicious user behavior.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+  - Impact
+relevantTechniques:
+  - T1098
+  - T1078
+  - T1496
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let auditLookback = starttime - 14d;
+  let opName = dynamic(["Add user", "Invite external user"]);
+  // Setting threshold to 3 as a default, change as needed.  Any operation that has been initiated by a user or app more than 3 times in the past 14 days will be excluded
+  let threshold = 3;
+  // Helper function to extract relevant fields from AuditLog events
+  let auditLogEvents = view (startTimeSpan:timespan)  {
+      AuditLogs | where TimeGenerated >= auditLookback
+      | extend ModProps = iff(TargetResources.[0].modifiedProperties != "[]", TargetResources.[0].modifiedProperties, todynamic("NoValues"))
+      | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)), 
+      tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+      | extend InitiatedByFull = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+      tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
+      | extend InitiatedBy = replace("_","@",tostring(split(InitiatedByFull, "#")[0]))
+      | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+      | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
+      | extend TargetResourceName = case(
+      isempty(tostring(TargetResources.[0].displayName)), TargetUserPrincipalName,
+      isnotempty(tostring(TargetResources.[0].displayName)) and tostring(TargetResources.[0].displayName) startswith "upn:", tolower(tostring(TargetResources.[0].displayName)),
+      tolower(tostring(TargetResources.[0].displayName))
+      )
+      | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
+      | extend TargetUserName = iff(isempty(TargetUserName), tostring(split(split(TargetResourceName, ",")[0], " ")[1]), TargetUserName ) 
+      | mvexpand ModProps
+      | extend PropertyName = tostring(ModProps.displayName), newValue = replace('\"','',tostring(ModProps.newValue));
+  };
+  let HistoricalAdd = auditLogEvents(auditLookback)
+  | where OperationName in~ (opName)
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OperationCount = count() 
+  by Type, InitiatedBy, IpAddress, TargetUserName, TargetResourceName, Category, OperationName, PropertyName, newValue, CorrelationId, Id
+  // Remove comment below to only include operations initiated by a user or app that is above the threshold for the last 14 days
+  | where OperationCount > threshold
+  ;
+  // Get list of new added users to correlate with all other events
+  let Correlate = HistoricalAdd 
+  | summarize by InitiatedBy, TargetUserName, CorrelationId;
+  // Get all other events related to list of newly added users
+  let allOtherEvents = auditLogEvents(auditLookback);
+  // Join the new added user list to get the list of associated events
+  let CorrelatedEvents = Correlate 
+  | join allOtherEvents on InitiatedBy, TargetUserName
+  | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) 
+  by Type, InitiatedBy, IpAddress, TargetUserName, TargetResourceName, Category, OperationName, PropertyName, newValue, CorrelationId, Id
+  ;
+  // Union the results so we can see when the user was added and any associated events that occurred during the same time.
+  let Results = union isfuzzy=true HistoricalAdd,CorrelatedEvents;
+  // newValues that are simple semi-colon separated, make those dynamic for easy viewing and Aggregate into the PropertyUpdate set based on CorrelationId and Id(DirectoryId)
+  Results
+  | extend newValue = split(newValue, ";")
+  | extend PropertyUpdate = pack(PropertyName, newValue, "Id", Id)
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), PropertyUpdateSet = make_bag(PropertyUpdate) 
+  by InitiatedBy, IpAddress, TargetUserName, TargetResourceName, OperationName, CorrelationId
+  | extend timestamp = StartTime, AccountCustomEntity = InitiatedBy, IPCustomEntity = IpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Other", "Identity" ]

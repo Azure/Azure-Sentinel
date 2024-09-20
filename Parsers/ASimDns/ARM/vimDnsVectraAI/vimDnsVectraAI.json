@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimDnsVectraAI",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "DNS ASIM parser for Vectra AI Steams",
+            "category": "ASIM",
+            "FunctionAlias": "vimDnsVectraAI",
+            "query": "let parser=\n(\n  starttime:datetime=datetime(null), \n  endtime:datetime=datetime(null),\n  srcipaddr:string='*',\n  domain_has_any:dynamic=dynamic([]),\n  responsecodename:string='*', \n  response_has_ipv4:string='*',\n  response_has_any_prefix:dynamic=dynamic([]),\n  eventtype:string='Query',\n  disabled:bool=false\n) \n{\n  let NetworkProtocolLookup = datatable(proto_d:real, NetworkProtocol:string)[\n      6, 'TCP',\n      17, 'UDP'];\n  let DnsClassLookup = datatable(DnsQueryClass:int, DnsQueryClassName: string)[\n      0, 'Reserved',\n      1, 'IN',\n      2, 'Unassigned',\n      3, 'CH',\n      4, 'HS',\n      254, 'None',\n      255, 'Any'\n  ];\n  let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';\n  VectraStream_CL\n  | where not(disabled)\n  | where (isnull(starttime) or TimeGenerated >= starttime)\n      and (isnull(endtime) or TimeGenerated <= endtime)\n  | project-away MG, ManagementGroupName, RawData, SourceSystem, Computer\n  | where metadata_type_s == 'metadata_dns'\n  | where (srcipaddr == '*' or id_orig_h_s == srcipaddr)\n  | where (array_length(domain_has_any) == 0 or query_s has_any(domain_has_any))\n  | where (responsecodename == '*' or rcode_name_s =~ responsecodename)\n  | where (response_has_ipv4 == '*' or has_ipv4(answers_s, response_has_ipv4))\n  | where (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(answers_s, response_has_any_prefix))\n  | where (eventtype == '*' or eventtype in~ ('Query', 'lookup'))\n  | project-rename\n      DvcDescription = hostname_s,\n      DstDescription = resp_hostname_s,\n      SrcDescription = orig_hostname_s,\n      DnsFlagsAuthoritative = AA_b,\n      DnsFlagsRecursionAvailable = RA_b,\n      DnsFlagsRecursionDesired = RD_b,\n      DnsFlagsTruncated = TC_b,\n      DnsResponseName = answers_s,\n      DnsQuery = query_s,\n      DnsQueryTypeName = qtype_name_s,\n      DstIpAddr = id_resp_h_s,\n      DnsSessionId = community_id_s,\n      SrcIpAddr = id_orig_h_s,\n      DstDvcId = resp_huid_s,\n      SrcDvcId = orig_huid_s,\n      DvcId = sensor_uid_s,\n      EventOriginalUid = uid_s\n  | extend\n      DstHostname = iff (DstDescription startswith \"IP-\" or not(DstDescription matches regex HostnameRegex), \"\", DstDescription),\n      SrcHostname = iff (SrcDescription startswith \"IP-\" or not(SrcDescription matches regex HostnameRegex), \"\", SrcDescription),\n      DvcHostname = iff (DvcDescription startswith \"IP-\" or not(DvcDescription matches regex HostnameRegex), \"\", DvcDescription),\n      NetworkProtocolVersion = toupper(id_ip_ver_s),\n      DnsResponseCode = toint(rcode_d),\n      DnsResponseCodeName = toupper(rcode_name_s),\n      DnsQueryClass = toint(qclass_d),\n      DnsQueryType = toint(qtype_d),\n      DstPortNumber = toint(id_resp_p_d),\n      EventCount = toint(1),\n      EventEndTime = unixtime_milliseconds_todatetime(ts_d),\n      EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),\n      EventProduct = 'Vectra Stream',\n      EventResult = case(tolong(rcode_d) > 0, \"Failure\", \"Success\"),\n      EventSchema = 'Dns', \n      EventSchemaVersion='0.1.3',\n      EventType = 'Query',\n      EventVendor = 'Vectra AI',\n      SrcDvcIdType = 'VectraId',\n      DstDvcIdType = 'VectraId',\n      DvcIdType = 'VectraId',\n      SrcPortNumber = toint(id_orig_p_d),\n      TransactionIdHex = tostring(toint(trans_id_d)),\n      EventSubType = iff (saw_reply_b, \"response\", \"request\")\n  | lookup DnsClassLookup on DnsQueryClass\n  | lookup NetworkProtocolLookup on proto_d\n  | extend\n      EventResultDetails = DnsResponseCodeName,\n      EventStartTime = EventEndTime,\n      SessionId = DnsSessionId,\n      Domain = DnsQuery,\n      Hostname = DstHostname,\n      IpAddr = SrcIpAddr,\n      Dvc = coalesce (DvcId, DvcDescription),\n      Src = SrcIpAddr,\n      Dst = DstIpAddr\n  | project-away\n      *_d, *_s, *_b, *_g\n    };\nparser(starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr:string='*',domain_has_any:dynamic=dynamic([]),responsecodename:string='*',response_has_ipv4:string='*',response_has_any_prefix:dynamic=dynamic([]),eventtype:string='Query',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

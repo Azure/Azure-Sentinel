@@ -1,0 +1,38 @@
+id: f3dc87f3-64f9-405d-aa1b-fed98f859357
+name: New users calling sensitive Watchlist
+description: |
+  'This hunting query looks for users who have run queries calling a watchlist template relating to sensitive data that have not previously been seen calling these watchlists.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor(Query Audit)
+    dataTypes:
+      - LAQueryLogs
+tactics:
+  - Collection
+relevantTechniques:
+  - T1530
+  - T1213
+query: |
+
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  LAQueryLogs
+  | where TimeGenerated between(lookback..starttime)
+  | where QueryText has_any ('_GetWatchlist("VIPUsers")', "_GetWatchlist('VIPUsers')", '_GetWatchlist("ServiceAccounts")', "_GetWatchlist('ServiceAccounts')",'_GetWatchlist("HighValueAssets")', "_GetWatchlist('HighValueAssets')")
+  | summarize by AADEmail
+  | join kind = rightanti (LAQueryLogs
+  | where TimeGenerated between(starttime..endtime)
+  | where QueryText has_any ('_GetWatchlist("VIPUsers")', "_GetWatchlist('VIPUsers')", '_GetWatchlist("ServiceAccounts")', "_GetWatchlist('ServiceAccounts')",'_GetWatchlist("HighValueAssets")', "_GetWatchlist('HighValueAssets')"))
+  on AADEmail
+  | project TimeGenerated, AADEmail, QueryText, RequestClientApp, RequestTarget
+  | extend timestamp = TimeGenerated, AccountCustomEntity = AADEmail
+
+entityMappings:
+- entityType: Account
+  fieldMappings:
+    - identifier: FullName
+      columnName: AccountCustomEntity
+- entityType: AzureResource
+  fieldMappings:
+    - identifier: ResourceId
+      columnName: RequestTarget

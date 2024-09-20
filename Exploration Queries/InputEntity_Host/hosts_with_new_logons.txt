@@ -1,0 +1,30 @@
+// Shows accounts that have logged onto a host for the first time - this may clearly be benign activity but an account logging onto multiple hosts for the first time can also be used to look for evidence of that account being used to move laterally across a network.
+// Hosts with new logons - ie first time an account has logged onto a host
+// Tags: #LateralMovement
+let LogonEvents=()
+{
+    let logonSuccess=SecurityEvent
+    | where EventID==4624
+    | project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress,ActionType="Logon";
+    let logonFail=SecurityEvent
+    | where EventID==4625
+    | project  EventTime=TimeGenerated, ComputerName=Computer,AccountName=TargetUserName, AccountDomain=TargetDomainName, IpAddress, ActionType="LogonFailure";
+    logonFail
+    | union logonSuccess;
+};
+LogonEvents
+| where EventTime >= ago(30d)
+| where ActionType == "Logon"
+| summarize count() by ComputerName, AccountName
+| where AccountName !startswith "Dnz"  // DEMO - filter out a known account from baseline
+| join kind=leftouter
+(
+    LogonEvents
+    | where EventTime >= ago(1d)
+    | where ActionType == "Logon"
+    | summarize count() by ComputerName, AccountName
+)
+on ComputerName
+| where AccountName != AccountName1
+| summarize HostCount=dcount(ComputerName) by AccountName1
+| render piechart

@@ -1,0 +1,46 @@
+id: 77a58c08-bc8e-48b3-8fe9-6c38fd011cd9
+name: Anomalous Failed Logon
+description: |
+  'Adversaries with no prior knowledge of legitimate credentials within the system or environment may guess passwords to attempt access to accounts. Emotet, for example, has been observed using a hard-coded list of passwords to brute-force user accounts. The query below generates an output of all users with 'High' BlastRadius that perform failed Sign-in:Invalid username or password.'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - CredentialAccess
+relevantTechniques:
+  - T1110.001
+query: |
+ BehaviorAnalytics
+ | where ActivityType =~ "LogOn"
+ | where UsersInsights.BlastRadius =~ "High"
+ | join kind = inner (
+ SigninLogs  | where Status.errorCode == 50126
+ ) on $left.SourceRecordId == $right._ItemId
+ | extend UserPrincipalName = iff(UserPrincipalName has "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserPrincipalName),
+ UserName = iff(UserName has "#EXT#",replace("_","@",tostring(split(UserPrincipalName, "#")[0])),UserName)
+ | project TimeGenerated, UserName, UserPrincipalName, UsersInsights, ActivityType, ActionType,["Evidence"]=ActivityInsights, ResourceDisplayName, AppDisplayName, SourceIPAddress, SourceIPLocation, SourceDevice, DevicesInsights, ResourceId
+ | extend Name=split(UserPrincipalName, "@")[0], UPNSuffix=split(UserPrincipalName, "@")[1]
+ | extend Account_0_Name = Name
+ | extend Account_0_UPNSuffix = UPNSuffix
+ | extend IP_0_Address = SourceIPAddress
+ | extend AzureResource_0_ResourceId = ResourceId
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceIPAddress
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: ResourceId
+version: 2.0.0

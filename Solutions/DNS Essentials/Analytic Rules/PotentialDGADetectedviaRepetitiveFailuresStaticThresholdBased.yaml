@@ -1,0 +1,67 @@
+id: 89ba52fa-96a7-4653-829a-ca49bb13336c
+name: Potential DGA(Domain Generation Algorithm) detected via Repetitive Failures - Static threshold based (ASIM DNS Solution)
+description: |
+  'This rule identifies clients with a high NXDomain count, which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). An alert is generated when a new IP address is seen (based on not being seen associated with NXDomain records in prior 10-day baseline period). It utilizes [ASIM](https://aka.ms/AboutASIM) normalization and is applied to any source that supports the ASIM DNS schema.'
+severity: Medium
+status: Available 
+tags:
+  - Schema: ASimDns
+    SchemaVersion: 0.1.6
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 10d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CommandAndControl
+relevantTechniques:
+  - T1568
+  - T1008
+query: |
+  let threshold = 100;
+  let lookback = 10d;
+  let referenceendtime = 1d;
+  let nxDomainDnsEvents = (stime: datetime, etime: datetime) {
+    _Im_Dns(responsecodename='NXDOMAIN', starttime=stime, endtime=etime)
+    | where DnsQueryTypeName in ("A", "AAAA")
+    | where ipv4_is_match("127.0.0.1", SrcIpAddr) == False
+    | where DnsQuery !contains "/" and DnsQuery contains "."
+  };
+  nxDomainDnsEvents (stime=ago(referenceendtime), etime=now())
+  | summarize
+    StartTimeUtc = min(TimeGenerated),
+    EndTimeUtc = max(TimeGenerated),
+    DNSQueryCount=dcount(DnsQuery)
+    by SrcIpAddr
+  | where DNSQueryCount > threshold
+  // Filter out previously seen IPs
+  | join kind=leftanti (nxDomainDnsEvents (stime=ago(lookback), etime=ago(referenceendtime))
+    | summarize DNSQueryCount=dcount(DnsQuery) by SrcIpAddr, bin(TimeGenerated,1d)
+    | where DNSQueryCount > threshold)
+    on SrcIpAddr
+  // Pull out sample NXDomain responses for those remaining potentially infected IPs
+  | join kind = inner (nxDomainDnsEvents (stime=ago(lookback), etime=now())
+    | summarize by DnsQuery, SrcIpAddr)
+    on SrcIpAddr
+  | summarize
+    StartTimeUtc = min(StartTimeUtc),
+    EndTimeUtc = max(EndTimeUtc),
+    DNSQueries=make_list(DnsQuery, 100)
+    by SrcIpAddr, DNSQueryCount
+  | extend DNSQueryThreshold=threshold
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SrcIpAddr
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  DNSQueries: DNSQueries
+  DNSQueryThreshold: DNSQueryThreshold
+  DNSQueryCount: DNSQueryCount
+alertDetailsOverride:
+  alertDisplayNameFormat: "[Static threshold] Potential DGA (Domain Generation Algorithm) originating from client IP: '{{SrcIpAddr}}' has been detected."
+  alertDescriptionFormat: "Client has been identified with high NXDomain count which could be indicative of a DGA (cycling through possible C2 domains where most C2s are not live). This client is found to be communicating with multiple Domains which do not exist.\n\nDGA DNS query count baseline is: '{{DNSQueryThreshold}}'\n\nCurrent failed DNS query count from this client: '{{DNSQueryCount}}'\n\nDNS queries requested by this client inlcude: '{{DNSQueries}}'"
+version: 1.0.2
+kind: Scheduled

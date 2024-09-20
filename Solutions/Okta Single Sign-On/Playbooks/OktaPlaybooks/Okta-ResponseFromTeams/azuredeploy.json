@@ -1,0 +1,453 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Response on Okta user from Teams", 
+        "description": "This playbooks sends an adaptive card to the SOC Teams channel with information about the Okta user and incident details. The SOC is allowed to take action such suspend, reset password, expire password, add to group. An informative comment will be posted to the incident.",
+        "prerequisites": ["1. Okta Custom Connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+          "2. Generate an API key. [Learn how](https://developer.okta.com/docs/guides/create-an-api-token/overview/)"],
+        "prerequisitesDeployTemplateFile": "../../OktaCustomConnector/azuredeploy.json",
+        "lastUpdateTime": "2021-07-28T00:00:00.000Z", 
+        "entities": ["Account"], 
+        "tags": ["Remediation"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Accenture"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Okta-ResponseFromTeams",
+            "type": "String",
+			 "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+        },
+         "SOC Email": {
+      "defaultValue": "",
+      "type": "String",
+	  "metadata": {
+        "description": "Email alias of the SOC team"
+      }
+    },
+    
+	  "Teams GroupId": {
+      "defaultValue": "TeamgroupId",
+      "type": "String",
+	  "metadata": {
+        "description": "GroupId of the Team channel"
+      }
+    },
+    "Teams ChannelId": {
+      "defaultValue": "TeamChannelId",
+      "type": "String",
+      "metadata": {
+        "description": "Team ChannelId"
+      }
+    },
+    "CustomConnectorName":{
+        "defaultValue": "OktaCustomConnector",
+        "type": "string",
+        "metadata": {
+          "description": "Name of the custom connector which interacts with Okta"
+        }
+      }
+	},
+    "variables": {
+    "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+    "OKTAConnectionName": "[concat('oktaconnector-', parameters('PlaybookName'))]",
+    "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]"
+  },
+    "resources": [
+	  {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('OKTAConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+        }
+      }
+    },
+    {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('AzureSentinelConnectionName')]",
+        "location": "[resourceGroup().location]",
+        "kind": "V1",
+        "properties": {
+            "displayName": "[variables('AzureSentinelConnectionName')]",
+            "customParameterValues": {},
+            "parameterValueType": "Alternative",
+            "api": {
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+            }
+        }
+    },
+	 {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('TeamsConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+        }
+      }
+    },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+           "name": "[parameters('PlaybookName')]",
+           "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "ResponseOnOktaUserTeams-Okta",
+                "hidden-SentinelTemplateVersion": "1.0",
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+			 "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('OKTAConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]"
+      ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                  
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Compose_the_choice_set_dropdown_for_adaptive_card_for_group_names": {
+                            "runAfter": {
+                                "For_each_group": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "@outputs('Select_groups')?[0]?['body']"
+                        },
+                        "Entities_-_Get_Accounts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/account"
+                            }
+                        },
+                        "For_each-risky_account_received_from_the_incident": {
+                            "foreach": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                            "actions": {
+                                "Add_a_comment_to_the_incident_with_the_information_collected_and_action_taken": {
+                                    "runAfter": {
+                                        "Update_incident_to_change_severity_and_status_according_to_choice": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Update_incident_to_change_severity_and_status_according_to_choice')?['id']",
+                                            "message": "<p><strong>OKTA Playbook ran and performed the following actions:<br>\n<br>\nGot User information from OKTA :<br>\n<br>\nUser id</strong>: &nbsp;@{body('Get_User')?['id']}<br>\n<strong>User name</strong>: &nbsp; @{body('Get_User')?['credentials']?['provider']?['name']}<br>\n<strong>User login</strong>: @{body('Get_User')?['profile']?['login']}<br>\n<strong>User email</strong>: @{body('Get_User')?['profile']?['email']}<br>\n<strong>User status: </strong>@{body('Get_User')?['status']}<br>\n<strong>User created:</strong> @{body('Get_User')?['created']}<br>\n<strong>User activated:</strong> @{body('Get_User')?['activated']}<br>\n<strong>User statusChanged:</strong> @{body('Get_User')?['statusChanged']}<br>\n<strong>User lastLogin:</strong> @{body('Get_User')?['lastLogin']}<br>\n<strong>User lastUpdated:</strong> @{body('Get_User')?['lastUpdated']}<br>\n<strong>User passwordChanged: </strong>@{body('Get_User')?['passwordChanged']}<br>\n<br>\n<strong>Actions taken on Sentinel:<br>\n</strong><br>\n<strong>Incident close reason</strong>: @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['incidentStatus']}<br>\n<strong>Action taken on User</strong>: @{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')['submitActionId']}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Get_User": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/api/v1/users/@{encodeURIComponent(items('For_each-risky_account_received_from_the_incident')?['Name'])}"
+                                    },
+                                    "description": "This gets the user details from Okta"
+                                },
+                                "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response": {
+                                    "runAfter": {
+                                        "Get_User": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnectionWebhook",
+                                    "inputs": {
+                                        "body": {
+                                            "body": {
+                                                "messageBody": " {\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n       \n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"large\",\n            \"weight\": \"bolder\",\n            \"text\": \"Suspicious identity - Microsoft Sentinel\",\n            \"wrap\": true\n        },\n         {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Possible Comprised User detected by the provider\",\n                            \"wrap\": true\n                        },\n         {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']} incident @{triggerBody()?['object']?['properties']?['title']} \",\n            \"wrap\": true,\n            \"weight\":\"bolder\"\n        },\n        \n         {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Incident description\",\n                            \"wrap\": true,\n                            \"weight\": \"Bolder\"\n                        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\":\" @{triggerBody()?['object']?['properties']?['description']}\",\n                            \"wrap\": true\n                        },\n                         {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})\",\n                            \"wrap\": true\n                        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                       \n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Risky user details from Okta:\",\n                            \"wrap\": true,\n                            \"weight\": \"Bolder\"\n                        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"UserID: @{body('Get_User')?['id']}\",\n                            \"wrap\": true\n                        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"First and Last name: @{body('Get_User')?['profile']?['firstName']} @{body('Get_User')?['profile']?['lastName']}\",\n                            \"wrap\": true\n                        },\n                       {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"User display name: @{items('For_each-risky_account_received_from_the_incident')?['Name']}\",\n                            \"wrap\": true\n                        },\n                     {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Status: @{body('Get_User')?['status']}\",\n                            \"wrap\": true\n                        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Status changed: @{body('Get_User')?['statusChanged']}\",\n                            \"wrap\": true\n                        },\n                       {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Last login: @{body('Get_User')?['lastLogin']}\",\n                            \"wrap\": true\n                        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Last updated: @{body('Get_User')?['lastUpdated']}\",\n                            \"wrap\": true\n                        },\n                         {\n                            \"type\": \"TextBlock\",\n                            \"text\": \"Password changed: @{body('Get_User')?['passwordChanged']}\",\n                            \"wrap\": true\n                        },\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration:\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close Azure Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"Close incident - False Positive\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"Close incident - True Positive\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Close incident - Benign Positive\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"No\",\n                    \"value\": \"no\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Microsoft Sentinel incident severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Response in Okta\",\n            \"size\": \"Medium\",\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"Image\",\n            \"style\": \"Person\",\n            \"url\": \"https://seekvectorlogo.com/wp-content/uploads/2017/12/okta-vector-logo.png\",\n            \"size\": \"Small\"\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Change user state (suspend)\"\n        },\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Change user state (unsuspend)\"\n        },\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Expire password\"\n        },\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Reset password\"\n        },\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Ignore\"\n        },\n        {\n            \"type\": \"Action.ShowCard\",\n            \"title\": \"Add user to group\",\n            \"card\": {\n                \"type\": \"AdaptiveCard\",\n                 \"body\":[\n                     {\n            \"type\": \"Input.ChoiceSet\",\n            \"id\": \"GroupId\",\n            \n            \"value\": \"1\",\n            \"choices\": @{outputs('Select_groups')?[0]?['body']}\n\n        }\n                ],\n                \"actions\": [\n                    {\n                        \"type\": \"Action.Submit\",\n                        \"title\": \"OK\"\n                    }\n                ],\n                \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n                \"version\": \"1.2\"\n            }\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                                                "recipient": {
+                                                    "channelId":"[parameters('Teams ChannelId')]"
+                                                },
+                                                "shouldUpdateCard": true
+                                            },
+                                            "notificationUrl": "@{listCallbackUrl()}"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['teams']['connectionId']"
+                                            }
+                                        },
+                                        "path": "/flowbot/actions/flowcontinuation/recipienttypes/channel/$subscriptions",
+                                        "queries": {
+                                            "groupId": "[parameters('Teams GroupId')]"
+                                        }
+                                    }
+                                },
+                                "Switch_to_perform_action_choices_on_the_user_in_Okta": {
+                                    "runAfter": {
+                                        "Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "cases": {
+                                        "Case_-_Add_user_to_group": {
+                                            "case": "OK",
+                                            "actions": {
+                                                "Group_–_Add_member": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "put",
+                                                        "path": "/api/v1/groups/@{encodeURIComponent(body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['GroupId'])}/users/@{encodeURIComponent(body('Get_User')?['id'])}"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_-_Expire_Password": {
+                                            "case": "Expire password",
+                                            "actions": {
+                                                "Expire_Password": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/api/v1/users/@{encodeURIComponent(body('Get_User')?['id'])}/lifecycle/expire_password"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_-_Reset_Password": {
+                                            "case": "Reset password",
+                                            "actions": {
+                                                "Reset_Password": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/api/v1/users/@{encodeURIComponent(body('Get_User')?['id'])}/lifecycle/reset_password"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_-_Suspend_User": {
+                                            "case": "Change user state (suspend)",
+                                            "actions": {
+                                                "Suspend_User": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/api/v1/users/@{encodeURIComponent(body('Get_User')?['id'])}/lifecycle/suspend"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "Case_-_Unsuspend_User": {
+                                            "case": "Change user state (unsuspend)",
+                                            "actions": {
+                                                "Unsuspend_User": {
+                                                    "runAfter": {},
+                                                    "type": "ApiConnection",
+                                                    "inputs": {
+                                                        "host": {
+                                                            "connection": {
+                                                                "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                                                            }
+                                                        },
+                                                        "method": "post",
+                                                        "path": "/api/v1/users/@{encodeURIComponent(body('Get_User')?['id'])}/lifecycle/unsuspend"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "default": {
+                                        "actions": {}
+                                    },
+                                    "expression": "@body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')['submitActionId']",
+                                    "type": "Switch"
+                                },
+                                "Update_incident_to_change_severity_and_status_according_to_choice": {
+                                    "runAfter": {
+                                        "Switch_to_perform_action_choices_on_the_user_in_Okta": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "classification": {
+                                                "ClassificationAndReason": "@{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['incidentStatus']}"
+                                            },
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "severity": "@{body('Post_an_Adaptive_Card_to_a_Teams_channel_and_wait_for_a_response')?['data']?['incidentSeverity']}",
+                                            "status": "Closed"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Compose_the_choice_set_dropdown_for_adaptive_card_for_group_names": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "For_each_group": {
+                            "foreach": "@body('List_Groups')",
+                            "actions": {
+                                "Select_groups": {
+                                    "runAfter": {},
+                                    "type": "Select",
+                                    "inputs": {
+                                        "from": "@body('List_Groups')",
+                                        "select": {
+                                            "title": "@item()?['profile']?['name']",
+                                            "value": "@item()?['id']"
+                                        }
+                                    },
+                                    "description": "preparing the group name and id from the list of groups to display in the adaptive card for user choice"
+                                }
+                            },
+                            "runAfter": {
+                                "List_Groups": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "description": "For each group preparing the list of groups with required details to display in the adaptive card for user choice"
+                        },
+                        "List_Groups": {
+                            "runAfter": {
+                                "Entities_-_Get_Accounts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['OktaCustomConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/api/v1/groups"
+                            },
+                            "description": "This provides list of groups present in Okta domain"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                             "OktaCustomConnector": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('OKTAConnectionName'))]",
+                "connectionName": "[variables('OKTAConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+              },
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                "connectionProperties": {
+                    "authentication": {
+                        "type": "ManagedServiceIdentity"
+                    }
+                }
+              },
+
+              "teams": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "connectionName": "[variables('TeamsConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+
+              }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,406 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-IP-Blocklist-Remove-IPs", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel Incident. It will remove the IP address from Microsoft Sentinel Incidents from a Microsoft Azure Conditional Access Named Locations list.",
+        "prerequisites": "1. A Microsoft Azure Named Locations list id is needed. 2. A Microsoft Azure App Registration is also needed for the Microsoft Graph API. 3. A Microsoft Azure key vault containing the app registration secret must also be set up. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-IP-Blocklist-Remove-IPs",
+        "lastUpdateTime": "20223-11-15T18:47:33Z",
+        "entities": ["IP"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Conditional Access", "Named Locations"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-IP-Blocklist-Remove-IPs",
+            "type": "string"
+        },
+        "NamedLocationsListName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Microsoft Azure Named Locations list that will hold the IPs"
+            }
+        },
+        "NamedLocationsListID": {
+            "type": "string",
+            "metadata": {
+                "description": "ID of the Microsoft Azure Named Locations list that will hold the IPs"
+            }
+        },
+        "AppRegistrationID": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Application (client) ID of the App Registration"
+            }
+        },
+        "AppRegistrationTenant": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Directory (tenant) ID of the App Registration"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Key Vault that stores the App Registration Secret"
+            }
+        },
+        "SecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of Key Vault Secret that contains the value of the App Registration Secret"
+            }
+        }
+    },
+    "variables": {
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Incident_Contains_IPs": {
+                            "actions": {
+                                "For_Each_-_Existing_IP": {
+                                    "foreach": "@body('Parse_JSON')?['ipRanges']",
+                                    "actions": {
+                                        "Condition_-_Add_to_JSON_body_if_existing_IP_is_not_in_Incident_IP_list": {
+                                            "actions": {
+                                                "Append_to_string_variable": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "Json Body",
+                                                        "value": "\n@{items('For_Each_-_Existing_IP')},\n"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "not": {
+                                                            "contains": [
+                                                                "@variables('Incident IPs')",
+                                                                "@replace(items('For_Each_-_Existing_IP')?['cidrAddress'],'/32', '')"
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "HTTP-_Remove_Incident_IPs_from_Named_Locations_List": {
+                                    "runAfter": {
+                                        "For_Each_-_Existing_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                         "authentication": {
+                                            "audience": "https://graph.microsoft.com",
+                                            "clientId": "[parameters('AppRegistrationID')]",
+                                            "secret": "@body('Get_Secret')?['value']",
+                                            "tenant": "[parameters('AppRegistrationTenant')]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "body": "@concat(substring(variables('Json Body'), 0, lastIndexOf(variables('Json Body'), ',')), decodeUriComponent('%0A'),']', decodeUriComponent('%0A'), '}')",
+                                        "headers": {
+                                            "Content-type": "application/json"
+                                        },
+                                        "method": "PATCH",
+                                        "uri": "[concat('https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations/', parameters('NamedLocationsListID'))]"
+                                    }
+                                },
+                                "HTTP_-_Get_Previous_List_Values": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://graph.microsoft.com",
+                                            "clientId": "[parameters('AppRegistrationID')]",
+                                            "secret": "@body('Get_Secret')?['value']",
+                                            "tenant": "[parameters('AppRegistrationTenant')]",
+                                            "type": "ActiveDirectoryOAuth"
+                                        },
+                                        "method": "GET",
+                                        "uri": "[concat('https://graph.microsoft.com/v1.0/identity/conditionalAccess/namedLocations/', parameters('NamedLocationsListID'))]"
+                                    }
+                                },
+                                "Parse_JSON": {
+                                    "runAfter": {
+                                        "HTTP_-_Get_Previous_List_Values": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_-_Get_Previous_List_Values')",
+                                        "schema": {
+                                            "properties": {
+                                                "@@odata.context": {
+                                                    "type": "string"
+                                                },
+                                                "@@odata.type": {
+                                                    "type": "string"
+                                                },
+                                                "createdDateTime": {
+                                                    "type": "string"
+                                                },
+                                                "displayName": {
+                                                    "type": "string"
+                                                },
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "ipRanges": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "@@odata.type": {
+                                                                "type": "string"
+                                                            },
+                                                            "cidrAddress": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "@@odata.type",
+                                                            "cidrAddress"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "isTrusted": {
+                                                    "type": "boolean"
+                                                },
+                                                "modifiedDateTime": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Variable_-_JSON_Body": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_IPs')?['IPs'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_-_Incident_IP": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Append_to_array_variable_-_Add_Incident_IP_address_value": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "Incident IPs",
+                                        "value": "@items('For_each_-_Incident_IP')?['address']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Get_Secret": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Initialize_Variable_-_JSON_Body": {
+                            "runAfter": {
+                                "For_each_-_Incident_IP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Json Body",
+                                        "type": "string",
+                                        "value": "[concat('{\n\"@odata.type\": \"#microsoft.graph.ipNamedLocation\",\n\"displayName\": \"', parameters('NamedLocationsListName'), '\",\n\"isTrusted\": false,\n \"ipRanges\": [')]"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_Incident_IPs": {
+                            "runAfter": {
+                                "Get_Secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident IPs",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

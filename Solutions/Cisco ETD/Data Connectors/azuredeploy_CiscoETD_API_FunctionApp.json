@@ -1,0 +1,326 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionName": {
+            "defaultValue": "CiscoETD",
+            "minLength": 1,
+            "type": "string"
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "defaultValue": "",
+            "minLength": 1,
+            "metadata": {
+                "description": "Log analytics workspace name"
+            }
+        },
+        "WorkspaceID": {
+            "type": "string",
+            "defaultValue": "",
+            "minLength": 1
+        },
+        "SharedKey": {
+            "type": "securestring",
+            "defaultValue": "",
+            "minLength": 1
+        },
+        "ApiKey": {
+            "type": "securestring",
+            "defaultValue": "",
+            "minLength": 1
+        },
+        "ClientId": {
+            "type": "securestring",
+            "defaultValue": ""
+        },
+        "ClientSecret": {
+            "type": "securestring",
+            "defaultValue": ""
+        },
+        "Region": {
+            "type": "string",
+            "allowedValues": ["Australia", "Beta", "Europe", "India", "United States (US)"],
+            "metadata": {
+              "description": "Select the ETD region",
+              "displayName": "Region"
+            }
+        },
+        "Verdicts": {
+            "type": "string",
+            "metadata": {
+                "description": "Supported verdicts are: bec, graymail, malicious, neutral, phishing, scam, spam",
+                "displayName": "Verdicts"
+            } 
+        },
+        "workbookId": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "metadata": {
+                "description": "The unique guid for this workbook instance, do not edit the field"
+              }
+          }
+    },
+    "variables": {
+        "suffix": "[substring(toLower(uniqueString(resourceGroup().id, concat('[resourceGroup().locatio', 'n]'))),0,5)]",
+        "FunctionName": "[toLower(parameters('FunctionName'))]",
+        "StorageName": "[concat(variables('FunctionName'), variables('suffix'))]",
+        "ETDregion": {
+              "Beta": "beta",
+              "Australia": "au",
+              "Europe": "de",
+              "India": "in",
+              "United States (US)": "us"
+            },
+        "workbookDisplayName": "[concat('EmailThreatDefenseDashboard','-',variables('FunctionName'),'-',variables('suffix'))]",
+        "workbookType": "sentinel",
+        "workbookSourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2015-05-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "ApplicationId": "[variables('FunctionName')]"
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('StorageName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": true,
+                "encryption": {
+                    "services": {
+                        "blob": {
+                            "keyType": "Account",
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[parameters('WorkspaceName')]",
+            "location": "[resourceGroup().location]"
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD Mailboxes query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "Top 10 mailboxes",
+                "category": "ETD",
+                "query": "CiscoETD_CL | project Mailbox = parse_json(tostring(mailboxes_s)) | mv-expand Mailbox | summarize ThreatCount = count() by tostring(Mailbox) | top 10 by ThreatCount desc | project Mailbox, ThreatCount | render columnchart",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD Verdicts query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "Distribution of Verdict type",
+                "category": "ETD",
+                "query": "CiscoETD_CL | summarize TotalMessages = count() by verdict_category_s | extend Categories = coalesce(verdict_category_s, 'No Verdict') | project Verdicts = Categories, TotalMessages | render piechart title = 'Email Threat Defense Messages by Verdict'",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD Incidents query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "Incidents aggregated over a period based on verdicts ",
+                "category": "ETD",
+                "query": "CiscoETD_CL | summarize ThreatCount = count() by verdict_category_s, TimeBin = bin(TimeGenerated, 1h) | project TimeBin, verdict_category_s, ThreatCount | render columnchart",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD Malicious URL query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "Malicious URLs",
+                "category": "ETD",
+                "query": "CiscoETD_CL | where parse_json(verdict_techniques_s)[6].type == 'Malicious URL'",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD QR Codes query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "QR Codes",
+                "category": "ETD",
+                "query": "CiscoETD_CL | where parse_json(verdict_techniques_s)[6].type == 'QR code'",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD Malicious Sender Domains query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "Top 10 Malicious Sender Domains",
+                "category": "ETD",
+                "query": "CiscoETD_CL | extend Domain = tostring(split(fromAddress_s, '@')[1]) | where isnotnull(Domain) and trim(' ', Domain) != '' | summarize Count = count() by Domain | top 10 by Count desc",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD Malicious Senders query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "Top 10 Malicious Senders",
+                "category": "ETD",
+                "query": "CiscoETD_CL | extend Email = fromAddress_s | where isnotnull(Email) and trim(' ', Email) != '' | summarize Count = count() by Email | top 10 by Count desc",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD Targeted users query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "Top 10 Targeted users",
+                "category": "ETD",
+                "query": "CiscoETD_CL | project Mailbox = parse_json(tostring(mailboxes_s)) | mv-expand Mailbox | summarize Count = count() by tostring(Mailbox) | top 10 by Count desc | project Mailbox",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/savedSearches",
+            "apiVersion": "2015-11-01-preview",
+            "name": "[format('{0}/{1}', parameters('WorkspaceName'), 'ETD User Impersonation query')]",
+            "properties": {
+                "etag": "*",
+                "displayName": "User Impersonation",
+                "category": "ETD",
+                "query": "CiscoETD_CL | where parse_json(verdict_techniques_s)[6].type == 'User Impersonation'",
+                "version": 1
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('WorkspaceName'))]"
+            ]
+        },
+        {
+            "name": "[parameters('workbookId')]",
+            "type": "microsoft.insights/workbooks",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2022-04-01",
+            "dependsOn": [],
+            "kind": "shared",
+            "properties": {
+              "displayName": "[variables('workbookDisplayName')]",
+              "serializedData": "{\"version\":\"Notebook/1.0\",\"items\":[{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETD_CL | summarize TotalMessages = count() by verdict_category_s | extend Categories = coalesce(verdict_category_s, 'No Verdict') | project Verdicts = Categories, TotalMessages | render piechart title = 'Email Threat Defense Messages by Verdict'\",\"size\":0,\"title\":\"Total Messages by Threat Type\",\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"query - 0\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"title\":\"Top 10 Malicious Senders Domains\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETD_CL\\n| extend Domain = tostring(split(fromAddress_s, '@')[1])\\n| where isnotnull(Domain) and trim(' ', Domain) != ''\\n| summarize Count = count() by Domain\\n| top 10 by Count desc\\n\",\"size\":0,\"timeContext\":{\"durationMs\":86400000},\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"visualization\":\"categoricalbar\",\"graphSettings\":{\"type\":0,\"topContent\":{\"columnMatch\":\"Domain\",\"formatter\":1},\"centerContent\":{\"columnMatch\":\"Count\",\"formatter\":1,\"numberFormat\":{\"unit\":17,\"options\":{\"maximumSignificantDigits\":3,\"maximumFractionDigits\":2}}}}},\"name\":\"query - 0\"}]},\"customWidth\":\"50\",\"name\":\"group - 9\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"customWidth\":\"100\",\"name\":\"group - 6\",\"styleSettings\":{\"margin\":\"10px\",\"showBorder\":true}},{\"type\":12,\"content\":{\"version\":\"NotebookGroup/1.0\",\"groupType\":\"editable\",\"items\":[{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETD_CL\\n| extend Email = fromAddress_s\\n| where isnotnull(Email) and trim(' ', Email) != ''\\n| summarize Count = count() by Email\\n| top 10 by Count desc\",\"size\":0,\"title\":\"Top 10 Malicious Senders\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\",\"gridSettings\":{\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"sortBy\":[{\"itemKey\":\"Count\",\"sortOrder\":2}]},\"customWidth\":\"50\",\"name\":\"query - 2\",\"styleSettings\":{\"margin\":\"10px\"}},{\"type\":3,\"content\":{\"version\":\"KqlItem/1.0\",\"query\":\"CiscoETD_CL\\n| summarize Count = count() by mailboxes_s\\n| top 10 by Count desc\\n| extend  Email = tostring(replace(\\\"[\\\\\\\"\\\\\\\"\\\\\\\\[\\\\\\\\]]\\\", \\\"\\\", mailboxes_s))\\n| project Email, Count\",\"size\":0,\"title\":\"Top 10 Targetd users\",\"queryType\":0,\"resourceType\":\"microsoft.operationalinsights/workspaces\"},\"customWidth\":\"50\",\"name\":\"query - 3\",\"styleSettings\":{\"margin\":\"10px\"}}]},\"name\":\"Group_Top 10\"}],\"isLocked\":false,\"fallbackResourceIds\":[\"[variables('workbookSourceId')]\"],\"fromTemplateId\":\"sentinel-UserWorkbook\"}",
+              "version": "1.0",
+              "sourceId": "[variables('workbookSourceId')]",
+              "category": "[variables('workbookType')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2018-11-01",
+            "name": "[variables('FunctionName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('StorageName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('FunctionName'))]"
+            ],
+            "kind": "functionapp,linux",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "name": "[variables('FunctionName')]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": true,
+                "alwaysOn": true,
+                "reserved": true,
+                "siteConfig": {
+                    "linuxFxVersion": "python|3.8"
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2018-11-01",
+                    "type": "config",
+                    "name": "appsettings",
+                    "dependsOn": [
+                        "[concat('Microsoft.Web/sites/', variables('FunctionName'))]"
+                    ],
+                    "properties": {
+                        "FUNCTIONS_EXTENSION_VERSION": "~4",
+                        "FUNCTIONS_WORKER_RUNTIME": "python",
+                        "APPINSIGHTS_INSTRUMENTATIONKEY": "[reference(resourceId('Microsoft.insights/components', variables('FunctionName')), '2015-05-01').InstrumentationKey]",
+                        "APPLICATIONINSIGHTS_CONNECTION_STRING": "[reference(resourceId('microsoft.insights/components', variables('FunctionName')), '2015-05-01').ConnectionString]",
+                        "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('StorageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('StorageName')), '2015-05-01-preview').key1)]",
+                        "WorkspaceID": "[parameters('WorkspaceID')]",
+                        "SharedKey": "[parameters('SharedKey')]",
+                        "ApiKey": "[parameters('ApiKey')]",
+                        "ClientId": "[parameters('ClientId')]",
+                        "ClientSecret": "[parameters('ClientSecret')]",
+                        "Region": "[variables('ETDregion')[parameters('Region')]]",
+                        "Verdicts": "[parameters('Verdicts')]",
+                        "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinel-CiscoETD-functionapp"
+                    }
+                }
+            ]
+        }
+    ]
+}

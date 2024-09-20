@@ -1,0 +1,731 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+    "title": "Enrich_Sentinel_IPQualityScore_Domain_Reputation",
+    "description": "This playbook uses the IPQS Fraud and Risk Scoring connector to automatically enrich Domain's found in the Sentinel incidents. This Playbook Template provides the Reputation such as **Critical, High Risk, Moderate Risk, Low Risk, Suspicious, Clean** based on Risk Score. Learn more about the integration via the https://docs.microsoft.com/connectors/ipqsfraudandriskscor/ or visit https://www.ipqualityscore.com/contact-us to request a trial key.",
+    "prerequisites": ["None"],
+    "postDeployment": ["None"],
+    "lastUpdateTime": "2023-04-04T00:00:00.000Z",
+    "entities": [],
+    "tags": [],
+    "support": {
+      "tier": "community"
+    },
+    "author": {
+      "name": "David Mackler, IPQualityScore"
+    },
+    "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "Enrich_Sentinel_IPQualityScore_Domain_Reputation",
+                "notes": [ "Initial version" ]
+            }
+        ]   
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Enrich_Sentinel_IPQualityScore_Domain_Reputation",
+            "type": "string"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+		"IPQSApiKey": "[concat('ipqsfraudandriskscor-', parameters('PlaybookName'))]",
+		"AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+	},
+    "resources": [
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('AzureSentinelConnectionName')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+				}
+			}
+		},
+		{
+			"type": "Microsoft.Web/connections",
+			"apiVersion": "2016-06-01",
+			"name": "[variables('IPQSApiKey')]",
+			"location": "[resourceGroup().location]",
+			"properties": {
+				"displayName": "[parameters('UserName')]",
+				"customParameterValues": {},
+				"api": {
+					"id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/ipqsfraudandriskscor')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+			"dependsOn": [
+				"[resourceId('Microsoft.Web/connections', variables('IPQSApiKey'))]",
+				"[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+			],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Domain_Age_Variable": {
+                            "runAfter": {
+                                "Host_Host_Entity_Full_Name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "domain_age",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Domain_RISK_SCORE_Variable": {
+                            "runAfter": {
+                                "IPQS_Reputation_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "domain_risk_score",
+                                        "type": "integer"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_Hosts": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "Alert_-_Get_incident_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident_2')?['id']",
+                                            "message": "<p><span style=\"font-size: 24px; color: rgb(71,85,119)\">IPQualityScore Reputation Data for </span><span style=\"font-size: 24px; color: rgb(71,85,119)\">@{items('For_each')?['HostName']}</span><span style=\"font-size: 24px; color: rgb(71,85,119)\">.</span><span style=\"font-size: 24px; color: rgb(71,85,119)\">@{items('For_each')?['DnsDomain']}</span><span style=\"font-size: 24px; color: rgb(71,85,119)\">:<br>\n</span><span style=\"font-family: arial; font-size: 18px; color: rgb(71,85,119)\">IPQS Reputation: </span><span style=\"font-family: arial; font-size: 18px; color: rgb(71,85,119)\"></span><span style=\"font-family: arial; font-size: 18px; color: rgb(71,85,119)\">@{variables('ipqs_reputation')}</span><span style=\"font-family: arial; font-size: 18px; color: rgb(71,85,119)\"><br>\nIPQS API Response:</span><span style=\"font-family: arial; font-size: 18px; color: rgb(71,85,119)\"><strong><br>\n</strong></span><span style=\"font-family: arial; font-size: 18px; color: rgb(71,85,119)\"><strong>@{body('Create_HTML_table')}</strong></span><span style=\"font-family: arial; font-size: 18px; color: rgb(71,85,119)\"><strong></strong></span></p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Alert_-_Get_incident_2": {
+                                    "runAfter": {
+                                        "Create_HTML_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                                    }
+                                },
+                                "Checking_for_Successful_Response": {
+                                    "actions": {
+                                        "Check_Malware_or_Phishing_is_true": {
+                                            "actions": {
+                                                "Set_IPQS_Reputation_Variable_Critical": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "ipqs_reputation",
+                                                        "value": "CRITICAL"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Set_Domain_Risk_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "else": {
+                                                "actions": {
+                                                    "Check_Risk_Score_is_greater_than_or_equal_to_90": {
+                                                        "actions": {
+                                                            "Set_IPQS_Reputation_Variable_High_Risk": {
+                                                                "runAfter": {},
+                                                                "type": "SetVariable",
+                                                                "inputs": {
+                                                                    "name": "ipqs_reputation",
+                                                                    "value": "HIGH RISK"
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {},
+                                                        "else": {
+                                                            "actions": {
+                                                                "Check_Risk_Score_is_between_80_and_89": {
+                                                                    "actions": {
+                                                                        "Set_IPQS_Reputation_Variable_MODERATE_Risk": {
+                                                                            "runAfter": {},
+                                                                            "type": "SetVariable",
+                                                                            "inputs": {
+                                                                                "name": "ipqs_reputation",
+                                                                                "value": "MODERATE RISK"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {},
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Check_Risk_Score_is_between_70_and_79": {
+                                                                                "actions": {
+                                                                                    "Set_IPQS_Reputation_Variable_Low_Risk": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "ipqs_reputation",
+                                                                                            "value": "LOW RISK"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "runAfter": {},
+                                                                                "else": {
+                                                                                    "actions": {
+                                                                                        "Check_Risk_Score_is_between_55_and_69": {
+                                                                                            "actions": {
+                                                                                                "Set_IPQS_Reputation_Variable_Suspicious": {
+                                                                                                    "runAfter": {},
+                                                                                                    "type": "SetVariable",
+                                                                                                    "inputs": {
+                                                                                                        "name": "ipqs_reputation",
+                                                                                                        "value": "SUSPICIOUS"
+                                                                                                    }
+                                                                                                }
+                                                                                            },
+                                                                                            "runAfter": {},
+                                                                                            "else": {
+                                                                                                "actions": {
+                                                                                                    "Check_Risk_Score_is_less_than_or_equal_to_54": {
+                                                                                                        "actions": {
+                                                                                                            "Set_IPQS_Reputation_Variable_Clean": {
+                                                                                                                "runAfter": {},
+                                                                                                                "type": "SetVariable",
+                                                                                                                "inputs": {
+                                                                                                                    "name": "ipqs_reputation",
+                                                                                                                    "value": "CLEAN"
+                                                                                                                }
+                                                                                                            }
+                                                                                                        },
+                                                                                                        "runAfter": {},
+                                                                                                        "expression": {
+                                                                                                            "and": [
+                                                                                                                {
+                                                                                                                    "lessOrEquals": [
+                                                                                                                        "@variables('domain_risk_score')",
+                                                                                                                        54
+                                                                                                                    ]
+                                                                                                                }
+                                                                                                            ]
+                                                                                                        },
+                                                                                                        "type": "If"
+                                                                                                    }
+                                                                                                }
+                                                                                            },
+                                                                                            "expression": {
+                                                                                                "and": [
+                                                                                                    {
+                                                                                                        "greaterOrEquals": [
+                                                                                                            "@variables('domain_risk_score')",
+                                                                                                            55
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "lessOrEquals": [
+                                                                                                            "@variables('domain_risk_score')",
+                                                                                                            69
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            },
+                                                                                            "type": "If"
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                "expression": {
+                                                                                    "and": [
+                                                                                        {
+                                                                                            "greaterOrEquals": [
+                                                                                                "@variables('domain_risk_score')",
+                                                                                                70
+                                                                                            ]
+                                                                                        },
+                                                                                        {
+                                                                                            "lessOrEquals": [
+                                                                                                "@variables('domain_risk_score')",
+                                                                                                79
+                                                                                            ]
+                                                                                        }
+                                                                                    ]
+                                                                                },
+                                                                                "type": "If"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "greaterOrEquals": [
+                                                                                    "@variables('domain_risk_score')",
+                                                                                    80
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "lessOrEquals": [
+                                                                                    "@variables('domain_risk_score')",
+                                                                                    89
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If"
+                                                                }
+                                                            }
+                                                        },
+                                                        "expression": {
+                                                            "and": [
+                                                                {
+                                                                    "greaterOrEquals": [
+                                                                        "@variables('domain_risk_score')",
+                                                                        90
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        "type": "If"
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "or": [
+                                                    {
+                                                        "equals": [
+                                                            "@variables('is_phishing')",
+                                                            true
+                                                        ]
+                                                    },
+                                                    {
+                                                        "equals": [
+                                                            "@variables('is_malware')",
+                                                            true
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        },
+                                        "Set_Domain_Risk_variable": {
+                                            "runAfter": {
+                                                "Set_Phishing_Variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "domain_risk_score",
+                                                "value": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['risk_score']"
+                                            }
+                                        },
+                                        "Set_Malware_Valriable": {
+                                            "runAfter": {},
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "is_malware",
+                                                "value": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['malware']"
+                                            }
+                                        },
+                                        "Set_Phishing_Variable": {
+                                            "runAfter": {
+                                                "Set_Malware_Valriable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "is_phishing",
+                                                "value": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['phishing']"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Setting_Successful_Response_Variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@variables('is_success')",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Create_HTML_table": {
+                                    "runAfter": {
+                                        "Setting_JSON_OUTPUT": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "format": "HTML",
+                                        "from": "@variables('json_output')"
+                                    }
+                                },
+                                "Retrieve_URL_(or)_Domain_reputation_data": {
+                                    "runAfter": {
+                                        "Set_host_entity_value": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "$content-type": "multipart/form-data",
+                                            "$multipart": [
+                                                {
+                                                    "body": "@variables('host_entity_value')",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"url\""
+                                                    }
+                                                },
+                                                {
+                                                    "body": "0",
+                                                    "headers": {
+                                                        "Content-Disposition": "form-data; name=\"strictness\""
+                                                    }
+                                                }
+                                            ]
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['ipqsfraudandriskscor']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/url"
+                                    }
+                                },
+                                "Set_Domain_Age_Variable": {
+                                    "runAfter": {
+                                        "Checking_for_Successful_Response": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "domain_age",
+                                        "value": "Human:@{body('Retrieve_URL_(or)_Domain_reputation_data')?['domain_age']?['human']} , Timestamp: @{body('Retrieve_URL_(or)_Domain_reputation_data')?['domain_age']?['timestamp']}, ISO: @{body('Retrieve_URL_(or)_Domain_reputation_data')?['domain_age']?['iso']}"
+                                    }
+                                },
+                                "Set_dns_domain_variable": {
+                                    "runAfter": {
+                                        "Set_host_name_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "dns_domain",
+                                        "value": "@items('For_each')?['DnsDomain']"
+                                    }
+                                },
+                                "Set_host_entity_value": {
+                                    "runAfter": {
+                                        "Set_dns_domain_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "host_entity_value",
+                                        "value": "@{variables('host_name')}.@{variables('dns_domain')}"
+                                    }
+                                },
+                                "Set_host_name_variable": {
+                                    "runAfter": {},
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "host_name",
+                                        "value": "@items('For_each')?['HostName']"
+                                    }
+                                },
+                                "Setting_JSON_OUTPUT": {
+                                    "runAfter": {
+                                        "Set_Domain_Age_Variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "json_output",
+                                        "value": [
+                                            {
+                                                "Adult": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['adult']",
+                                                "Content Type": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['content_type']",
+                                                "DNS Valid": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['dns_valid']",
+                                                "Domain": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['domain']",
+                                                "Domain Age": "@variables('domain_age')",
+                                                "Domain Rank": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['domain_rank']",
+                                                "IP Address": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['ip_address']",
+                                                "Malware": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['malware']",
+                                                "Page Size": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['page_size']",
+                                                "Parking": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['parking']",
+                                                "Phishing": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['phishing']",
+                                                "Risk Score": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['risk_score']",
+                                                "Server": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['server']",
+                                                "Spamming": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['spamming']",
+                                                "Status Code": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['status_code']",
+                                                "Suspicious": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['suspicious']",
+                                                "UnSafe": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['unsafe']"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "Setting_Successful_Response_Variable": {
+                                    "runAfter": {
+                                        "Retrieve_URL_(or)_Domain_reputation_data": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "is_success",
+                                        "value": "@body('Retrieve_URL_(or)_Domain_reputation_data')?['success']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Domain_Age_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Host_Dns_Domain_Variable": {
+                            "runAfter": {
+                                "Host_Host_Name_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "dns_domain",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Host_Host_Entity_Full_Name": {
+                            "runAfter": {
+                                "Host_Dns_Domain_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "host_entity_value",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Host_Host_Name_Variable": {
+                            "runAfter": {
+                                "JSON_OUPUT": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "host_name",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "IPQS_Reputation_Variable": {
+                            "runAfter": {
+                                "Successful_Response_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ipqs_reputation",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "JSON_OUPUT": {
+                            "runAfter": {
+                                "Phishing_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "json_output",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Malware_Variable": {
+                            "runAfter": {
+                                "Domain_RISK_SCORE_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "is_malware",
+                                        "type": "boolean"
+                                    }
+                                ]
+                            }
+                        },
+                        "Phishing_Variable": {
+                            "runAfter": {
+                                "Malware_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "is_phishing",
+                                        "type": "boolean"
+                                    }
+                                ]
+                            }
+                        },
+                        "Successful_Response_Variable": {
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "is_success",
+                                        "type": "boolean"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "ipqsfraudandriskscor": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('IPQSApiKey'))]",
+                                "connectionName": "[variables('IPQSApiKey')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/ipqsfraudandriskscor')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

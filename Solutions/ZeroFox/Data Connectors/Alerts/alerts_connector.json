@@ -1,0 +1,128 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "string",
+      "defaultValue": ""
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'),'/providers/Microsoft.SecurityInsights/dataConnectors/',guid(subscription().subscriptionId))]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',guid(subscription().subscriptionId))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "kind": "APIPolling",
+      "properties": {
+        "connectorUiConfig": {
+          "id":"ZeroFox_Alert_Polling",
+          "title": "ZeroFox Enterprise - Alerts (Polling CCP)",
+          "publisher": "ZeroFox Enterprise",
+          "descriptionMarkdown": "Collects alerts from ZeroFox API.",
+          "graphQueriesTableName": "ZeroFoxAlertPoller_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total alerts received",
+              "legend": "ZeroFox Alerts",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "List all ZeroFox alerts",
+              "query": "{{graphQueriesTableName}}\n| sort by TimeGenerated asc"
+            },
+            {
+              "description": "Count alerts by network type",
+              "query": "{{graphQueriesTableName}}\n| summarize Count = count() by ThreatSource=network_s"
+            },
+            {
+              "description": "Count alerts by entity",
+              "query": "{{graphQueriesTableName}}\n| summarize Count = count() by Entity=entity_name_s"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "SentinelKindsV2",
+              "value": [
+                "APIPolling"
+              ]
+            }
+          ],
+          "availability": {
+            "status": 1,
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/solutions",
+                "permissionsDisplayText": "read and write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "action": true,
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "ZeroFox Personal Access Token (PAT)",
+                "description": "A ZeroFox PAT is required. You can get it in Data Connectors > [API Data Feeds](https://cloud.zerofox.com/data_connectors/api)."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "title": "Connect ZeroFox to Microsoft Sentinel",
+              "description": "Provide your ZeroFox PAT",
+              "instructions": [
+                {
+                  "type": "APIKey"
+                }
+              ]
+            }
+          ]
+        },
+        "pollingConfig": {
+          "auth": {
+            "authType": "APIKey",
+            "APIKeyName": "Authorization",
+            "APIKeyIdentifier": "Token"
+          },
+          "request": {
+            "apiEndpoint": "https://api.zerofox.com/1.0/alerts/",
+            "httpMethod": "Get",
+            "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+            "startTimeAttributeName": "min_timestamp",
+            "endTimeAttributeName": "max_timestamp",
+            "queryParameters": {
+              "sort_direction": "asc"
+            }
+          },
+          "response": {
+            "eventsJsonPaths": [
+              "$.alerts[*]"
+            ]
+          },
+          "paging": {
+            "pagingType": "Offset",
+            "offsetParaName": "offset",
+            "pageSizeParaName": "limit",
+            "pageSize": 100
+          }
+        }
+      }
+    }
+  ]
+}

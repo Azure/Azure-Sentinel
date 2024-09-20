@@ -1,0 +1,795 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "checkpoint-add-host-to-group",
+        "description": "This playbook will create Check Point objects and add to block group",
+        "prerequisites": [ "You need to first deploy the Check Point Connector in your subscription before you can install this playbook." ],
+        "lastUpdateTime": "2022-08-08T00:00:00.000Z",
+        "entities": [],
+        "tags": [],
+        "support": {
+            "tier": "Community"
+        },
+        "author": {
+            "name": "John Guo | Check Point Software Technologies"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "checkpoint-add-host-to-group",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "checkpoint-add-host-to-group",
+            "type": "String",
+            "metadata": {
+                "description": "Playbook name"
+            }
+        },
+        "CustomConnectorName": {
+            "defaultValue": "CheckPointMgmtConnector",
+            "type": "string"
+        },
+        "Sentinel Connection Name": {
+            "defaultValue": "sentinelalert",
+            "type": "String",
+            "metadata": {
+                "description": "Sentinel Connection Name"
+            }
+        },
+        "Check Point API Key": {
+            "defaultValue": "Enter the API key",
+            "type": "String",
+            "metadata": {
+                "description": "Check Point Management Server API Key"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[parameters('Sentinel Connection Name')]",
+        "CheckPointConnectionName": "[concat('CheckPointMgmtConnector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CheckPointConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('CheckPointConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_response_to_an_Azure_Sentinel_alert_is_triggered": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_Host": {
+                            "foreach": "@body('Parse_Entities')",
+                            "actions": {
+                                "add-host": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "ignore-warnings": true,
+                                            "ip-address": "@items('Add_Host')['Address']",
+                                            "name": "sentinel_@{items('Add_Host')['Address']}"
+                                        },
+                                        "headers": {
+                                            "Content-Type": " application/json",
+                                            "X-chkp-sid": "@body('Parse_Login')?['sid']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['CheckPointMgmtConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/add-host"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Login": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Add_Host_to_Group": {
+                            "foreach": "@body('Parse_Entities')",
+                            "actions": {
+                                "set-group": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "members": {
+                                                "add": "sentinel_@{items('Add_Host_to_Group')['Address']}"
+                                            },
+                                            "name": "@variables('BlockGroupName')"
+                                        },
+                                        "headers": {
+                                            "Content-Type": " application/json",
+                                            "X-chkp-sid": "@body('Parse_Login')?['sid']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['CheckPointMgmtConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/set-group"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Add_Host": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "BlockGroupName_VAR": {
+                            "runAfter": {
+                                "Policy-Package_VAR": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "BlockGroupName",
+                                        "type": "string",
+                                        "value": "SentinelBlockGroup"
+                                    }
+                                ]
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "Gateway1_VAR": {
+                            "runAfter": {
+                                "Parse_Entities": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "gateway1",
+                                        "type": "string",
+                                        "value": "r8040gw"
+                                    }
+                                ]
+                            }
+                        },
+                        "Gateway2_VAR": {
+                            "runAfter": {
+                                "Gateway1_VAR": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "gateway2",
+                                        "type": "string",
+                                        "value": "r8040gw_01"
+                                    }
+                                ]
+                            }
+                        },
+                        "InstallPolicy_VAR": {
+                            "runAfter": {
+                                "Publish_status_check": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "InstallPolicyStatus",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Install_Policy_status_check": {
+                            "actions": {
+                                "Install_Policy_status": {
+                                    "foreach": "@body('Parse_show-task_install-policy')?['tasks']",
+                                    "actions": {
+                                        "Install_policy_condition": {
+                                            "actions": {
+                                                "Set_InstallPolicy_VAR": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "InstallPolicyStatus",
+                                                        "value": 1
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Delay_3_seconds": {
+                                                        "runAfter": {},
+                                                        "type": "Wait",
+                                                        "inputs": {
+                                                            "interval": {
+                                                                "count": 2,
+                                                                "unit": "Second"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@items('Install_Policy_status')?['progress-percentage']",
+                                                            100
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_show-task_install-policy": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Parse_show-task_install-policy": {
+                                    "runAfter": {
+                                        "show-task_install-policy": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('show-task_install-policy')",
+                                        "schema": {
+                                            "properties": {
+                                                "tasks": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "progress-percentage": {
+                                                                "type": "integer"
+                                                            },
+                                                            "status": {
+                                                                "type": "string"
+                                                            },
+                                                            "suppressed": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "task-id": {
+                                                                "type": "string"
+                                                            },
+                                                            "task-name": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "task-id",
+                                                            "task-name",
+                                                            "status",
+                                                            "progress-percentage",
+                                                            "suppressed"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "show-task_install-policy": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "task-id": "@body('Parse_install-policy')?['task-id']"
+                                        },
+                                        "headers": {
+                                            "Content-Type": " application/json",
+                                            "X-chkp-sid": "@body('Parse_Login')?['sid']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['CheckPointMgmtConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/show-task"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_install-policy": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(variables('InstallPolicyStatus'), 1)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "Parse_Entities": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Entities_-_Get_IPs')?['IPs']",
+                                "schema": {
+                                    "items": {
+                                        "properties": {
+                                            "$id": {
+                                                "type": "string"
+                                            },
+                                            "Address": {
+                                                "type": "string"
+                                            },
+                                            "Type": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "$id",
+                                            "Address",
+                                            "Type"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "type": "array"
+                                }
+                            }
+                        },
+                        "Parse_Login": {
+                            "runAfter": {
+                                "login": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('login')",
+                                "schema": {
+                                    "properties": {
+                                        "api-server-version": {
+                                            "type": "string"
+                                        },
+                                        "last-login-was-at": {
+                                            "properties": {
+                                                "iso-8601": {
+                                                    "type": "string"
+                                                },
+                                                "posix": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "session-timeout": {
+                                            "type": "integer"
+                                        },
+                                        "sid": {
+                                            "type": "string"
+                                        },
+                                        "uid": {
+                                            "type": "string"
+                                        },
+                                        "url": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_install-policy": {
+                            "runAfter": {
+                                "install-policy": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('install-policy')",
+                                "schema": {
+                                    "properties": {
+                                        "task-id": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Parse_publish": {
+                            "runAfter": {
+                                "publish": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('publish')",
+                                "schema": {
+                                    "properties": {
+                                        "task-id": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "Policy-Package_VAR": {
+                            "runAfter": {
+                                "Gateway2_VAR": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "policy-package",
+                                        "type": "string",
+                                        "value": "Standard"
+                                    }
+                                ]
+                            }
+                        },
+                        "PublishStatus_VAR": {
+                            "runAfter": {
+                                "Add_Host_to_Group": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "PublishStatus",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Publish_status_check": {
+                            "actions": {
+                                "Parse_show-task_publish": {
+                                    "runAfter": {
+                                        "show-task_publish": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('show-task_publish')",
+                                        "schema": {
+                                            "properties": {
+                                                "tasks": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "progress-percentage": {
+                                                                "type": "integer"
+                                                            },
+                                                            "status": {
+                                                                "type": "string"
+                                                            },
+                                                            "suppressed": {
+                                                                "type": "boolean"
+                                                            },
+                                                            "task-id": {
+                                                                "type": "string"
+                                                            },
+                                                            "task-name": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "task-id",
+                                                            "task-name",
+                                                            "status",
+                                                            "progress-percentage",
+                                                            "suppressed"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Publish_status": {
+                                    "foreach": "@body('Parse_show-task_publish')?['tasks']",
+                                    "actions": {
+                                        "Publish_status_condition": {
+                                            "actions": {
+                                                "Set_PublishStatus_VAR": {
+                                                    "runAfter": {},
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "PublishStatus",
+                                                        "value": 1
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {},
+                                            "else": {
+                                                "actions": {
+                                                    "Delay_2_seconds": {
+                                                        "runAfter": {},
+                                                        "type": "Wait",
+                                                        "inputs": {
+                                                            "interval": {
+                                                                "count": 2,
+                                                                "unit": "Second"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": {
+                                                "and": [
+                                                    {
+                                                        "equals": [
+                                                            "@items('Publish_status')?['progress-percentage']",
+                                                            100
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            "type": "If"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_show-task_publish": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "show-task_publish": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "task-id": "@body('Parse_publish')?['task-id']"
+                                        },
+                                        "headers": {
+                                            "Content-Type": " application/json",
+                                            "X-chkp-sid": "@body('Parse_Login')?['sid']"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['CheckPointMgmtConnector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/show-task"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_publish": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": "@equals(variables('PublishStatus'), 1)",
+                            "limit": {
+                                "count": 60,
+                                "timeout": "PT1H"
+                            },
+                            "type": "Until"
+                        },
+                        "install-policy": {
+                            "runAfter": {
+                                "InstallPolicy_VAR": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "access": true,
+                                    "policy-package": "@variables('policy-package')",
+                                    "targets": [
+                                        "@variables('gateway1')",
+                                        "@variables('gateway2')"
+                                    ],
+                                    "threat-prevention": true
+                                },
+                                "headers": {
+                                    "Content-Type": " application/json",
+                                    "X-chkp-sid": "@body('Parse_Login')?['sid']"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['CheckPointMgmtConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/install-policy"
+                            }
+                        },
+                        "login": {
+                            "runAfter": {
+                                "BlockGroupName_VAR": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "api-key": "[parameters('Check Point API Key')]"
+                                },
+                                "headers": {
+                                    "Content-Type": " application/json"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['CheckPointMgmtConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/login"
+                            }
+                        },
+                        "logout": {
+                            "runAfter": {
+                                "Install_Policy_status_check": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {},
+                                "headers": {
+                                    "Content-Type": " application/json",
+                                    "X-chkp-sid": "@body('Parse_Login')?['sid']"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['CheckPointMgmtConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/logout"
+                            }
+                        },
+                        "publish": {
+                            "runAfter": {
+                                "PublishStatus_VAR": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {},
+                                "headers": {
+                                    "Content-Type": " application/json",
+                                    "X-chkp-sid": "@body('Parse_Login')?['sid']"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['CheckPointMgmtConnector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/publish"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "CheckPointMgmtConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CheckPointConnectionName'))]",
+                                "connectionName": "[variables('CheckPointConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('CustomConnectorName'))]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

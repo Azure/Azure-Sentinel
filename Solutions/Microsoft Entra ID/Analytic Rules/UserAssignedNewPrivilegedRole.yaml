@@ -1,0 +1,85 @@
+id: 746ddb63-f51b-4563-b449-a8b13cf302ec
+name: User Assigned New Privileged Role
+description: |
+  'Identifies when a new eligible or active privileged role is assigned to a user. Does not alert on PIM activations. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.
+  Ref : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1'
+severity: High
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+queryFrequency: 2h
+queryPeriod: 2h
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078.004
+tags:
+  - AADSecOpsGuide
+query: |
+  AuditLogs
+  | where Category =~ "RoleManagement"
+  | where AADOperationType in ("Assign", "AssignEligibleRole", "CreateRequestGrantedRole", "CreateRequestPermanentEligibleRole", "CreateRequestPermanentGrantedRole")
+  | where ActivityDisplayName has_any ("Add eligible member to role", "Add member to role")
+  | mv-apply TargetResourceSubject = TargetResources on 
+    (
+        where TargetResourceSubject.type in~ ("User", "ServicePrincipal")
+        | extend Target = iff(TargetResourceSubject.type =~ "ServicePrincipal", tostring(TargetResourceSubject.displayName), tostring(TargetResourceSubject.userPrincipalName)),
+                 subjectProps = TargetResourceSubject.modifiedProperties
+    )
+  | mv-apply TargetResourceRole = TargetResources on 
+    (
+      // mimic modifiedProperties so we can use the same logic to get the role name regardless of where it comes from
+      where TargetResourceRole.type in~ ("Role")
+      | extend roleProps = pack_array(bag_pack("displayName","Role.DisplayName", "newValue", TargetResourceRole.displayName))
+    )
+  | mv-apply Property = iff(array_length(subjectProps) > 0, subjectProps, roleProps) on 
+    ( 
+      where Property.displayName =~ "Role.DisplayName"
+        | extend RoleName = trim('"',tostring(Property.newValue))
+    )
+  | where RoleName contains "Admin"
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)
+  // Comment below to alert for PIM activations
+  | where Initiator != "MS-PIM"
+  | summarize by bin(TimeGenerated, 1h), OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result
+  | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Target
+      - identifier: Name
+        columnName: TargetName
+      - identifier: UPNSuffix
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatorName
+      - identifier: UPNSuffix
+        columnName: InitiatorUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
+version: 1.0.1
+kind: Scheduled

@@ -1,0 +1,46 @@
+Function:
+  Title: An ASIM function sets the UserType for Windows systems based on the username and sid
+  Version: '0.3'
+  LastUpdated: May 1st 2023
+References:
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: KQL Invoke operator
+  Link: https://docs.microsoft.com/azure/data-explorer/kusto/query/invokeoperator
+- Title: Well-Known SID Structures
+  Link: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/81d92bba-d22b-4a8c-908a-554ab29148ab
+- Title: Well-known SIDs
+  Link: https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-identifiers#well-known-sids
+Description: |
+  This ASIM tabular function is intended for use in ASIM parsers and sets the UserType in Windows systems based on the username and sid
+FunctionName: ASIM_GetWindowsUserType
+EquivalentBuiltInFunction: _ASIM_GetWindowsUserType
+FunctionParams:
+  - Name: username
+    Type: string
+  - Name: sid
+    Type: string
+
+FunctionQuery: |
+  let ASIM_GetWindowsUserType = (username:string, sid:string) { 
+      case ( 
+          sid startswith "S-1-5-80", "Service",
+          sid startswith "S-1-5-21", case (
+                sid endswith "-500", "Admin",
+                sid endswith "-501", "Guest",
+                sid endswith "-502", "Service", // A user account that's used by the Key Distribution Center (KDC) service. The account exists only on domain controllers.
+                username contains "admin", "Admin",
+                username endswith "$", "Machine",
+                "Regular"),
+          username endswith "$", "Machine",
+          sid == "S-1-5-113", "Other", // Local account
+          sid == "S-1-5-7", "Anonymous", 
+          sid == "S-1-5-17", "Service", // An account that's used by the default Internet Information Services (IIS) user
+          sid == "S-1-5-18", "System", 
+          sid == "S-1-5-19", "Service", 
+          sid == "S-1-5-20", "Service" ,
+          isempty(username), "",
+          "Other"
+      )
+  };
+  ASIM_GetWindowsUserType(username,sid)

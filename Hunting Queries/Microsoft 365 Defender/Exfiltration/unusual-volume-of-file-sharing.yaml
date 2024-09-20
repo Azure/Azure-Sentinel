@@ -1,0 +1,62 @@
+id: bafc1446-1cc4-4f6d-ad76-1250b8c3b60c
+name: Unusual volume of file sharing with external user.
+description: |
+  This query looks for users sharing access to files with external users. 
+  This applies to SharePoint and OneDrive users.
+  Audit event and Cloud application identifier references.  
+  Reference - https://learn.microsoft.com/microsoft-365/compliance/audit-log-sharing?view=o365-worldwide
+  Reference - https://learn.microsoft.com/azure/sentinel/entities-reference#cloud-application-identifiers
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - CloudAppEvents
+  - AADSignInEventsBeta
+tactics:
+- Exfiltration
+query: |
+  let usefulExtn= pack_array('csv', 'doc', 'docm', 'docx', 'dot', 'dotx', 'eml', 'pdf', 'pot', 'potm', 'potx', 'ppam', 'pps', 'ppsm', 'ppsx', 'ppt', 'pptm', 'pptx',
+    'psd', 'pst', 'pub', 'ppk', 'rar', 'rtf', 'txt', 'vsd', 'vsdm', 'vsdx', 'vss', 'vssm', 'vst', 'vstm', 'vstx', 'xla', 'xlam', 'xll', 'xlm', 'xls', 'xlsm', 'xlsx', 'xlt',
+    'xltm', 'xltx', 'xps', 'zip', 'xsl');
+  let sharingPerms= pack_array("AnonymousLinkCreated", "SharingInvitationCreated", "SharingSet");
+  let relevantAppIds = pack_array(int(20892), int(15600)); // App Ids for SharePoint and OneDrive
+  let timeWindow = 24h;
+  let timeNow = now();
+  //
+  let riskyUsers= // Look for users with risky sign-ins
+    AADSignInEventsBeta    
+    | where Timestamp between ((timeNow - timeWindow) .. (timeNow))
+    | where isnotempty(AccountObjectId) and isnotempty(RequestId) // In AADSignInEventsBeta, the SessionId column has inaccurate data and instead the RequestId has the actual Session identifier
+    | where ErrorCode == 0
+    | where RiskLevelDuringSignIn >=80
+    | project RiskLevelDuringSignIn, AccountObjectId, Timestamp, SessionId=RequestId
+    ;
+  let hasUsers = isnotempty(toscalar(riskyUsers));
+  //
+  CloudAppEvents // look for file sharing activity and scope it to risky users
+    | where hasUsers
+    | where Timestamp between ((timeNow - timeWindow) .. (timeNow))
+    | where ApplicationId in (relevantAppIds)
+    | where AccountObjectId in (riskyUsers)
+    | where ActionType in (sharingPerms)
+    | extend SourceFileExtension = tostring(RawEventData.SourceFileExtension), SourceFileName=tostring(RawEventData.SourceFileName), TargetGroup=tostring(RawEventData.TargetUserOrGroupType)
+    | where SourceFileExtension has_any (usefulExtn)
+    | where TargetGroup == "Guest"
+    //
+    | summarize Count = countif(isnotempty( SourceFileName)), (Timestamp, ReportId)=arg_min(Timestamp, ReportId) ,FileNames = make_set(SourceFileName, 10) ,FileExt = make_set(SourceFileExtension, 10) by AccountObjectId, AccountDisplayName, ApplicationId, ActionType, Time = bin(Timestamp, 10m)
+    | summarize TotalCount = countif(Count > 10) , (Timestamp, ReportId)=arg_min(Timestamp, ReportId) by AccountObjectId, AccountDisplayName, ApplicationId
+    | where TotalCount > 1
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountObjectId
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountDisplayName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: ApplicationId
+customDetails:
+  Count: TotalCount

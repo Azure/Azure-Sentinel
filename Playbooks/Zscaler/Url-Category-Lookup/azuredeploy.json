@@ -1,0 +1,339 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Zscaler URL category lookup", 
+        "description": "This playbook posts Zscaler category information for the Url included in the incident.",
+        "prerequisites": ["This playbook leverages a nested playbook: Zscaler authentication. Deploy this playbook before deploying this template in the same resource group."],
+        "lastUpdateTime": "2021-07-28T00:00:00.000Z", 
+        "entities": ["Url"], 
+        "tags": ["Enrichment"], 
+        "support": {
+            "tier": "community" 
+        },
+        "author": {
+            "name": "Wortell"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Zscaler-URL-Category-Lookup",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "Zscaler Authentation Playbook": {
+            "defaultValue": "Zscaler-Authentication-Playbook",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Zscaler Authentication Playbook"
+            }
+        },
+        "Zscaler Admin Url": {
+            "defaultValue": "https://admin.<zscaler_instance_domain>.net",
+            "type": "string",
+            "metadata": {
+                "description": "Update to a valid Zscaler admin url."
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "ZscalerAuthenticationFlow": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Logic/workflows/', parameters('Zscaler Authentation Playbook'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Add_comment_to_incident_(V3)": {
+                            "runAfter": {
+                                "Compose": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p>@{outputs('Compose')}<br>\n<strong>Zscaler Url lookup:<br>\n@{variables('Result')}</p>"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/Incidents/Comment"
+                            }
+                        },
+                        "HTTP_Delete_Api_Session": {
+                            "runAfter": {
+                                "Add_comment_to_incident_(V3)": [
+                                    "Succeeded"
+                                ]
+                            },
+                            
+                            "type": "Http",
+                            "inputs": {
+                                "cookie": "@body('Parse_Authentication_Reponse')?['cookie']",
+                                "method": "DELETE",
+                                "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/authenticatedSession')]"
+                            }
+                        },
+
+                                                "Compose": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://www.zscaler.com//themes/custom/zscaler/logo.svg\" alt=\"Zscaler\">"
+                        },
+                        "Entities_-_Get_URLs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/url"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                            "actions": {
+                                "For_each_Result": {
+                                    "foreach": "@body('Parse_Result')",
+                                    "actions": {
+                                        "Append_to_Result_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Result",
+                                                "value": "@{items('For_each_Result')['url']}: @{items('For_each_Result')['urlClassifications']}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_Result": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "HTTP": {
+                                    "runAfter": {
+                                        "Parse_URL_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "body": [
+                                            "@body('Parse_URL_JSON')?['url']"
+                                        ],
+                                        "cookie": "@body('Parse_Authentication_Reponse')?['cookie']",
+                                        "headers": {
+                                            "Cache-Control": "no-cache",
+                                            "Content-Type": "application/json"
+                                        },
+                                        "method": "POST",
+                                        "uri": "[concat(parameters('Zscaler Admin Url'), '/api/v1/urlLookup')]"
+                                    }
+                                },
+                                "Parse_Result": {
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP')",
+                                        "schema": {
+                                            "items": {
+                                                "properties": {
+                                                    "url": {
+                                                        "type": "string"
+                                                    },
+                                                    "urlClassifications": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "urlClassificationsWithSecurityAlert": {
+                                                        "type": "array"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "url",
+                                                    "urlClassifications",
+                                                    "urlClassificationsWithSecurityAlert"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    }
+                                },
+                                "Parse_URL_JSON": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each')",
+                                        "schema": {
+                                            "properties": {
+                                                "Type": {
+                                                    "type": "string"
+                                                },
+                                                "friendlyName": {
+                                                    "type": "string"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_Result_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_Result_variable": {
+                            "runAfter": {
+                                "Parse_Authentication_Reponse": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Result",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_Authentication_Reponse": {
+                            "runAfter": {
+                                "zscaler": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('zscaler')",
+                                "schema": {
+                                    "properties": {
+                                        "cookie": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "zscaler": {
+                            "runAfter": {
+                                "Entities_-_Get_URLs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Workflow",
+                            "inputs": {
+                                "host": {
+                                    "triggerName": "manual",
+                                    "workflow": {
+                                        "id": "[variables('ZscalerAuthenticationFlow')]"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

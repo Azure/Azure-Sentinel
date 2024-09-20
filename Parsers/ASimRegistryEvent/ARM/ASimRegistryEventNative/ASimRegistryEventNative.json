@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimRegistryEventNative",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Registry Event ASIM parser for Microsoft Sentinel native Registry Event table",
+            "category": "ASIM",
+            "FunctionAlias": "ASimRegistryEventNative",
+            "query": "let parser=(disabled: bool=false) {\n  ASimRegistryEventLogs\n  | where not(disabled)\n  | project-rename\n      EventUid = _ItemId\n  | extend          \n      EventSchema = \"RegistryEvent\",\n      DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)\n  //  -- Aliases\n  | extend\n      EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),\n      EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),\n      Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),\n      User =  ActorUsername,\n      Rule = coalesce(RuleName, tostring(RuleNumber)),\n      Process =  ActingProcessName\n  | project-away\n      TenantId,\n      SourceSystem,\n      _SubscriptionId,\n      _ResourceId\n};\nparser (disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

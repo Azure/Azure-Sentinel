@@ -1,0 +1,54 @@
+id: 1139230c-cf10-45db-b616-fed0d1415c05
+name: Box - Abmormal user activity
+description: |
+  'Detects spikes (deviations from avarage) in user activity.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: BoxDataConnector
+    dataTypes:
+      - BoxEvents_CL
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+relevantTechniques:
+  - T1530
+query: |
+  let lbperiod_start = 14d;
+  let lbperiod_end = 24h;
+  let user_actions_1 = BoxEvents
+  | where TimeGenerated between (ago(lbperiod_start) .. ago(lbperiod_end))
+  | summarize TotalEvents = count() by SourceName
+  | project TotalEvents, User = SourceName;
+  let user_actions_2 = BoxEvents
+  | where TimeGenerated between (ago(lbperiod_start) .. ago(lbperiod_end))
+  | summarize TotalEvents = count() by SrcUserName
+  | project TotalEvents, User = SrcUserName;
+  let TotalActions = (union user_actions_1, user_actions_2)
+  | summarize TotalEvents = count() by User
+  | extend EventsPerDay = TotalEvents / 29
+  | extend k = 1;
+  let actions1_last_h = BoxEvents
+  | summarize TotalEventsH = count() by SourceName
+  | project TotalEventsH, User = SourceName;
+  let actions2_last_h = BoxEvents
+  | summarize TotalEventsH = count() by SourceName
+  | project TotalEventsH, User = SourceName;
+  let TotalActionsLastHour = (union actions1_last_h, actions2_last_h)
+  | summarize TotalEventsH = sum(TotalEventsH) by User
+  | extend k = 1;
+  TotalActions
+  | join (TotalActionsLastHour) on k
+  | where EventsPerDay > TotalEventsH
+  | project User
+  | extend AccountCustomEntity = User
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

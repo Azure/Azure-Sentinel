@@ -1,0 +1,187 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Cohesity Incident Email",
+        "description": "This playbook sends an email to the recipient with the details related to the incidents.",
+        "prerequisites": "Create a distribution list (email) that will be used for sending out incident notifications.",
+        "postDeployment": [ "To enable this playbook, you need to authorize Outlook connection." ],
+        "prerequisitesDeployTemplateFile": "None",
+        "lastUpdateTime": "2022-12-23T10:57:00.000Z",
+        "entities": [ "Malware" ],
+        "tags": [ "SOAR", "Email Notification", "Threat Response" ],
+        "support": {
+            "tier": "community",
+            "armtemplate": "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author": {
+            "name": "Cohesity"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "My_Cohesity_Send_Incident_Email",
+            "type": "string"
+        },
+        "EmailID": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter value for EmailID"
+            }
+        }
+    },
+    "variables": {
+        "MicrosoftSentinelConnectionName": "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+        "OutlookConnectionName": "[concat('Outlook-', parameters('PlaybookName'))]"
+    },
+    "resources": [{
+            "properties": {
+                "provisioningState": "Succeeded",
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "EmailID": {
+                            "defaultValue": "[parameters('EmailID')]",
+                            "type": "string"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_variable": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [{
+                                    "name": "EmailBody",
+                                    "type": "string"
+                                }]
+                            }
+                        },
+                        "Send_email_(V2)": {
+                            "runAfter": {
+                                "Set_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>@{variables('EmailBody')}</p>",
+                                    "Importance": "Normal",
+                                    "Subject": "Cohesity Alert",
+                                    "To": "@parameters('EmailID')"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['outlook']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            }
+                        },
+                        "Set_variable_2": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                                "name": "EmailBody",
+                                "value": "<p>Hello SecurityTeam,</p>\n<p>You have a Cohesity incident from Microsoft Sentinel. Below is information:</p>\n\n<ul>\n<li><strong>Incident ARM Name:&nbsp;</strong>@{triggerBody()?['object']?['name']}</li>\n<li><strong>Description</strong>: @{triggerBody()?['object']?['properties']?['description']}</li>\n<li><strong>Severity</strong>: @{triggerBody()?['object']?['properties']?['severity']}</li>\n<li><strong>Incident ID</strong>: @{triggerBody()?['object']?['properties']?['incidentNumber']}</li>\n<li><strong>Incident Create Time Utc</strong>: @{triggerBody()?['object']?['properties']?['createdTimeUtc']}</li>\n<li><strong>Incident URL</strong>: @{triggerBody()?['object']?['properties']?['incidentUrl']}</li>\n</ul>\n\n<p>Please review and update incident accordingly.</p>\n<p>Cohesity Team</p>"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "outlook": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]",
+                                "connectionName": "[variables('OutlookConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name": "[parameters('PlaybookName')]",
+            "type": "Microsoft.Logic/workflows",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "hidden-SentinelTemplateName": "My_Cohesity_Send_Incident_Email",
+                "hidden-SentinelTemplateVersion": "1.0"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "apiVersion": "2019-05-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('OutlookConnectionName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('OutlookConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('OutlookConnectionName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Outlook')]"
+                }
+            }
+        }
+    ]
+}

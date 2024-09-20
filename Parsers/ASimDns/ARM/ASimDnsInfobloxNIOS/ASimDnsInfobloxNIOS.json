@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimDnsInfobloxNIOS",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "DNS activity ASIM parser for Infoblox NIOS",
+            "category": "ASIM",
+            "FunctionAlias": "ASimDnsInfobloxNIOS",
+            "query": "let SyslogProjected = Syslog | project SyslogMessage, ProcessName, TimeGenerated, Computer, HostIP;\nlet response = (disabled: boolean=false) {\n   SyslogProjected\n   | where not(disabled)\n   | where ProcessName == \"named\" and SyslogMessage has_all (\"client\", \"query:\", \"response:\")\n   | parse SyslogMessage with *\n       \"client \" SrcIpAddr: string\n       \"#\" SrcPortNumber: string\n       \" \" NetworkProtocol: string\n       \": query: \" DnsQuery: string\n       \" \" DnsQueryClassName: string\n       \" \" DnsQueryTypeName: string\n       \" response: \" DnsResponseCodeName: string\n       \" \" DnsFlags: string\n   | extend DnsResponseNameIndex= indexof(DnsFlags, \" \")\n   | extend DnsResponseName =iif(DnsResponseNameIndex != \"-1\", substring(DnsFlags, DnsResponseNameIndex+1), \"\")\n   | extend DnsFlags =iif(DnsResponseNameIndex != \"-1\", substring(DnsFlags, 0, DnsResponseNameIndex), DnsFlags)\n   | extend SrcPortNumber = iif(SrcPortNumber has ':',replace_string(SrcPortNumber,':',''),SrcPortNumber)\n   | extend SrcPortNumber = toint(SrcPortNumber)\n   | extend EventSubType = \"response\"\n   | project-away SyslogMessage, ProcessName, DnsResponseNameIndex\n };\n let request = (disabled: boolean=false) {\n   SyslogProjected \n   | where not(disabled)\n   | where ProcessName == \"named\" and SyslogMessage has_all (\"client\", \"query:\") and SyslogMessage !has \"response:\"\n   | extend SyslogMessage = (split(SyslogMessage,\"client \"))[1]\n   | extend SyslogMessage = iif(SyslogMessage startswith \"@\", (substring(SyslogMessage, indexof(SyslogMessage, \" \")+1)), SyslogMessage)\n   | extend SyslogMessage = replace_string(SyslogMessage,\"\\\\ \",\"@@@\")\n   | parse SyslogMessage with \n       SrcIpAddr: string\n       \"#\" SrcPortNumber: int *\n       \"query: \" DnsQuery: string\n       \" \" DnsQueryClassName: string\n       \" \" DnsQueryTypeName: string\n       \" \" DnsFlags: string\n   | extend DnsQuery = replace_string (DnsQuery, '@@@', ' ')\n   | extend DnsFlags= tostring((split(DnsFlags,\" \"))[0])\n   | extend \n       EventSubType = \"request\",\n       DnsResponseCodeName = \"NA\"\n   | project-away SyslogMessage, ProcessName\n };\n let parser = (disabled:boolean=false) {\n   union response (disabled), request (disabled)\n   | extend\n       EventCount=int(1),\n       EventStartTime=todatetime(TimeGenerated),\n       EventEndTime=todatetime(TimeGenerated),\n       EventProduct=\"NIOS\",\n       EventVendor=\"Infoblox\",\n       EventSchema=\"Dns\",\n       EventSchemaVersion=\"0.1.3\",\n       EventType=\"Query\", \n       EventResult=iff(EventSubType==\"request\" or DnsResponseCodeName==\"NOERROR\",\"Success\",\"Failure\"),\n       DvcIpAddr=iff (HostIP == \"Unknown IP\", \"\", HostIP)\n   // -- Aliases\n   | invoke _ASIM_ResolveDvcFQDN (\"Computer\")\n   | project-away Computer\n   | extend\n       Dvc=DvcHostname,\n       Domain=DnsQuery,\n       IpAddr=SrcIpAddr,\n       Src=SrcIpAddr,\n       EventResultDetails = DnsResponseCodeName\n   | project-away HostIP\n };\n parser (disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

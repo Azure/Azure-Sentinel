@@ -1,0 +1,34 @@
+id: 333ad16e-620b-4f36-af3b-da33f8d16cc2
+name: SmartScreen app block ignored by user
+description: |
+  Query for SmartScreen application blocks on files with "Malicious" reputation, where the user has decided to run the malware nontheless.
+  Read more about SmartScreen here: https://docs.microsoft.com/windows/security/threat-protection/windows-defender-smartscreen/windows-defender-smartscreen-overview.
+  Data availability: These events are available only on Windows 10 version 1703 and onwards.
+  Tags: #SmartScreen.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceEvents
+query: |
+  let minTimeRange = ago(7d);
+  let smartscreenAppBlocks = 
+      DeviceEvents
+      | where ActionType == "SmartScreenAppWarning" and Timestamp > minTimeRange
+              // Filter out SmartScreen test files downloaded from https://demo.smartscreen.msft.net/
+              and not (FileName startswith "knownmalicious" and FileName endswith ".exe")
+      | extend ParsedFields=parse_json(AdditionalFields)
+      | project Timestamp, DeviceName, BlockedFileName=FileName, SHA1, Experience=tostring(ParsedFields.Experience), ActivityId=tostring(ParsedFields.ActivityId), InitiatingProcessFileName;
+  // Query for UserDecision events - each one means the user has decided to ignore the warning and run the app.
+  let userIgnoredWarning=
+      DeviceEvents
+      | where ActionType == "SmartScreenUserOverride" and Timestamp > minTimeRange
+      | project DeviceName, ActivityId=extractjson("$.ActivityId", AdditionalFields, typeof(string));
+  // Join the block and user decision event using an ActivityId
+  let ignoredBlocks = 
+  	smartscreenAppBlocks
+  	| join kind=leftsemi (userIgnoredWarning) on DeviceName, ActivityId
+  	| project-away ActivityId;
+  ignoredBlocks
+  // Select only blocks on "Malicious" files.
+  // To hunt over Unknown/Untrusted files, remove the following where clause, but then you might want to join with additional signals.
+  | where Experience == "Malicious"

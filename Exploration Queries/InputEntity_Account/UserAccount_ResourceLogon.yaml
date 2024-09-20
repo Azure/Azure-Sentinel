@@ -1,0 +1,61 @@
+Id: c34bf507-cedf-4120-bf41-f835dd68b0d9
+DisplayName: Hosts which the account logged on to
+Description: Hosts which the account logged on to during a given time period based on SigninLogs (set time range to +-1d when running the query)
+InputEntityType: Account
+InputFields:
+  - Name
+OutputEntityTypes:
+  - Host
+QueryPeriodBefore: 1d
+QueryPeriodAfter: 1d
+DataSources:
+  - SigninLogs
+  - imAuthentication
+Tactics:
+  - Persistence
+  - Discovery
+  - LateralMovement
+  - Collection  
+query: |
+  let isimAuthenticationInstalled=toscalar(union isfuzzy=true  (datatable(Test:string)[]), (imAuthentication| take 0) | getschema | count | project Exists=(Count>1));
+  let Legacy = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where not(isimAuthenticationInstalled)) // if table is not installed this table is [1]
+  | join (
+    SigninLogs
+    | where ResultType == 0
+    | extend v_Account_Name = case(
+    v_Account_Name has '@', tostring(split(v_Account_Name, '@')[0]),
+    v_Account_Name has '\\', tostring(split(v_Account_Name, '\\')[1]),
+    v_Account_Name
+    )
+    | where UserPrincipalName has v_Account_Name
+    | extend RemoteHost = tolower(tostring(parsejson(DeviceDetail['displayName'])))
+    | extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser
+    | extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)
+    | extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city)
+    | extend DeviceId = case(isnotempty(DeviceDetail), tostring(DeviceDetail.deviceId), "Unknown Device")
+    | extend HostName = case(isnotempty(DeviceDetail), tostring(DeviceDetail.displayName), "Unknown Device")
+    | extend Dvc = case(isnotempty(HostName), HostName, case(isnotempty(DeviceId), DeviceId, "Unknown Device"))
+    | summarize min(TimeGenerated), max(TimeGenerated) by Dvc , tostring(OS)
+    | project min_TimeGenerated, max_TimeGenerated, Dvc, OS
+    | top 10 by min_TimeGenerated desc nulls last 
+    | project-rename Host_UnstructuredName=Dvc, Host_OSVersion=OS, Host_Aux_StartTime=min_TimeGenerated, Host_Aux_EndTime=max_TimeGenerated
+    | extend exists=int(1)
+  ) on exists
+  | project-away exists, exists1 };
+   let Normalized = (v_Account_Name:string){
+  (datatable(exists:int)[1] | where isimAuthenticationInstalled)
+  | join kind=inner (
+    imAuthentication(targetusername_has=v_Account_Name)
+    | where EventResult =~ "Success"
+    | extend Dvc = case(Dvc == "Microsoft", SrcDvcHostname, Dvc)
+    | extend Dvc = case(isnotempty(Dvc), Dvc, "Unknown Host")
+    | where Dvc != "Unknown Host"
+    | extend OS = case(isnotempty(TargetDvcOs), TargetDvcOs, SrcDvcOs)
+    | summarize min(TimeGenerated), max(TimeGenerated) by Dvc , tostring(OS)
+    | project min_TimeGenerated, max_TimeGenerated, Dvc, OS
+    | top 10 by min_TimeGenerated desc nulls last 
+    | project-rename Host_UnstructuredName=Dvc, Host_OSVersion=OS, Host_Aux_StartTime=min_TimeGenerated, Host_Aux_EndTime=max_TimeGenerated
+    | extend exists=int(1)
+  ) on exists | project-away exists, exists1 };
+  union isfuzzy=true Legacy('<v_Account_Name>'), Normalized('<v_Account_Name>')

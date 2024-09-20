@@ -1,0 +1,29 @@
+Id: d7cfd771-3082-4199-8fbb-9c12a3db88a8  
+DisplayName: Most Prevalent Inbound Network Connections by Host
+Description: Top 10 (most prevalent) inbound network connection events by a given host in the range of +-30m
+InputEntityType: Host
+InputFields:
+  - HostName
+OutputEntityTypes:
+  - Ip
+QueryPeriodBefore: 30m
+QueryPeriodAfter: 30m
+DataSources:
+  - _Im_NetworkSession
+Tactics:
+  - Discovery
+  - LateralMovement
+  - Collection
+query: |
+  let GetWireDataInboundWithHost = (v_Host_HostName:string){
+  _Im_NetworkSession(hostname_has_any=v_Host_HostName)
+  | where EventResult =~ "success"
+  | where NetworkDirection =~ "Inbound"
+  | extend LocalAppName = column_ifexists("LocalAppName", "")
+  | extend info = pack('Computer', DvcHostname, 'LocalPortNumber', DstPortNumber, 'DstIpAddr', Dst, 'SrcIpAddr', Src,'Direction', NetworkDirection, 'NetworkProtocol', NetworkProtocol, "LocalAppName", LocalAppName)
+  | summarize Process_Aux_Min_SessionStartTime=min(TimeGenerated), Process_Aux_Max_SessionStartTime=max(TimeGenerated), count(), IP_Aux_info = make_set(info, maxSize=1000) by Src, Dvc
+  | top 10 by count_ desc
+  | project-rename IP_Address=Src
+  };
+  // change <HostName> value below
+  GetWireDataInboundWithHost('<HostName>')

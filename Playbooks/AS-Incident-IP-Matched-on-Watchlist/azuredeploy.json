@@ -1,0 +1,328 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Incident-IP-Matched-on-Watchlist", 
+        "description": "This playbook is intended to be run from a Microsoft Sentinel incident. If any IP entities are found to match those in a specified watchlist containing a list of subnets, a comment noting this match will be added to the incident and the incident will be tagged with a label of your choosing.",
+        "prerequisites": "1. A Microsoft Sentinel watchlist containing subnets is needed",
+        "postDeployment": ["Assign Microsoft Sentinel Contributor role to playbook over Log Analytics Workspace."],
+        "lastUpdateTime": "2023-05-30T17:19:47Z",
+        "entities": ["IP"], 
+        "tags": ["Microsoft Sentinel", "Incident", "Watchlist", "Subnet"], 
+        "support": {
+            "tier": "partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Incident-IP-Matched-on-Watchlist",
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Logic App resource to be created"
+            }
+        },
+        "WatchlistName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the watchlist to check incident IP addresses against"
+            }
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Microsoft Sentinel workspace the watchlist is housed in"
+            }
+        },
+        "ResourceGroupName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the Microsoft Sentinel resource group the workspace is housed in"
+            }
+        },
+        "IncidentTag": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Name of the tag to add to the Microsoft Sentinel incident"
+            }
+        }
+    },
+    "variables": {
+        "azuremonitorlogs": "[concat('azuremonitorlogs-', parameters('PlaybookName'))]",
+        "azuresentinel": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuremonitorlogs')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azuresentinel')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {},
+                "parameterValueType": "Alternative",
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Condition_-_Check_for_IPs": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "For_each_-_Query_result": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>@{variables('Incident Comment')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "For_each_-_Query_result": {
+                                    "foreach": "@body('Run_query_and_list_results')?['value']",
+                                    "actions": {
+                                        "Append_to_string_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Incident Comment",
+                                                "value": "[concat('IP address @{items(''For_each_-_Query_result'')?[''address'']} matched in ', parameters('WatchlistName'), ' watchlist \nSubnet: @{items(''For_each_-_Query_result'')?[''SearchKey'']}\n\n')]"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Run_query_and_list_results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach"
+                                },
+                                "Run_query_and_list_results": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "[concat('let Incident_IPs = datatable(address:string)\n@{variables(''IP Addresses'')};\nIncident_IPs\n| evaluate ipv4_lookup(_GetWatchlist(''', parameters('WatchlistName'),'''), address, SearchKey)\n')]",
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "resourcegroups": "[parameters('ResourceGroupName')]",
+                                            "resourcename": "[parameters('WorkspaceName')]",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "subscriptions": "[subscription().subscriptionId]",
+                                            "timerange": "@{addDays(utcNow(), -10000)}"
+                                        }
+                                    }
+                                },
+                                "Update_incident": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                    {
+                                                        "Tag": "[parameters('IncidentTag')]"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_Incident_Comment": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(variables('IP Addresses'))",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_-_Entity_IP": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Append_to_array_variable": {
+                                    "runAfter": {},
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "IP Addresses",
+                                        "value": "@items('For_each_-_Entity_IP')?['Address']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_-_IP_Addresses": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable_-_IP_Addresses": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IP Addresses",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_-_Incident_Comment": {
+                            "runAfter": {
+                                "For_each_-_Entity_IP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Incident Comment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuremonitorlogs'))]",
+                                "connectionName": "[variables('azuremonitorlogs')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            },
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azuresentinel'))]",
+                                "connectionName": "[variables('azuresentinel')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

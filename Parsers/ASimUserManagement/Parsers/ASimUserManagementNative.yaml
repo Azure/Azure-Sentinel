@@ -1,0 +1,52 @@
+Parser:
+  Title: User Management activity ASIM parser for Microsoft Sentinel native User Management activity table
+  Version: "0.1.0"
+  LastUpdated: "Mar 07 2024"
+Product:
+  Name: Native
+Normalization:
+  Schema: UserManagement
+  Version: '0.1.1'
+References:
+- Title: ASIM User Management Schema
+  Link: https://aka.ms/ASimUserManagementDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native User Management activity table to the ASIM User Management activity normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: ASimUserManagementNative
+EquivalentBuiltInParser: _ASim_UserManagement_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    disabled:bool = false
+  )
+  {
+    ASimUserManagementActivityLogs
+    | where not(disabled)
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "UserManagement",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        User = ActorUsername,
+        Hostname = DvcHostname,
+        IpAddr = SrcIpAddr,
+        Src = coalesce (SrcHostname,SrcIpAddr, SrcDvcId),
+        UpdatedPropertyName = EventSubType
+    | project-away
+        TenantId,
+        SourceSystem,
+        _SubscriptionId,
+        _ResourceId
+  };
+  parser (disabled = disabled)

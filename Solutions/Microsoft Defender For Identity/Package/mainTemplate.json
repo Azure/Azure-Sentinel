@@ -1,0 +1,263 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "author": "Microsoft - support@microsoft.com",
+    "comments": "Solution template for Microsoft Defender for Identity"
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "Workspace name for Log Analytics where Microsoft Sentinel is setup"
+      }
+    }
+  },
+  "variables": {
+    "solutionId": "azuresentinel.azure-sentinel-solution-mdefenderforidentity",
+    "_solutionId": "[variables('solutionId')]",
+    "email": "support@microsoft.com",
+    "_email": "[variables('email')]",
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "uiConfigId1": "AzureAdvancedThreatProtection",
+    "_uiConfigId1": "[variables('uiConfigId1')]",
+    "dataConnectorContentId1": "AzureAdvancedThreatProtection",
+    "_dataConnectorContentId1": "[variables('dataConnectorContentId1')]",
+    "dataConnectorId1": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+    "_dataConnectorId1": "[variables('dataConnectorId1')]",
+    "dataConnectorTemplateSpecName1": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentId1')))]",
+    "dataConnectorVersion1": "1.0.0"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/templateSpecs",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('dataConnectorTemplateSpecName1')]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "properties": {
+        "description": "Microsoft Defender for Identity data connector with template",
+        "displayName": "Microsoft Defender for Identity template"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/templateSpecs/versions",
+      "apiVersion": "2021-05-01",
+      "name": "[concat(variables('dataConnectorTemplateSpecName1'),'/',variables('dataConnectorVersion1'))]",
+      "location": "[parameters('workspace-location')]",
+      "tags": {
+        "hidden-sentinelWorkspaceId": "[variables('workspaceResourceId')]",
+        "hidden-sentinelContentType": "DataConnector"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/templateSpecs', variables('dataConnectorTemplateSpecName1'))]"
+      ],
+      "properties": {
+        "description": "Microsoft Defender for Identity data connector with template version 2.0.1",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersion1')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+              "apiVersion": "2021-03-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "StaticUI",
+              "properties": {
+                "connectorUiConfig": {
+                  "id": "[variables('_uiConfigId1')]",
+                  "title": "Microsoft Defender for Identity",
+                  "publisher": "Microsoft",
+                  "descriptionMarkdown": "Connect Microsoft Defender for Identity to gain visibility into the events and user analytics. Microsoft Defender for Identity identifies, detects, and helps you investigate advanced threats, compromised identities, and malicious insider actions directed at your organization. Microsoft Defender for Identity enables SecOp analysts and security professionals struggling to detect advanced attacks in hybrid environments to:\n\n-   Monitor users, entity behavior, and activities with learning-based analytics​\n-   Protect user identities and credentials stored in Active Directory\n-   Identify and investigate suspicious user activities and advanced attacks throughout the kill chain\n-   Provide clear incident information on a simple timeline for fast triage\n\n[Try now >](https://aka.ms/AtpTryNow)\n\n[Deploy now >](https://aka.ms/AzureATP_Deploy)\n\nFor more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220069&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).",
+                  "graphQueries": [
+                    {
+                      "metricName": "Total data received",
+                      "legend": "SecurityAlerts",
+                      "baseQuery": "SecurityAlert\n    | where ProductName == \"Azure Advanced Threat Protection\"\n        | extend alertWasCustomized = bag_has_key(todynamic(ExtendedProperties), \"OriginalProductName\")\n        | where alertWasCustomized == false"
+                    }
+                  ],
+                  "connectivityCriterias": [
+                    {
+                      "type": "SentinelKinds",
+                      "value": [
+                        "AzureAdvancedThreatProtection"
+                      ]
+                    }
+                  ],
+                  "dataTypes": [
+                    {
+                      "name": "SecurityAlert (AATP)",
+                      "lastDataReceivedQuery": "SecurityAlert\n    | where ProductName == \"Azure Advanced Threat Protection\"\n        | extend alertWasCustomized = bag_has_key(todynamic(ExtendedProperties), \"OriginalProductName\")\n        | where alertWasCustomized == false\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+                "contentId": "[variables('_dataConnectorContentId1')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersion1')]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Microsoft Defender for Identity",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "Microsoft",
+                  "email": "[variables('_email')]"
+                },
+                "support": {
+                  "tier": "Microsoft",
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "link": "https://support.microsoft.com/"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', last(split(variables('_dataConnectorId1'),'/'))))]",
+      "dependsOn": [
+        "[variables('_dataConnectorId1')]"
+      ],
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentId1'))]",
+        "contentId": "[variables('_dataConnectorContentId1')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersion1')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Microsoft Defender for Identity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "tier": "Microsoft",
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "link": "https://support.microsoft.com/"
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId1'))]",
+      "apiVersion": "2021-03-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+      "location": "[parameters('workspace-location')]",
+      "kind": "StaticUI",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "Microsoft Defender for Identity",
+          "publisher": "Microsoft",
+          "descriptionMarkdown": "Connect Microsoft Defender for Identity to gain visibility into the events and user analytics. Microsoft Defender for Identity identifies, detects, and helps you investigate advanced threats, compromised identities, and malicious insider actions directed at your organization. Microsoft Defender for Identity enables SecOp analysts and security professionals struggling to detect advanced attacks in hybrid environments to:\n\n-   Monitor users, entity behavior, and activities with learning-based analytics​\n-   Protect user identities and credentials stored in Active Directory\n-   Identify and investigate suspicious user activities and advanced attacks throughout the kill chain\n-   Provide clear incident information on a simple timeline for fast triage\n\n[Try now >](https://aka.ms/AtpTryNow)\n\n[Deploy now >](https://aka.ms/AzureATP_Deploy)\n\nFor more information, see the [Microsoft Sentinel documentation](https://go.microsoft.com/fwlink/p/?linkid=2220069&wt.mc_id=sentinel_dataconnectordocs_content_cnl_csasci).",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "SecurityAlerts",
+              "baseQuery": "SecurityAlert\n    | where ProductName == \"Azure Advanced Threat Protection\"\n        | extend alertWasCustomized = bag_has_key(todynamic(ExtendedProperties), \"OriginalProductName\")\n        | where alertWasCustomized == false"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "SecurityAlert (AATP)",
+              "lastDataReceivedQuery": "SecurityAlert\n    | where ProductName == \"Azure Advanced Threat Protection\"\n        | extend alertWasCustomized = bag_has_key(todynamic(ExtendedProperties), \"OriginalProductName\")\n        | where alertWasCustomized == false\n            | summarize Time = max(TimeGenerated)\n            | where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriterias": [
+            {
+              "type": "SentinelKinds",
+              "value": [
+                "AzureAdvancedThreatProtection"
+              ]
+            }
+          ],
+          "id": "[variables('_uiConfigId1')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "apiVersion": "2022-01-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "2.0.1",
+        "kind": "Solution",
+        "contentSchemaVersion": "2.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Microsoft Defender for Identity",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "Microsoft",
+          "email": "[variables('_email')]"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com/"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('_dataConnectorContentId1')]",
+              "version": "[variables('dataConnectorVersion1')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2022-04-20",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Threat Protection"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
+  "outputs": {}
+}

@@ -1,0 +1,275 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "AS-Edgescan-Integration-Hosts", 
+        "description": "This playbook will run daily and ingest host records created in Edgescan in the last two days. If these records are not in the Microsoft Sentinel Edgescan_Hosts_CL custom log, they will be added.",
+        "prerequisites": "1. An Edgescan account is needed, along with an API key for this account. Support for the set up and configuration of each of these items can be found here: https://github.com/Accelerynt-Security/AS-Edgescan-Integration",
+        "lastUpdateTime": "2023-04-25T18:51:37Z",
+        "tags": ["Microsoft Sentinel", "Custom Logs", "Edgescan"], 
+        "support": {
+            "tier": "Partner"
+        },
+        "author": {
+            "name": "Accelerynt"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "AS-Edgescan-Integration-Hosts",
+            "type": "string"
+        },
+        "EdgescanURL": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter your Edgescan URL, following the format: example.edgescan.com"
+            }
+        },
+        "EdgescanUsername": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter your Edgescan username"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata" : {
+                "description" : "Enter the name of the key vault that stores your Edgescan API token"
+            }
+        },
+        "KeyVaultSecretName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter the name of the key vault secret that contains the value of your Edgescan API token"
+            }
+        }
+    },
+    "variables": {
+        "azureloganalyticsdatacollector": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]",
+        "keyvault": "[concat('keyvault-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('azureloganalyticsdatacollector')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('keyvault')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('PlaybookName')]",
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                },
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector'))]",
+                "[resourceId('Microsoft.Web/connections', variables('keyvault'))]"
+            ],
+            "properties": {
+                "state": "Disabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Polling_Frequency": {
+                            "recurrence": {
+                                "frequency": "Hour",
+                                "interval": 24
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "Get_Secret_API_Token": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('KeyVaultSecretName'), ''')}/value')]"
+                            }
+                        },
+                        "For_Each_Host": {
+                            "foreach": "@body('Parse_JSON')?['hosts']",
+                            "actions": {
+                                "Send_Data": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": "@{items('For_Each_Host')}",
+                                        "headers": {
+                                            "Log-Type": "[parameters('PlaybookName')]"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/api/logs"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_Ingested_Hosts_Variable": {
+                            "runAfter": {
+                                "Get_Secret_API_Token": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Ingested Hosts",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Parse_JSON": {
+                            "runAfter": {
+                                "Send_HTTP_GET_Hosts_Request": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('Send_HTTP_GET_Hosts_Request')",
+                                "schema": {
+                                    "count": {
+                                        "type": "integer"
+                                    },
+                                    "hosts": {
+                                        "items": {
+                                            "properties": {
+                                                "apis_detected": {
+                                                    "type": "boolean"
+                                                },
+                                                "asset_id": {
+                                                    "type": "integer"
+                                                },
+                                                "hostnames": {
+                                                    "type": "array"
+                                                },
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "label": {
+                                                    "type": "string"
+                                                },
+                                                "location": {
+                                                    "type": "string"
+                                                },
+                                                "os_name": {
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "type": "string"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "total": {
+                                        "type": "integer"
+                                    }
+                                }
+                            }
+                        },
+                        "Send_HTTP_GET_Hosts_Request": {
+                            "runAfter": {
+                                "Initialize_Ingested_Hosts_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "password": "@{body('Get_Secret_API_Token')?['value']}",
+                                    "type": "Basic",
+                                    "username": "[parameters('EdgescanUsername')]"
+                                },
+                                "method": "GET",
+                                "uri": "[concat('https://', parameters('EdgescanURL'), '/api/v1/hosts.json')]"
+                            },
+                            "description": "Grab hosts"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('azureloganalyticsdatacollector'))]",
+                                "connectionName": "azureloganalyticsdatacollector",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            },
+                            "keyvault": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('keyvault'))]",
+                                "connectionName": "[variables('keyvault')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

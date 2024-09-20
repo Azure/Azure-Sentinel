@@ -1,0 +1,37 @@
+id: 8178a514-1270-4e31-a1d9-aaafeb40122f
+name: M2131_LogRetentionLessThan1Year
+description: |
+  'This alert is designed to monitor log retention within the Maturity Model for Event Log Management (M-21-31) standard. The alert triggers when a log analytics workspace in active storage is configured for less than 1 year.'
+severity: Medium
+status: Available
+requiredDataConnectors: []
+queryFrequency: 1d
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1082
+query: |
+  SecurityRecommendation
+  | summarize arg_max(TimeGenerated, *) by RecommendationDisplayName, AssessedResourceId
+  | where RecommendationDisplayName == "Activity log should be retained for at least one year"
+  | summarize Failed = countif(RecommendationState == "Unhealthy"), Passed = countif(RecommendationState == "Healthy"), Total = countif(RecommendationState == "Healthy" or RecommendationState == "Unhealthy") by RecommendationDisplayName, AssessedResourceId
+  | extend PassedControls = (Passed/todouble(Total))*100
+  | extend RemediationLink = strcat('https://portal.azure.com/#blade/Microsoft_Azure_Security/SecurityMenuBlade/22')
+  | project RecommendationDisplayName, AssessedResourceId, Total, PassedControls, Passed, Failed, RemediationLink, LastObserved=now()
+  | where Failed > 0
+  | sort by Failed desc
+  | extend URLCustomEntity = RemediationLink, ResourceId = AssessedResourceId
+entityMappings:
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: URLCustomEntity
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: AssessedResourceId
+version: 1.0.0
+kind: Scheduled

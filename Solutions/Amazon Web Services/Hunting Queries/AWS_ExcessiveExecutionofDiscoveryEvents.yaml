@@ -1,0 +1,30 @@
+id: c9ccaebf-314c-446d-b3f6-314560ccb0e1
+name: Excessive execution of discovery events 
+description: |
+  'Several enumeration API calls were executed by the same identity. This could be an attacker trying to enumerate the compromised user/token permissions. Verify with the user identity that this activity is legitimate.'
+severity: High
+requiredDataConnectors:
+  - connectorId: AWS
+    dataTypes:
+      - AWSCloudTrail
+tactics:
+  - Discovery
+relevantTechniques:
+  - T1526
+query: |
+    AWSCloudTrail
+    | where (EventName startswith "List" or EventName startswith "Describe" or EventName startswith "Get")
+    | where SourceIpAddress !has "amazonaws.com" and UserAgent has "aws-cli"
+    | extend UserIdentityUserName = iff(isnotempty(UserIdentityUserName), UserIdentityUserName, tostring(split(UserIdentityArn,'/')[-1]))
+    | extend timestamp = TimeGenerated, IPCustomEntity = SourceIpAddress, AccountCustomEntity = UserIdentityUserName
+    | summarize timestamp=arg_max(timestamp,*), enum_events=dcount(EventName), num_regions=dcount(AWSRegion) by bin(TimeGenerated,24h), IPCustomEntity, AccountCustomEntity
+    | where enum_events > 3
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

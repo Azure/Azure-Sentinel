@@ -1,0 +1,948 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This playbook queries the Spur.us database to find Anonymizer services. Uses the IP Entities. Incident trigger.",
+        "author": "Sandor Tokesi"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "spur_alert",
+            "type": "String"
+        },
+        "KeyVaultName": {
+            "defaultValue": "kv4sentinel",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the KeyVault in which the Spur API token is stored."
+            }
+        },
+        "SecretName": {
+            "defaultValue": "secretname",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Secret in which the Spur API token is stored."
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('sen-', parameters('PlaybookName'))]",
+        "KeyVaultConnectionName": "[concat('kva-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "SpurAlert-Azure-APIConnection",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                },
+                "parameterValueType": "Alternative"
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('KeyVaultConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "SpurAlert-KeyVault-APIConnection",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                },
+                "parameterValueType": "Alternative",
+                "alternativeParameterValues": {
+                    "vaultName": "[parameters('KeyVaultName')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_conn']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_incident": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_conn']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}/workspaces/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/alerts/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}"
+                            }
+                        },
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel_conn']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            }
+                        },
+                        "For_each_-_IP_Entities": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "similarIPs": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "message": "<p>@{variables('Spur_Comment')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_conn']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Anonymous": {
+                                    "actions": {
+                                        "Append_to_string_variable": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:160%;color:red;\">The given IP is an Anonymizer. </span><br/><br/>"
+                                            }
+                                        },
+                                        "Update_incident": {
+                                            "runAfter": {
+                                                "Append_to_string_variable": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "incidentArmId": "@body('Update_incident_-_Removing_taxonomy_tags')?['id']",
+                                                    "tagsToAdd": {
+                                                        "TagsToAdd": [
+                                                            {
+                                                                "Tag": "Spur:@{body('Parse_IP_Entity_')?['address']}=Anonymizer"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['azuresentinel_conn']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "put",
+                                                "path": "/Incidents"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Update_incident_-_Removing_taxonomy_tags": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_to_string_variable_2": {
+                                                "runAfter": {},
+                                                "type": "AppendToStringVariable",
+                                                "inputs": {
+                                                    "name": "Spur_Comment",
+                                                    "value": "<span style=\"color:green;font-size:160%;\">The given IP is NOT an Anonymizer. </span><br/><br/>"
+                                                }
+                                            },
+                                            "Update_incident_2": {
+                                                "runAfter": {
+                                                    "Append_to_string_variable_2": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "ApiConnection",
+                                                "inputs": {
+                                                    "body": {
+                                                        "incidentArmId": "@body('Update_incident_-_Removing_taxonomy_tags')?['id']",
+                                                        "tagsToAdd": {
+                                                            "TagsToAdd": [
+                                                                {
+                                                                    "Tag": "Spur:@{body('Parse_IP_Entity_')?['address']}=Clean"
+                                                                }
+                                                            ]
+                                                        }
+                                                    },
+                                                    "host": {
+                                                        "connection": {
+                                                            "name": "@parameters('$connections')['azuresentinel_conn']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method": "put",
+                                                    "path": "/Incidents"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_IP_information')?['anonymous']",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Append_General_Information_table": {
+                                    "runAfter": {
+                                        "Anonymous": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Spur_Comment",
+                                        "value": "<span style=\"font-size:140%;\">General information:</span><br/><br/><table><tr><th>Info Type</th><th>Value</th></tr><tr><td>AS Organization</td><td>@{body('Parse_IP_information')?['as']?['organization']}</td></tr>\n<tr><td>GeoLite Country</td><td>@{body('Parse_IP_information')?['geoLite']?['country']}</td></tr>\n<tr><td>GeoLite State</td><td>@{body('Parse_IP_information')?['geoLite']?['state']}</td></tr>\n<tr><td>GeoLite City</td><td>@{body('Parse_IP_information')?['geoLite']?['city']}</td></tr>\n</table><br/>"
+                                    }
+                                },
+                                "Clear_tmp_Comment_variable": {
+                                    "runAfter": {
+                                        "Set_Comment": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "tmp_comment",
+                                        "value": " "
+                                    }
+                                },
+                                "HTTP_-_Request_IP_information": {
+                                    "runAfter": {
+                                        "Clear_tmp_Comment_variable": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "headers": {
+                                            "Token": "@body('Get_secret')?['value']"
+                                        },
+                                        "method": "GET",
+                                        "uri": "https://api.spur.us/v1/context/@{body('Parse_IP_Entity_')?['address']}"
+                                    }
+                                },
+                                "Parse_IP_Entity_": {
+                                    "runAfter": {},
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@items('For_each_-_IP_Entities')",
+                                        "schema": {
+                                            "properties": {
+                                                "Type": {
+                                                    "type": "string"
+                                                },
+                                                "address": {
+                                                    "type": "string"
+                                                },
+                                                "friendlyName": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Parse_IP_information": {
+                                    "runAfter": {
+                                        "HTTP_-_Request_IP_information": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('HTTP_-_Request_IP_information')",
+                                        "schema": {
+                                            "properties": {
+                                                "anonymous": {
+                                                    "type": "boolean"
+                                                },
+                                                "as": {
+                                                    "properties": {
+                                                        "number": {
+                                                            "type": "integer"
+                                                        },
+                                                        "organization": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "assignment": {
+                                                    "properties": {
+                                                        "exists": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "lastTurnover": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "deviceBehaviors": {
+                                                    "properties": {
+                                                        "behaviors": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "name": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "name"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "exists": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "devices": {
+                                                    "properties": {
+                                                        "estimate": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "geoLite": {
+                                                    "properties": {
+                                                        "city": {
+                                                            "type": "string"
+                                                        },
+                                                        "country": {
+                                                            "type": "string"
+                                                        },
+                                                        "state": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "geoPrecision": {
+                                                    "properties": {
+                                                        "city": {
+                                                            "type": "string"
+                                                        },
+                                                        "country": {
+                                                            "type": "string"
+                                                        },
+                                                        "exists": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "hash": {
+                                                            "type": "string"
+                                                        },
+                                                        "point": {
+                                                            "properties": {
+                                                                "latitude": {
+                                                                    "type": "number"
+                                                                },
+                                                                "longitude": {
+                                                                    "type": "number"
+                                                                },
+                                                                "radius": {
+                                                                    "type": "integer"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "spread": {
+                                                            "type": "string"
+                                                        },
+                                                        "state": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "infrastructure": {
+                                                    "type": "string"
+                                                },
+                                                "ip": {
+                                                    "type": "string"
+                                                },
+                                                "proxiedTraffic": {
+                                                    "properties": {
+                                                        "exists": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "proxies": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "name": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "type": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "name",
+                                                                    "type"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "similarIPs": {
+                                                    "properties": {
+                                                        "exists": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "ips": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "vpnOperators": {
+                                                    "properties": {
+                                                        "exists": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "operators": {
+                                                            "items": {
+                                                                "properties": {
+                                                                    "name": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "name"
+                                                                ],
+                                                                "type": "object"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "wifi": {
+                                                    "properties": {
+                                                        "exists": {
+                                                            "type": "boolean"
+                                                        },
+                                                        "ssids": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                },
+                                "Set_Comment": {
+                                    "runAfter": {
+                                        "Parse_IP_Entity_": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Spur_Comment",
+                                        "value": "<span style=\"font-size:200%;font-weight: bold;\">Spur.us execution @{body('Parse_IP_Entity_')?['address']}</span><br/><br/>"
+                                    }
+                                },
+                                "Update_incident_-_Removing_taxonomy_tags": {
+                                    "runAfter": {
+                                        "Parse_IP_information": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@body('Alert_-_Get_incident')?['id']",
+                                            "tagsToRemove": {
+                                                "TagsToRemove": [
+                                                    {
+                                                        "Tag": "Spur:@{body('Parse_IP_Entity_')?['address']}=Anonymizer"
+                                                    },
+                                                    {
+                                                        "Tag": "Spur:@{body('Parse_IP_Entity_')?['address']}=Clean"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel_conn']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                },
+                                "deviceBehaviors": {
+                                    "actions": {
+                                        "Append_to_string_variable_10": {
+                                            "runAfter": {
+                                                "For_each_3": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "</table><br/>"
+                                            }
+                                        },
+                                        "Append_to_string_variable_8": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:140%;\">Device Behaviors:</span><table><tr><th>Name</th></tr>"
+                                            }
+                                        },
+                                        "For_each_3": {
+                                            "foreach": "@body('Parse_IP_information')?['deviceBehaviors']?['behaviors']",
+                                            "actions": {
+                                                "Append_to_string_variable_9": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "Spur_Comment",
+                                                        "value": "<tr><td>@{items('For_each_3')?['name']}</td></tr>"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Append_to_string_variable_8": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "vpnOperators": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_IP_information')?['deviceBehaviors']?['exists']",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "proxiedTraffic": {
+                                    "actions": {
+                                        "Append_to_string_variable_4": {
+                                            "runAfter": {
+                                                "For_each": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "</table><br/>"
+                                            }
+                                        },
+                                        "For_each": {
+                                            "foreach": "@body('Parse_IP_information')?['proxiedTraffic']?['proxies']",
+                                            "actions": {
+                                                "Append_to_string_variable_3": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "Spur_Comment",
+                                                        "value": "<tr><td>@{items('For_each')?['name']}</td><td>@{items('For_each')?['type']}</td></tr>"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "createProxyTableHeader": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        },
+                                        "createProxyTableHeader": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:140%;\">Proxied Traffic:</span><table> <tr><th>Name</th><th>Type</th></tr>"
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Append_General_Information_table": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_IP_information')?['proxiedTraffic']?['exists']",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "similarIPs": {
+                                    "actions": {
+                                        "Append_to_string_variable_14": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:140%;\">Similar IPs:</span><table><tr><th>IP</th></tr>"
+                                            }
+                                        },
+                                        "Append_to_string_variable_16": {
+                                            "runAfter": {
+                                                "For_each_5": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "@{variables('tmp_comment')}</table><br/>"
+                                            }
+                                        },
+                                        "For_each_5": {
+                                            "foreach": "@body('Parse_IP_information')?['similarIPs']?['ips']",
+                                            "actions": {
+                                                "Append_to_tmp_comment_variable": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "tmp_comment",
+                                                        "value": "<tr><td>@{items('For_each_5')}</td></tr>"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Append_to_string_variable_14": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "wifi": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_IP_information')?['similarIPs']?['exists']",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "vpnOperators": {
+                                    "actions": {
+                                        "Append_to_string_variable_5": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:140%;\">VPN Operators:</span><table><tr><th>Operator Names</th></tr>"
+                                            }
+                                        },
+                                        "Append_to_string_variable_7": {
+                                            "runAfter": {
+                                                "For_each_2": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "</table><br/>"
+                                            }
+                                        },
+                                        "For_each_2": {
+                                            "foreach": "@body('Parse_IP_information')?['vpnOperators']?['operators']",
+                                            "actions": {
+                                                "Append_to_string_variable_6": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "Spur_Comment",
+                                                        "value": "<tr><td>@{items('For_each_2')?['name']}</td></tr>"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Append_to_string_variable_5": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "proxiedTraffic": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_IP_information')?['vpnOperators']?['exists']",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "wifi": {
+                                    "actions": {
+                                        "Append_to_string_variable_11": {
+                                            "runAfter": {},
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "<span style=\"font-size:140%;\">WiFi information:</span><table><tr><th>SSID</th></tr>"
+                                            }
+                                        },
+                                        "Append_to_string_variable_13": {
+                                            "runAfter": {
+                                                "For_each_4": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToStringVariable",
+                                            "inputs": {
+                                                "name": "Spur_Comment",
+                                                "value": "</table><br/>"
+                                            }
+                                        },
+                                        "For_each_4": {
+                                            "foreach": "@body('Parse_IP_information')?['wifi']?['ssids']",
+                                            "actions": {
+                                                "Append_to_string_variable_12": {
+                                                    "runAfter": {},
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "Spur_Comment",
+                                                        "value": "<tr><td>@{items('For_each_4')}</td></tr>"
+                                                    }
+                                                }
+                                            },
+                                            "runAfter": {
+                                                "Append_to_string_variable_11": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Foreach"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "deviceBehaviors": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "equals": [
+                                                    "@body('Parse_IP_information')?['wifi']?['exists']",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_temp_Comment_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "Get_secret": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['keyvault_conn']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "[concat('/secrets/@{encodeURIComponent(''', parameters('SecretName'), ''')}/value')]"
+                            }
+                        },
+                        "Initialize_Comment_variable": {
+                            "runAfter": {
+                                "Get_secret": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Spur_Comment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_temp_Comment_variable": {
+                            "runAfter": {
+                                "Initialize_Comment_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "tmp_comment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel_conn": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "keyvault_conn": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('KeyVaultConnectionName'))]",
+                                "connectionName": "[variables('KeyVaultConnectionName')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                },
+                                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/keyvault')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

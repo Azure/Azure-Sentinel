@@ -1,0 +1,48 @@
+id: a5bb38e3-5ee2-47fe-a65d-c3c9341112ef
+name: Successful Sign-In From Non-Compliant Device with bulk download activity
+description: |
+  'This hunting query will help detect successful sign-ins from devices that are marked non-compliant along with bulk download activity.
+  Attackers may attempt to get a list of accounts, groups, registration details within an environment which could help in follow-on behavior.
+  Best practice is to block sign ins from non-complaint devices, however if allowed monitor these events to ensure they do not lead to other risky activity.
+    Reference: https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-devices#non-compliant-device-sign-in'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+      - AuditLogs
+tactics:
+  - InitialAccess
+  - Discovery
+relevantTechniques:
+  - T1078
+  - T1087
+query: |
+  SigninLogs
+    | where ResultType == 0
+    | where tostring(DeviceDetail.isCompliant) == "false"
+    | where ConditionalAccessStatus == "success"
+    | extend UserPrincipalName = tolower(UserPrincipalName)
+    | project TimeGenerated,ResourceId, OperationName,CorrelationId,Location,AppId, Id,IPAddress,LocationDetails,OriginalRequestId,ResourceServicePrincipalId,UserId,UserPrincipalName,AADTenantId,UserType,HomeTenantId,ConditionalAccessStatus
+  | join kind=inner
+  (
+  AuditLogs
+  | where OperationName has_any  ("Download group members", "Download users", "Download user registeration details", "Download groups")
+  | extend IpAddress = case(
+  isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress),
+  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),'Not Available')
+  | extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)),
+    tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+  | extend TargetResourceName = tolower(tostring(TargetResources.[0].displayName))
+  | extend InitiatedBy = tolower(InitiatedBy)
+  | project TimeGenerated, InitiatedBy, CorrelationId, Id,AADTenantId, ResourceId, IpAddress, OperationName
+  ) on $left.UserPrincipalName == $right.InitiatedBy
+  | project TimeGenerated, UserPrincipalName, IPAddress, CorrelationId, Id, ResourceId, OperationName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress

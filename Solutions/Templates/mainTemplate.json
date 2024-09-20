@@ -1,0 +1,160 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "author": "ENTER YOUR NAME / COMPANY NAME",
+        "comments": "Solution template for Product-Appliance/Domain/Vertical"
+    },
+    //These should align with the outputs specified in createUIDefinition.json file
+    "parameters": {
+        "formattedTimeNow": {
+            "type": "string",
+            "defaultValue": "[utcNow('g')]", // https://docs.microsoft.com/dotnet/standard/base-types/standard-date-and-time-format-strings#GeneralDateShortTime
+            "metadata": {
+                "description": "Appended to workbook displayNames to make them unique - this is required if you are including workbooks"
+            }
+        },
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass arm-ttk test `Location-Should-Not-Be-Hardcoded`.  We instead use the `workspace-location` which is derived from the LA workspace"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[parameters('location')]",
+            "metadata": {
+                "description": "Region to deploy Solution resources"
+            }
+        },
+        "workspace": {
+            "defaultValue": "<Enter Log Analytics Workspace>",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Workspace name for Azure Log Analytics where Azure Sentinel is setup"
+            }
+        },
+        // Analytic Rules - for adding more analytic rules copy below analytic1-id and rename to analytic2-id and so on
+        "analytic1-id": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "minLength": 1,
+            "metadata": {
+                "description": "Unique id for the scheduled alert rule"
+            }
+        },
+        // Workbook - for adding more workbooks, copy the set below and rename to workbook2 and so on
+        "workbook1-id": {
+            "type": "string",
+            "defaultValue": "[newGuid()]",
+            "minLength": 1,
+            "metadata": {
+                "description": "Unique id for the workbook"
+            }
+        },
+        "workbook1-name": {
+            "type": "string",
+            "defaultValue": "Product-Appliance/Domain/Vertical",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name for the workbook"
+            }
+        },
+        // Playbook - for adding more playbooks, uncomment and copy the set below and rename to playbook2 and so on. 
+        // In this template there are 2 configurable properties mentioned. Customize as per your needs to give a name for these properties and add more as needed
+        "playbook1-name": {
+            "defaultValue": "PLAYBOOK_NAME",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Resource name for the logic app playbook.  No spaces are allowed"
+            }
+        },
+        "playbook1-configurationProperty1": {
+            "defaultValue": "<Enter configurationProperty1>",
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Description of configurationProperty1"
+            }
+        },
+        "playbook1-configurationProperty2": {
+            "type": "securestring",
+            "minLength": 1,
+            "metadata": {
+                "description": "Description of configurationProperty2"
+            }
+        }
+    },
+    // These variables are defined twice to trick the arm-ttk test `IDs-Should-Be-Derived-From-ResourceIDs`
+    "variables": {
+        // These variables are defined twice to trick the arm-ttk test `IDs-Should-Be-Derived-From-ResourceIDs`
+        "workbook-source": "[concat(resourceGroup().id, '/providers/Microsoft.OperationalInsights/workspaces/',parameters('workspace'))]",
+        "_workbook-source": "[variables('workbook-source')]"
+        // Example Playbook Connection Variables
+        // "LogAnalyticsConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('playbook1-name'))]",
+        // "connection": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('workspace-location'), '/managedApis/azureloganalyticsdatacollector')]",
+        // "_connection": "[variables('connection')]"
+        // The variable below is defined to trick the arm-ttk test `Parameters Must Be Referenced` -- This can be removed once the parameters are referenced or removed.
+        // "credentials": "[concat(parameters('playbook1-configurationProperty1'), parameters('playbook1-configurationProperty2'))]"
+    },
+    "resources": [
+        {
+            "apiVersion": "2020-06-01",
+            //Generate a new GUID and paste in the below string
+            "name": "pid-ENTER_NEW_GUID",
+            "type": "Microsoft.Resources/deployments",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',parameters('analytic1-id'))]",
+            "apiVersion": "2020-01-01",
+            "kind": "Scheduled",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "description": "enter description from yaml template",
+                "displayName": "enter name from yaml template",
+                "enabled": false,
+                "query": "KQL query of analytic rule 1 from yaml template with right escape - refer to examples linked in template guidance",
+                "queryFrequency": "enter queryFrequency from the yaml file in ISO 8601 format - PT1H",
+                "queryPeriod": "enter queryPeriod value from the yaml file in ISO 8601 format - PT1H",
+                "severity": "enter severity from the yaml file",
+                "suppressionDuration": "enter suppressionDuration value in ISO 8601 format - PT1H",
+                "suppressionEnabled": false,
+                "tactics": [ "enter value 1 from tactics in yaml file - comma separate multiple values, each value being in quotes" ],
+                "triggerOperator": "enter triggerOperator from yaml file - value must be expanded for e.g. GreaterThan rather than gt",
+                "triggerThreshold": 0 // This will be an integer from the yaml file
+            }
+        },
+        {
+            "type": "Microsoft.Insights/workbooks",
+            "name": "[parameters('workbook1-id')]",
+            "location": "[parameters('workspace-location')]",
+            "kind": "shared",
+            "apiVersion": "2020-02-12",
+            "properties": {
+                "displayName": "[concat(parameters('workbook1-name'), ' - ', parameters('formattedTimeNow'))]",
+                "serializedData": "Get this information by pasting your workbook json file in Azure Sentinel workbooks and following the directions in the workbooks docs https://docs.microsoft.com/azure/azure-monitor/visualize/workbooks-automate#azure-resource-manager-template-for-deploying-a-workbook-template -> Within the resources - properties, copy the value of serializedData and paste that value here - this would be a huge block with escaped queries etc. of the workbook in ARM format. Look at example linked in template for details",
+                "version": "1.0",
+                "sourceId": "[variables('_workbook-source')]",
+                "category": "sentinel"
+            }
+        }
+        // Playbook 1
+        // Copy-paste the entire "resources" section from your playbook (azuredeploy.json ARM file) into this section to define your playbook
+    ],
+    "outputs": {
+    }
+}

@@ -1,0 +1,41 @@
+id: ea5d043f-80ef-452c-a31a-b584e485b2be
+name: Insider Risk_Entity Anomaly Followed by IRM Alert
+description: |
+  'This query joins Microsoft Sentinel Entity Insights with Microsoft Purview Insider Risk Management Alerts. There is also an option for configuration of correlations against watchlists. For more information, see https://docs.microsoft.com/azure/sentinel/watchlists'
+requiredDataConnectors:
+  - connectorId: BehaviorAnalytics
+    dataTypes:
+      - BehaviorAnalytics
+  - connectorId: OfficeATP
+    dataTypes:
+      - SecurityAlert (Office 365)
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  let InsiderRiskManagementAlerts = SecurityAlert
+  | where ProductName == "Microsoft 365 Insider Risk Management"
+  | summarize hint.strategy = shuffle arg_max(TimeGenerated, *), NumberOfUpdates = count() by SystemAlertId
+  | mv-expand todynamic(Entities)
+  | where Entities["Type"] =~ "account"
+  | extend Name = tostring(tolower(Entities["Name"])), NTDomain = tostring(Entities["NTDomain"]), UPNSuffix = tostring(Entities["UPNSuffix"]), AadUserId = tostring(Entities["AadUserId"]), AadTenantId = tostring(Entities["AadTenantId"]), 
+            Sid = tostring(Entities["Sid"]), IsDomainJoined = tobool(Entities["IsDomainJoined"]), Host = tostring(Entities["Host"])
+  | extend UserPrincipalName = iff(Name != "" and UPNSuffix != "", strcat(Name, "@", UPNSuffix), "")
+  | extend Href_ = tostring(parse_json(ExtendedLinks)[0].Href)
+  | where UserPrincipalName <> ""
+  | summarize PreviousSecurityAlertLinks=make_set(AlertLink) by UserPrincipalName, AlertLink;
+  BehaviorAnalytics
+  | where UserPrincipalName <> ""
+  | where ActivityInsights contains "True"
+  | extend EntityAnomalies = strcat(ActivityInsights)
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, EntityAnomalies
+  | join kind=innerunique (InsiderRiskManagementAlerts) on UserPrincipalName
+  | project UserPrincipalName, EntityAnomalies, StartTime, EndTime, AlertLink, PreviousSecurityAlertLinks
+  // | lookup kind=inner _GetWatchlist('<Your Watchlist Name>') on $left.UserPrincipalName == $right.SearchKey
+  | extend AccountCustomEntity = UserPrincipalName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AccountCustomEntity

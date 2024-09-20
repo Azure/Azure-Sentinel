@@ -1,0 +1,1181 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "Block Host Nested Remediation - Crowdstrike",
+    "description": "This playbook will Contain the device automatically without SOC intervention",
+    "mainSteps": [ "1. Fetches a list of potentially malicious Hosts.", "2. Contain host if it is not already contained." ],
+    "prerequisites": [
+      "1. Azure Key vault is required for storing the Crowdstrike ClientID and Secrets, create key vault if not exists. [learn how](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2Fazure-quickstart-templates%2Fmaster%2F201-key-vault-secret-create%2Fazuredeploy.json) ",
+      "2. Add Crowdstrike Client ID and Client Secret in Key vault secrets and capture the keys which are required during the template deployment.",
+      "3. CrowdStrike Base playbook needs to be deployed prior to the deployment of this playbook under the same subscription and under the same resource group. Capture the name of playbook during deployment.",
+      "4. CrowdStrike Base playbook needs to be added in the access policy of the Key Vault [learn how](https://docs.microsoft.com/azure/key-vault/general/assign-access-policy-portal)"
+
+    ],
+    "lastUpdateTime": "2022-08-29T10:43:00Z",
+    "entities": [ "Host" ],
+    "tags": [ "Remediation" ],
+    "support": {
+      "tier": "microsoft"
+    },
+    "author": {
+      "name": "Microsoft"
+    }
+  },
+  "parameters": {
+    "Playbook_Name": {
+      "defaultValue": "Crowdstrike-ContainHost-Nested",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Logic App/Playbook"
+      }
+    },
+    "CrowdStrike_Base_Playbook_Name": {
+      "defaultValue": "CrowdStrike_Base",
+      "type": "String"
+    }
+  },
+  "variables": {},
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('Playbook_Name')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "Crowdstrike_ContainHost"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "properties": {
+                    "Hosts": {
+                      "items": {
+                        "properties": {
+                          "Hostname": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "Hostname"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "runs": 1
+                }
+              }
+            }
+          },
+          "actions": {
+            "Condition_to_check_if_crowdstrike_action_is_successful": {
+              "actions": {
+                "Response": {
+                  "runAfter": {},
+                  "type": "Response",
+                  "kind": "Http",
+                  "inputs": {
+                    "body": "@outputs('Result')",
+                    "statusCode": 200
+                  },
+                  "operationOptions": "Asynchronous"
+                }
+              },
+              "runAfter": {
+                "Filter_array": [
+                  "Succeeded",
+                  "TimedOut",
+                  "Skipped",
+                  "Failed"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Compose_Crowdstrike_Logo": {
+                    "runAfter": {
+                      "Scope_output": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Compose",
+                    "inputs": "<img src=\"https://uploads4.craft.co/uploads/company/logo/852xx/85212/normal_1171b7695370eb94.jpg\"  width=\"32\" height=\"32\">"
+                  },
+                  "Compose_HTTP_Failed_Response": {
+                    "runAfter": {
+                      "Create_HTML_table_to_capture_error_information": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Compose",
+                    "inputs": "[concat('@{outputs(''Compose_Crowdstrike_Logo'')} ', parameters('Playbook_Name'), ' Playbook\n\nException occured while Quarantining the Device. Please find the below exception information:\n\n@{body(''Create_HTML_table_to_capture_error_information'')}')]"
+                  },
+                  "Create_HTML_table_to_capture_error_information": {
+                    "runAfter": {
+                      "Compose_Crowdstrike_Logo": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Table",
+                    "inputs": {
+                      "columns": [
+                        {
+                          "header": "MethodName",
+                          "value": "@item()?['name']"
+                        },
+                        {
+                          "header": "Error",
+                          "value": "@item()?['outputs']?['body']?['error']?['message']"
+                        },
+                        {
+                          "header": "StatusCode",
+                          "value": "@item()?['outputs']?['statusCode']"
+                        }
+                      ],
+                      "format": "HTML",
+                      "from": "@outputs('Filter_array')?['body']"
+                    }
+                  },
+                  "Response_if_playbook_get(s)_failed": {
+                    "runAfter": {
+                      "Compose_HTTP_Failed_Response": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Response",
+                    "kind": "Http",
+                    "inputs": {
+                      "body": "@outputs('Compose_HTTP_Failed_Response')",
+                      "statusCode": "@outputs('Scope_output')['statusCode']"
+                    },
+                    "operationOptions": "Asynchronous"
+                  },
+                  "Scope_output": {
+                    "runAfter": {},
+                    "type": "Compose",
+                    "inputs": "@outputs('Filter_array')?['body']?[0]?['outputs']"
+                  }
+                }
+              },
+              "expression": {
+                "and": [
+                  {
+                    "lessOrEquals": [
+                      "@length(body('Filter_array'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "type": "If",
+              "description": "This checks if crowdstrike action is successful or not"
+            },
+            "Filter_array": {
+              "runAfter": {
+                "Scope": [
+                  "Succeeded",
+                  "TimedOut",
+                  "Skipped",
+                  "Failed"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@result('Scope')",
+                "where": "@equals(item()?['status'], 'Failed')"
+              }
+            },
+            "Initialize_variable_comment": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Comment",
+                    "type": "array"
+                  }
+                ]
+              },
+              "description": "This is used to store comments to update in the incident"
+            },
+            "Initialize_variable_for_Comment_variable": {
+              "runAfter": {
+                "Initialize_variable_success_from_crowdstrike": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "CommentObjVar",
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "Initialize_variable_success_from_crowdstrike": {
+              "runAfter": {
+                "Initialize_variable_comment": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Successfromcrowdstike",
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": "This is used to hold the success or failure information from crowdstrike api actions"
+            },
+            "Scope": {
+              "actions": {
+                "Compose_image_to_add_in_the_incident": {
+                  "runAfter": {
+                    "Create_HTML_table": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "<img src=\"https://uploads4.craft.co/uploads/company/logo/852xx/85212/normal_1171b7695370eb94.jpg\"  width=\"32\" height=\"32\">",
+                  "description": "This composes the crowd strike image to comment in the incident"
+                },
+                "Create_HTML_table": {
+                  "runAfter": {
+                    "For_each_hosts": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Table",
+                  "inputs": {
+                    "format": "HTML",
+                    "from": "@variables('Comment')"
+                  }
+                },
+                "CrowdStrike_Base": {
+                  "runAfter": {},
+                  "type": "Workflow",
+                  "inputs": {
+                    "host": {
+                      "triggerName": "manual",
+                      "workflow": {
+                        "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name ,'/providers/Microsoft.Logic/workflows/', parameters('CrowdStrike_Base_Playbook_Name'))]"
+                      }
+                    }
+                  },
+                  "description": "Call the base logic App to get access token and Falcon Host URL",
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "properties": [
+                        "inputs",
+                        "outputs"
+                      ]
+                    }
+                  }
+                },
+                "For_each_hosts": {
+                  "foreach": "@triggerBody()?['Hosts']",
+                  "actions": {
+                    "Condition_to_check_if_device_is_present_in_falcon_host_crowdstrike": {
+                      "actions": {
+                        "HTTP_-_Get_device_information_": {
+                          "runAfter": {},
+                          "type": "Http",
+                          "inputs": {
+                            "headers": {
+                              "Accept": "application/json",
+                              "Authorization": "@{body('CrowdStrike_Base')?['AccessToken']}",
+                              "Content-Type": "application/json"
+                            },
+                            "method": "GET",
+                            "uri": "@{body('CrowdStrike_Base')?['FalconHost']}/devices/entities/devices/v1?ids=@{body('Parse_JSON_Get_device_id_response')?['resources']?[0]}"
+                          },
+                          "description": "This gets the device information from crowdstrike"
+                        },
+                        "Parse_JSON_device_information_response": {
+                          "runAfter": {
+                            "HTTP_-_Get_device_information_": [
+                              "Succeeded"
+                            ]
+                          },
+                          "type": "ParseJson",
+                          "inputs": {
+                            "content": "@body('HTTP_-_Get_device_information_')",
+                            "schema": {
+                              "properties": {
+                                "errors": {
+                                  "type": "array"
+                                },
+                                "meta": {
+                                  "properties": {
+                                    "powered_by": {
+                                      "type": "string"
+                                    },
+                                    "query_time": {
+                                      "type": "number"
+                                    },
+                                    "trace_id": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "type": "object"
+                                },
+                                "resources": {
+                                  "items": {
+                                    "properties": {
+                                      "agent_load_flags": {
+                                        "type": "string"
+                                      },
+                                      "agent_local_time": {
+                                        "type": "string"
+                                      },
+                                      "agent_version": {
+                                        "type": "string"
+                                      },
+                                      "bios_manufacturer": {
+                                        "type": "string"
+                                      },
+                                      "bios_version": {
+                                        "type": "string"
+                                      },
+                                      "build_number": {
+                                        "type": "string"
+                                      },
+                                      "cid": {
+                                        "type": "string"
+                                      },
+                                      "config_id_base": {
+                                        "type": "string"
+                                      },
+                                      "config_id_build": {
+                                        "type": "string"
+                                      },
+                                      "config_id_platform": {
+                                        "type": "string"
+                                      },
+                                      "cpu_signature": {
+                                        "type": "string"
+                                      },
+                                      "device_id": {
+                                        "type": "string"
+                                      },
+                                      "device_policies": {
+                                        "properties": {
+                                          "device_control": {
+                                            "properties": {
+                                              "applied": {
+                                                "type": "boolean"
+                                              },
+                                              "applied_date": {
+                                                "type": "string"
+                                              },
+                                              "assigned_date": {
+                                                "type": "string"
+                                              },
+                                              "policy_id": {
+                                                "type": "string"
+                                              },
+                                              "policy_type": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "type": "object"
+                                          },
+                                          "firewall": {
+                                            "properties": {
+                                              "applied": {
+                                                "type": "boolean"
+                                              },
+                                              "applied_date": {
+                                                "type": "string"
+                                              },
+                                              "assigned_date": {
+                                                "type": "string"
+                                              },
+                                              "policy_id": {
+                                                "type": "string"
+                                              },
+                                              "policy_type": {
+                                                "type": "string"
+                                              },
+                                              "rule_set_id": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "type": "object"
+                                          },
+                                          "global_config": {
+                                            "properties": {
+                                              "applied": {
+                                                "type": "boolean"
+                                              },
+                                              "applied_date": {
+                                                "type": "string"
+                                              },
+                                              "assigned_date": {
+                                                "type": "string"
+                                              },
+                                              "policy_id": {
+                                                "type": "string"
+                                              },
+                                              "policy_type": {
+                                                "type": "string"
+                                              },
+                                              "settings_hash": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "type": "object"
+                                          },
+                                          "prevention": {
+                                            "properties": {
+                                              "applied": {
+                                                "type": "boolean"
+                                              },
+                                              "applied_date": {
+                                                "type": "string"
+                                              },
+                                              "assigned_date": {
+                                                "type": "string"
+                                              },
+                                              "policy_id": {
+                                                "type": "string"
+                                              },
+                                              "policy_type": {
+                                                "type": "string"
+                                              },
+                                              "rule_groups": {
+                                                "items": {
+                                                  "type": "string"
+                                                },
+                                                "type": "array"
+                                              },
+                                              "settings_hash": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "type": "object"
+                                          },
+                                          "remote_response": {
+                                            "properties": {
+                                              "applied": {
+                                                "type": "boolean"
+                                              },
+                                              "applied_date": {
+                                                "type": "string"
+                                              },
+                                              "assigned_date": {
+                                                "type": "string"
+                                              },
+                                              "policy_id": {
+                                                "type": "string"
+                                              },
+                                              "policy_type": {
+                                                "type": "string"
+                                              },
+                                              "settings_hash": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "type": "object"
+                                          },
+                                          "sensor_update": {
+                                            "properties": {
+                                              "applied": {
+                                                "type": "boolean"
+                                              },
+                                              "applied_date": {
+                                                "type": "string"
+                                              },
+                                              "assigned_date": {
+                                                "type": "string"
+                                              },
+                                              "policy_id": {
+                                                "type": "string"
+                                              },
+                                              "policy_type": {
+                                                "type": "string"
+                                              },
+                                              "settings_hash": {
+                                                "type": "string"
+                                              },
+                                              "uninstall_protection": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "type": "object"
+                                          }
+                                        },
+                                        "type": "object"
+                                      },
+                                      "external_ip": {
+                                        "type": "string"
+                                      },
+                                      "first_seen": {
+                                        "type": "string"
+                                      },
+                                      "group_hash": {
+                                        "type": "string"
+                                      },
+                                      "groups": {
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "type": "array"
+                                      },
+                                      "hostname": {
+                                        "type": "string"
+                                      },
+                                      "last_seen": {
+                                        "type": "string"
+                                      },
+                                      "local_ip": {
+                                        "type": "string"
+                                      },
+                                      "mac_address": {
+                                        "type": "string"
+                                      },
+                                      "machine_domain": {
+                                        "type": "string"
+                                      },
+                                      "major_version": {
+                                        "type": "string"
+                                      },
+                                      "meta": {
+                                        "properties": {
+                                          "version": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "type": "object"
+                                      },
+                                      "minor_version": {
+                                        "type": "string"
+                                      },
+                                      "modified_timestamp": {
+                                        "type": "string"
+                                      },
+                                      "os_version": {
+                                        "type": "string"
+                                      },
+                                      "ou": {
+                                        "items": {
+                                          "type": "string"
+                                        },
+                                        "type": "array"
+                                      },
+                                      "platform_id": {
+                                        "type": "string"
+                                      },
+                                      "platform_name": {
+                                        "type": "string"
+                                      },
+                                      "pointer_size": {
+                                        "type": "string"
+                                      },
+                                      "policies": {
+                                        "items": {
+                                          "properties": {
+                                            "applied": {
+                                              "type": "boolean"
+                                            },
+                                            "applied_date": {
+                                              "type": "string"
+                                            },
+                                            "assigned_date": {
+                                              "type": "string"
+                                            },
+                                            "policy_id": {
+                                              "type": "string"
+                                            },
+                                            "policy_type": {
+                                              "type": "string"
+                                            },
+                                            "rule_groups": {
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "type": "array"
+                                            },
+                                            "settings_hash": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "policy_type",
+                                            "policy_id",
+                                            "applied",
+                                            "settings_hash",
+                                            "assigned_date",
+                                            "applied_date",
+                                            "rule_groups"
+                                          ],
+                                          "type": "object"
+                                        },
+                                        "type": "array"
+                                      },
+                                      "product_type": {
+                                        "type": "string"
+                                      },
+                                      "product_type_desc": {
+                                        "type": "string"
+                                      },
+                                      "provision_status": {
+                                        "type": "string"
+                                      },
+                                      "reduced_functionality_mode": {
+                                        "type": "string"
+                                      },
+                                      "serial_number": {
+                                        "type": "string"
+                                      },
+                                      "service_pack_major": {
+                                        "type": "string"
+                                      },
+                                      "service_pack_minor": {
+                                        "type": "string"
+                                      },
+                                      "site_name": {
+                                        "type": "string"
+                                      },
+                                      "slow_changing_modified_timestamp": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "system_manufacturer": {
+                                        "type": "string"
+                                      },
+                                      "system_product_name": {
+                                        "type": "string"
+                                      },
+                                      "tags": {
+                                        "type": "array"
+                                      }
+                                    },
+                                    "required": [
+                                      "device_id",
+                                      "cid",
+                                      "agent_load_flags",
+                                      "agent_local_time",
+                                      "agent_version",
+                                      "bios_manufacturer",
+                                      "bios_version",
+                                      "build_number",
+                                      "config_id_base",
+                                      "config_id_build",
+                                      "config_id_platform",
+                                      "cpu_signature",
+                                      "external_ip",
+                                      "mac_address",
+                                      "hostname",
+                                      "first_seen",
+                                      "last_seen",
+                                      "local_ip",
+                                      "machine_domain",
+                                      "major_version",
+                                      "minor_version",
+                                      "platform_id",
+                                      "platform_name",
+                                      "policies",
+                                      "reduced_functionality_mode",
+                                      "device_policies",
+                                      "groups",
+                                      "group_hash",
+                                      "product_type",
+                                      "product_type_desc",
+                                      "provision_status",
+                                      "serial_number",
+                                      "service_pack_major",
+                                      "service_pack_minor",
+                                      "pointer_size",
+                                      "status",
+                                      "system_manufacturer",
+                                      "system_product_name",
+                                      "tags",
+                                      "modified_timestamp",
+                                      "slow_changing_modified_timestamp",
+                                      "meta"
+                                    ],
+                                    "type": "object"
+                                  },
+                                  "type": "array"
+                                }
+                              },
+                              "type": "object"
+                            }
+                          },
+                          "description": "prepare Json message for device information"
+                        },
+                        "Switch_to_check_the_device_status": {
+                          "runAfter": {
+                            "Parse_JSON_device_information_response": [
+                              "Succeeded"
+                            ]
+                          },
+                          "cases": {
+                            "Case_-_contained": {
+                              "case": "contained",
+                              "actions": {
+                                "Append_to_string_variable_comment_if_host_is_contained": {
+                                  "runAfter": {
+                                    "Set_variable_comment_variable": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": {
+                                    "name": "Comment",
+                                    "value": "@variables('CommentObjVar')"
+                                  }
+                                },
+                                "Set_variable_comment_variable": {
+                                  "runAfter": {},
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "CommentObjVar",
+                                    "value": {
+                                      "action": "No action taken from playbook",
+                                      "device_id": "@{body('Parse_JSON_device_information_response')?['resources']?['device_id']}",
+                                      "external_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['external_ip']}",
+                                      "first_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['first_seen']}",
+                                      "hostname": "@{body('Parse_JSON_device_information_response')?['resources']?['hostname']}",
+                                      "hoststatus": "Contained",
+                                      "last_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['last_seen']}",
+                                      "local_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['local_ip']}",
+                                      "mac_address": "@{body('Parse_JSON_device_information_response')?['resources']?['mac_address']}",
+                                      "machine_domain": "@{body('Parse_JSON_device_information_response')?['resources']?['machine_domain']}"
+                                    }
+                                  }
+                                },
+                                "Set_variable_success_from_crowdstirke_in_case_of_host_is_already_contained": {
+                                  "runAfter": {
+                                    "Append_to_string_variable_comment_if_host_is_contained": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "Successfromcrowdstike",
+                                    "value": "Success"
+                                  },
+                                  "description": "This sets the variable success from crowdstrike to update in the incident"
+                                }
+                              }
+                            },
+                            "Case_-_containment_pending": {
+                              "case": "containment_pending",
+                              "actions": {
+                                "Append_to_string_variable_comment_if_host_status_is_containment_pending": {
+                                  "runAfter": {
+                                    "Set_variable": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": {
+                                    "name": "Comment",
+                                    "value": "@variables('CommentObjVar')"
+                                  },
+                                  "description": "Append to string variable comment if host status is containment pending"
+                                },
+                                "Set_variable": {
+                                  "runAfter": {},
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "CommentObjVar",
+                                    "value": {
+                                      "action": "No action taken from playbook",
+                                      "device_id": "@{body('Parse_JSON_device_information_response')?['resources']?['device_id']}",
+                                      "external_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['external_ip']}",
+                                      "first_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['first_seen']}",
+                                      "hostname": "@{body('Parse_JSON_device_information_response')?['resources']?['hostname']}",
+                                      "hoststatus": "containment_pending",
+                                      "last_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['last_seen']}",
+                                      "local_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['local_ip']}",
+                                      "mac_address": "@{body('Parse_JSON_device_information_response')?['resources']?['mac_address']}",
+                                      "machine_domain": "@{body('Parse_JSON_device_information_response')?['resources']?['machine_domain']}"
+                                    }
+                                  }
+                                },
+                                "Set_variable_success_from_crowdstirke_in_case_of_containment_pending": {
+                                  "runAfter": {
+                                    "Append_to_string_variable_comment_if_host_status_is_containment_pending": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "Successfromcrowdstike",
+                                    "value": "Success"
+                                  },
+                                  "description": "This sets the variable success from crowdstrike to update in the incident"
+                                }
+                              }
+                            },
+                            "Case_-_lift_containment_pending": {
+                              "case": "lift_containment_pending",
+                              "actions": {
+                                "Append_to_string_variable_comment_if_host_status_is_lift_containment_pending": {
+                                  "runAfter": {
+                                    "Set_variable_2": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "AppendToArrayVariable",
+                                  "inputs": {
+                                    "name": "Comment",
+                                    "value": "@variables('CommentObjVar')"
+                                  },
+                                  "description": "Append to string variable comment if host status is lift containment pending"
+                                },
+                                "Set_variable_2": {
+                                  "runAfter": {},
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "CommentObjVar",
+                                    "value": {
+                                      "action": "No action taken from playbook",
+                                      "device_id": "@{body('Parse_JSON_device_information_response')?['resources']?['device_id']}",
+                                      "external_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['external_ip']}",
+                                      "first_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['first_seen']}",
+                                      "hostname": "@{body('Parse_JSON_device_information_response')?['resources']?['hostname']}",
+                                      "hoststatus": "Lift_containment_pending",
+                                      "last_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['last_seen']}",
+                                      "local_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['local_ip']}",
+                                      "mac_address": "@{body('Parse_JSON_device_information_response')?['resources']?['mac_address']}",
+                                      "machine_domain": "@{body('Parse_JSON_device_information_response')?['resources']?['machine_domain']}"
+                                    }
+                                  }
+                                },
+                                "Set_variable_success_from_crowdstirke_in_case_of_lift_containment_pending": {
+                                  "runAfter": {
+                                    "Append_to_string_variable_comment_if_host_status_is_lift_containment_pending": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "Successfromcrowdstike",
+                                    "value": "Success"
+                                  },
+                                  "description": "This sets the variable success from crowdstrike to update in the incident"
+                                }
+                              }
+                            },
+                            "Case_-_not_contained": {
+                              "case": "normal",
+                              "actions": {
+                                "Condition_to_check_if_contain_success_or_not": {
+                                  "actions": {
+                                    "Append_to_string_variable_comment_if_host_is_contained_by_playbook": {
+                                      "runAfter": {
+                                        "Set_variable_comment_variable_contained": [
+                                          "Succeeded"
+                                        ]
+                                      },
+                                      "type": "AppendToArrayVariable",
+                                      "inputs": {
+                                        "name": "Comment",
+                                        "value": "@variables('CommentObjVar')"
+                                      },
+                                      "description": "Append to string variable comment if host is contained by playbook"
+                                    },
+                                    "Set_variable_comment_variable_contained": {
+                                      "runAfter": {},
+                                      "type": "SetVariable",
+                                      "inputs": {
+                                        "name": "CommentObjVar",
+                                        "value": {
+                                          "action": "The playbook sucessfully contained the host",
+                                          "device_id": "@{body('Parse_JSON_device_information_response')?['resources']?['device_id']}",
+                                          "external_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['external_ip']}",
+                                          "first_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['first_seen']}",
+                                          "hostname": "@{body('Parse_JSON_device_information_response')?['resources']?['hostname']}",
+                                          "hoststatus": "Contained",
+                                          "last_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['last_seen']}",
+                                          "local_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['local_ip']}",
+                                          "mac_address": "@{body('Parse_JSON_device_information_response')?['resources']?['mac_address']}",
+                                          "machine_domain": "@{body('Parse_JSON_device_information_response')?['resources']?['machine_domain']}"
+                                        }
+                                      }
+                                    },
+                                    "Set_variable_success_from_crowdstirke_in_case_of_success": {
+                                      "runAfter": {
+                                        "Append_to_string_variable_comment_if_host_is_contained_by_playbook": [
+                                          "Succeeded"
+                                        ]
+                                      },
+                                      "type": "SetVariable",
+                                      "inputs": {
+                                        "name": "Successfromcrowdstike",
+                                        "value": "Success"
+                                      },
+                                      "description": "This sets variable success from crowdstirke in case of success"
+                                    }
+                                  },
+                                  "runAfter": {
+                                    "HTTP_-_Contain_a_host": [
+                                      "Succeeded"
+                                    ]
+                                  },
+                                  "else": {
+                                    "actions": {
+                                      "Append_to_string_variable_comment_if_host_is_not_contained_by_playbook": {
+                                        "runAfter": {
+                                          "Set_variable_comment_variable_not_contained": [
+                                            "Succeeded"
+                                          ]
+                                        },
+                                        "type": "AppendToArrayVariable",
+                                        "inputs": {
+                                          "name": "Comment",
+                                          "value": "@variables('CommentObjVar')"
+                                        },
+                                        "description": "Append to string variable comment if host is not contained by playbook"
+                                      },
+                                      "Set_variable_comment_variable_not_contained": {
+                                        "runAfter": {},
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                          "name": "CommentObjVar",
+                                          "value": {
+                                            "action": "The playbook sucessfully contained the host",
+                                            "device_id": "@{body('Parse_JSON_device_information_response')?['resources']?['device_id']}",
+                                            "external_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['external_ip']}",
+                                            "first_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['first_seen']}",
+                                            "hostname": "@{body('Parse_JSON_device_information_response')?['resources']?['hostname']}",
+                                            "hoststatus": "Not contained/Normal",
+                                            "last_seen": "@{body('Parse_JSON_device_information_response')?['resources']?['last_seen']}",
+                                            "local_ip": "@{body('Parse_JSON_device_information_response')?['resources']?['local_ip']}",
+                                            "mac_address": "@{body('Parse_JSON_device_information_response')?['resources']?['mac_address']}",
+                                            "machine_domain": "@{body('Parse_JSON_device_information_response')?['resources']?['machine_domain']}"
+                                          }
+                                        }
+                                      },
+                                      "Set_variable_success_from_crowdstrike_in_case_of_failure": {
+                                        "runAfter": {
+                                          "Append_to_string_variable_comment_if_host_is_not_contained_by_playbook": [
+                                            "Succeeded"
+                                          ]
+                                        },
+                                        "type": "SetVariable",
+                                        "inputs": {
+                                          "name": "Successfromcrowdstike",
+                                          "value": "Failure"
+                                        },
+                                        "description": "This sets variable success from crowdstirke in case of Failure"
+                                      }
+                                    }
+                                  },
+                                  "expression": {
+                                    "and": [
+                                      {
+                                        "equals": [
+                                          "@outputs('HTTP_-_Contain_a_host')['statusCode']",
+                                          202
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "type": "If",
+                                  "description": "condition to check if contain a host is success or failure"
+                                },
+                                "HTTP_-_Contain_a_host": {
+                                  "runAfter": {},
+                                  "type": "Http",
+                                  "inputs": {
+                                    "body": {
+                                      "action_parameters": [
+                                        {
+                                          "name": "contain"
+                                        }
+                                      ],
+                                      "ids": [
+                                        "@{body('Parse_JSON_Get_device_id_response')?['resources']?[0]}"
+                                      ]
+                                    },
+                                    "headers": {
+                                      "Accept": "application/json",
+                                      "Authorization": "@{body('CrowdStrike_Base')?['AccessToken']}",
+                                      "Content-Type": "application/json"
+                                    },
+                                    "method": "POST",
+                                    "uri": "@{body('CrowdStrike_Base')?['FalconHost']}/devices/entities/devices-actions/v2?action_name=contain"
+                                  },
+                                  "description": "This will contain a host in crowdstrike"
+                                }
+                              }
+                            }
+                          },
+                          "default": {
+                            "actions": {}
+                          },
+                          "expression": "@body('Parse_JSON_device_information_response')?['resources']?[0]?['status']",
+                          "type": "Switch",
+                          "description": "This checks on the device status"
+                        }
+                      },
+                      "runAfter": {
+                        "Parse_JSON_Get_device_id_response": [
+                          "Succeeded"
+                        ]
+                      },
+                      "else": {
+                        "actions": {
+                          "Append_to_string_variable_comment_if_no_device_exist": {
+                            "runAfter": {
+                              "Set_variable_comment_if_no_device_exist": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                              "name": "Comment",
+                              "value": "@variables('CommentObjVar')"
+                            }
+                          },
+                          "Set_variable_comment_if_no_device_exist": {
+                            "runAfter": {},
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "CommentObjVar",
+                              "value": {
+                                "action": "There is no device present in Crowdstrike",
+                                "device_id": "",
+                                "external_ip": "",
+                                "first_seen": "",
+                                "hostname": "",
+                                "hoststatus": "",
+                                "last_seen": "",
+                                "local_ip": "",
+                                "mac_address": "",
+                                "machine_domain": "",
+                                "os_version": ""
+                              }
+                            }
+                          },
+                          "Set_variable_success_from_crowdstrike": {
+                            "runAfter": {
+                              "Append_to_string_variable_comment_if_no_device_exist": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "SetVariable",
+                            "inputs": {
+                              "name": "Successfromcrowdstike",
+                              "value": "Success"
+                            },
+                            "description": "This sets the variable success in case of no device info found"
+                          }
+                        }
+                      },
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@body('Parse_JSON_Get_device_id_response')?['resources']?[0]",
+                                "@null"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "type": "If",
+                      "description": "This checks if device is present in crowdstrike or not"
+                    },
+                    "HTTP_-_Get_device_id": {
+                      "runAfter": {},
+                      "type": "Http",
+                      "inputs": {
+                        "headers": {
+                          "Accept": "application/json",
+                          "Authorization": "@{body('CrowdStrike_Base')?['AccessToken']}",
+                          "Content-Type": "application/json"
+                        },
+                        "method": "GET",
+                        "uri": "@{body('CrowdStrike_Base')?['FalconHost']}/devices/queries/devices/v1?filter=hostname:'@{items('For_each_hosts')?['Hostname']}'"
+                      },
+                      "description": "This gets the device id from crowdstrike by filtering on hostname"
+                    },
+                    "Parse_JSON_Get_device_id_response": {
+                      "runAfter": {
+                        "HTTP_-_Get_device_id": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@body('HTTP_-_Get_device_id')",
+                        "schema": {
+                          "errors": [],
+                          "meta": {
+                            "pagination": {
+                              "limit": 100,
+                              "offset": 1,
+                              "total": 1
+                            },
+                            "powered_by": "device-api",
+                            "query_time": 0.005041315,
+                            "trace_id": "aa7b84f5-3e81-4980-ad9f-c14b6d8ca577"
+                          },
+                          "resources": [
+                            "cdc977a72a8c49528bb82f89dde2c2e9"
+                          ]
+                        }
+                      },
+                      "description": "prepare json message for the device id response"
+                    }
+                  },
+                  "runAfter": {
+                    "CrowdStrike_Base": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Foreach"
+                },
+                "Result": {
+                  "runAfter": {
+                    "Compose_image_to_add_in_the_incident": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@{outputs('Compose_image_to_add_in_the_incident')}CrowdStrike_ContainHost playbook run results:\n\n@{body('Create_HTML_table')}"
+                }
+              },
+              "runAfter": {
+                "Initialize_variable_for_Comment_variable": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Scope"
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {}
+      }
+    }
+  ]
+}

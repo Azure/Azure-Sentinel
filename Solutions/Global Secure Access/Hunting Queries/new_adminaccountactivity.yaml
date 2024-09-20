@@ -1,0 +1,53 @@
+id: 723c5f46-133f-4f1e-ada6-5c138f811d75
+name: New Admin Account Activity Seen Which Was Not Seen Historically
+description: |
+  This will help you discover any new admin account activity which was seen and were not seen historically.
+  Any new accounts seen in the results can be validated and investigated for any suspicious activities.
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - PrivilegeEscalation
+  - Collection
+relevantTechniques:
+  - T1078
+  - T1114
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = starttime - 14d;
+  let historicalActivity =
+    EnrichedMicrosoft365AuditLogs
+    | where TimeGenerated between (lookback .. starttime)
+    | where RecordType == "ExchangeAdmin" and UserType in ("Admin", "DcAdmin")
+    | summarize historicalCount = count() by UserId;
+  let recentActivity = EnrichedMicrosoft365AuditLogs
+    | where TimeGenerated between (starttime .. endtime)
+    | where UserType in ("Admin", "DcAdmin")
+    | summarize recentCount = count() by UserId;
+  recentActivity
+  | join kind=leftanti (historicalActivity) on UserId
+  | project UserId, recentCount
+  | join kind=rightsemi (
+      EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated between (starttime .. endtime)
+      | where RecordType == "ExchangeAdmin" 
+      | where UserType in ("Admin", "DcAdmin")
+    ) on UserId
+  | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by RecordType, Operation, UserType, UserId, ResultStatus
+  | extend AccountName = iff(UserId contains '@', tostring(split(UserId, '@')[0]), UserId)
+  | extend AccountUPNSuffix = iff(UserId contains '@', tostring(split(UserId, '@')[1]), '')
+  | extend AccountName = iff(UserId contains '\\', tostring(split(UserId, '\\')[1]), AccountName)
+  | extend AccountNTDomain = iff(UserId contains '\\', tostring(split(UserId, '\\')[0]), '')
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+version: 2.0.1

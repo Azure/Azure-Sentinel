@@ -1,0 +1,713 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Cisco ASA - Create or Inbound Access Rule On Interface",
+        "description": "This playbook allows blocking/unblocking of IPs in Cisco ASA, using **Access Rules** which will be created on an interface.",
+        "prerequisites": [
+            "1. **This playbook template is based on Microsoft Sentinel Incident Trigger which is currently in Private Preview (Automation Rules).** You can change the trigger to the Sentinel Alert trigger in cases you are not part of the Private Preview.",
+            "2. Cisco ASA custom connector needs to be deployed prior to the deployment of this playbook, in the same resource group and region. Relevant instructions can be found in the connector doc page.",
+            "3. Cisco ASA needs to have an extended Access Control List configured. Create a new ACL or retrieve the name of an existing ACL. To use Cisco ASDM to configure Extended ACLs, see [Configure Extended ACLs](https://www.cisco.com/c/en/us/td/docs/security/asa/asa914/asdm714/firewall/asdm-714-firewall-config/access-acls.html#ID-2069-0000016d)"
+        ],
+        "postDeployment": [ "**a. Authorize connections**", "Once deployment is complete, you will need to authorize each connection.", "1. Click the Microsoft Sentinel connection resource", "2.Click edit API connection", "3.Click Authorize", "4.Sign in", "5.Click Save", "6.Repeat steps for other connections such as Teams and Cisco ASA (For authorizing the Cisco ASA API connection, the username and password needs to be provided)", "**b. Select Teams channel**", "The Teams channel to which the adaptive card will be posted will need to be configured.", "1. Click the Azure Logic app resource", "2. Edit the Logic App", "3. Find the 'PostToTeams' action", "4. Select a Team and Channel", "5. Save the Logic App", "**c. Configurations in Sentinel**", "1. In Microsoft Sentinel analytical rules should be configured to trigger an incident with IP Entity.", "2. Configure the automation rules to trigger this playbook" ],
+        "lastUpdateTime": "2021-07-28T00:00:00.000Z",
+        "entities": [ "Ip" ],
+        "tags": [],
+        "support": {
+            "tier": "community"
+        },
+        "author": {
+            "name": "Wortell"
+        },
+        "releaseNotes": [
+            {
+                "version": "1.0.0",
+                "title": "",
+                "notes": [
+                    "Initial version"
+                ]
+            }
+        ]
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "CiscoASA-CreateInboundAccessRuleOnInterface",
+            "type": "String",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "Cisco ASA Connector name": {
+            "defaultValue": "CiscoASAConnector",
+            "type": "String",
+            "metadata": {
+                "description": "Cisco ASA Connector name"
+            }
+        },
+        "Interface ID": {
+            "type": "String",
+            "metadata": {
+                "description": "Interface ID"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "TeamsConnectionName": "[concat('teamsconnector-', parameters('PlaybookName'))]",
+        "CiscoASAConnectionName": "[concat('ciscoasaconnector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('TeamsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CiscoASAConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Cisco ASA Connector name'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CiscoASAConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Interface ID": {
+                            "defaultValue": "",
+                            "type": "String"
+                        }
+                    },
+                    "staticResults": {
+                        "Add_comment_to_incident_(V3)0": {
+                            "status": "Succeeded",
+                            "outputs": {
+                                "headers": {},
+                                "statusCode": "OK"
+                            }
+                        },
+                        "Entities_-_Get_IPs0": {
+                            "status": "Succeeded",
+                            "outputs": {
+                                "body": {
+                                    "IPs": [
+                                        {
+                                            "Address": "192.168.11.1"
+                                        },
+                                        {
+                                            "Address": "192.168.11.2"
+                                        },
+                                        {
+                                            "Address": "192.168.11.3"
+                                        }
+                                    ]
+                                },
+                                "headers": {},
+                                "statusCode": "OK"
+                            }
+                        }
+                    },
+                    "triggers": {
+                        "When_Azure_Sentinel_incident_creation_rule_was_triggered_(Private_Preview_only)": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_IPs": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/ip"
+                            },
+                            "runtimeConfiguration": {
+                                "staticResult": {
+                                    "staticResultOptions": "Disabled",
+                                    "name": "Entities_-_Get_IPs0"
+                                }
+                            }
+                        },
+                        "Fetch_inbound_access_rules_on_an_interface": {
+                            "runAfter": {
+                                "Initialize_Interface_ID_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "headers": {
+                                    "User-Agent": "REST API Agent"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['cisco-ASAv-connector']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/api/access/in/@{encodeURIComponent(variables('Interface ID'))}/rules"
+                            }
+                        },
+                        "For_each_over_IPs": {
+                            "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions": {
+                                "Filter_Extended_ACE_items_for_IP_Address": {
+                                    "runAfter": {},
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@body('Fetch_inbound_access_rules_on_an_interface')?['items']",
+                                        "where": "@and(equals(item()?['sourceAddress']?['kind'], 'IPv4Address'), equals(item()?['sourceAddress']?['value'], items('For_each_over_IPs')?['Address']))"
+                                    }
+                                },
+                                "If_Extended_ACE_items_contains_IP": {
+                                    "actions": {
+                                        "Append_exist_item_to_ipAddresses_variable": {
+                                            "runAfter": {
+                                                "Append_to_adaptiveCardIPAddressItems_variable_remove_block": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "ipAddresses",
+                                                "value": {
+                                                    "IPAddress": "@{items('For_each_over_IPs')?['Address']}",
+                                                    "controlName": "ipAddressAction@{variables('forEachIndex')}",
+                                                    "existsInExtendedAceItems": "@if(greater(length(body('Filter_Extended_ACE_items_for_IP_Address')), 0), true, false)",
+                                                    "extendedAceItemObjectId": "@{body('Filter_Extended_ACE_items_for_IP_Address')[0]?['objectId']}"
+                                                }
+                                            }
+                                        },
+                                        "Append_to_adaptiveCardIPAddressItems_variable_remove_block": {
+                                            "runAfter": {},
+                                            "type": "AppendToArrayVariable",
+                                            "inputs": {
+                                                "name": "adaptiveCardIPAddressItems",
+                                                "value": {
+                                                    "columns": [
+                                                        {
+                                                            "items": [
+                                                                {
+                                                                    "text": "Unblock '@{items('For_each_over_IPs')?['Address']}'?",
+                                                                    "type": "TextBlock",
+                                                                    "wrap": true
+                                                                }
+                                                            ],
+                                                            "type": "Column",
+                                                            "width": "stretch"
+                                                        },
+                                                        {
+                                                            "items": [
+                                                                {
+                                                                    "choices": [
+                                                                        {
+                                                                            "title": "Ignore",
+                                                                            "value": "ignore"
+                                                                        },
+                                                                        {
+                                                                            "title": "Unblock",
+                                                                            "value": "unblock"
+                                                                        }
+                                                                    ],
+                                                                    "id": "ipAddressAction@{variables('forEachIndex')}",
+                                                                    "placeholder": "Placeholder text",
+                                                                    "type": "Input.ChoiceSet",
+                                                                    "value": "ignore"
+                                                                }
+                                                            ],
+                                                            "type": "Column",
+                                                            "width": "stretch"
+                                                        }
+                                                    ],
+                                                    "type": "ColumnSet"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Filter_Extended_ACE_items_for_IP_Address": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else": {
+                                        "actions": {
+                                            "Append_does_not_exist_item_to_ipAddresses_variable": {
+                                                "runAfter": {
+                                                    "Append_to_adaptiveCardIPAddressItems_variable_add_block": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "ipAddresses",
+                                                    "value": {
+                                                        "IPAddress": "@{items('For_each_over_IPs')?['Address']}",
+                                                        "controlName": "ipAddressAction@{variables('forEachIndex')}",
+                                                        "existsInExtendedAceItems": "@if(greater(length(body('Filter_Extended_ACE_items_for_IP_Address')), 0), true, false)",
+                                                        "extendedAceItemObjectId": ""
+                                                    }
+                                                }
+                                            },
+                                            "Append_to_adaptiveCardIPAddressItems_variable_add_block": {
+                                                "runAfter": {},
+                                                "type": "AppendToArrayVariable",
+                                                "inputs": {
+                                                    "name": "adaptiveCardIPAddressItems",
+                                                    "value": {
+                                                        "columns": [
+                                                            {
+                                                                "items": [
+                                                                    {
+                                                                        "text": "Block '@{items('For_each_over_IPs')?['Address']}'?",
+                                                                        "type": "TextBlock",
+                                                                        "wrap": true
+                                                                    }
+                                                                ],
+                                                                "type": "Column",
+                                                                "width": "stretch"
+                                                            },
+                                                            {
+                                                                "items": [
+                                                                    {
+                                                                        "choices": [
+                                                                            {
+                                                                                "title": "Ignore",
+                                                                                "value": "ignore"
+                                                                            },
+                                                                            {
+                                                                                "title": "Block",
+                                                                                "value": "block"
+                                                                            }
+                                                                        ],
+                                                                        "id": "ipAddressAction@{variables('forEachIndex')}",
+                                                                        "placeholder": "Placeholder text",
+                                                                        "type": "Input.ChoiceSet",
+                                                                        "value": "ignore"
+                                                                    }
+                                                                ],
+                                                                "type": "Column",
+                                                                "width": "stretch"
+                                                            }
+                                                        ],
+                                                        "type": "ColumnSet"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(body('Filter_Extended_ACE_items_for_IP_Address'))",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Increment_for_For_Each_index": {
+                                    "runAfter": {
+                                        "If_Extended_ACE_items_contains_IP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "IncrementVariable",
+                                    "inputs": {
+                                        "name": "forEachIndex",
+                                        "value": 1
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_For_Each_index_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach",
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "repetitions": 1
+                                }
+                            }
+                        },
+                        "If_PostToTeams_submit_action_is_Submit": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "runAfter": {
+                                        "For_each_over_ipAddresses": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><span style=\"font-size: 16px\"><strong>Cisco ASA playbook run summary</strong></span><br>\n<span style=\"font-size: 14px\">The following IPs were found in the Incident:</span><br>\n@{variables('ipAddressesActionComment')}</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    },
+                                    "runtimeConfiguration": {
+                                        "staticResult": {
+                                            "staticResultOptions": "Disabled",
+                                            "name": "Add_comment_to_incident_(V3)0"
+                                        }
+                                    }
+                                },
+                                "For_each_over_ipAddresses": {
+                                    "foreach": "@variables('ipAddresses')",
+                                    "actions": {
+                                        "Switch_PostToTeams_data_for_IP_Address": {
+                                            "runAfter": {},
+                                            "cases": {
+                                                "Case_block": {
+                                                    "case": "block",
+                                                    "actions": {
+                                                        "Append_blocked_comment_to_ipAddressActionComment": {
+                                                            "runAfter": {
+                                                                "Create_an_inbound_access_rule_on_an_interface": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "ipAddressesActionComment",
+                                                                "value": "@{items('For_each_over_ipAddresses')['IPAddress']} - blocked in Cisco ASA\n"
+                                                            }
+                                                        },
+                                                        "Create_an_inbound_access_rule_on_an_interface": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "body": {
+                                                                    "active": true,
+                                                                    "destinationAddress": {
+                                                                        "kind": "AnyIPAddress",
+                                                                        "value": "any4"
+                                                                    },
+                                                                    "destinationService": {
+                                                                        "kind": "NetworkProtocol",
+                                                                        "value": "ip"
+                                                                    },
+                                                                    "permit": false,
+                                                                    "sourceAddress": {
+                                                                        "kind": "IPv4Address",
+                                                                        "value": "@{items('For_each_over_ipAddresses')['IPAddress']}"
+                                                                    }
+                                                                },
+                                                                "headers": {
+                                                                    "User-Agent": "REST API Agent"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['cisco-ASAv-connector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "post",
+                                                                "path": "/api/access/in/@{encodeURIComponent(variables('Interface ID'))}/rules"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_unblock": {
+                                                    "case": "unblock",
+                                                    "actions": {
+                                                        "Append_unblocked_comment_to_ipAddressActionComment": {
+                                                            "runAfter": {
+                                                                "Remove_an_inbound_access_rule_on_an_interface": [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type": "AppendToStringVariable",
+                                                            "inputs": {
+                                                                "name": "ipAddressesActionComment",
+                                                                "value": "@{items('For_each_over_ipAddresses')['IPAddress']} - unblocked in Cisco ASA\n"
+                                                            }
+                                                        },
+                                                        "Remove_an_inbound_access_rule_on_an_interface": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "headers": {
+                                                                    "User-Agent": "REST API Agent"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['cisco-ASAv-connector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "delete",
+                                                                "path": "/api/access/in/@{encodeURIComponent(variables('Interface ID'))}/rules/@{encodeURIComponent(items('For_each_over_ipAddresses')['extendedAceItemObjectId'])}"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {
+                                                    "Append_no_action_taken_comment_to_ipAddressActionComment": {
+                                                        "runAfter": {},
+                                                        "type": "AppendToStringVariable",
+                                                        "inputs": {
+                                                            "name": "ipAddressesActionComment",
+                                                            "value": "@{items('For_each_over_ipAddresses')['IPAddress']} - no action taken in Cisco ASA\n"
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "expression": "@outputs('PostToTeams')['body']['data'][item()['controlName']]",
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "type": "Foreach"
+                                },
+                                "Update_incident": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "classification": {
+                                                "ClassificationAndReason": "@{outputs('PostToTeams')['body']['data']['incidentStatus']}"
+                                            },
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "severity": "@{outputs('PostToTeams')['body']['data']['incidentSeverity']}",
+                                            "status": "Closed"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_ipAddressesActionComment_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('PostToTeams')['body']['submitActionId']",
+                                            "Submit"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Initialize_Adaptive_Card_IP_Address_variable": {
+                            "runAfter": {
+                                "Initialize_ipAddresses_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "adaptiveCardIPAddressItems",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_For_Each_index_variable": {
+                            "runAfter": {
+                                "Initialize_Adaptive_Card_IP_Address_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "forEachIndex",
+                                        "type": "integer",
+                                        "value": 0
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_Interface_ID_variable": {
+                            "runAfter": {
+                                "Entities_-_Get_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Interface ID",
+                                        "type": "string",
+                                        "value": "@parameters('Interface ID')"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_ipAddressesActionComment_variable": {
+                            "runAfter": {
+                                "PostToTeams": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ipAddressesActionComment",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_ipAddresses_variable": {
+                            "runAfter": {
+                                "Fetch_inbound_access_rules_on_an_interface": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "ipAddresses",
+                                        "type": "array"
+                                    }
+                                ]
+                            }
+                        },
+                        "PostToTeams": {
+                            "runAfter": {
+                                "For_each_over_IPs": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "body": {
+                                        "messageBody": "{\n    \"type\": \"AdaptiveCard\",\n    \"body\": [\n        {\n            \"type\": \"TextBlock\",\n            \"size\": \"Large\",\n            \"weight\": \"Bolder\",\n            \"text\": \"Suspicious IP - Microsoft Sentinel\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{triggerBody()?['object']?['properties']?['severity']} incident @{triggerBody()?['object']?['properties']?['title']}\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Incident description\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{triggerBody()?['object']?['properties']?['description']}\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Alert product names\",\n            \"wrap\": true,\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"@{join(triggerBody()?['object']?['properties']?['additionalData']?['alertProductNames'], ', ')}\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"[Click here to view the Incident](@{triggerBody()?['object']?['properties']?['incidentUrl']})\",\n            \"wrap\": true\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"TextBlock\",\n                            \"size\": \"Medium\",\n                            \"weight\": \"Bolder\",\n                            \"text\": \"Incident configuration:\",\n                            \"wrap\": true\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"ColumnSet\",\n            \"columns\": [\n                {\n                    \"type\": \"Column\",\n                    \"items\": [\n                        {\n                            \"type\": \"Image\",\n                            \"style\": \"Person\",\n                            \"url\": \"https://connectoricons-prod.azureedge.net/releases/v1.0.1391/1.0.1391.2130/azuresentinel/icon.png\",\n                            \"size\": \"Small\"\n                        }\n                    ],\n                    \"width\": \"auto\"\n                }\n            ]\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Close MicroSoft Sentinal incident?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Inaccurate Data\",\n                    \"value\": \"False Positive - Inaccurate Data\"\n                },\n                {\n                    \"isSelected\": true,\n                    \"title\": \"False Positive - Incorrect Alert Logic\",\n                    \"value\": \"False Positive - Incorrect Alert Logic\"\n                },\n                {\n                    \"title\": \"True Positive - Suspicious Activity\",\n                    \"value\": \"True Positive - Suspicious Activity\"\n                },\n                {\n                    \"title\": \"Benign Positive - Suspicious But Expected\",\n                    \"value\": \"Benign Positive - Suspicious But Expected\"\n                },\n                {\n                    \"title\": \"Undetermined\",\n                    \"value\": \"Undetermined\"\n                }\n            ],\n            \"id\": \"incidentStatus\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"Benign Positive - Suspicious But Expected\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Change Microsoft Sentinel Incident Severity?\"\n        },\n        {\n            \"choices\": [\n                {\n                    \"isSelected\": true,\n                    \"title\": \"High\",\n                    \"value\": \"High\"\n                },\n                {\n                    \"title\": \"Medium\",\n                    \"value\": \"Medium\"\n                },\n                {\n                    \"title\": \"Low\",\n                    \"value\": \"Low\"\n                },\n                {\n                    \"title\": \"Informational\",\n                    \"value\": \"Informational\"\n                },\n                {\n                    \"title\": \"Don't change\",\n                    \"value\": \"same\"\n                }\n            ],\n            \"id\": \"incidentSeverity\",\n            \"style\": \"compact\",\n            \"type\": \"Input.ChoiceSet\",\n            \"value\": \"@{triggerBody()?['object']?['properties']?['severity']}\"\n        },\n        {\n            \"type\": \"TextBlock\",\n            \"text\": \"Cisco ASA Actions\",\n            \"weight\": \"Bolder\"\n        },\n        {\n            \"type\": \"Image\",\n            \"url\": \"data:image/png;base64,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\",\n            \"size\": \"Medium\"\n        },\n        {\n            \"type\": \"Container\",\n            \"items\": @{variables('adaptiveCardIPAddressItems')}\n        }\n    ],\n    \"actions\": [\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Submit\"\n        },\n        {\n            \"type\": \"Action.Submit\",\n            \"title\": \"Ignore\"\n        }\n    ],\n    \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n    \"version\": \"1.2\"\n}",
+                                        "recipient": {
+                                            "channelId": ""
+                                        },
+                                        "shouldUpdateCard": true,
+                                        "updateMessage": "Thanks for your response, it is being processed."
+                                    },
+                                    "notificationUrl": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['teams']['connectionId']"
+                                    }
+                                },
+                                "path": "/flowbot/actions/flowcontinuation/recipienttypes/channel/$subscriptions",
+                                "queries": {
+                                    "groupId": ""
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "cisco-ASAv-connector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CiscoASAConnectionName'))]",
+                                "connectionName": "[variables('CiscoASAConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/customApis/', parameters('Cisco ASA Connector name'))]"
+                            },
+                            "teams": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('TeamsConnectionName'))]",
+                                "connectionName": "[variables('TeamsConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                            }
+                        }
+                    },
+                    "Interface ID": {
+                        "value": "[parameters('Interface ID')]"
+                    }
+                }
+            }
+        }
+    ]
+}

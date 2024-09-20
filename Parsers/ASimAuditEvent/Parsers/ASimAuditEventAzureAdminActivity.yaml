@@ -1,0 +1,155 @@
+Parser:
+  Title: Audit Event ASIM parser for Azure administrative activity
+  Version: '0.2'
+  LastUpdated: Feb 19 2022
+Product:
+  Name: Microsoft Azure
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1.0'
+References:
+- Title: ASIM Audit Event Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Azure administrative activity in the AzureActivity table to the ASIM Audit Event schema.
+ParserName: ASimAuditEventAzureActivity
+EquivalentBuiltInParser: _ASim_AuditEvent_AzureActivity
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false){
+     let AzureActivityOperationLookup = datatable (op:string, EventType:string) 
+    [
+      'ACTION', 'Execute',
+      'WRITE', 'Set',
+      'DELETE', 'Delete'
+    ];
+    let AzureActivityStatusLookup = datatable (ActivityStatusValue:string, ActivitySubstatusValue:string, EventResult:string, EventResultDetails:string) 
+    [
+        "Accept","Accepted","Success","",
+        "Accept","Created","Success","",
+        "Accept","OK","Success","",
+        "Accept","","Success","",
+        "Accepted","","Success","",
+        "Active","","Success","Active",
+        "Failed","","Failure","",
+        "Failure","BadRequest","Failure","Bad Request",
+        "Failure","Conflict","Failure","Bad Request",
+        "Failure","Forbidden","Failure","Unauthorized",
+        "Failure","InternalServerError","Failure","Internal error",
+        "Failure","MethodNotAllowed","Failure","Bad Request",
+        "Failure","NotFound","Failure","Not found",
+        "Failure","Unauthorized","Failure","Unauthorized",
+        "Failure","","Failure","",
+        "In Progress","","Success","In Progress",
+        "Resolved","","Success","",
+        "Start","","Success","Start",
+        "Started","","Success","Start",
+        "Succeeded","","Success","",
+        "Success","Created","Success","",
+        "Success","NoContent","Success","",
+        "Success","OK","Success","",
+        "Success","","Success","",
+        "Updated","","Success","",
+        "Succeeded","OK","Success","",
+        "Accepted","Accepted","Success","",
+        "Accepted","OK","Success","",
+        "Failed","Forbidden","Failure","Unauthorized",
+        "Succeeded","Created","Success","",
+        "Failed","BadRequest","Failure","Bad request",
+        "Accepted","Created","Success","",
+        "Failed","Conflict","Failure","Bad request",
+        "Failed","MethodNotAllowed","Failure","Bad request",
+        "Failure","BadGateway","Failure","Bad request",
+        "Succeeded","NoContent","Success","",
+        "Failure","ServiceUnavailable","Failure","Internal error",
+        "Failure","GatewayTimeout","Failure","Internal error",
+        "Failed","NotFound","Failure","Not found",
+        "Failed","BadGateway","Failure","Bad request",
+        "Failure","UnsupportedMediaType","Failure","Bad request",
+        "Failed","Unauthorized","Failure","Unauthorized",
+        "Cancel","","Failure","Cancelled"
+    ];
+    AzureActivity 
+    | where not(disabled)
+    | where CategoryValue == "Administrative"
+    | project-away HTTPRequest, Level, SourceSystem, EventSubmissionTimestamp, TenantId, OperationId, Hierarchy, Category, ResourceId, ResourceProvider, Resource
+    | project-rename 
+        Operation = OperationNameValue,
+        SrcIpAddr = CallerIpAddress,
+        EventOriginalUid = EventDataId,
+        ActorSessionId = CorrelationId,
+        EventOriginalType = CategoryValue
+    | extend
+        EventCount = int(1),
+        EventStartTime = TimeGenerated, 
+        EventEndTime= TimeGenerated,
+        EventProduct = 'Azure',
+        EventVendor = 'Microsoft',
+        EventSchemaVersion = '0.1.0',
+        EventSchema = 'AuditEvent',
+        ObjectType = "Cloud Resource",
+        TargetAppName = "Azure",
+        TargetAppType = "CSP"
+    // --
+    // Calculate EventResult, EventResultDetails, and EventResultOriginalDetails
+    | extend
+        EventOriginalResultDetails = strcat (
+            ActivityStatusValue, 
+            iff (ActivitySubstatusValue !="", strcat(' [', ActivitySubstatusValue, ']'), "")
+        )
+    | extend 
+        ActivitySubstatusValue = iff (ActivitySubstatusValue matches regex "\\d+", "", ActivitySubstatusValue)
+    | lookup AzureActivityStatusLookup on ActivityStatusValue, ActivitySubstatusValue
+    | extend EventResult = iff(EventResult == "", "Other", EventResult)
+    | extend EventSeverity = iff(EventResult == "Failure", "Low", "Informational")
+    | project-away ActivityStatus*, ActivitySubstatus*
+    // --
+    // Calculate Actor
+    | extend 
+        Caller = iff(Caller == "Microsoft.RecoveryServices", "", Caller)
+    | extend 
+        ActorUsernameType = iff (Caller has "@", "UPN", "")
+    | extend 
+        ActorUsername = iff (ActorUsernameType == "UPN", Caller, ""),
+        ActorUserId = iff (ActorUsernameType != "UPN", Caller, "")
+    | extend
+        ActorUserIdType = iff  (ActorUserId != "", "AADID", "")
+    | project-away Caller
+    // --
+    // Calculate Object
+    | extend 
+        entity = tostring(Properties_d.entity), 
+        resource = tostring(Properties_d.resource),
+        entity_name = tostring(Properties_d.["Entity Name"])
+    | extend Object = case ( 
+            entity != "", entity,
+            strcat ("/subscriptions/", SubscriptionId, "/resourceGroups/", ResourceGroup, "/providers/", ResourceProviderValue, "/",resource, iff (entity_name != "", strcat("/", entity_name), ""))
+        )
+    | project-away entity, resource,entity_name, _SubscriptionId, SubscriptionId, ResourceGroup, ResourceProviderValue
+    // --
+    // Calculate EventType
+    | extend op = toupper(tostring(split(Operation,"/")[-1]))
+    | lookup AzureActivityOperationLookup on op
+    | extend EventType = iff (EventType == "", "Other", EventType)
+    | project-away op
+    // Aliases
+    | extend AdditionalFields = pack_dictionary("Authorization", Authorization_d, "Claims", Claims_d, "Error", Properties_d.statusMessage)
+    // -- Aliases
+    | extend 
+        IpAddr = SrcIpAddr,
+        User = ActorUsername,
+        Application = TargetAppName,
+        Dst = TargetAppName,
+        Src = SrcIpAddr,
+    // -- Entity identifier explicit aliases
+        ActorUserUpn = ActorUsername,
+        ActorUserAadId = ActorUserId
+    | project-away OperationName, Properties*, Authorization*, Claims*
+    // -- Properties*
+  };
+  parser (disabled=disabled)

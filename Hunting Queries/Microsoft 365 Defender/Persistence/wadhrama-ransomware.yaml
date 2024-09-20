@@ -1,0 +1,38 @@
+id: 733c3a83-5950-496c-90f0-d66f0efa3c35
+name: wadhrama-ransomware
+description: |
+  This query was originally published in the threat analytics report, RDP ransomware persists as Wadhrama.
+  The ransomware known as Wadhrama has been used in human-operated attacks that follow a particular pattern. The attackers often use Remote Desktop Protocol (RDP) to gain initial access to a device or network, exfiltrate credentials, and maintain persistance.
+  The following query checks for possible Wadhrama-related activity, by searching for attempts to establish RDP persistance via the registry.
+  Other techniques used by the group associated with Wadhrama are listed under See also.
+  Reference - https://www.microsoft.com/wdsi/threats/malware-encyclopedia-description?Name=Ransom:Win32/Wadhrama
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+tactics:
+- Persistence
+query: |
+  // Find attempts to establish RDP persistence via the registry
+  let Allow = DeviceProcessEvents
+  | where Timestamp > ago(7d)
+  | where FileName == "reg.exe"
+  | where ProcessCommandLine has "AllowTSConnections"
+  | extend AllowReport = Timestamp ;
+  //
+  let Deny = DeviceProcessEvents
+  | where Timestamp > ago(7d)
+  | where FileName == "reg.exe"
+  | where ProcessCommandLine has "fDenyTSConnections"
+  | extend DenyReport = Timestamp;
+  //
+  let Special = DeviceProcessEvents
+  | where Timestamp > ago(7d)
+  | where FileName == "reg.exe"
+  | where ProcessCommandLine has "SpecialAccounts"
+  | extend SpecialReport = Timestamp;
+  //
+  Special | join kind=inner (Deny | join kind=inner Allow on DeviceId) on DeviceId
+  | where AllowReport < Timestamp +10s and AllowReport > Timestamp -10s
+  | where DenyReport < Timestamp +10s and DenyReport > Timestamp -10s
+  | where SpecialReport < Timestamp +10s and SpecialReport > Timestamp -10s

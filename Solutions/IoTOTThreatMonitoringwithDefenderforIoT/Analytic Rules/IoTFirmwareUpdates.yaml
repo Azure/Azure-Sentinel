@@ -1,0 +1,82 @@
+id: 7cad4b66-5e83-4756-8de4-f21315ab1e77
+name: Firmware Updates (Microsoft Defender for IoT)
+description: |
+  'This alert leverages Defender for IoT to detect unauthorized firmware updates that may indicate malicious activity on the network such as a cyber threat that attempts to manipulate PLC firmware to compromise PLC function.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: IoT
+    dataTypes:
+      - SecurityAlert (ASC for IoT)
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T0857
+query: |
+  SecurityAlert
+  | where ProviderName == "IoTSecurity"
+  | where AlertName has_any ("Beckhoff Software Changed", "Firmware Version Changed", "Firmware Change", "Firmware Changed", "Firmware Update")
+  | extend ExtendedProperties = parse_json(ExtendedProperties)
+  | where tostring(ExtendedProperties.isNew) == "True"
+  | extend DeviceId = tostring(ExtendedProperties.DeviceId), 
+           SourceDeviceAddress = tostring(ExtendedProperties.SourceDeviceAddress), 
+           DestDeviceAddress = tostring(ExtendedProperties.DestinationDeviceAddress), 
+           RemediationSteps = tostring(parse_json(RemediationSteps)[0]), 
+           Protocol = tostring(ExtendedProperties.Protocol), 
+           AlertManagementUri = tostring(ExtendedProperties.AlertManagementUri)
+  | project
+    TimeGenerated,
+    DeviceId,
+    ProductName,
+    ProductComponentName,
+    AlertSeverity,
+    AlertName,
+    Description,
+    Protocol,
+    SourceDeviceAddress,
+    DestDeviceAddress,
+    RemediationSteps,
+    Tactics,
+    Entities,
+    VendorOriginalId,
+    AlertLink,
+    AlertManagementUri,
+    Techniques
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SourceDeviceAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DestDeviceAddress
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+customDetails:
+  Sensor: DeviceId
+  Protocol: Protocol
+  VendorOriginalId: VendorOriginalId
+  AlertManagementUri: AlertManagementUri
+alertDetailsOverride:
+  alertDisplayNameFormat: (MDIoT) {{AlertName}}
+  alertDescriptionFormat: (MDIoT) {{Description}}
+  alertTacticsColumnName: Tactics
+  alertSeverityColumnName: AlertSeverity
+  alertDynamicProperties: 
+    - alertProperty: ProductName
+      value: ProductName
+    - alertProperty: RemediationSteps
+      value: RemediationSteps
+    - alertProperty: Techniques
+      value: Techniques
+    - alertProperty: ProductComponentName
+      value: ProductComponentName
+    - alertProperty: AlertLink
+      value: AlertLink
+version: 1.0.2
+kind: Scheduled

@@ -1,0 +1,28 @@
+id: f936ddfa-58e3-4db1-834b-fb50e8bd55c5
+name: Alert Events from Internal IP Address
+description: |
+  Determines DeviceId from internal IP address and outputs all alerts in events table associated to the DeviceId.
+  Example use case is Firewall determines Internal IP with suspicious network activity. Query WDATP based on date/time and Internal IP and see associated alerts for the endpoint.
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceNetworkInfo
+  - AlertEvidence
+  - AlertInfo
+query: |
+  let PivotTime = datetime(2021-01-02 20:57:02); //Fill out time
+  let TimeRangeStart = PivotTime-15m; // 15 Minutes Prior to Pivot Time
+  let TimeRangeEnd = PivotTime+15m; // 15 Minutes After Pivot Time
+  let IPAddress = "172.16.40.8";  // internal IP address to search
+  // Locate DeviceIds associated with IP
+  let FindDeviceIdbyIP = DeviceNetworkInfo
+  | where Timestamp between ((TimeRangeStart) ..TimeRangeEnd) 
+  	and IPAddresses contains strcat("\"", IPAddress, "\"") 
+  	and NetworkAdapterStatus == "Up"
+  | project DeviceName, DeviceId, Timestamp, IPAddresses;
+  // Query Alerts matching DeviceIds
+  FindDeviceIdbyIP 
+  | join kind=rightsemi AlertEvidence on DeviceId
+  | join AlertInfo on AlertId
+  // Summarizes alerts by AlertId with min and max event times
+  | summarize Title=any(Title), min(Timestamp), max(Timestamp), DeviceName=any(DeviceName) by AlertId

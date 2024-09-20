@@ -1,0 +1,101 @@
+id: 9be772a3-57ee-44b6-9c57-4f8742ec1c3c
+Function:
+  Title: Parser for JuniperSRX
+  Version: '1.0.0'
+  LastUpdated: '2023-08-23'
+Category: Microsoft Sentinel Parser
+FunctionName: JuniperSRX
+FunctionAlias: JuniperSRX
+FunctionQuery: |
+    let LogHeader = Syslog
+    | extend Parser = extract_all(@"(\w+)\:?\s([\S\s]+)", dynamic([1,2]),SyslogMessage)
+    | mv-expand Parser
+    | extend EventTimestamp = EventTime,
+             DvcHostname = HostName,
+             EventType = ProcessName,
+             ProcessId = ProcessID,
+             Message = trim("- ",tostring(Parser[1]))
+    | project-away Parser;
+    let SshEvents = LogHeader
+    | where EventType =~ "sshd"
+    | extend Parser = extract_all(@"password\sfor\s(\w+)\sfrom\s([0-9.]+)\sport\s(\d+)",dynamic([1,2,3]), Message)
+    | mv-expand Parser
+    | extend UserName = tostring(Parser[0]),
+             SrcIpAddr = tostring(Parser[1]),
+             DstIpAddr = "",
+             SrcPortNumber = toint(Parser[2]),
+             DstPortNumber = toint(""),
+             ZoneName = "",
+             InterfaceName = "",
+             Action = ""
+    | extend EventName = extract(@"^(\w+\s?\w+?)\s(for|from)",1, Message)
+    | extend EventName = extract(@"([\w\s]+\!)",1, Message)
+    | extend UserName = iif(isempty(UserName), extract(@"for\suser\s\'(\w+)\'\sfrom\shost\s\'([0-9\.]+)\'",1, Message), UserName)
+    | extend UserName = iif(isempty(UserName), extract(@"PAM_USER\:\s(\w+)",1, Message), UserName)
+    | extend UserName = iif(isempty(UserName), extract(@"user:\s(\w+)",1, Message), UserName)
+    | extend SrcIpAddr = iif(isempty(SrcIpAddr), extract(@"from\s(host)?\s?\'?([0-9.]+)\'?",2, Message), SrcIpAddr)
+    | extend SrcIpAddr = iif(isempty(SrcIpAddr), extract(@"source\:\s([0-9.]+)\:",1, Message), SrcIpAddr)
+    | extend SrcIpAddr = iif(isempty(SrcIpAddr), extract(@"closed\sby\s([0-9.]+)\s",1, Message), SrcIpAddr)
+    | extend DstIpAddr = iif(isempty(DstIpAddr), extract(@"destination\:\s([0-9.]+)\:[0-9]+",1, Message), DstIpAddr)
+    | extend DstPortNumber = iif(isempty(DstPortNumber), toint(extract(@"destination\:\s[0-9.]+\:([0-9]+)",1, Message)), DstPortNumber)
+    | extend SrcPortNumber = iif(isempty(SrcPortNumber), toint(extract(@"closed\sby\s([0-9.]+)\sport\s([0-9]+)",2, Message)), SrcPortNumber)
+    | extend SrcPortNumber = iif(isempty(SrcPortNumber), toint(extract(@"source\:\s[0-9.]+\:([0-9]+)",1, Message)), SrcPortNumber)
+    | extend ZoneName = iif(isempty(ZoneName), extract(@"zone\sname\:\s([\w]+)\,\s",1, Message), ZoneName)
+    | extend InterfaceName = iif(isempty(InterfaceName), extract(@"interface\sname\:\s([\w\-\.\/]+)\,\s",1, Message), InterfaceName)
+    | extend Action = iif(isempty(Action), extract(@"action\:\s([\w]+)",1, Message), Action)
+    | project-away Parser;
+    let IdsEvents = LogHeader
+    | where EventType == "RT_IDS"
+    | extend SrcIpAddr = extract(@"source\:\s([0-9.]+)\,?\:?(\d+)?",1, Message),
+             SrcPortNumber = toint(extract(@"source\:\s([0-9.]+)\,?\:?(\d+)?",2, Message)),
+             DstIpAddr = extract(@"destination\:\s([0-9.]+)\,?",1, Message),
+             DstPortNumber = toint(extract(@"destination\:\s([0-9.]+)\,?\:?(\d+)?",2, Message)),
+             ProtocolId = toint(extract(@"protocol-id\:\s([0-9.]+)\,",1, Message)),
+             ZoneName = extract(@"zone\sname\:\s([\w]+)\,",1, Message),
+             InterfaceName = extract(@"interface\sname\:\s([\w\.]+)\,",1, Message),
+             Action = extract(@"action\:\s([\w\-\.]+)",1, Message);
+    let FlowEvents = LogHeader
+    | where EventType == "RT_FLOW"
+    | extend FlowEventName = extract(@"^([\w\s]+)\s(\d.*)",1, Message);
+    let FlowDenyEvents = FlowEvents
+    | where FlowEventName =~ 'session denied'
+    | extend Parser = extract_all(@"^([\w\s\-]+)(\s|\:)\s?([\d\.]+)\/(\d+)\-\>([\d\.]+)\/(\d+)\s(\w+)?\s?([\w\-]+)\s([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9]), Message)
+    | mv-expand Parser
+    | extend EventName = tostring(Parser[0]),
+             SrcIpAddr = tostring(Parser[2]),
+             SrcPortNumber = toint(Parser[3]),
+             DstIpAddr = tostring(Parser[4]),
+             DstPortNumber = toint(Parser[5]),
+             ServiceName = tostring(Parser[7]),
+             Substring = tostring(Parser[8])
+    | project-away Parser, Substring;
+    let FlowNotDenyEvents = FlowEvents
+    | where FlowEventName !~ 'session denied'
+    | extend Parser = extract_all(@"^([\w\s\-]+)(\s|\:)\s?([\d\.]+)\/(\d+)\-\>([\d\.]+)\/(\d+)\s(\w+)?\s?([\w\-]+)\s([\d\.]+)\/(\d+)\-\>([\d\.]+)\/(\d+)\s([\S\s]+)",dynamic([1,2,3,4,5,6,7,8,9,10,11,12,13]), Message)
+    | mv-expand Parser
+    | extend EventName = tostring(Parser[0]),
+             SrcIpAddr = tostring(Parser[2]),
+             SrcPortNumber = toint(Parser[3]),
+             DstIpAddr = tostring(Parser[4]),
+             DstPortNumber = toint(Parser[5]),
+             ServiceName = tostring(Parser[7]),
+             SrcNatIpAddr = tostring(Parser[8]),
+             SrcNatPortNumber = toint(Parser[9]),
+             DstNatIpAddr = tostring(Parser[10]),
+             DstNatPortNumber = toint(Parser[11]),
+             Substring = tostring(Parser[12])
+    | extend Parser2 = extract_all(@"(0x0/s)?([\S]+)\s([\S]+)\s([\S]+)\s([\S]+)\s(\d+)\s([\S]+)\s([\S]+)\s([\S]+)\s(\d+)",dynamic([1,2,3,4,5,6,7,8,9,10]), Substring)
+    | mvexpand Parser2
+    | extend SrcNatRuleName = tostring(Parser2[2]),
+             DstNatRuleName = tostring(Parser2[4]),
+             ProtocolId = toint(Parser2[5]),
+             PolicyName = tostring(Parser2[6]),
+             SourceZoneName = tostring(Parser2[7]),
+             DestinationZoneName = tostring(Parser2[8]),
+             SessionId = toint(Parser2[9])
+    | project-away Parser, Parser2, Substring;
+    let AllOtherEvents = LogHeader
+    | where EventType !in ("sshd","RT_IDS","RT_FLOW")
+    | extend EventName = extract(@"^([\w\s]+)\s(0)",1, Message);
+    union SshEvents, IdsEvents, AllOtherEvents, FlowNotDenyEvents, FlowDenyEvents
+    | extend EventName = iif(isempty(EventName), extract(@"^([\w\s]+)\s(\d.*)",1, Message), EventName)

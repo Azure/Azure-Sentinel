@@ -1,0 +1,49 @@
+id: c1544d8f-cbbd-4e35-8d32-5b9312279833
+name: GitLab - External User Added to GitLab
+description: |
+  'This queries GitLab Application logs to list external user accounts (i.e.: account not in allow-listed domains) which have been added to GitLab users.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Syslog
+    dataTypes: 
+      - Syslog
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1136
+query: |
+  // List of allow-listed domains
+  let allowedDomain = pack_array("mydomain.com");
+  GitLabAudit
+  | where AddAction == "user"
+  | project AuthorName, IPAddress, User = EntityName
+  | join (GitLabApp 
+  | where UserAdded == 1
+  | parse kind=regex Message with "User \"" User "\"" EmailAddress " was created"
+  | project tostring(User), EmailAddress = substring(EmailAddress,2,strlen(EmailAddress)-3)) on User
+  | project  AuthorName, IPAddress, User, EmailAddress, DomainName = tostring(extract("@(.*)$", 1, EmailAddress))
+  | where allowedDomain !contains DomainName
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: User
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AuthorName        
+  - entityType: DNS
+    fieldMappings:
+      - identifier: DomainName
+        columnName: DomainName        
+version: 1.0.0
+kind: Scheduled

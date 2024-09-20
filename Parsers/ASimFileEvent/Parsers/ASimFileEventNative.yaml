@@ -1,0 +1,53 @@
+Id: aaa811e7-673b-50a0-ba97-27ddee2d40b5
+Parser:
+  Title: File Event ASIM parser for Microsoft Sentinel native File Event table
+  Version: "0.1.1"
+  LastUpdated: Nov 21 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: FileEvent
+  Version: "0.2.1"
+References:
+  - Title: ASIM File Event Schema
+    Link: https://aka.ms/ASimFileEventDoc
+  - Title: ASIM
+    Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native File Event table (ASimFileEventLogs) to the ASIM File Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: ASimFileEventNative
+EquivalentBuiltInParser: _ASim_FileEvent_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled: bool=false) {
+    ASimFileEventLogs
+    | where not(disabled)
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "FileEvent",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Src = SrcIpAddr,
+        IpAddr = SrcIpAddr,
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        User = ActorUsername,
+        FileName = TargetFileName,
+        FilePath = TargetFilePath,
+        Process = ActingProcessName,
+        Url = TargetUrl,
+        Application = TargetAppName
+    | project-away
+        TenantId,
+        SourceSystem,
+        _SubscriptionId,
+        _ResourceId
+  };
+  parser (disabled=disabled)

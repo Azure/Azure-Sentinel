@@ -1,0 +1,64 @@
+id: 8df80270-b4fa-4a7a-931e-8d17c0b321ae
+name: Access Token Manipulation - Create Process with Token
+description: |
+  This query detects the use of the 'runas' command and checks whether the account used to elevate privileges isn't the user's own admin account. 
+  Additionally, it will match this event to the logon events - to check whether it has been successful as well as augment the event with the new SID.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+      - DeviceLogonEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+  - DefenseEvasion
+relevantTechniques:
+  - T1134.002
+query: |
+  let RunAsProcess=DeviceProcessEvents
+      | where FileName =~ "runas.exe" 
+      // You can choose to filter out the local admin account. This is based on convention. Here, we assume that localadmin accounts
+      // end with _ladmin (RID 500 / LAPS).
+      | where not(AccountName has_any("_ladmin"))
+      // De-obfuscate the commandline used. 
+      | extend CleanProcessCommandLine=parse_command_line(tostring(ProcessCommandLine), "windows")
+      // Exclude a user running something on their system through their admin account.
+      | where CleanProcessCommandLine !contains strcat(AccountName, "_adm") // Replace this with your admin account naming convention.
+      // Exclude local admin account activities by, for instance, the servicedesk that uses the LAPS provisioned account. This is optional. 
+      // Disable the line below if the number of false positives is acceptable. 
+      | where not(CleanProcessCommandLine has_any (":_ladmin")) // Replace this with your local RID500/LAPS account.
+      // Extract the username for the elevation action.
+      | extend ElevatedAccountName=extract("user:([a-zA-Z0-9\\\\]+)",1,tostring(CleanProcessCommandLine))
+      // Strip the domain suffix.
+      | extend CleanElevatedAccountName= trim("(.*\\\\)",ElevatedAccountName);
+  RunAsProcess
+  | join kind=leftouter ( 
+      DeviceLogonEvents
+      | project-rename CleanElevatedAccountName = AccountName
+      ) on CleanElevatedAccountName,DeviceId
+  | project-rename ElevatedActionType=ActionType1,ElevatedAccountSid=AccountSid1
+  | project TimeGenerated,DeviceId,DeviceName,FileName,FolderPath,ProcessCommandLine,SHA256,ProcessIntegrityLevel,AccountDomain,AccountName,AccountSid, LogonId, InitiatingProcessFileName,InitiatingProcessFolderPath,InitiatingProcessCommandLine,CleanProcessCommandLine,ElevatedAccountName,CleanElevatedAccountName,ElevatedActionType,LogonType,ElevatedAccountSid
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+  - entityType: Account
+    fieldMappings:
+      - identifier: Sid
+        columnName: AccountSid 
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountDomain
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: ProcessCommandLine
+version: 1.0.0
+kind: Scheduled

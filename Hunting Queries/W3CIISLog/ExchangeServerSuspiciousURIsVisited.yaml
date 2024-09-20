@@ -1,0 +1,45 @@
+id: 3122423d-6c33-43c8-bc10-6d27b4350176
+name: Exchange Server Suspicious URIs Visited
+description: |
+  'This query will detect paths suspicious associated with ProxyLogon exploitation, it will then calculate the percentage of suspicious URIs
+  the user had visited in relation to the total number of URIs the user has visited. This query will assist in the detection of automated
+  ProxyLogon exploitation.'
+requiredDataConnectors:
+  - connectorId: AzureMonitor(IIS)
+    dataTypes:
+      - W3CIISLog
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1190
+tags:
+  - Exchange
+query: |
+
+  //Calculate number of suspicious URI stems visited by user
+  W3CIISLog 
+  | where not(ipv4_is_private(cIP))
+  | where (csUriStem matches regex @"\/owa\/auth\/[A-Za-z0-9]{1,30}\.js") or (csUriStem matches regex @"\/ecp\/[A-Za-z0-9]{1,30}\.(js|flt|css)") or (csUriStem =~ "/ews/exchange.asmx")
+  | extend userHash = hash_md5(strcat(cIP, csUserAgent))
+  | summarize susCount=dcount(csUriStem), make_list(csUriStem), min(TimeGenerated), max(TimeGenerated) by userHash, cIP, csUserAgent
+  | join kind=leftouter  (
+    //Calculate unique URI stems visited by each user
+    W3CIISLog
+    | where not(ipv4_is_private(cIP))
+    | extend userHash = hash_md5(strcat(cIP, csUserAgent))
+    | summarize allCount=dcount(csUriStem) by userHash
+  ) on userHash
+  //Find instances where only a common endpoint was seen
+  | extend containsDefault = iff(list_csUriStem contains "/ews/exchange.asmx", 1, 0)
+  //If we only see the common endpoint and nothing else dump it
+  | extend result = iff(containsDefault == 1, containsDefault+susCount, 0)
+  | where result != 2
+  | extend susPercentage = susCount / allCount * 100
+  | where susPercentage > 90
+  | project StartTime=min_TimeGenerated, EndTime=max_TimeGenerated, AttackerIP=cIP, AttackerUA=csUserAgent, URIsVisited=list_csUriStem, suspiciousPercentage=susPercentage, allUriCount=allCount, suspiciousUriCount=susCount
+  | extend timestamp = StartTime, IPCustomEntity = AttackerIP
+entityMappings:
+- entityType: NetworkConnection
+  fieldMappings:
+    - identifier: SourceAddress
+      columnName: AttackerIP

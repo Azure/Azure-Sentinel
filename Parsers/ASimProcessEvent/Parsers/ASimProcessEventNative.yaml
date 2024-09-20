@@ -1,0 +1,49 @@
+Id: 192fbf56-be7b-4bee-a172-a44e6527a9e0
+Parser:
+  Title: Process Event ASIM parser for Microsoft Sentinel native Process Event table
+  Version: "0.1.0"
+  LastUpdated: Nov 22 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: ProcessEvent
+  Version: "0.1.4"
+References:
+  - Title: ASIM Process Schema
+    Link: https://aka.ms/ASimProcessEventDoc
+  - Title: ASIM
+    Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Process Event table (ASimProcessEventLogs) to the ASIM Process Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: ASimProcessEventNative
+EquivalentBuiltInParser: _ASim_ProcessEvent_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled: bool=false) {
+    ASimProcessEventLogs 
+    | where not(disabled)
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "ProcessEvent",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        User = TargetUsername,
+        Process = TargetProcessName,
+        CommandLine = TargetProcessCommandLine,
+        Hash = coalesce(TargetProcessSHA512, TargetProcessSHA256, TargetProcessMD5, TargetProcessSHA1, TargetProcessIMPHASH)
+    | project-away
+        TenantId,
+        SourceSystem,
+        _SubscriptionId,
+        _ResourceId
+  };
+  parser (disabled=disabled)

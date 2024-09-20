@@ -1,0 +1,89 @@
+id: 0ff22697-dc58-4623-b844-a767629840cd
+name: Rare Process Path
+description: |
+  'Identifies when a process is running from a rare path. This could indicate malicious or unexpected activity as attacks
+  often try to use common process names running from non-standard locations'
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+tactics:
+  - Execution
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let lookback = totimespan((endtime-starttime)*7);
+  let processEvents=
+  SecurityEvent
+  | where TimeGenerated between(ago(lookback)..endtime)
+  | where EventID==4688
+  // excluding well known processes
+  | where NewProcessName !endswith ':\\Windows\\System32\\conhost.exe' and ParentProcessName !endswith ':\\Windows\\System32\\conhost.exe'
+  | where ParentProcessName !endswith ":\\Windows\\System32\\wuauclt.exe" and NewProcessName !startswith "C:\\Windows\\SoftwareDistribution\\Download\\Install\\AM_Delta_Patch_"
+  | where NewProcessName !has ":\\Windows\\WinSxS\\amd64_microsoft-windows-servicingstack_" and ParentProcessName !has ":\\Windows\\WinSxS\\amd64_microsoft-windows-servicingstack_"
+  | where NewProcessName !endswith ":\\WindowsAzure\\SecAgent\\WaSecAgentProv.exe"
+  | where ParentProcessName !has ":\\WindowsAzure\\GuestAgent_" and NewProcessName !has ":\\WindowsAzure\\GuestAgent_"
+  | where ParentProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_" and NewProcessName !has ":\\WindowsAzure\\WindowsAzureNetAgent_"
+  | where ParentProcessName !has ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" and ParentProcessName !endswith "\\MpCmdRun.exe"
+  | where NewProcessName !has ":\\ProgramData\\Microsoft\\Windows Defender\\platform\\" and NewProcessName !endswith "\\MpCmdRun.exe"
+  | where NewProcessName !has ':\\Program Files\\Microsoft Monitoring Agent\\Agent\\'
+  // filter out common randomly named paths and files
+  | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{3}\.tmp")
+  | where not(NewProcessName matches regex @"\\TRA[0-9A-Fa-f]{4}\.tmp")
+  | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{3}\.tmp")
+  | where not(NewProcessName matches regex @"Installer\\MSI[0-9A-Fa-f]{4}\.tmp")
+  | where not(NewProcessName matches regex @"\\Windows\\Temp\\[0-9A-Za-z-]*\\DismHost\.exe")
+  | where not(NewProcessName matches regex @"\\Users\\[0-9A-Za-z-_~\.]*\\AppData\\Local\\Temp\\[0-9A-Za-z-]*\\DismHost\.exe")
+  | where not(NewProcessName matches regex @"\\Windows\\Temp\\[0-9A-Za-z-]*\\MpSigStub\.exe")
+  | where not(NewProcessName matches regex @"\\[0-9A-Za-z]*\\amd64\\setup\.exe") and (ParentProcessName !has ":\\Windows\\SoftwareDistribution\\Download\\Install\\"
+  or ParentProcessName !has "\\AppData\\Local\\Temp\\mpam-")
+  | where not(NewProcessName matches regex @"\\Windows\\Microsoft.NET\\(Framework|Framework64)\\v[0-9].[0-9].[0-9]*\\(csc\.exe|cvtres\.exe|mscorsvw\.exe|ngentask\.exe|ngen\.exe)")
+  | where not(NewProcessName matches regex @"\\WindowsAzure\\GuestAgent_[0-9].[0-9].[0-9]*.[0-9]*_[0-9]*-[0-9]*-[0-9]*_[0-9]*\\")
+  and not(ParentProcessName matches regex @"\\WindowsAzure\\GuestAgent_[0-9].[0-9].[0-9]*.[0-9]*_[0-9]*-[0-9]*-[0-9]*_[0-9]*\\")
+  | where not(NewProcessName matches regex @"\\[0-9A-Za-z]*\\epplauncher.exe")
+  | where not(NewProcessName matches regex @"\\Packages\\Plugins\\Microsoft\.")
+  | extend path_parts = parse_path(NewProcessName)
+  | extend ProcessPath = tostring(path_parts.DirectoryPath)
+  ;
+  let normalizedProcessPath = processEvents
+  | extend NormalizedProcessPath = ProcessPath
+  // normalize guids
+  | project TimeGenerated, Computer, Account, Process, ProcessPath,
+  NormalizedProcessPath = replace("[0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12}", "<guid>", NormalizedProcessPath)
+  // normalize digits away
+  | project TimeGenerated, Computer, Account, Process, ProcessPath, NormalizedProcessPath = replace(@'\d', '#', NormalizedProcessPath)
+  ;
+  let freqs = normalizedProcessPath
+  | summarize make_list(Computer, 1000), make_list(Account, 1000), make_list(ProcessPath, 1000), frequency=count() by NormalizedProcessPath, Process
+  | join kind= leftouter (
+  normalizedProcessPath
+  | summarize StartTimeUtc=min(TimeGenerated), EndTimeUtc=max(TimeGenerated) by NormalizedProcessPath, Process
+  ) on NormalizedProcessPath, Process;
+  freqs
+  | where frequency <= toscalar( freqs | serialize | project frequency | summarize percentiles(frequency, 5))
+  | order by frequency asc
+  | mv-expand Computer = list_Computer, Account = list_Account, ProcessPath = list_ProcessPath
+  | project StartTimeUtc, EndTimeUtc, frequency, Process, NormalizedProcessPath, tostring(ProcessPath), tostring(Computer), tostring(Account)
+  | extend NTDomain = split(Account, '\\', 0)[0], Name = split(Account, '\\', 1)[0], HostName = split(Computer, '.', 0)[0], DnsDomain = strcat_array(array_slice(split(Computer, '.'), 1, -1), '.')
+  | extend Account_0_Name = Name
+  | extend Account_0_NTDomain = NTDomain
+  | extend Host_0_HostName = HostName
+  | extend Host_0_DnsDomain = DnsDomain 
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Name
+      - identifier: NTDomain
+        columnName: NTDomain 
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.1

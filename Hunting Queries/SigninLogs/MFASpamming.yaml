@@ -1,0 +1,63 @@
+id: 7f87c43a-6aff-44fe-907f-651986cbf956
+name: MFA Spamming
+description: |
+  'Identifies list of user impacted by MFA Spamming within a given time window,Default Failure count is 10 with default Time Window is 5 minutes'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  // Filter for sign-in logs ingested within the last day
+  SigninLogs
+  | where ingestion_time() > ago(1d)
+  // Extract information from dynamic columns DeviceDetail and LocationDetails
+  | extend
+        DeviceDetail = todynamic(DeviceDetail),
+        LocationDetails = todynamic(LocationDetails)
+  // Extract specific attributes from DeviceDetail and LocationDetails
+  | extend
+        OS = tostring(DeviceDetail.operatingSystem),
+        Browser = tostring(DeviceDetail.browser),
+        State = tostring(LocationDetails.state),
+        City = tostring(LocationDetails.city),
+        Region = tostring(LocationDetails.countryOrRegion)
+  // Filter for records with AuthenticationRequirement set to multiFactorAuthentication
+  | where AuthenticationRequirement == "multiFactorAuthentication"
+  // Expand multi-value property AuthenticationDetails into separate records
+  | mv-expand todynamic(AuthenticationDetails)
+  // Parse AuthResult from JSON in AuthenticationDetails and convert to string
+  | extend AuthResult = tostring(parse_json(AuthenticationDetails).authenticationStepResultDetail)
+  // Summarize data by aggregating statistics for each user, IP, and AuthResult
+  | summarize FailedAttempts = countif(AuthResult == "MFA denied; user declined the authentication" or AuthResult == "MFA denied; user did not respond to mobile app notification"),
+              SuccessfulAttempts = countif(AuthResult == "MFA successfully completed"),InvolvedOS=make_set(OS,5),InvolvedBrowser=make_set(Browser),
+              StartTime = min(TimeGenerated),
+              EndTime = max(TimeGenerated) by UserPrincipalName, IPAddress,State,City,Region
+  // Calculate AuthenticationWindow by finding time difference between start and end times
+  | extend AuthenticationWindow = (EndTime - StartTime)
+  // Filter for records with more than 10 failed attempts in 5-minute window and at least 1 successful attempt
+  | where FailedAttempts > 10 and AuthenticationWindow <= 5m
+  // Extract user's name and UPN suffix using split function
+  | extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPAddress
+version: 1.0.0
+metadata:
+  source:
+    kind: Community
+  author:
+    name: Praveen Kumar Balasundaram
+  support:
+    tier: Community
+  categories:
+    domains: [ "Security - Other", "Identity" ]

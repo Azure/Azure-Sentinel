@@ -1,0 +1,173 @@
+Parser:
+  Title: Web Session ASIM parser for F5 BIG-IP Application Security Manager (ASM)
+  Version: '0.1.0'
+  LastUpdated: Dec 04 2023
+Product:
+  Name: F5 BIG-IP Application Security Manager (ASM)
+Normalization:
+  Schema: WebSession
+  Version: '0.2.6'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+- Title: F5 Big IP ASM Documentation
+  Link: 
+    https://techdocs.f5.com/en-us/bigip-15-0-0/external-monitoring-of-big-ip-systems-implementations/event-messages-and-attack-types.html
+    https://docplayer.net/9349757-Common-event-format-configuration-guide.html
+Description: |
+  This ASIM parser supports normalizing F5 Big IP ASM(Application Security Manager) logs to the ASIM Web Session normalized schema. F5 Big IP ASM events are captured through F5 Network data connector which ingests attack events and data into Microsoft Sentinel in CEF format over Syslog using F5's technology partner Arcsight.
+ParserName: ASimWebSessionF5ASM
+EquivalentBuiltInParser: _ASim_WebSession_F5ASM
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let DvcActionLookup = datatable (DeviceAction: string, DvcAction: string)
+  [
+      "Blocked", "Deny",
+      "blocked", "Deny",
+      "Passed", "Allow",
+      "passed", "Allow",
+      "Alerted", "Deny",
+      "alerted", "Deny"
+  ];
+  let EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)
+  [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Medium",
+      "5", "Medium",
+      "6", "Medium",
+      "7", "High",
+      "8", "High",
+      "9", "High",
+      "10", "High"
+  ];
+  let parser=(disabled: bool=false) {
+      let DeviceEventClassIDList = dynamic(["Brute Force Attack", "IP Enforcer Attack", "Web Scraping Attack", "DoS Attack"]);
+      let AllData = CommonSecurityLog
+          | where not(disabled)
+          | where DeviceVendor == "F5" and DeviceProduct == "ASM"
+          | invoke _ASIM_ResolveDvcFQDN('DeviceName')
+          | project-rename DvcIpAddr = DeviceAddress;
+      let GeneralEnforcementData = AllData
+          | where ((substring(DeviceEventClassID, 0, 1) == "2" and strlen(DeviceEventClassID) == 9) or DeviceEventClassID == Activity) 
+                and DeviceEventClassID !in (DeviceEventClassIDList)
+          | parse-kv DeviceCustomString3 as (Host: string, ["User-Agent"]: string, Cookie: string, Referer: string) with (pair_delimiter="\\r\\n", kv_delimiter=":")
+          | parse DeviceCustomString3 with * "HTTP/" HttpVersion: string "\\r\\n" rest: string
+          | extend
+              EventResultDetails = tostring(FieldDeviceCustomNumber1)
+          | project-rename 
+              DstIpAddr = DestinationIP,
+              DstPortNumber = DestinationPort,
+              EventOriginalUid = ExtID,
+              HttpRequestMethod = RequestMethod,
+              NetworkApplicationProtocol = ApplicationProtocol,
+              HttpCookie = Cookie,
+              HttpHost = Host,
+              HttpReferrer = Referer,
+              HttpUserAgent = ['User-Agent'],
+              HttpRequestXff = DeviceCustomString5
+          | extend
+              EventResult = iff(toint(EventResultDetails) >= 400 or DeviceAction =~ "blocked", "Failure", "Success"),
+              HttpStatusCode = EventResultDetails,
+              AdditionalFields = bag_pack(
+                        "Full Request", DeviceCustomString3, 
+                        "Policy Name", DeviceCustomString1,
+                        "Attack Type", DeviceCustomString4,
+                        "Policy Apply Date", DeviceCustomDate1,
+                        "Web Application Name", DeviceCustomString2
+                    ),
+              Dst = DstIpAddr;
+      let AnomalyDetectionData = AllData
+          | where DeviceEventClassID in (DeviceEventClassIDList)
+          | extend
+              EventResult = iff(DeviceAction =~ "passed", "Success", "Failure"),
+              AdditionalFields = bag_pack(
+                        "Detection Average", FieldDeviceCustomNumber1,
+                        "Dropped Requests", FieldDeviceCustomNumber2,
+                        "Attack Status", DeviceCustomString4,
+                        "Detection Mode", DeviceCustomString5,
+                        "Web Application Name", DeviceCustomString2
+                    ),
+              ThreatId = tostring(FieldDeviceCustomNumber3)
+          | project-away ApplicationProtocol, ExtID;
+      union GeneralEnforcementData, AnomalyDetectionData
+      | lookup DvcActionLookup on DeviceAction
+      | lookup EventSeverityLookup on LogSeverity
+      | extend 
+          EventStartTime = todatetime(ReceiptTime),
+          EventOriginalType = iff(isempty(toint(DeviceEventClassID)), DeviceEventClassID, Activity)
+      | extend
+          EventCount = int(1),
+          EventSchema = "WebSession",
+          EventSchemaVersion = "0.2.6",
+          EventType = "HTTPsession"
+      | project-rename 
+          EventProduct = DeviceProduct,
+          EventVendor = DeviceVendor,
+          EventUid = _ItemId,
+          EventOriginalSeverity = LogSeverity,
+          DvcOriginalAction = DeviceAction,
+          Url = RequestURL,
+          SrcIpAddr = SourceIP,
+          SrcGeoCountry = DeviceCustomString6,
+          SrcPortNumber = SourcePort,
+          SrcUserId = SourceUserID,
+          SrcUsername = SourceUserName,
+          EventMessage = Message,
+          EventProductVersion = DeviceVersion,
+          RuleName = DeviceCustomString1
+      | extend 
+          SrcUserIdType = iff(isnotempty(SrcUserId), "Other", ""),
+          SrcUsernameType = _ASIM_GetUsernameType(SrcUsername),
+          SrcUserType = _ASIM_GetUserType(SrcUsername, SrcUserId),
+          Dvc = coalesce(DvcFQDN, DvcHostname, DvcIpAddr),
+          EventEndTime = EventStartTime,
+          Src = SrcIpAddr,
+          IpAddr = SrcIpAddr,
+          UserAgent = HttpUserAgent,
+          User = SrcUsername,
+          Rule = RuleName
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          Activity,
+          CommunicationDirection,
+          Computer,
+          EndTime,
+          EventOutcome,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          IndicatorThreatType,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          Protocol,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          SimplifiedDeviceAction,
+          StartTime,
+          TenantId,
+          ThreatDescription,
+          ThreatSeverity,
+          ThreatConfidence,
+          Reason,
+          ExternalID,
+          ReportReferenceLink,
+          ReceiptTime,
+          rest,
+          _ResourceId
+  };
+  parser(disabled=disabled)

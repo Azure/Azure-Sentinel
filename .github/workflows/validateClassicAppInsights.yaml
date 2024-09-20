@@ -1,0 +1,51 @@
+# Identify Microsoft.Insights/components is present and using WorkspaceResourceId in PR. If type is present but WorkspaceResourceId is not used then fail the build as Classic App Insights is retiring on 24 Feb 2024.
+name: Validate Classic App Insights
+env:
+  APPINSIGHTS: "${{ vars.APPINSIGHTS }}"
+  BASE_FOLDER_PATH: "${{ vars.BASEFOLDERPATH }}"
+  BRANCH_NAME: "${{ github.event.client_payload.pull_request.head.ref || github.event.client_payload.pullRequestBranchName }}"
+  PULL_REQUEST_NUMBER: "${{ github.event.pull_request.number }}"
+  RUNID: "${{ github.run_id }}"
+  GITHUB_APPS_ID: "${{ secrets.APPLICATION_ID }}"
+  GITHUB_APPS_KEY: "${{ secrets.APPLICATION_PRIVATE_KEY }}"
+
+on:
+  pull_request: 
+    branches:
+      - master
+    paths:
+      - Solutions/**
+      - DataConnectors/**
+
+jobs:
+  validateClassicAppInsights:
+    if: ${{ github.actor != 'dependabot[bot]' && !github.event.pull_request.merged && !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a token
+        id: generate_token
+        uses: actions/create-github-app-token@46e4a501e119d39574a54e53a06c9a705efc55c9
+        with:
+          app-id: ${{ env.GITHUB_APPS_ID }}
+          private-key: ${{ env.GITHUB_APPS_KEY }}
+
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab
+        env:
+          GeneratedToken: ${{ steps.generate_token.outputs.token }}
+        with:
+          ref: "${{ env.BRANCH_NAME }}"
+          fetch-depth: 2
+          token: ${{ env.GeneratedToken}}
+
+      - id: validateAppInsights
+        name: validateAppInsights
+        if: ${{ success() }}
+        shell: pwsh
+        run: |
+          $runId = "${{ env.RUNID }}"
+          $instrumentationKey = "${{ env.APPINSIGHTS }}"
+          $pullRequestNumber = "${{ env.PULL_REQUEST_NUMBER }}"
+          $baseFolderPath = "${{ env.BASE_FOLDER_PATH }}"
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml
+          ./.script/package-automation/validateClassicAppInsights.ps1 $runId $pullRequestNumber $instrumentationKey $baseFolderPath

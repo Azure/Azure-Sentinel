@@ -1,0 +1,67 @@
+id: bc17381e-07ee-48a2-931f-06a3d9e149c9
+name: Same User - Successful logon for a given App and failure on another App within 1m and low distribution
+description: |
+  'This identifies when a user account successfully logs onto a given App and within 1 minute fails to logon to a different App.
+  This may indicate a malicious attempt at accessing disallowed Apps for discovery or potential lateral movement'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SigninLogs
+tactics:
+  - Discovery
+  - LateralMovement
+relevantTechniques:
+  - T1087
+  - T1021
+query: |
+
+  let logonDiff = 1m;
+  let Success = SigninLogs
+  | where ResultType == "0"
+  | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online", "Office 365 SharePoint Online")
+  | project SuccessLogonTime = TimeGenerated, UserPrincipalName, IPAddress , SuccessAppDisplayName = AppDisplayName;
+  let Fail = SigninLogs
+  | where ResultType !in ("0", "50140")
+  | where ResultDescription !~ "Other"
+  | where AppDisplayName !in ("Office 365 Exchange Online", "Skype for Business Online", "Office 365 SharePoint Online")
+  | project FailedLogonTime = TimeGenerated, UserPrincipalName, IPAddress , FailedAppDisplayName = AppDisplayName, ResultType, ResultDescription;
+  let InitialDataSet =
+  Success | join kind= inner (
+  Fail
+  ) on UserPrincipalName, IPAddress
+  | where isnotempty(FailedAppDisplayName)
+  | where SuccessLogonTime < FailedLogonTime and FailedLogonTime - SuccessLogonTime <= logonDiff and SuccessAppDisplayName != FailedAppDisplayName;
+  let InitialHits =
+  InitialDataSet
+  | summarize FailedLogonTime = min(FailedLogonTime), SuccessLogonTime = min(SuccessLogonTime)
+  by UserPrincipalName, SuccessAppDisplayName, FailedAppDisplayName, IPAddress, ResultType, ResultDescription;
+  // Only take hits where there is 5 or less distinct AppDisplayNames on the success side as this limits highly active applications where failures occur more regularly
+  let Distribution =
+  InitialDataSet
+  | summarize count_SuccessAppDisplayName = count() by SuccessAppDisplayName, ResultType
+  | where count_SuccessAppDisplayName <= 5;
+  InitialHits | join (
+     Distribution
+  ) on SuccessAppDisplayName, ResultType
+  | project UserPrincipalName, SuccessLogonTime, IPAddress, SuccessAppDisplayName, FailedLogonTime, FailedAppDisplayName, ResultType, ResultDescription
+  | extend timestamp = SuccessLogonTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.1
+metadata:
+    source:
+        kind: Community
+    author:
+        name: Shain
+    support:
+        tier: Community
+    categories:
+        domains: [ "Security - Other", "Identity" ]

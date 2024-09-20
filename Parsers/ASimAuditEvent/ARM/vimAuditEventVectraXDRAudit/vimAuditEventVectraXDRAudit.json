@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimAuditEventVectraXDRAudit",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Audit Event ASIM filtering parser for Vectra XDR Audit Logs Event",
+            "category": "ASIM",
+            "FunctionAlias": "vimAuditEventVectraXDRAudit",
+            "query": "let parser = (disabled:bool = false, eventresult:string='*', starttime:datetime=datetime(null), endtime:datetime=datetime(null), actorusername_has_any:dynamic=dynamic([]),operation_has_any:dynamic=dynamic([]),object_has_any:dynamic=dynamic([]))\n{\n  Audits_Data_CL\n  | where not(disabled) and event_action_s !in (\"login\",\"logout\")\n  | where (isnull(starttime) or event_timestamp_t >= starttime) and (isnull(endtime) or event_timestamp_t <= endtime) and (array_length(actorusername_has_any) == 0 or tostring(toint(user_id_d)) has_any (actorusername_has_any)) or (array_length(actorusername_has_any) == 0 or username_s has_any (actorusername_has_any)) and (array_length(operation_has_any) == 0 or event_action_s has_any (operation_has_any)) and (array_length(object_has_any) == 0 or event_object_s has_any (object_has_any))\n  | extend\n        EventEndTime = event_timestamp_t,\n        EventProduct = 'XDR',\n        EventSchema = \"AuditEvent\",\n        EventSchemaVersion = \"0.1.0\",\n        EventStartTime = event_timestamp_t,\n        EventType = 'Other',\n        EventVendor = 'Vectra',\n        Type = \"Audit Log\",\n        EventUid = tostring(toint(id_d)),\n        ActorUserId = tostring(toint(user_id_d)),\n        ActorUserIdType = \"UID\",\n        ActorUsernameType = \"UPN\",\n        EventResult = case(result_status_s==\"success\", \"Success\", result_status_s==\"failure\", \"Failure\",\"NA\")\n  | project-rename\n        Dvc = source_ip_s,\n        Operation = event_action_s,\n        ActorUsername = username_s,\n        Object = event_object_s,\n        ActorOriginalUserType = user_type_s,\n        EventMessage = Message,\n        EventProductVersion = version_s\n  | where ('*' in (eventresult) or EventResult in (eventresult))\n  | extend User = ActorUsername\n  | project-away\n        id_d, user_id_d, user_role_s, result_status_s,event_timestamp_t, event_data_s, api_client_id_g, TenantId, _ResourceId, RawData, SourceSystem, Computer, MG, ManagementGroupName\n};\nparser (disabled=disabled, eventresult=eventresult, starttime=starttime, endtime=endtime, actorusername_has_any=actorusername_has_any,operation_has_any=operation_has_any,object_has_any=object_has_any)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False,eventresult:string='*',starttime:datetime=datetime(null),endtime:datetime=datetime(null),actorusername_has_any:dynamic=dynamic([]),operation_has_any:dynamic=dynamic([]),object_has_any:dynamic=dynamic([])"
+          }
+        }
+      ]
+    }
+  ]
+}

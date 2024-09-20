@@ -1,0 +1,48 @@
+id: 346d36c9-2e79-4d8f-8c14-1eef73d38737
+name: Recon Activity with Interactive Logon Correlation
+description: |
+  'This query looks at correlating different reconnaissance alerts with interactive logon logs to help analysts investigate initial possible compromise activity'
+requiredDataConnectors:
+  - connectorId: AzureSecurityCenter
+    dataTypes:
+      - SecurityAlert (ASC)
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes: 
+      - SecurityEvents 
+  - connectorId: WindowsForwardedEvents
+    dataTypes: 
+      - WindowsEvent 
+tactics:
+  - InitialAccess
+  - Impact
+relevantTechniques:
+  - T1190
+  - T1078
+query: |
+    SecurityAlert
+    | where AlertName has_any ('Atypical travel','Unfamiliar sign-in properties','Anonymous IP address','Malware linked IP address','Malicious IP address','Password Spray','Targeted port scans')
+    | summarize count(),make_set(AlertName) by WorkspaceSubscriptionId,CompromisedEntity= toupper(CompromisedEntity),TimeGenerated
+    | extend number_alerts = array_length(set_AlertName)
+    | join kind=inner
+    (
+    SecurityEvent
+    | where EventID == 4624 and LogonType == 10
+      | project  Account = tolower(Account), Computer = toupper(Computer), IpAddress, AccountType, Activity, LogonTypeName,Interactivelogontime=TimeGenerated
+      ) on  $left.CompromisedEntity==$right.Computer
+      | project TimeGenerated,Interactivelogontime,AccountCustomEntity=Account,AccountType,CompromisedEntity,Activity,IpAddress
+      | extend TimeWindow = TimeGenerated + 15m
+      | where Interactivelogontime between (TimeGenerated .. TimeWindow)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+
+    

@@ -1,0 +1,763 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Get-SecureScore-Information",
+            "type": "string"
+        },
+        "application_ID": {
+            "defaultValue": "Enter your application ID here",
+            "type": "string"
+        },
+        "application_secret": {
+            "defaultValue": "Enter your application secret here",
+            "type": "securestring"
+        },
+        "Tenant_ID": {
+            "defaultValue": "Enter your tenant ID here",
+            "type": "string"
+        },
+        "LogAnalyticsWorkspaceID": {
+            "type": "string",
+            "defaultValue": "Enter your Workspace ID here",
+            "metadata": {
+                "description": "The unique identifier of the Azure Log Analytics workspace."
+            }
+        },
+        "LogAnalyticsWorkspaceKey": {
+            "type": "securestring",
+            "defaultValue": "Enter your Workspace Key here",
+            "metadata": {
+                "description": "The primary or secondary key of the Azure Log Analytics workspace."
+            }
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureLogAnalyticsConnectionName": "[concat('azureloganalyticsdatacollector-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureLogAnalyticsConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "parameterValues": {
+                    "username": "[parameters('LogAnalyticsWorkspaceID')]",
+                    "password": "[parameters('LogAnalyticsWorkspaceKey')]"
+                },
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "Application ID": {
+                            "defaultValue": "[parameters('application_ID')]",
+                            "type": "String"
+                        },
+                        "Secret": {
+                            "defaultValue": "[parameters('application_secret')]",
+                            "type": "String"
+                        },
+                        "Tenant ID": {
+                            "defaultValue": "[parameters('Tenant_ID')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Recurrence": {
+                            "recurrence": {
+                                "frequency": "Week",
+                                "interval": 1
+                            },
+                            "type": "Recurrence"
+                        }
+                    },
+                    "actions": {
+                        "M365_Secure_Score_HTTP": {
+                            "runAfter": {},
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://graph.microsoft.com",
+                                    "clientId": "@parameters('Application ID')",
+                                    "secret": "@parameters('Secret')",
+                                    "tenant": "@parameters('Tenant ID')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://graph.microsoft.com/v1.0/security/secureScores?$top=1"
+                            }
+                        },
+                        "M365_Secure_Score_Parse_JSON": {
+                            "runAfter": {
+                                "M365_Secure_Score_HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('M365_Secure_Score_HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "body": {
+                                            "properties": {
+                                                "@@odata.context": {
+                                                    "type": "string"
+                                                },
+                                                "@@odata.nextLink": {
+                                                    "type": "string"
+                                                },
+                                                "value": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "activeUserCount": {
+                                                                "type": "number"
+                                                            },
+                                                            "averageComparativeScores": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "SeatSizeRangeLowerValue": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "SeatSizeRangeUpperValue": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "appsScore": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "appsScoreMax": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "averageScore": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "basis": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "dataScore": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "dataScoreMax": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "deviceScore": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "deviceScoreMax": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "identityScore": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "identityScoreMax": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "infrastructureScore": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "infrastructureScoreMax": {
+                                                                            "type": "number"
+                                                                        }
+                                                                    },
+                                                                    "required": [],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "azureTenantId": {
+                                                                "type": "string"
+                                                            },
+                                                            "controlScores": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "IsApplicable": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "controlCategory": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "controlName": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "controlState": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "count": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "description": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "expiry": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "implementationStatus": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "lastSynced": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "mdoImplementationStatus": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "on": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "score": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "scoreInPercentage": {
+                                                                            "type": "number"
+                                                                        },
+                                                                        "source": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "state": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "total": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "createdDateTime": {
+                                                                "type": "string"
+                                                            },
+                                                            "currentScore": {
+                                                                "type": "number"
+                                                            },
+                                                            "enabledServices": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "licensedUserCount": {
+                                                                "type": "number"
+                                                            },
+                                                            "maxScore": {
+                                                                "type": "number"
+                                                            },
+                                                            "vendorInformation": {
+                                                                "properties": {
+                                                                    "provider": {
+                                                                        "type": "string"
+                                                                    },
+                                                                    "providerVersion": {},
+                                                                    "subProvider": {},
+                                                                    "vendor": {
+                                                                        "type": "string"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            }
+                                                        },
+                                                        "required": [],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "headers": {
+                                            "properties": {
+                                                "Cache-Control": {
+                                                    "type": "string"
+                                                },
+                                                "Content-Length": {
+                                                    "type": "string"
+                                                },
+                                                "Content-Type": {
+                                                    "type": "string"
+                                                },
+                                                "Date": {
+                                                    "type": "string"
+                                                },
+                                                "OData-Version": {
+                                                    "type": "string"
+                                                },
+                                                "Strict-Transport-Security": {
+                                                    "type": "string"
+                                                },
+                                                "Transfer-Encoding": {
+                                                    "type": "string"
+                                                },
+                                                "Vary": {
+                                                    "type": "string"
+                                                },
+                                                "client-request-id": {
+                                                    "type": "string"
+                                                },
+                                                "request-id": {
+                                                    "type": "string"
+                                                },
+                                                "x-ms-ags-diagnostic": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "statusCode": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "M365_Secure_Score_Send_Data": {
+                            "runAfter": {
+                                "M365_Secure_Score_Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{body('M365_Secure_Score_Parse_JSON')?['value']}",
+                                "headers": {
+                                    "Log-Type": "M365SecureScore"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        },
+                            "For_each": {
+                                "foreach": "@body('M365_Secure_Score_Parse_JSON')?['value']",
+                                "actions": {
+                                    "M365_Secure_Score_Controls_Send_Data": {
+                                        "runAfter": {},
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "body": "@{items('For_each')?['controlScores']}",
+                                            "headers": {
+                                                "Log-Type": "M365SecureScoreControls"
+                                            },
+                                            "host": {
+                                                "connection": {
+                                                    "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "path": "/api/logs"
+                                        }
+                                    }
+                                },
+                                "runAfter": {
+                                    "M365_Secure_Score_Send_Data": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "type": "Foreach"
+                            },
+                        "MDE_Exposure_Score_HTTP": {
+                            "runAfter": {
+                                "MDE_Secure_Score_Send_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://api.securitycenter.windows.com",
+                                    "clientId": "@parameters('Application ID')",
+                                    "secret": "@parameters('Secret')",
+                                    "tenant": "@parameters('Tenant ID')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://api.securitycenter.windows.com/api/exposureScore"
+                            }
+                        },
+                        "MDE_Exposure_Score_Send_Data": {
+                            "runAfter": {
+                                "MDE_Exposure_Score_HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{body('MDE_Exposure_Score_HTTP')}",
+                                "headers": {
+                                    "Log-Type": "MDfEExposureScore"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        },
+                        "MDE_Recommendations_HTTP": {
+                            "runAfter": {
+                                "MDE_Exposure_Score_Send_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://api.securitycenter.windows.com",
+                                    "clientId": "@parameters('Application ID')",
+                                    "secret": "@parameters('Secret')",
+                                    "tenant": "@parameters('Tenant ID')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://api.securitycenter.windows.com/api/recommendations"
+                            }
+                        },
+                        "MDE_Recommendations_Parse_JSON": {
+                            "runAfter": {
+                                "MDE_Recommendations_HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('MDE_Recommendations_HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "activeAlert": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "associatedThreats": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
+                                                    },
+                                                    "configScoreImpact": {
+                                                        "type": "number"
+                                                    },
+                                                    "exposedMachinesCount": {
+                                                        "type": "integer"
+                                                    },
+                                                    "exposureImpact": {
+                                                        "type": "number"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "nonProductivityImpactedAssets": {
+                                                        "type": "integer"
+                                                    },
+                                                    "productName": {
+                                                        "type": "string"
+                                                    },
+                                                    "publicExploit": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "recommendationCategory": {
+                                                        "type": "string"
+                                                    },
+                                                    "recommendationName": {
+                                                        "type": "string"
+                                                    },
+                                                    "recommendedVersion": {
+                                                        "type": "string"
+                                                    },
+                                                    "relatedComponent": {
+                                                        "type": "string"
+                                                    },
+                                                    "remediationType": {
+                                                        "type": "string"
+                                                    },
+                                                    "severityScore": {
+                                                        "type": "integer"
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "subCategory": {
+                                                        "type": "string"
+                                                    },
+                                                    "totalMachineCount": {
+                                                        "type": "integer"
+                                                    },
+                                                    "vendor": {
+                                                        "type": "string"
+                                                    },
+                                                    "weaknesses": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "productName",
+                                                    "recommendationName",
+                                                    "weaknesses",
+                                                    "vendor",
+                                                    "recommendedVersion",
+                                                    "recommendationCategory",
+                                                    "subCategory",
+                                                    "severityScore",
+                                                    "publicExploit",
+                                                    "activeAlert",
+                                                    "associatedThreats",
+                                                    "remediationType",
+                                                    "status",
+                                                    "configScoreImpact",
+                                                    "exposureImpact",
+                                                    "totalMachineCount",
+                                                    "exposedMachinesCount",
+                                                    "nonProductivityImpactedAssets",
+                                                    "relatedComponent"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "MDE_Recommendations_Send_Data": {
+                            "runAfter": {
+                                "MDE_Recommendations_Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{body('MDE_Recommendations_Parse_JSON')?['value']}",
+                                "headers": {
+                                    "Log-Type": "MDfERecommendations"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        },
+                        "MDE_Secure_Score_HTTP": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://api.securitycenter.windows.com",
+                                    "clientId": "@parameters('Application ID')",
+                                    "secret": "@parameters('Secret')",
+                                    "tenant": "@parameters('Tenant ID')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://api.securitycenter.windows.com/api/configurationScore"
+                            }
+                        },
+                        "MDE_Secure_Score_Send_Data": {
+                            "runAfter": {
+                                "MDE_Secure_Score_HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{body('MDE_Secure_Score_HTTP')}",
+                                "headers": {
+                                    "Log-Type": "MDfESecureScore"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        },
+                        "MDE_Vulnerabilities_HTTP": {
+                            "runAfter": {
+                                "MDE_Recommendations_Send_Data": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Http",
+                            "inputs": {
+                                "authentication": {
+                                    "audience": "https://api.securitycenter.windows.com",
+                                    "clientId": "@parameters('Application ID')",
+                                    "secret": "@parameters('Secret')",
+                                    "tenant": "@parameters('Tenant ID')",
+                                    "type": "ActiveDirectoryOAuth"
+                                },
+                                "method": "GET",
+                                "uri": "https://api.securitycenter.windows.com/api/Vulnerabilities"
+                            }
+                        },
+                        "MDE_Vulnerabilities_Parse_JSON": {
+                            "runAfter": {
+                                "MDE_Vulnerabilities_HTTP": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@body('MDE_Vulnerabilities_HTTP')",
+                                "schema": {
+                                    "properties": {
+                                        "@@odata.context": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "items": {
+                                                "properties": {
+                                                    "cvssV3": {
+                                                        "type": "number"
+                                                    },
+                                                    "description": {
+                                                        "type": "string"
+                                                    },
+                                                    "exploitInKit": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "exploitTypes": {
+                                                        "type": "array"
+                                                    },
+                                                    "exploitUris": {
+                                                        "type": "array"
+                                                    },
+                                                    "exploitVerified": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "exposedMachines": {
+                                                        "type": "integer"
+                                                    },
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "publicExploit": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "publishedOn": {
+                                                        "type": "string"
+                                                    },
+                                                    "severity": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedOn": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "name",
+                                                    "description",
+                                                    "severity",
+                                                    "cvssV3",
+                                                    "exposedMachines",
+                                                    "publishedOn",
+                                                    "updatedOn",
+                                                    "publicExploit",
+                                                    "exploitVerified",
+                                                    "exploitInKit",
+                                                    "exploitTypes",
+                                                    "exploitUris"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        },
+                        "MDE_Vulnerabilities_Send_Data": {
+                            "runAfter": {
+                                "MDE_Vulnerabilities_Parse_JSON": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@{body('MDE_Vulnerabilities_Parse_JSON')?['value']}",
+                                "headers": {
+                                    "Log-Type": "MDfEVulnerabilitiesList"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureloganalyticsdatacollector']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/api/logs"
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azureloganalyticsdatacollector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureLogAnalyticsConnectionName'))]",
+                                "connectionName": "variables('AzureLogAnalyticsConnectionName'",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azureloganalyticsdatacollector')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

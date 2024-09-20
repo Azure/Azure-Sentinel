@@ -1,0 +1,144 @@
+Parser:
+  Title: DNS ASIM parser for Vectra AI Steams
+  Version: '0.1.1'
+  LastUpdated: Dec 26 2022
+Product:
+  Name: Vectra AI Streams
+Normalization:
+  Schema: Dns
+  Version: '0.1.3'
+References:
+- Title: ASIM DNS Schema
+  Link: https://aka.ms/ASimDnsDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing Vectra AI Steams logs to the ASIM DNS normalized schema.
+ParserName: vimDnsVectraAI
+EquivalentBuiltInParser: _Im_Dns_VectraAI
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr
+    Type: string
+    Default: '*'
+  - Name: domain_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: responsecodename
+    Type: string
+    Default: '*'
+  - Name: response_has_ipv4
+    Type: string
+    Default: '*'
+  - Name: response_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventtype
+    Type: string
+    Default: 'Query'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=
+  (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr:string='*',
+    domain_has_any:dynamic=dynamic([]),
+    responsecodename:string='*', 
+    response_has_ipv4:string='*',
+    response_has_any_prefix:dynamic=dynamic([]),
+    eventtype:string='Query',
+    disabled:bool=false
+  ) 
+  {
+    let NetworkProtocolLookup = datatable(proto_d:real, NetworkProtocol:string)[
+        6, 'TCP',
+        17, 'UDP'];
+    let DnsClassLookup = datatable(DnsQueryClass:int, DnsQueryClassName: string)[
+        0, 'Reserved',
+        1, 'IN',
+        2, 'Unassigned',
+        3, 'CH',
+        4, 'HS',
+        254, 'None',
+        255, 'Any'
+    ];
+    let HostnameRegex = @'^[a-zA-Z0-9-]{1,61}$';
+    VectraStream_CL
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime)
+        and (isnull(endtime) or TimeGenerated <= endtime)
+    | project-away MG, ManagementGroupName, RawData, SourceSystem, Computer
+    | where metadata_type_s == 'metadata_dns'
+    | where (srcipaddr == '*' or id_orig_h_s == srcipaddr)
+    | where (array_length(domain_has_any) == 0 or query_s has_any(domain_has_any))
+    | where (responsecodename == '*' or rcode_name_s =~ responsecodename)
+    | where (response_has_ipv4 == '*' or has_ipv4(answers_s, response_has_ipv4))
+    | where (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(answers_s, response_has_any_prefix))
+    | where (eventtype == '*' or eventtype in~ ('Query', 'lookup'))
+    | project-rename
+        DvcDescription = hostname_s,
+        DstDescription = resp_hostname_s,
+        SrcDescription = orig_hostname_s,
+        DnsFlagsAuthoritative = AA_b,
+        DnsFlagsRecursionAvailable = RA_b,
+        DnsFlagsRecursionDesired = RD_b,
+        DnsFlagsTruncated = TC_b,
+        DnsResponseName = answers_s,
+        DnsQuery = query_s,
+        DnsQueryTypeName = qtype_name_s,
+        DstIpAddr = id_resp_h_s,
+        DnsSessionId = community_id_s,
+        SrcIpAddr = id_orig_h_s,
+        DstDvcId = resp_huid_s,
+        SrcDvcId = orig_huid_s,
+        DvcId = sensor_uid_s,
+        EventOriginalUid = uid_s
+    | extend
+        DstHostname = iff (DstDescription startswith "IP-" or not(DstDescription matches regex HostnameRegex), "", DstDescription),
+        SrcHostname = iff (SrcDescription startswith "IP-" or not(SrcDescription matches regex HostnameRegex), "", SrcDescription),
+        DvcHostname = iff (DvcDescription startswith "IP-" or not(DvcDescription matches regex HostnameRegex), "", DvcDescription),
+        NetworkProtocolVersion = toupper(id_ip_ver_s),
+        DnsResponseCode = toint(rcode_d),
+        DnsResponseCodeName = toupper(rcode_name_s),
+        DnsQueryClass = toint(qclass_d),
+        DnsQueryType = toint(qtype_d),
+        DstPortNumber = toint(id_resp_p_d),
+        EventCount = toint(1),
+        EventEndTime = unixtime_milliseconds_todatetime(ts_d),
+        EventOriginalSubType = tostring(split(metadata_type_s, '_')[1]),
+        EventProduct = 'Vectra Stream',
+        EventResult = case(tolong(rcode_d) > 0, "Failure", "Success"),
+        EventSchema = 'Dns', 
+        EventSchemaVersion='0.1.3',
+        EventType = 'Query',
+        EventVendor = 'Vectra AI',
+        SrcDvcIdType = 'VectraId',
+        DstDvcIdType = 'VectraId',
+        DvcIdType = 'VectraId',
+        SrcPortNumber = toint(id_orig_p_d),
+        TransactionIdHex = tostring(toint(trans_id_d)),
+        EventSubType = iff (saw_reply_b, "response", "request")
+    | lookup DnsClassLookup on DnsQueryClass
+    | lookup NetworkProtocolLookup on proto_d
+    | extend
+        EventResultDetails = DnsResponseCodeName,
+        EventStartTime = EventEndTime,
+        SessionId = DnsSessionId,
+        Domain = DnsQuery,
+        Hostname = DstHostname,
+        IpAddr = SrcIpAddr,
+        Dvc = coalesce (DvcId, DvcDescription),
+        Src = SrcIpAddr,
+        Dst = DstIpAddr
+    | project-away
+        *_d, *_s, *_b, *_g
+      };
+  parser(starttime, endtime, srcipaddr, domain_has_any, responsecodename, response_has_ipv4, response_has_any_prefix, eventtype, disabled)

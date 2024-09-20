@@ -1,0 +1,790 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Block IP Nested Remediation - Forcepoint NGFW",
+        "description": "This playbook checks if malicious IP address is blocked or unblocked by SMC firewall.",
+        "mainSteps": [ "1. Fetches a list of potentially malicious IP addresses", "2. If malicious IP address is not blocked by SMC firewall then blocks it." ],
+        "prerequisites": [
+            "1. Forcepoint SMC Custom Connector needs to be deployed prior to the deployment of this playbook under the same resource group.",
+            "2. Forcepoint SMC API Key should be known.[Refer here](http://www.websense.com/content/support/library/ngfw/v610/rfrnce/ngfw_6100_ug_smc-api_a_en-us.pdf )",
+            "3. Forcepoint SMC Version number should be known. [Refer here](https://help.stonesoft.com/onlinehelp/StoneGate/SMC/)",
+            "4. IP address list name for blocking IP address present in SMC should be known."
+        ],
+        "lastUpdateTime": "2022-08-29T10:43:00Z",
+        "entities": [ "IP" ],
+        "tags": [ "Remediation" ],
+        "support": {
+            "tier": "microsoft"
+        },
+        "author": {
+            "name": "Accenture"
+        }
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "String",
+            "defaultValue": "Forcepoint-Block-IP-Nested-Remediation",
+            "metadata": {
+                "description": "Enter name for playbook without spaces"
+            }
+        },
+        "ForcepointSMCConnectorName": {
+            "type": "string",
+            "defaultValue": "ForcepointSMC-Connector",
+            "metadata": {
+                "description": "Enter the name for your Forcepoint SMC Connector without spaces"
+            }
+        },
+        "ForcepointSMCApiKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Enter the api key for smc login"
+            }
+        },
+        "VersionNumber": {
+            "type": "string",
+            "defaultValue": "6.8",
+            "metadata": {
+                "description": "Enter SMC Api key Version Number"
+            }
+        },
+        "IPListName": {
+            "type": "string",
+            "metadata": {
+                "description": "Enter IP List Name present in SMC"
+            }
+        }
+    },
+    "variables": {
+        "Forcepoint_Connector": "[concat('ForcepointSMCApiConnector-',parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('Forcepoint_Connector'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "manual": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "properties": {
+                                        "IPs": {
+                                            "items": {
+                                                "properties": {
+                                                    "Address": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "Address"
+                                                ],
+                                                "type": "object"
+                                            },
+                                            "type": "array"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "concurrency": {
+                                    "runs": 1
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Catch_Scope": {
+                            "actions": {
+                                "Create_HTML_table_for_error": {
+                                    "runAfter": {
+                                        "Filter_error_array": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Table",
+                                    "inputs": {
+                                        "columns": [
+                                            {
+                                                "header": "IP Address",
+                                                "value": "@item()['Address']"
+                                            },
+                                            {
+                                                "header": "Action Name",
+                                                "value": "@body('Filter_error_array')[0]?['name']"
+                                            },
+                                            {
+                                                "header": "Message",
+                                                "value": "@body('Filter_error_array')[0]?['outputs']?['body']?['error']?['message']"
+                                            }
+                                        ],
+                                        "format": "HTML",
+                                        "from": "@triggerBody()?['IPs']"
+                                    }
+                                },
+                                "Error_Response": {
+                                    "runAfter": {
+                                        "Create_HTML_table_for_error": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Response",
+                                    "kind": "Http",
+                                    "inputs": {
+                                        "body": "@{outputs('Forcepoint_Logo')}Forcepoint NGFW-Block IP Address Error\n@{body('Create_HTML_table_for_error')}",
+                                        "statusCode": 500
+                                    },
+                                    "operationOptions": "Asynchronous"
+                                },
+                                "Filter_error_array": {
+                                    "runAfter": {},
+                                    "type": "Query",
+                                    "inputs": {
+                                        "from": "@result('Try_Scope')",
+                                        "where": "@equals(item()?['status'], 'Failed')"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Try_Scope": [
+                                    "Failed",
+                                    "Skipped",
+                                    "TimedOut"
+                                ]
+                            },
+                            "type": "Scope"
+                        },
+                        "Forcepoint_Logo": {
+                            "runAfter": {
+                                "Initialize_variable_to_Error": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Compose",
+                            "inputs": "<img src=\"https://upload.wikimedia.org/wikipedia/en/b/b6/Forcepoint.jpg\" alt=\"ForcepointImage\" width=\"32\" height=\"32\">",
+                            "description": "Forcepoint logo for comments "
+                        },
+                        "Initialize_variable_Terminate": {
+                            "runAfter": {
+                                "Forcepoint_Logo": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Terminate",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": " This holds the variable terminate to terminate the logic app "
+                        },
+                        "Initialize_variable_for_IP_Address": {
+                            "runAfter": {
+                                "SMC_API_Key": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IP Address",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "Binding Ip address to this IP address variable"
+                        },
+                        "Initialize_variable_for_IP_list_name": {
+                            "runAfter": {
+                                "Initialize_variable_Terminate": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "IP list name",
+                                        "type": "string",
+                                        "value": "[parameters('IPListName')]"
+                                    }
+                                ]
+                            },
+                            "description": "Initialize variable for IP list name"
+                        },
+                        "Initialize_variable_to_Error": {
+                            "runAfter": {
+                                "Initialize_variable_to_SMC_Api_Version_Number": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Error",
+                                        "type": "string"
+                                    }
+                                ]
+                            },
+                            "description": "To keep the error into this variable and pass it to wherever required."
+                        },
+                        "Initialize_variable_to_SMC_Api_Version_Number": {
+                            "runAfter": {
+                                "Initialize_variable_to_consolidate_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SMC Api Version Number",
+                                        "type": "string",
+                                        "value": "[parameters('VersionNumber')]"
+                                    }
+                                ]
+                            },
+                            "description": "To keep SMC Api version number. Forcepoint will update the SMC version every year"
+                        },
+                        "Initialize_variable_to_consolidate_variable": {
+                            "runAfter": {
+                                "Initialize_variable_to_keep_all_actions": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Consolidatevrbl",
+                                        "type": "object"
+                                    }
+                                ]
+                            },
+                            "description": "To form a JSON object to pass it into Allaction variable"
+                        },
+                        "Initialize_variable_to_keep_all_actions": {
+                            "runAfter": {
+                                "Initialize_variable_for_IP_Address": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Arrayforallactions",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "description": "To store IP address , severity , action to be taken into one array varriable and we can create a table."
+                        },
+                        "SMC_API_Key": {
+                            "runAfter": {},
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "SMC API Key",
+                                        "type": "string",
+                                        "value": "[parameters('ForcepointSMCApiKey')]"
+                                    }
+                                ]
+                            },
+                            "description": "SMC API Key is to store Api key for login"
+                        },
+                        "Try_Scope": {
+                            "actions": {
+                                "Check_if_body_present_from_output": {
+                                    "actions": {
+                                        "Check_Login_Status": {
+                                            "runAfter": {
+                                                "Login": [
+                                                    "Succeeded",
+                                                    "Failed",
+                                                    "Skipped",
+                                                    "TimedOut"
+                                                ]
+                                            },
+                                            "cases": {
+                                                "200_Success_OK": {
+                                                    "case": 200,
+                                                    "actions": {
+                                                        "Condition_to_check_if_IP_list_is_present_or_not": {
+                                                            "actions": {
+                                                                "Add_IP_Address_into_IP_List": {
+                                                                    "runAfter": {
+                                                                        "Looping_IP_Address": [
+                                                                            "Succeeded",
+                                                                            "TimedOut",
+                                                                            "Skipped",
+                                                                            "Failed"
+                                                                        ]
+                                                                    },
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "body": {
+                                                                            "ip": "@variables('IP Address')"
+                                                                        },
+                                                                        "headers": {
+                                                                            "Accept": "application/json",
+                                                                            "Content-Type": "application/json"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/ip_list/@{encodeURIComponent(last(split(body('Get_IP_List_Element')?['result']?[0]?['href'],'/')))}/ip_address_list"
+                                                                    }
+                                                                },
+                                                                "Condition_to_check_if_needs_to_be_terminated": {
+                                                                    "actions": {
+                                                                        "Terminate_the_playbook_if_API_issue_occurred": {
+                                                                            "runAfter": {},
+                                                                            "type": "Terminate",
+                                                                            "inputs": {
+                                                                                "runError": {
+                                                                                    "message": "Having API issue in playbook"
+                                                                                },
+                                                                                "runStatus": "Failed"
+                                                                            },
+                                                                            "description": "Terminate the playbook if API issue occurred"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Create_HTML_table_for_Add_comment_to_incident": [
+                                                                            "Succeeded",
+                                                                            "TimedOut",
+                                                                            "Skipped",
+                                                                            "Failed"
+                                                                        ]
+                                                                    },
+                                                                    "else": {
+                                                                        "actions": {
+                                                                            "Response": {
+                                                                                "runAfter": {},
+                                                                                "type": "Response",
+                                                                                "kind": "Http",
+                                                                                "inputs": {
+                                                                                    "body": "@{outputs('Forcepoint_Logo')}Forcepoint NGFW-Block IP Address\n\nThe below IP address(s) are found to be malicious and playbook taken action against to that IPs.\n\n@{body('Create_HTML_table_for_Add_comment_to_incident')}",
+                                                                                    "statusCode": 200
+                                                                                },
+                                                                                "operationOptions": "Asynchronous"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "expression": {
+                                                                        "and": [
+                                                                            {
+                                                                                "equals": [
+                                                                                    "@variables('Terminate')",
+                                                                                    "APIError"
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    "type": "If",
+                                                                    "description": "Condition to check if needs to be terminated"
+                                                                },
+                                                                "Create_HTML_table_for_Add_comment_to_incident": {
+                                                                    "runAfter": {
+                                                                        "Add_IP_Address_into_IP_List": [
+                                                                            "Succeeded",
+                                                                            "TimedOut",
+                                                                            "Skipped",
+                                                                            "Failed"
+                                                                        ]
+                                                                    },
+                                                                    "type": "Table",
+                                                                    "inputs": {
+                                                                        "columns": [
+                                                                            {
+                                                                                "header": "IP-Address",
+                                                                                "value": "@item()?['IPAddres']"
+                                                                            },
+                                                                            {
+                                                                                "header": "IP-List-Name",
+                                                                                "value": "@variables('IP list name')"
+                                                                            },
+                                                                            {
+                                                                                "header": "IP-Status",
+                                                                                "value": "@item()?['IPStatus']"
+                                                                            },
+                                                                            {
+                                                                                "header": "Action-Taken",
+                                                                                "value": "@item()?['Action']"
+                                                                            }
+                                                                        ],
+                                                                        "format": "HTML",
+                                                                        "from": "@variables('Arrayforallactions')"
+                                                                    },
+                                                                    "description": "Creating a HTML table from all actions taken by IP address"
+                                                                },
+                                                                "Get_IP_address": {
+                                                                    "runAfter": {},
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "headers": {
+                                                                            "Accept": "application/json",
+                                                                            "Content-Type": "application/json"
+                                                                        },
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method": "get",
+                                                                        "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/ip_list/@{encodeURIComponent(last(split(body('Get_IP_List_Element')?['result']?[0]?['href'],'/')))}/ip_address_list"
+                                                                    }
+                                                                },
+                                                                "Looping_IP_Address": {
+                                                                    "foreach": "@triggerBody()?['IPs']",
+                                                                    "actions": {
+                                                                        "Check_the_result_length_from_filter_output": {
+                                                                            "actions": {
+                                                                                "Append_to_array_of_all_actions": {
+                                                                                    "runAfter": {
+                                                                                        "Set_variable_to_consolidate_variable_set": [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type": "AppendToArrayVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "Arrayforallactions",
+                                                                                        "value": "@variables('Consolidatevrbl')"
+                                                                                    }
+                                                                                },
+                                                                                "Set_variable_to_consolidate_variable_set": {
+                                                                                    "runAfter": {},
+                                                                                    "type": "SetVariable",
+                                                                                    "inputs": {
+                                                                                        "name": "Consolidatevrbl",
+                                                                                        "value": {
+                                                                                            "Action": "Already blocked",
+                                                                                            "IPAddres": "@{items('Looping_IP_Address')?['Address']}",
+                                                                                            "IPStatus": "Blocked",
+                                                                                            "IncidentSeverity": ""
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "runAfter": {},
+                                                                            "else": {
+                                                                                "actions": {
+                                                                                    "Append_to_array_variable_to_Not_exit_IP_address": {
+                                                                                        "runAfter": {},
+                                                                                        "type": "AppendToArrayVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "IP Address",
+                                                                                            "value": "@items('Looping_IP_Address')?['Address']"
+                                                                                        },
+                                                                                        "description": "Append to array variable to Not exit IP address"
+                                                                                    },
+                                                                                    "Append_to_array_variable_to_array_for_actions": {
+                                                                                        "runAfter": {
+                                                                                            "Set_variable_for_consolidate_variable": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "AppendToArrayVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "Arrayforallactions",
+                                                                                            "value": "@variables('Consolidatevrbl')"
+                                                                                        },
+                                                                                        "description": "Append to array variable to array for actions"
+                                                                                    },
+                                                                                    "Set_variable_for_consolidate_variable": {
+                                                                                        "runAfter": {
+                                                                                            "Append_to_array_variable_to_Not_exit_IP_address": [
+                                                                                                "Succeeded"
+                                                                                            ]
+                                                                                        },
+                                                                                        "type": "SetVariable",
+                                                                                        "inputs": {
+                                                                                            "name": "Consolidatevrbl",
+                                                                                            "value": {
+                                                                                                "Action": "Blocked by playbook",
+                                                                                                "IPAddres": "@{items('Looping_IP_Address')?['Address']}",
+                                                                                                "IPStatus": "Blocked",
+                                                                                                "IncidentSeverity": ""
+                                                                                            }
+                                                                                        },
+                                                                                        "description": "Set variable for consolidate variable"
+                                                                                    }
+                                                                                }
+                                                                            },
+                                                                            "expression": {
+                                                                                "and": [
+                                                                                    {
+                                                                                        "contains": [
+                                                                                            "@body('Get_IP_address')?['ip']",
+                                                                                            "@items('Looping_IP_Address')?['Address']"
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            },
+                                                                            "type": "If",
+                                                                            "description": "We will check for the result output is empty or exist in the policy rule. If result output is empty ,then there is no policy based on IP Address. And If result ouput is having some information related to IP Address then there is a policy with respect to IP"
+                                                                        }
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Set_variable_for_IP_list_array_from_SMC_IP_address": [
+                                                                            "Succeeded",
+                                                                            "TimedOut",
+                                                                            "Failed",
+                                                                            "Skipped"
+                                                                        ]
+                                                                    },
+                                                                    "type": "Foreach",
+                                                                    "description": "Here we are looping each IP Address and check whether it is blocked or not "
+                                                                },
+                                                                "Set_variable_for_IP_list_array_from_SMC_IP_address": {
+                                                                    "runAfter": {
+                                                                        "Get_IP_address": [
+                                                                            "Succeeded",
+                                                                            "TimedOut",
+                                                                            "Skipped",
+                                                                            "Failed"
+                                                                        ]
+                                                                    },
+                                                                    "type": "SetVariable",
+                                                                    "inputs": {
+                                                                        "name": "IP Address",
+                                                                        "value": "@body('Get_IP_address')?['ip']"
+                                                                    },
+                                                                    "description": "Set variable for IP list array from SMC IP address"
+                                                                }
+                                                            },
+                                                            "runAfter": {
+                                                                "Get_IP_List_Element": [
+                                                                    "Succeeded",
+                                                                    "TimedOut",
+                                                                    "Skipped",
+                                                                    "Failed"
+                                                                ]
+                                                            },
+                                                            "else": {
+                                                                "actions": {
+                                                                    "Set_variable_if_IP_list_is_not_exist": {
+                                                                        "runAfter": {},
+                                                                        "type": "SetVariable",
+                                                                        "inputs": {
+                                                                            "name": "Error",
+                                                                            "value": "@{variables('IP list name')} is does not exist in the Forcepoint SMC"
+                                                                        }
+                                                                    },
+                                                                    "Terminate": {
+                                                                        "runAfter": {
+                                                                            "Set_variable_if_IP_list_is_not_exist": [
+                                                                                "Succeeded"
+                                                                            ]
+                                                                        },
+                                                                        "type": "Terminate",
+                                                                        "inputs": {
+                                                                            "runError": {
+                                                                                "message": "@variables('Error')"
+                                                                            },
+                                                                            "runStatus": "Failed"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression": {
+                                                                "and": [
+                                                                    {
+                                                                        "equals": [
+                                                                            "@outputs('Get_IP_List_Element')?['statusCode']",
+                                                                            200
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type": "If"
+                                                        },
+                                                        "Get_IP_List_Element": {
+                                                            "runAfter": {},
+                                                            "type": "ApiConnection",
+                                                            "inputs": {
+                                                                "headers": {
+                                                                    "Accept": "application/json",
+                                                                    "Content-Type": "application/json"
+                                                                },
+                                                                "host": {
+                                                                    "connection": {
+                                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method": "get",
+                                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/elements/ip_list",
+                                                                "queries": {
+                                                                    "expand": true,
+                                                                    "expose_etag": true,
+                                                                    "filter": "@variables('IP list name')"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {
+                                                    "Set_variable_to_login_unsuccessful": {
+                                                        "runAfter": {},
+                                                        "type": "SetVariable",
+                                                        "inputs": {
+                                                            "name": "Error",
+                                                            "value": "Error status code @{outputs('Login')['statusCode']}Unsuccessful login attempt."
+                                                        },
+                                                        "description": "When unsuccessful login atempt has done then we can bind the error to \"Error\" variable."
+                                                    },
+                                                    "Terminate_if_login_is_unsuccessful": {
+                                                        "runAfter": {
+                                                            "Set_variable_to_login_unsuccessful": [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type": "Terminate",
+                                                        "inputs": {
+                                                            "runError": {
+                                                                "message": "@variables('Error')"
+                                                            },
+                                                            "runStatus": "Failed"
+                                                        },
+                                                        "description": "Terminate if login is unsuccessful login attempt"
+                                                    }
+                                                }
+                                            },
+                                            "expression": "@outputs('Login')['statusCode']",
+                                            "type": "Switch"
+                                        },
+                                        "Login": {
+                                            "runAfter": {},
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "authenticationkey": "@variables('SMC API Key')"
+                                                },
+                                                "headers": {
+                                                    "Accept": "application/json",
+                                                    "Content-Type": "application/json"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['ForcepointSMCApiConnector']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "/@{encodeURIComponent(variables('SMC Api Version Number'))}/login"
+                                            },
+                                            "description": "Before take an action against to any other api in Forcepoint SMC we need to do login."
+                                        }
+                                    },
+                                    "runAfter": {},
+                                    "else": {
+                                        "actions": {
+                                            "Set_variable_to_error_variable_if_IP_Address_are_not_available_from_sentinel": {
+                                                "runAfter": {},
+                                                "type": "SetVariable",
+                                                "inputs": {
+                                                    "name": "Error",
+                                                    "value": "IP Address not found from sentinel incident."
+                                                },
+                                                "description": "Binding the error to \"Error\" variable and pass it to incident comment."
+                                            },
+                                            "Terminate_if_there_are_no_inputs_from_sentinel": {
+                                                "runAfter": {
+                                                    "Set_variable_to_error_variable_if_IP_Address_are_not_available_from_sentinel": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "type": "Terminate",
+                                                "inputs": {
+                                                    "runError": {
+                                                        "message": "@variables('Error')"
+                                                    },
+                                                    "runStatus": "Failed"
+                                                },
+                                                "description": "Terminate the playbook if there are no inputs from sentinel"
+                                            }
+                                        }
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "greater": [
+                                                    "@length(triggerBody()?['IPs'])",
+                                                    0
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type": "If",
+                                    "description": "Form this condition, we will check like if body present in the sentinel incident or not and we will check the Ip address are available or not."
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_for_IP_list_name": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Scope"
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "ForcepointSMCApiConnector": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('Forcepoint_Connector'))]",
+                                "connectionName": "[variables('Forcepoint_Connector')]",
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('ForcepointSMCConnectorName'))]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('Forcepoint_Connector')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.Web/customApis/',parameters('ForcepointSMCConnectorName'))]"
+                }
+            }
+        }
+    ]
+}

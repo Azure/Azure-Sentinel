@@ -1,0 +1,77 @@
+id: 2b6a3882-d601-4298-983b-880f6dc7acdb
+name: User Granted Access and Grants Access to Other Users
+description: |
+  'This query identifies when a new user is granted access and starts granting access to other users.  This can help you identify rogue or malicious user behavior.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AuditLogs
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+  let starttime = todatetime('{{StartTimeISO}}');
+  let endtime = todatetime('{{EndTimeISO}}');
+  let auditLookback = starttime - 14d;
+  let opName = dynamic(["Add user", "Invite external user"]);
+  // Helper function to extract relevant fields from AuditLog events
+  let auditLogEvents = view (startTimeSpan:timespan, operation:dynamic)  {
+      AuditLogs | where TimeGenerated >= auditLookback
+      | where OperationName in~ (operation)
+      | extend ModProps = iff(TargetResources.[0].modifiedProperties != "[]", TargetResources.[0].modifiedProperties, todynamic("NoValues"))
+      | extend IpAddress = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)), 
+      tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), tostring(parse_json(tostring(InitiatedBy.app)).ipAddress))
+      | extend InitiatedByFull = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), 
+      tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName))
+      | extend InitiatedBy = replace("_","@",tostring(split(InitiatedByFull, "#")[0]))
+      | extend TargetUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+      | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
+      | extend TargetResourceName = case(
+      isempty(tostring(TargetResources.[0].displayName)), TargetUserPrincipalName,
+      isnotempty(tostring(TargetResources.[0].displayName)) and tostring(TargetResources.[0].displayName) startswith "upn:", tolower(tostring(TargetResources.[0].displayName)),
+      tolower(tostring(TargetResources.[0].displayName))
+      )
+      | extend TargetUserName = replace("_","@",tostring(split(TargetUserPrincipalName, "#")[0]))
+      | extend TargetUserName = iff(isempty(TargetUserName), tostring(split(split(TargetResourceName, ",")[0], " ")[1]), TargetUserName ) 
+      | mvexpand ModProps
+      | extend PropertyName = tostring(ModProps.displayName), newValue = replace('\"','',tostring(ModProps.newValue));
+  };
+  // Assigning time for First TargetUserName that was added
+  let FirstAdd = auditLogEvents(auditLookback, opName)  
+  | project FirstAddTimeUtc = TimeGenerated, Type, FirstInitiatedBy = InitiatedBy, IpAddress, FirstTargetUserName = TargetUserName, FirstTargetResourceName = TargetResourceName, 
+  FirstOperationName = OperationName, FirstPropertyName = PropertyName, FirstnewValue = newValue, FirstCorrelationId = CorrelationId, FirstId = Id;
+  // Assigning time for second TargetUserName that was added, which will allow us to see if a first TargetUserName added in is the Initiated by on the second in the later join
+  let SecondAdd = auditLogEvents(auditLookback, opName)  
+  | project SecondAddTimeUtc = TimeGenerated, Type, SecondInitiatedBy = InitiatedBy, IpAddress, SecondTargetUserName = TargetUserName, SecondTargetResourceName = TargetResourceName, 
+  SecondOperationName = OperationName, SecondPropertyName = PropertyName, SecondnewValue = newValue, SecondCorrelationId = CorrelationId, SecondId = Id;
+  //  Joining the FirstAdd with SecondAdd where the FirstAdd TargetUserName value matches the SecondAdd InitiatedBy.  This shows the new user adding a user.
+  let NewUserAddsUser = FirstAdd | join SecondAdd on $left.FirstTargetUserName == $right.SecondInitiatedBy
+  // we only want items where the FirstAddTimeUtc is before the SecondAddTimeUtc
+  | where FirstAddTimeUtc < SecondAddTimeUtc
+  ;
+  // Build out some of the properties for context
+  NewUserAddsUser
+  | extend FirstnewValue = split(FirstnewValue, ";"), SecondnewValue = split(SecondnewValue, ";")
+  | extend PropertyUpdate = pack(FirstPropertyName, FirstnewValue, SecondPropertyName, SecondnewValue, "FirstCorrelationId", FirstCorrelationId, "FirstId", FirstId, "SecondCorrelationId", SecondCorrelationId, "SecondId", SecondId)
+  | summarize PropertyUpdateSet = make_bag(PropertyUpdate, 1000) by FirstAddTimeUtc, FirstInitiatedBy, FirstTargetUserName, SecondAddTimeUtc, SecondInitiatedBy, SecondTargetUserName, 
+  IpAddress, FirstTargetResourceName, SecondTargetResourceName, FirstOperationName, SecondOperationName
+  | extend timestamp = FirstAddTimeUtc, FirstInitiatedByUserName = tostring(strcat_array(array_slice(split(FirstInitiatedBy, '@'), 0, -2), '@')), FirstInitiatedByUPNSuffix = tostring(split(FirstInitiatedBy, '@')[-1])
+  | extend Account_0_Name = FirstInitiatedByUserName
+  | extend Account_0_UPNSuffix = FirstInitiatedByUPNSuffix
+  | extend IP_0_Address = IpAddress
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: FirstInitiatedByUserName
+      - identifier: UPNSuffix
+        columnName: FirstInitiatedByUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IpAddress
+version: 1.0.2

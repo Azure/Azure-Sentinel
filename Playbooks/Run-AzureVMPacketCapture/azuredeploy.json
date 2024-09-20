@@ -1,0 +1,354 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata":{
+        "comments": "This playbook will take start a packet capture on a Azure VM Windows or Linux using Network Watcher, the capture will run for ten minutes, and will be stored on a blob storage account.",
+        "author": "Nathan Swift"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Run-AzureVMPacketCapture",
+            "type": "String"
+        },
+        "UserName": {
+            "defaultValue": "<username>@<domain>",
+            "type": "string"
+        },
+        "AzureStorageURI": {
+            "defaultValue": "/subscriptions/YOURSUBSCRIPTIONID/resourceGroups/YOURRESOURCEGROUPNAME/providers/Microsoft.Storage/storageAccounts/YOURSTORAGEACCOUNTNAME",
+            "type": "string"
+        },
+        "AzureStoragePath": {
+            "defaultValue": "https://YOURSTORAGEACCOUNTNAME.blob.core.windows.net/YOURCONTAINERNAME/",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "displayName": "[parameters('UserName')]",
+                "customParameterValues": {},
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "LogicAppsCategory": "security"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        },
+                        "storagepath": {
+                            "defaultValue": "[parameters('AzureStoragePath')]",
+                            "type": "String"
+                        },
+                        "storageuri": {
+                            "defaultValue": "[parameters('AzureStorageURI')]",
+                            "type": "String"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_alert": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "callback_url": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path": "/subscribe"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Alert_-_Get_hosts": {
+                            "runAfter": {
+                                "Alert_-_Get_incident": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "body": "@triggerBody()?['Entities']",
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Alert_-_Get_incident": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "get",
+                                "path": "/Cases/@{encodeURIComponent(triggerBody()?['SystemAlertId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceSubscriptionId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceId'])}/@{encodeURIComponent(triggerBody()?['WorkspaceResourceGroup'])}"
+                            }
+                        },
+                        "For_each": {
+                            "foreach": "@body('Alert_-_Get_hosts')?['Hosts']",
+                            "actions": {
+                                "For_each_2": {
+                                    "foreach": "@body('HTTP')?['data']?['rows'][0]",
+                                    "actions": {
+                                        "Increment_variable": {
+                                            "runAfter": {
+                                                "Switch": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "IncrementVariable",
+                                            "inputs": {
+                                                "name": "Counter",
+                                                "value": 1
+                                            }
+                                        },
+                                        "Switch": {
+                                            "runAfter": {},
+                                            "cases": {
+                                                "Case": {
+                                                    "case": 1,
+                                                    "actions": {
+                                                        "Set_variable": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "vmid",
+                                                                "value": "@{items('For_each_2')}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_2": {
+                                                    "case": 2,
+                                                    "actions": {
+                                                        "Set_variable_2": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "packcapname",
+                                                                "value": "@{concat('Case', body('Alert_-_Get_incident')?['properties']?['CaseNumber'], 'VM', items('For_each_2'), '.cap')}"
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "Case_3": {
+                                                    "case": 3,
+                                                    "actions": {
+                                                        "Set_variable_3": {
+                                                            "runAfter": {},
+                                                            "type": "SetVariable",
+                                                            "inputs": {
+                                                                "name": "vmlocation",
+                                                                "value": "@{items('For_each_2')}"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default": {
+                                                "actions": {}
+                                            },
+                                            "expression": "@variables('Counter')",
+                                            "type": "Switch"
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Set_variable_4": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Foreach",
+                                    "runtimeConfiguration": {
+                                        "concurrency": {
+                                            "repetitions": 1
+                                        }
+                                    }
+                                },
+                                "HTTP": {
+                                    "runAfter": {},
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://management.azure.com",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": {
+                                            "query": "where type == 'microsoft.compute/virtualmachines' | where name contains '@{items('For_each')?['HostName']}' | project vmid = id, vmname = name, location",
+                                            "subscriptions": [
+                                                "@{triggerBody()?['WorkspaceSubscriptionId']}"
+                                            ]
+                                        },
+                                        "method": "POST",
+                                        "uri": "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2018-09-01-preview"
+                                    }
+                                },
+                                "HTTP_2": {
+                                    "runAfter": {
+                                        "For_each_2": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Http",
+                                    "inputs": {
+                                        "authentication": {
+                                            "audience": "https://management.azure.com",
+                                            "type": "ManagedServiceIdentity"
+                                        },
+                                        "body": {
+                                            "properties": {
+                                                "storageLocation": {
+                                                    "storageId": "@{parameters('storageuri')}",
+                                                    "storagePath": "@{concat(parameters('storagepath'), variables('packcapname'))}"
+                                                },
+                                                "target": "@{variables('vmid')}",
+                                                "timeLimitinSeconds": 600,
+                                                "totalBytesPerSession": 1073741824
+                                            }
+                                        },
+                                        "method": "PUT",
+                                        "uri": "https://management.azure.com/subscriptions/@{split(variables('vmid'), '/')[add(length(split(variables('vmid'), '/')), -7)]}/ResourceGroups/NetworkWatcherRG/providers/Microsoft.Network/networkWatchers/@{concat('NetworkWatcher_', variables('vmlocation'))}/packetCaptures/@{guid()}?api-version=2019-11-01"
+                                    }
+                                },
+                                "Set_variable_4": {
+                                    "runAfter": {
+                                        "HTTP": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "SetVariable",
+                                    "inputs": {
+                                        "name": "Counter",
+                                        "value": 1
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_variable_4": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Foreach"
+                        },
+                        "Initialize_variable": {
+                            "runAfter": {
+                                "Alert_-_Get_hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vmid",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_2": {
+                            "runAfter": {
+                                "Initialize_variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "packcapname",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_3": {
+                            "runAfter": {
+                                "Initialize_variable_2": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "vmlocation",
+                                        "type": "string",
+                                        "value": "@{null}"
+                                    }
+                                ]
+                            }
+                        },
+                        "Initialize_variable_4": {
+                            "runAfter": {
+                                "Initialize_variable_3": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Counter",
+                                        "type": "integer",
+                                        "value": 1
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

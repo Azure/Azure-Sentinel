@@ -1,0 +1,73 @@
+Parser:
+  Title: Web Session ASIM parser for Microsoft Sentinel native Network Session table
+  Version: '0.1'
+  LastUpdated: Jan 5 2023
+Product:
+  Name: Native
+Normalization:
+  Schema: WebSession
+  Version: '0.2.5'
+References:
+- Title: ASIM Web Session Schema
+  Link: https://aka.ms/ASimWebSessionDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the native Microsoft Sentinel Web Session table (ASimWebSessionLogs) to the ASIM WebSession normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time. 
+ParserName: ASimWebSessionNative
+EquivalentBuiltInParser: _ASim_WebSession_Native
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser=(disabled:bool=false) 
+  {
+    ASimWebSessionLogs  | where not(disabled)
+      // 
+      // -- Schema fixed
+      | extend
+          FileSize = tolong(FileSize)
+      //
+      // -- Log Analytics global fields renaming
+      | project-rename
+          EventUid          = _ItemId,
+          DvcScopeId        = _SubscriptionId
+      //
+      // -- ASIM Global fields
+      | extend          
+          EventSchema       = "WebSession"
+      | extend
+          //
+          // -- Default values
+          EventEndTime      = coalesce (EventEndTime, TimeGenerated),
+          EventStartTime    = coalesce (EventStartTime, TimeGenerated),
+          //
+          // -- Multi-source aliases
+          Dvc = iff (EventType == 'HTTPSession',
+            coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, DstMacAddr, _ResourceId, strcat (EventVendor,'/', EventProduct)),
+            coalesce (DvcFQDN, DvcHostname, DstFQDN, DstHostname, DvcIpAddr, DstIpAddr, DvcId, DstDvcId, DstMacAddr, _ResourceId, strcat (EventVendor,'/', EventProduct))
+          ),
+          Dst               = coalesce (DstFQDN, DstHostname, DstIpAddr, DstDvcId),
+          Src               = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+          Rule              = coalesce(RuleName, tostring(RuleNumber)),
+          //
+          // -- Aliases which depend on EventType
+          Hostname = iff  (EventType == "EndpointNetworkSession" and NetworkDirection == ("Inbound"), SrcHostname, DstHostname),
+          IpAddr = iff  (EventType == "EndpointNetworkSession" and NetworkDirection == ("Inbound"), DstIpAddr, SrcIpAddr),
+          //
+          // -- Simple aliases
+          Duration          = NetworkDuration,
+          SessionId         = NetworkSessionId,
+          User              = SrcUsername,
+          HttpStatusCode    = EventResultDetails,
+          UserAgent         = HttpUserAgent
+          // --
+          // -- Aliased fields not implemented in ASimWebSessionLogs yet 
+          //InnerVlanId     = SrcVlanId,
+          //OuterVlanId     = DstVlanId,
+          //DvcInterface    = coalesce(DvcInterface, DvcInboundInterface, DvcOutboundInterface), 
+      | project-away
+          TenantId, SourceSystem, _ResourceId
+  };
+  parser  (disabled=disabled)

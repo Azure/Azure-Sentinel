@@ -1,0 +1,63 @@
+id: 2566e99f-ad0f-472a-b9ac-d3899c9283e6
+name: Dev-0270 Registry IOC - September 2022
+description: | 
+  'The query below identifies modification of registry by Dev-0270 actor to disable security feature as well as to add ransom notes'
+severity: High 
+requiredDataConnectors:
+  - connectorId: SecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: WindowsSecurityEvents
+    dataTypes:
+      - SecurityEvent
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 6h 
+queryPeriod: 6h 
+triggerOperator: gt 
+triggerThreshold: 0 
+status: Available
+tactics: 
+  - Impact
+relevantTechniques:
+  - T1486
+tags:
+  - Dev-0270
+query: |
+  (union isfuzzy=true
+  (SecurityEvent
+  | where EventID == 4688
+  | where (CommandLine has_all  ('reg', 'add', 'HKLM\\SOFTWARE\\Policies\\', '/v','/t', 'REG_DWORD', '/d', '/f') and CommandLine has_any('DisableRealtimeMonitoring', 'UseTPMKey', 'UseTPMKeyPIN', 'UseAdvancedStartup', 'EnableBDEWithNoTPM', 'RecoveryKeyMessageSource'))
+    or CommandLine has_all ('reg', 'add', 'HKLM\\SOFTWARE\\Policies\\', '/v','/t', 'REG_DWORD', '/d', '/f', 'RecoveryKeyMessage', 'Your drives are Encrypted!', '@')
+  | project TimeGenerated, Computer, Account, AccountDomain, ProcessName, ProcessNameFullPath = NewProcessName, EventID, Activity, CommandLine, EventSourceName, Type
+  ),
+  (DeviceProcessEvents 
+  | where (InitiatingProcessCommandLine has_all(@'"reg"', 'add', @'"HKLM\SOFTWARE\Policies\', '/v','/t', 'REG_DWORD', '/d', '/f') 
+     and InitiatingProcessCommandLine has_any('DisableRealtimeMonitoring', 'UseTPMKey', 'UseTPMKeyPIN', 'UseAdvancedStartup', 'EnableBDEWithNoTPM', 'RecoveryKeyMessageSource') ) 
+     or InitiatingProcessCommandLine has_all('"reg"', 'add', @'"HKLM\SOFTWARE\Policies\', '/v','/t', 'REG_DWORD', '/d', '/f', 'RecoveryKeyMessage', 'Your drives are Encrypted!', '@')
+  | extend Account = strcat(InitiatingProcessAccountDomain, @'\', InitiatingProcessAccountName), Computer = DeviceName
+   )
+   )
+  | extend HostName = tostring(split(Computer, ".")[0]), DomainIndex = toint(indexof(Computer, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(Computer, DomainIndex + 1), Computer)
+  | extend AccountName = tostring(split(Account, @'\')[1]), AccountNTDomain = tostring(split(Account, @'\')[0])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Account
+      - identifier: Name
+        columnName: AccountName
+      - identifier: NTDomain
+        columnName: AccountNTDomain
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: Computer
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: HostNameDomain
+version: 1.0.3
+kind: Scheduled

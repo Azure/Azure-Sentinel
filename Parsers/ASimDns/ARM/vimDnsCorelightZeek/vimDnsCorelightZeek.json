@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimDnsCorelightZeek",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "DNS activity ASIM filtering parser for Corelight Zeek",
+            "category": "ASIM",
+            "FunctionAlias": "vimDnsCorelightZeek",
+            "query": "let query_type_lookup=datatable(DnsQueryType:int,DnsQueryTypeName:string)[\n  0, \"Reserved\",\n  1, \"A\",\n  2, \"NS\",\n  3, \"MD\",\n  4, \"MF\",\n  5, \"CNAME\",\n  6, \"SOA\",\n  7, \"MB\",\n  8, \"MG\",\n  9, \"MR\",\n  10, \"NULL\",\n  11, \"WKS\",\n  12, \"PTR\",\n  13, \"HINFO\",\n  14, \"MINFO\",\n  15, \"MX\",\n  16, \"TXT\",\n  17, \"RP\",\n  18, \"AFSDB\",\n  19, \"X25\",\n  20, \"ISDN\",\n  21, \"RT\",\n  22, \"NSAP\",\n  23, \"NSAP-PTR\",\n  24, \"SIG\",\n  25, \"KEY\",\n  26, \"PX\",\n  27, \"GPOS\",\n  28, \"AAAA\",\n  29, \"LOC\",\n  30, \"NXT\",\n  31, \"EID\",\n  32, \"NIMLOC\",\n  33, \"SRV\",\n  34, \"ATMA\",\n  35, \"NAPTR\",\n  36, \"KX\",\n  37, \"CERT\",\n  38, \"A6\",\n  39, \"DNAME\",\n  40, \"SINK\",\n  41, \"OPT\",\n  42, \"APL\",\n  43, \"DS\",\n  44, \"SSHFP\",\n  45, \"IPSECKEY\",\n  46, \"RRSIG\",\n  47, \"NSEC\",\n  48, \"DNSKEY\",\n  49, \"DHCID\",\n  50, \"NSEC3\",\n  51, \"NSEC3PARAM\",\n  52, \"TLSA\",\n  53, \"SMIMEA\",\n  54, \"Unassigned\",\n  55, \"HIP\",\n  56, \"NINFO\",\n  57, \"RKEY\",\n  58, \"TALINK\",\n  59, \"CDS\",\n  60, \"CDNSKEY\",\n  61, \"OPENPGPKEY\",\n  62, \"CSYNC\",\n  99, \"SPF\",\n  100, \"UINFO\",\n  101, \"UID\",\n  102, \"GID\",\n  103, \"UNSPEC\",\n  104, \"NID\",\n  105, \"L32\",\n  106, \"L64\",\n  107, \"LP\",\n  108, \"EUI48\",\n  109, \"EUI64\",\n  249, \"TKEY\",\n  250, \"TSIG\",\n  251, \"IXFR\",\n  252, \"AXFR\",\n  253, \"MAILB\",\n  254, \"MAILA\",\n  255, \"ANY\",\n  256, \"URI\",\n  257, \"CAA\",\n  258, \"AVC\",\n  259, \"DOA\",\n  32768, \"TA\",\n  32769, \"DLV\"];\nlet class_lookup = datatable(DnsQueryClass:int, DnsQueryClassName: string)[\n    0, 'Reserved',\n    1, 'IN',\n    2, 'Unassigned',\n    3, 'CH',\n    4, 'HS',\n    254, 'None',\n    255, 'Any'];\nlet parser=(\n  starttime:datetime=datetime(null)\n  , endtime:datetime=datetime(null)\n  , srcipaddr:string='*'\n  , domain_has_any:dynamic=dynamic([]) \n  , responsecodename:string='*'\n  , response_has_ipv4:string='*'\n  , response_has_any_prefix:dynamic=dynamic([])\n  , eventtype:string='Query'\n  , disabled:bool=false\n  ){\n  Corelight_CL | where not(disabled)\n  //  -- Pre-parsing filtering:\n  | where\n    (eventtype in~ ('lookup', 'Query'))\n    and (isnull(starttime) or TimeGenerated >= starttime)\n    and (isnull(endtime) or TimeGenerated <= endtime)\n    and (Message has '\"_path\":\"dns\"' or Message has '\"_path\":\"dns_red\"')\n    and (srcipaddr=='*' or has_ipv4(Message, srcipaddr))\n    and (array_length(domain_has_any) ==0 or Message has_any (domain_has_any))\n    and (responsecodename=='*' or Message has responsecodename)\n    and (response_has_ipv4=='*' or has_ipv4(Message,response_has_ipv4) )\n    and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(Message, response_has_any_prefix))\n  // --\n  | project Message, TimeGenerated\n  | parse-kv Message as (\n      ['\"_system_name\"']:string,\n      ['\"_write_ts\"']:datetime,\n      ['\"ts\"']:datetime,\n      ['\"uid\"']:string,\n      ['\"id.orig_h\"']:string,\n      ['\"id.orig_p\"']:int,\n      ['\"id.resp_h\"']:string,\n      ['\"id.resp_p\"']:int,\n      ['\"proto\"']:string,\n      ['\"trans_id\"']:int,\n      ['\"query\"']:string,\n      ['\"qclass\"']:int,\n      ['\"qtype\"']:int,\n      ['\"AA\"']:bool,\n      ['\"TC\"']:bool,\n      ['\"CD\"']:bool,\n      ['\"RD\"']:bool,\n      ['\"RA\"']:bool,\n      ['\"Z\"']:int,\n      ['\"rejected\"']:bool,\n      ['\"rcode\"']:int,\n      ['\"rcode_name\"']:string,\n      ['\"rtt\"']:real,\n  ) \n  with (quote = '\"')\n  | parse Message with * '\"answers\":' answers:string ',\"TTLs\":' TTLs:string ',\"rejected\"' *\n  // -- Post-filtering accurately now that message is parsed\n  | where\n       (srcipaddr==\"*\" or srcipaddr==['\"id.orig_h\"'])\n        and (array_length(domain_has_any) ==0 or ['\"query\"'] has_any (domain_has_any))\n        and (responsecodename==\"*\" or ['\"rcode_name\"'] has responsecodename)\n        and (response_has_ipv4=='*' or has_ipv4(answers,response_has_ipv4) )\n        and (array_length(response_has_any_prefix) == 0 or has_any_ipv4_prefix(answers, response_has_any_prefix))\n  | extend \n      EventCount=int(1),\n      EventProduct=\"Zeek\",\n      EventVendor=\"Corelight\",\n      EventSchema = \"Dns\",\n      EventSchemaVersion=\"0.1.4\",\n      EventType=\"Query\"\n  | project-rename\n      EventStartTime= ['\"ts\"'],\n      EventEndTime = ['\"_write_ts\"'],\n      EventOriginalUid = ['\"uid\"'],\n      SrcIpAddr = ['\"id.orig_h\"'],\n      SrcPortNumber = ['\"id.orig_p\"'],\n      DstIpAddr = ['\"id.resp_h\"'],\n      DstPortNumber = ['\"id.resp_p\"'],\n      NetworkProtocol = ['\"proto\"'],\n      DnsQuery = ['\"query\"'],\n      DnsResponseCode = ['\"rcode\"'],\n      EventResultDetails = ['\"rcode_name\"'],\n      DnsFlagsAuthoritative = ['\"AA\"'],\n      DnsFlagsTruncated = ['\"TC\"'],\n      DnsFlagsRecursionDesired = ['\"RD\"'],\n      DnsFlagsCheckingDisabled = ['\"CD\"'],\n      DnsFlagsRecursionAvailable = ['\"RA\"'],\n      DnsQueryClass = ['\"qclass\"'],\n      DnsQueryType = ['\"qtype\"'],\n      rtt = ['\"rtt\"'],\n      Z = ['\"Z\"'],\n      trans_id = ['\"trans_id\"'],\n      rejected = ['\"rejected\"'],\n      Dvc = ['\"_system_name\"']\n  | lookup query_type_lookup on DnsQueryType\n  | lookup class_lookup on DnsQueryClass\n  | extend\n      EventSubType=iff(isnull(DnsResponseCode),'request','response'),\n      DnsNetworkDuration = toint(rtt*1000),\n      EventResult = iff (EventResultDetails!~'NOERROR' or rejected,'Failure','Success'),\n      DnsQueryTypeName = case (DnsQueryTypeName == \"\" and not(isnull(DnsQueryType)), strcat(\"TYPE\", DnsQueryType), DnsQueryTypeName),\n      DnsQueryClassName = case (DnsQueryClassName == \"\" and not(isnull(DnsQueryClass)), strcat(\"CLASS\", DnsQueryClass), DnsQueryClassName),\n      TransactionIdHex = tohex(toint(trans_id)),\n      DnsFlagsZ = (Z != 0),\n      DnsResponseName = tostring(pack ('answers', answers, 'ttls', TTLs)) // support of auth & addl to be added.\n  | project-away rtt\n  // Aliases\n  | extend \n      DnsResponseCodeName=EventResultDetails, \n      Domain=DnsQuery,\n      IpAddr=SrcIpAddr,\n      Src=SrcIpAddr,\n      Duration=DnsNetworkDuration,\n      Dst=DstIpAddr\n  | project-away Message, Z, TTLs, answers, trans_id, rejected\n};\nparser (starttime=starttime, endtime=endtime, srcipaddr=srcipaddr, domain_has_any=domain_has_any, responsecodename=responsecodename, response_has_ipv4=response_has_ipv4, response_has_any_prefix=response_has_any_prefix, disabled=disabled)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),srcipaddr:string='*',domain_has_any:dynamic=dynamic([]),responsecodename:string='*',response_has_ipv4:string='*',response_has_any_prefix:dynamic=dynamic([]),eventtype:string='Query',disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

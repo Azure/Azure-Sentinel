@@ -1,0 +1,431 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/AzureSQL.svg\"width=\"75px\"height=\"75px\">\n\n**Note:** _There may be [known issues](https://aka.ms/sentinelsolutionsknownissues) pertaining to this Solution, please refer to them before installing._\n\nThe [Azure SQL Database](https://azure.microsoft.com/products/azure-sql/) solution for Microsoft Sentinel enables you to stream Azure SQL database audit and diagnostic logs into Microsoft Sentinel, allowing you to continuously monitor activity in all your instances. \r\n  \r\n  **Underlying Microsoft Technologies used:** \r\n\r\n This solution takes a dependency on the following technologies, and some of these dependencies either may be in [Preview](https://azure.microsoft.com/support/legal/preview-supplemental-terms/) state or might result in additional ingestion or operational costs:\r\n\n  a. [Azure Monitor Resource Diagnostics ](https://docs.microsoft.com/azure/azure-monitor/essentials/diagnostic-settings?tabs=portal)\n\n**Data Connectors:** 1, **Workbooks:** 1, **Analytic Rules:** 10, **Hunting Queries:** 8\n\n[Learn more about Microsoft Sentinel](https://aka.ms/azuresentinel) | [Learn more about Solutions](https://aka.ms/azuresentinelsolutionsdoc)",
+        "subscription": {
+          "resourceProviders": [
+            "Microsoft.OperationsManagement/solutions",
+            "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "Microsoft.Insights/workbooks",
+            "Microsoft.Logic/workflows"
+          ]
+        },
+        "location": {
+          "metadata": {
+            "hidden": "Hiding location, we get it from the log analytics workspace"
+          },
+          "visible": false
+        },
+        "resourceGroup": {
+          "allowExisting": true
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "getLAWorkspace",
+        "type": "Microsoft.Solutions.ArmApiControl",
+        "toolTip": "This filters by workspaces that exist in the Resource Group selected",
+        "condition": "[greater(length(resourceGroup().name),0)]",
+        "request": {
+          "method": "GET",
+          "path": "[concat(subscription().id,'/providers/Microsoft.OperationalInsights/workspaces?api-version=2020-08-01')]"
+        }
+      },
+      {
+        "name": "workspace",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Workspace",
+        "placeholder": "Select a workspace",
+        "toolTip": "This dropdown will list only workspace that exists in the Resource Group selected",
+        "constraints": {
+          "allowedValues": "[map(filter(basics('getLAWorkspace').value, (filter) => contains(toLower(filter.id), toLower(resourceGroup().name))), (item) => parse(concat('{\"label\":\"', item.name, '\",\"value\":\"', item.name, '\"}')))]",
+          "required": true
+        },
+        "visible": true
+      }
+    ],
+    "steps": [
+      {
+        "name": "dataconnectors",
+        "label": "Data Connectors",
+        "bladeTitle": "Data Connectors",
+        "elements": [
+          {
+            "name": "dataconnectors1-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the data connector for ingesting Azure SQL Database audit and diagnostic logs into Microsoft Sentinel. After installing the solution, configure and enable this data connector by following guidance in Manage solution view."
+            }
+          },
+          {
+            "name": "dataconnectors-link2",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more about connecting data sources",
+                "uri": "https://docs.microsoft.com/azure/sentinel/connect-data-sources"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "workbooks",
+        "label": "Workbooks",
+        "subLabel": {
+          "preValidation": "Configure the workbooks",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Workbooks",
+        "elements": [
+          {
+            "name": "workbooks-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs workbook(s) to help you gain insights into the telemetry collected in Microsoft Sentinel. After installing the solution, start using the workbook in Manage solution view."
+            }
+          },
+          {
+            "name": "workbooks-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-monitor-your-data"
+              }
+            }
+          },
+          {
+            "name": "workbook1",
+            "type": "Microsoft.Common.Section",
+            "label": "Azure SQL Database Workbook",
+            "elements": [
+              {
+                "name": "workbook1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Sets the time window in days to search around the alert"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "analytics",
+        "label": "Analytics",
+        "subLabel": {
+          "preValidation": "Configure the analytics",
+          "postValidation": "Done"
+        },
+        "bladeTitle": "Analytics",
+        "elements": [
+          {
+            "name": "analytics-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following analytic rule templates. After installing the solution, create and enable analytic rules in Manage solution view."
+            }
+          },
+          {
+            "name": "analytics-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/tutorial-detect-threats-custom?WT.mc_id=Portal-Microsoft_Azure_CreateUIDef"
+              }
+            }
+          },
+          {
+            "name": "analytic1",
+            "type": "Microsoft.Common.Section",
+            "label": "Credential errors stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query batches of distinct SQL queries that failed with error codes that might indicate malicious attempts to gain illegitimate access to the data. When Brute Force attacks are attempted, majority of logins will use wrong credentials, thus will fail with error code 18456. Thus, if we see a large number of logins with such error codes, this could indicate Brute Force attack."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic2",
+            "type": "Microsoft.Common.Section",
+            "label": "Firewall errors stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query batches of distinct SQL queries that failed with error codes that might indicate malicious attempts to gain illegitimate access to the data. When attacker attempts to scan or gain access to server protected by firewall, he will be blocked by firewall and fail with error code 40615. Thus, if we see a large number of logins with such error codes, this could indicate attempts to gain access."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic3",
+            "type": "Microsoft.Common.Section",
+            "label": "Syntax errors stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query batches of distinct SQL queries that failed with error codes that might indicate malicious attempts to gain illegitimate access to the data. When blind type of attacks are performed (such as SQL injection of fuzzying), the attempted queries are often malformed and fail on wrong syntax (error 102) or wrong escaping (error 105). Thus, if a large number of different queries fail on such errors in a short amount of time, this might indicate attempted attack."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic4",
+            "type": "Microsoft.Common.Section",
+            "label": "Drop attempts stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects batches of distinct SQL queries that execute (or attempt to) commands that could indicate potential security issues - such as attempts to drop tables or databases (e.g. for data vandalism)."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic5",
+            "type": "Microsoft.Common.Section",
+            "label": "Execution attempts stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects batches of distinct SQL queries that execute (or attempt to) commands that could indicate potential security issues - such as attempts to execute shell commands (e.g. for running illegitimate code)."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic6",
+            "type": "Microsoft.Common.Section",
+            "label": "Firewall rule manipulation attempts stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects batches of distinct SQL queries that execute (or attempt to) commands that could indicate potential security issues - such as attempts to manipulate firewall rules (e.g. for allowing malicious access to the database)."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic7",
+            "type": "Microsoft.Common.Section",
+            "label": "OLE object manipulation attempts stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects batches of distinct SQL queries that execute (or attempt to) commands that could indicate potential security issues - such as attempts to manipulate OLE objects (e.g. for running malicious commands)."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic8",
+            "type": "Microsoft.Common.Section",
+            "label": "Outgoing connection attempts stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This query detects batches of distinct SQL queries that execute (or attempt to) commands that could indicate potential security issues - such as attempts to access external sites or resources (e.g. for downloading malicious content)."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic9",
+            "type": "Microsoft.Common.Section",
+            "label": "Affected rows stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic9-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Goal: To detect anomalous data change/deletion. This query detects SQL queries that changed/deleted a large number of rows, which is significantly higher than normal for this database. The detection is calculated inside recent time window (defined by 'detectionWindow' parameter), and the anomaly is calculated based on previous training window \n (defined by 'trainingWindow' parameter). The user can set the minimal threshold for anomaly by changing the threshold parameters volThresholdZ and volThresholdQ (higher threshold will detect only more severe anomalies)."
+                }
+              }
+            ]
+          },
+          {
+            "name": "analytic10",
+            "type": "Microsoft.Common.Section",
+            "label": "Response rows stateful anomaly on database",
+            "elements": [
+              {
+                "name": "analytic10-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Goal: To detect anomalous data exfiltration. This query detects SQL queries that accessed a large number of rows, which is significantly higher than normal for this database.\n The calculation is made inside recent time window (defined by 'detectionWindow' parameter), and the anomaly is calculated based on previous training window \n (defined by 'trainingWindow' parameter). The user can set the minimal threshold for anomaly by changing the threshold parameters volThresholdZ and volThresholdQ (higher thresholds will detect only more severe anomalies)."
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "huntingqueries",
+        "label": "Hunting Queries",
+        "bladeTitle": "Hunting Queries",
+        "elements": [
+          {
+            "name": "huntingqueries-text",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "text": "This solution installs the following hunting queries. After installing the solution, run these hunting queries to hunt for threats in Manage solution view. "
+            }
+          },
+          {
+            "name": "huntingqueries-link",
+            "type": "Microsoft.Common.TextBlock",
+            "options": {
+              "link": {
+                "label": "Learn more",
+                "uri": "https://docs.microsoft.com/azure/sentinel/hunting"
+              }
+            }
+          },
+          {
+            "name": "huntingquery1",
+            "type": "Microsoft.Common.Section",
+            "label": "Anomalous Query Execution Time",
+            "elements": [
+              {
+                "name": "huntingquery1-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query will detect SQL queries that have affected an unusual number of rows for the given user and application combination.\nIt will calculate the prevalence for each row count impacted to find instances where a large number of rows is anomalously affected.\nThis hunting query is designed to detect SQL mass-deletion and mass-read events. This hunting query depends on AzureSql data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery2",
+            "type": "Microsoft.Common.Section",
+            "label": "Boolean Blind SQL Injection",
+            "elements": [
+              {
+                "name": "huntingquery2-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query will detect instances where a balanced boolean query, e.g. \"true=true\", is observed in an SQL query sent to the server. Balanced boolean queries are commonly used by attackers to test of SQL injections vulnerabilities This hunting query depends on AzureSql data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery3",
+            "type": "Microsoft.Common.Section",
+            "label": "Anomalous Query Execution Time",
+            "elements": [
+              {
+                "name": "huntingquery3-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query will detect SQL queries that took an unusually long period of time to execute based on a calculated average execution time. The query groups based on the application and the username, making this query suitable for detecting exploitation of web applications, or other SQL backed applications with predictable behaviour. This hunting query depends on AzureSql data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery4",
+            "type": "Microsoft.Common.Section",
+            "label": "Prevalence Based SQL Query Size Anomaly",
+            "elements": [
+              {
+                "name": "huntingquery4-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Applications using SQL will generally make repeated similar requests for data as users interact with the application, this hunting query will find instances where an unusual number of tokens have been seen grouped on the client application and username. The query will calculate the prevalence for the token sizes based on historical activity from grouped application and user and show instances where an unusual number of tokens were observed. This query is designed to be run against application and username combinations that are used by SQL applications, such as content management systems (Wordpress, Joomla, TYPO3, etc.). This hunting query depends on AzureSql data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery5",
+            "type": "Microsoft.Common.Section",
+            "label": "Suspicious SQL Stored Procedures",
+            "elements": [
+              {
+                "name": "huntingquery5-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query will detect SQL queries where suspicious stored procedures are called. Suspicious procedures included in the query are based on data seen by the MSTIC Deception honeypot. This hunting query depends on AzureSql data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery6",
+            "type": "Microsoft.Common.Section",
+            "label": "Time Based SQL Query Size Anomaly",
+            "elements": [
+              {
+                "name": "huntingquery6-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "This hunting query uses series decompose anomaly to identify periods of time where a given user account and application combination is used to send an anomalous number of parameters or SQL query tokens to the server. This query is designed to be run against application and username combinations that are used by SQL applications, such as content management systems (Wordpress, Joomla, TYPO3, etc.). This hunting query depends on AzureSql data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery7",
+            "type": "Microsoft.Common.Section",
+            "label": "Affected rows stateful anomaly on database - hunting query",
+            "elements": [
+              {
+                "name": "huntingquery7-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Goal: To detect anomalous data change/deletion. This query detects SQL queries that changed/deleted a large number of rows, which is significantly higher than normal for this database. This is a hunting query, so the training and the detection occur on the whole time window (controlled by 'queryPeriod' parameter). The user can set the minimal threshold for anomaly by changing the threshold parameters volThresholdZ and volThresholdQ (higher threshold will detect only more severe anomalies). This hunting query depends on AzureSql data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          },
+          {
+            "name": "huntingquery8",
+            "type": "Microsoft.Common.Section",
+            "label": "Response rows stateful anomaly on database - hunting query",
+            "elements": [
+              {
+                "name": "huntingquery8-text",
+                "type": "Microsoft.Common.TextBlock",
+                "options": {
+                  "text": "Goal: To detect anomalous data exfiltration. This query detects SQL queries that accessed a large number of rows, which is significantly higher than normal for this database. This is a hunting query, so the training and the detection occur on the whole time window (controlled by 'queryPeriod' parameter). The user can set the minimal threshold for anomaly by changing the threshold parameters volThresholdZ and volThresholdQ (higher thresholds will detect only more severe anomalies). This hunting query depends on AzureSql data connector (AzureDiagnostics Parser or Table)"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "workspace-location": "[first(map(filter(basics('getLAWorkspace').value, (filter) => and(contains(toLower(filter.id), toLower(resourceGroup().name)),equals(filter.name,basics('workspace')))), (item) => item.location))]",
+      "location": "[location()]",
+      "workspace": "[basics('workspace')]"
+    }
+  }
+}
