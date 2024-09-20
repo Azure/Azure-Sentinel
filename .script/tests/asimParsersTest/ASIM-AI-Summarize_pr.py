@@ -35,7 +35,6 @@ def get_git_diff():
 
 # Fetch the git diff
 git_diff = get_git_diff()
-print(f"git_diff: {git_diff}")
 
 # Setup logging
 try:
