@@ -22,7 +22,6 @@ completion = client.chat.completions.create(
         "content": "You are an AI assistant that helps people by writing and reviewing Microsoft Sentinel ASIM parsers. You can answer queries related to ASIM normalization."
     }
 ],
-    past_messages=15,
     max_tokens=4096,
     temperature=0,
     top_p=1,
