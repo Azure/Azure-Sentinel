@@ -71,6 +71,10 @@ completion = client.chat.completions.create(
         {
             "role": "user",
             "content": f"Summarize the following Microsoft ASIM github PR changes: {git_diff}"
+        },
+        {
+            "role": "user",
+            "content": "Please perform a preliminary code review before the human review, flagging potential issues like syntax errors, inefficient code, or deviations from Sentinel/ASIM best practices."
         }
 ],
     max_tokens=4096,
