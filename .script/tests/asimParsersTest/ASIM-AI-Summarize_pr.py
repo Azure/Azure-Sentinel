@@ -1,12 +1,27 @@
 import os
 from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+import logging
+import sys
 
-# Initialize Azure OpenAI client with Entra ID authentication
-token_provider = get_bearer_token_provider(
-    DefaultAzureCredential(),
-    "https://cognitiveservices.azure.com/.default"
-)
+# Setup logging
+try:
+    logging.basicConfig(
+        level=logging.ERROR,
+        format='%asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+except:
+    logging.error('Failed to setup logging: ', exc_info=True)
+
+# Obtain an access token
+try:
+    token_provider = get_bearer_token_provider(
+        DefaultAzureCredential(),
+        "https://cognitiveservices.azure.com/.default"
+    )
+except:
+        logging.error('Failed to obtain access token: ', exc_info=True)
 
 client = AzureOpenAI(
     azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
@@ -20,28 +35,32 @@ completion = client.chat.completions.create(
     {
         "role": "system",
         "content": "You are an AI assistant that helps people by writing and reviewing Microsoft Sentinel ASIM parsers. You can answer queries related to ASIM normalization."
-    }
+    },
+        {
+            "role": "user",
+            "content": f"Summarize the following PR changes: {pr_diff}"
+        }
 ],
     max_tokens=4096,
     temperature=0,
     top_p=1,
     frequency_penalty=0,
     presence_penalty=0,
-    stop=None,
-    extra_body={
-        "data_sources": [
-            {
-                "type": "azure_search",
-                "parameters": {
-                    "endpoint": os.environ["AZURE_AI_SEARCH_ENDPOINT"],
-                    "index_name": os.environ["AZURE_AI_SEARCH_INDEX"],
-                    "authentication": {
-                        "type": "azure_ad"
-                    }
-                }
-            }
-        ]
-    }
+    stop=None
+    # extra_body={
+    #     "data_sources": [
+    #         {
+    #             "type": "azure_search",
+    #             "parameters": {
+    #                 "endpoint": os.environ["AZURE_AI_SEARCH_ENDPOINT"],
+    #                 "index_name": os.environ["AZURE_AI_SEARCH_INDEX"],
+    #                 "authentication": {
+    #                     "type": "azure_ad"
+    #                 }
+    #             }
+    #         }
+    #     ]
+    # }
 )
 
 print(completion.model_dump_json(indent=2))
