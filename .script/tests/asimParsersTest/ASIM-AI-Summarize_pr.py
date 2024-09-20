@@ -3,15 +3,15 @@ from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 # Initialize Azure OpenAI client with Entra ID authentication
-token_provider = get_bearer_token_provider(
-    DefaultAzureCredential(),
-    "https://cognitiveservices.azure.com/.default"
-)
+credential = DefaultAzureCredential()
 
-client = AzureOpenAI(
-    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-    azure_ad_token_provider=token_provider,
-    api_version="2024-05-01-preview",
+# Retrieve the access token
+access_token = credential.get_token("https://cognitiveservices.azure.com/.default").token
+
+# Token provider for Azure OpenAI client
+token_provider = get_bearer_token_provider(
+    credential,
+    "https://cognitiveservices.azure.com/.default"
 )
 
 # Get the PR diff from the environment
@@ -43,7 +43,8 @@ completion = client.chat.completions.create(
                     "endpoint": os.environ["AZURE_AI_SEARCH_ENDPOINT"],
                     "index_name": os.environ["AZURE_AI_SEARCH_INDEX"],
                     "authentication": {
-                        "type": "access_token"
+                        "type": "access_token",
+                        "token": access_token
                     }
                 }
             }
