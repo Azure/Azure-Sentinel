@@ -18,7 +18,7 @@ client = AzureOpenAI(
 pr_diff = os.getenv("PR_DIFF")
 
 completion = client.chat.completions.create(
-    model="GPT-4o",  # Replace with your deployment model
+    model="gpt-4",  # Replace with your deployment model
     messages= [
         {
             "role": "system",
