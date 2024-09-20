@@ -8,10 +8,16 @@ credential = DefaultAzureCredential()
 # Retrieve the access token
 access_token = credential.get_token("https://cognitiveservices.azure.com/.default").token
 
-# Token provider for Azure OpenAI client
+# Initialize Azure OpenAI client with Entra ID authentication
 token_provider = get_bearer_token_provider(
     credential,
     "https://cognitiveservices.azure.com/.default"
+)
+
+client = AzureOpenAI(
+    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    azure_ad_token_provider=token_provider,
+    api_version="2024-05-01-preview",
 )
 
 # Get the PR diff from the environment
