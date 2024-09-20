@@ -4,6 +4,9 @@ from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 import logging
 import sys
 
+# Fetch PR_DIFF environment variable
+pr_diff = os.getenv("PR_DIFF")
+
 # Setup logging
 try:
     logging.basicConfig(
