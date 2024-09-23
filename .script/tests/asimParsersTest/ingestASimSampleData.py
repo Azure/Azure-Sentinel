@@ -275,6 +275,15 @@ commit_number = get_current_commit_number()
 prnumber = sys.argv[1]
 
 for file in parser_yaml_files:
+    SchemaNameMatch = re.search(r'ASim(\w+)/', file)
+    if SchemaNameMatch:
+        SchemaName = SchemaNameMatch.group(1)
+    else:
+        SchemaName = None
+    # Check if changed file is a union parser. If Yes, skip the file
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')):
+        print(f"Ignoring this {file} because it is a union parser file")
+        continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
     asim_parser = read_github_yaml(asim_parser_url)
