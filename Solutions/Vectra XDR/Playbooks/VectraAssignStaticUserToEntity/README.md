@@ -22,7 +22,7 @@ This playbook will assign a predefined user to an entity in Vectra when the stat
    * tenantId: Tenant ID where the Key Vault is located.
    * BaseURL: Enter the base URL of your Vectra account.
    * UserId: Enter a user id which will be assign to entity.
-   * GenerateAccessTokenPlaybookName: Playbook name which is deployed as part of prerequisites.
+   * GenerateAccessCredPlaybookName: Playbook name which is deployed as part of prerequisites.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraAssignStaticUserToEntity%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraAssignStaticUserToEntity%2Fazuredeploy.json)
 

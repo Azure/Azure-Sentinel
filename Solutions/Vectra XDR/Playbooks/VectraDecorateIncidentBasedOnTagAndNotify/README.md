@@ -25,7 +25,7 @@ This playbook will add pre-defined or user customizable comment to an incident g
    * TeamsUserId: Enter Microsoft Teams User email Id. 
    * IncidentComment: Enter comment you want to add in incident create based on tag. NOTE: Entity id, type and tag will be added by default for incident comment.
    * EntityNote: Enter a note you want to add in Vectra Entity. NOTE: Incident link will be added by default to note.
-   * GenerateAccessTokenPlaybookName: Playbook name which is deployed as part of prerequisites.
+   * GenerateAccessCredPlaybookName: Playbook name which is deployed as part of prerequisites.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraDecorateIncidentBasedOnTagAndNotify%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraDecorateIncidentBasedOnTagAndNotify%2Fazuredeploy.json)
 
