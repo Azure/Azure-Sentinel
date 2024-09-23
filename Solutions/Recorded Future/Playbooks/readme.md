@@ -40,7 +40,7 @@ The Recorded Future solution uses the following connectors:
 
 - **/azuresentinel** - <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors</a>
 
-- **/microsoftgraphsecurity** - <a href="https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/" target="_blank">Documentation on Microsoft power platform connectors</a>. The playbooks using this API is being DEPRECATED and will transition to new playbooks using **/azuresentinel** API.
+- **/microsoftgraphsecurity** - <a href="https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/" target="_blank">Documentation on Microsoft power platform connectors</a>. The playbooks using this API is being _DEPRECATED_ and will transition to new playbooks using **/azuresentinel** API.
 
 ## Ingestion and Operational costs
 Playbook(Logic apps) may result in additional ingestion or operational costs:
@@ -208,7 +208,7 @@ Another way to handle the issue is addressing it at the source, depending on fro
 
 ### Report issues/errors
 
-When reporting issues or errors to Recorded Future on logic apps. Please include logic app version identifier that can be found in the version section in the azure portal.
+When reporting issues or errors to Recorded Future on logic apps. Please include logic app version identifier that can be found in the `<Logic App> -> Development Tools -> Versions` section in the Azure portal.
 
 ![alt text](Images/LogicAppVersion.png)
 

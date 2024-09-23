@@ -83,7 +83,7 @@ In the designer, locate all steps that show a warning and authenticate these ste
 
 ## Change Risk List 
 To can change Risk List to pull in to your environment. This can be done in the default playbook or you can install several instances of one playbook. 
-Example: You would like to use both ```Actively Communicating Validated C&C Server``` and ```Recent Phishing Host``` ip Risk Lists. 
+Example: You would like to use both ```Actively Communicating Validated C&C Server``` and ```Recent Phishing Host``` IP Risk Lists. 
 Select the **RecordedFuture-IP-IndicatorImport** template from ```Automation -> Playbook``` twice and save with different names like ```Recorded Future - Actively Communicating Validated C&C Server - IndicatorImport``` and ```Recorded Future - Phishing Host - IndicatorImport```. 
 
 Change the Risk List to download and modify the description in the ```RecordedFuture-Threatlntelligencelmport``` step in the logic app. 
