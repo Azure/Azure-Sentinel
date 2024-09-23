@@ -34,51 +34,185 @@
     "_solutionVersion": "3.0.0",
     "solutionId": "azuresentinel.azure-sentinel-solution-account-lockout",
     "_solutionId": "[variables('solutionId')]",
+    "analyticRuleObject1": {
+      "analyticRuleVersion1": "1.0.1",
+      "_analyticRulecontentId1": "",
+      "analyticRuleId1": "[resourceId('Microsoft.SecurityInsights/AlertRuleTemplates', '')]",
+      "analyticRuleTemplateSpecName1": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat(parameters('workspace'),'-ar-',uniquestring('')))]",
+      "_analyticRulecontentProductId1": "[concat(take(variables('_solutionId'),50),'-','ar','-', uniqueString(concat(variables('_solutionId'),'-','AnalyticsRule','-','','-', '1.0.1')))]"
+    },
     "_solutioncontentProductId": "[concat(take(variables('_solutionId'),50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]"
   },
-  "resources": {
-    "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
-    "apiVersion": "2023-04-01-preview",
-    "location": "[parameters('workspace-location')]",
-    "properties": {
-      "version": "3.0.0",
-      "kind": "Solution",
-      "contentSchemaVersion": "3.0.0",
-      "displayName": "Account_Lockout",
-      "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
-      "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Account_Lockout/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>This Kusto Query Language (KQL) script is designed to analyze account lockout events (EventID 4740) over the last 5 working days, focusing on specific working hours (8 PM to 8 AM) in the US/Pacific time zone. The objective is to identify and highlight potential security anomalies where the frequency of lockouts exceeds the normal rate.</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
-      "contentKind": "Solution",
-      "contentProductId": "[variables('_solutioncontentProductId')]",
-      "id": "[variables('_solutioncontentProductId')]",
-      "icon": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Logos/Azure_Sentinel.svg",
-      "contentId": "[variables('_solutionId')]",
-      "parentId": "[variables('_solutionId')]",
-      "source": {
-        "kind": "Solution",
-        "name": "Account_Lockout",
-        "sourceId": "[variables('_solutionId')]"
-      },
-      "author": {
-        "name": "InspiraEnterprise"
-      },
-      "support": {
-        "name": "Microsoft Corporation",
-        "email": "support@microsoft.com",
-        "tier": "Microsoft",
-        "link": "https://support.microsoft.com"
-      },
-      "firstPublishDate": "2024-09-20",
-      "lastPublishDate": "2024-09-20",
-      "providers": [
-        "Microsoft"
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[variables('analyticRuleObject1').analyticRuleTemplateSpecName1]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
       ],
-      "categories": {
-        "domains": [
-          "Security - Cloud Security"
-        ]
+      "properties": {
+        "description": "Account-Lockout_AnalyticalRules Analytics Rule with template version 3.0.0",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.SecurityInsights/AlertRuleTemplates",
+              "name": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "apiVersion": "2023-02-01-preview",
+              "kind": "Scheduled",
+              "location": "[parameters('workspace-location')]",
+              "properties": {
+                "description": "This Kusto Query Language (KQL) script is designed to analyze account lockout events (EventID 4740) over the last 5 working days, focusing on specific working hours (8 PM to 8 AM) in the US/Pacific time zone. The objective is to identify and highlight potential security anomalies where the frequency of lockouts exceeds the normal rate.",
+                "displayName": "Account Lockout Alert",
+                "enabled": false,
+                "query": "let startHour = 20; // Start of the working hours (8 PM)\nlet endHour = 8;  // End of the working hours (8 AM)\nlet workingDays = 5;\nlet endTime = now();\nlet startTime = endTime - 30d; // A sufficiently large range to capture the last 5 working days plus today\n// Get all days in the range and filter out weekends\nlet allDays = range x from startofday(startTime) to endofday(endTime) step 1d\n    | extend DayOfWeek = dayofweek(x)\n    | where DayOfWeek != 6d and DayOfWeek != 0d; // Exclude weekends\n// Get the last 5 working days including today\nlet last5WorkingDays = allDays\n    | sort by x desc\n    | take workingDays;\n// Determine the exact start time for the last 5 working days including today\nlet workingDaysStart = toscalar(last5WorkingDays | summarize min(x));\nlet workingDaysEnd = endTime;\n// Retrieve and process lockout events\nlet lockouts = \n    SecurityEvent\n    | extend pacific_dt = datetime_utc_to_local(TimeGenerated, 'US/Pacific') // converting the time zone to US/Pacific Time Zone\n    | extend DayOfWeek = dayofweek(pacific_dt)\n    | where DayOfWeek != 6d and DayOfWeek != 0d // Exclude weekends\n    | where EventID == 4740 // Account lockout event\n    | where pacific_dt between (workingDaysStart .. workingDaysEnd)\n    | extend Time = format_datetime(pacific_dt, \"HH\")\n    // Handle the time range that crosses midnight\n    | extend hourOfDay = datetime_part(\"hour\", pacific_dt)\n    | where (hourOfDay >= startHour or hourOfDay < endHour)\n    | summarize lockoutCount = count(),TargetUserName = make_set(TargetUserName) by bin(pacific_dt, 1d), hourOfDay, Time;\n// Calculate the average lockouts per hour over the last 5 working days\nlet rollingAverageLockoutsPerHour = \n    lockouts\n    | summarize avgLockouts = avg(lockoutCount) by hourOfDay,Time;\n// Get lockouts by hour for each of the last 5 working days including today\nlet workingDayLockoutsPerHour = \n    lockouts\n    | summarize dailyLockoutCount = sum(lockoutCount),TargetUserName = make_set(TargetUserName) by bin(pacific_dt, 1d), hourOfDay, Time\n    | project pacific_dt, hourOfDay, dailyLockoutCount, TargetUserName;\n// Join with the rolling average lockouts per hour\nworkingDayLockoutsPerHour\n| join kind=inner (rollingAverageLockoutsPerHour) on hourOfDay\n| extend Time = strcat(format_datetime(pacific_dt, \"yyyy-MM-dd\"), \" \", tostring(Time), \":00\")\n| project Time, dailyLockoutCount, avgLockouts, TargetUserName\n| order by Time asc\n| where dailyLockoutCount > avgLockouts * 1.5\n| render timechart with(title=\"Account Lock Events\")\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "P5D",
+                "severity": "Medium",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "status": "Available",
+                "requiredDataConnectors": [
+                  {
+                    "connectorId": "Windows Security Events via AMA",
+                    "dataTypes": [
+                      "SecurityEvent"
+                    ]
+                  }
+                ],
+                "tactics": [
+                  "T1110",
+                  "T1098",
+                  "T1078"
+                ],
+                "techniques": [
+                  "BruteForce",
+                  "AccountManipulation",
+                  "ValidAccounts"
+                ],
+                "entityMappings": [
+                  {
+                    "fieldMappings": [
+                      {
+                        "columnName": "TargetUserName",
+                        "identifier": "Name"
+                      }
+                    ],
+                    "entityType": "Account"
+                  }
+                ],
+                "eventGroupingSettings": {
+                  "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                  "alertDescriptionFormat": "Lockout events for user {{TargetUserName}} exceeded the expected threshold in the time range {{Time}}.",
+                  "alertSeverityColumnName": "dailyLockoutCount",
+                  "alertDisplayNameFormat": "Account Lockout Alert: Lockout exceeded threshold"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "apiVersion": "2022-01-01-preview",
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('AnalyticsRule-', last(split(variables('analyticRuleObject1').analyticRuleId1,'/'))))]",
+              "properties": {
+                "description": "Account_Lockout Analytics Rule 1",
+                "parentId": "[variables('analyticRuleObject1').analyticRuleId1]",
+                "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+                "kind": "AnalyticsRule",
+                "version": "[variables('analyticRuleObject1').analyticRuleVersion1]",
+                "source": {
+                  "kind": "Solution",
+                  "name": "Account_Lockout",
+                  "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                  "name": "InspiraEnterprise"
+                },
+                "support": {
+                  "name": "Microsoft Corporation",
+                  "email": "support@microsoft.com",
+                  "tier": "Microsoft",
+                  "link": "https://support.microsoft.com"
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+        "contentKind": "AnalyticsRule",
+        "displayName": "Account Lockout Alert",
+        "contentProductId": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "id": "[variables('analyticRuleObject1')._analyticRulecontentProductId1]",
+        "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
       }
     },
-    "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
-  },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "apiVersion": "2023-04-01-preview",
+      "location": "[parameters('workspace-location')]",
+      "properties": {
+        "version": "3.0.0",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "displayName": "Account_Lockout",
+        "publisherDisplayName": "Microsoft Sentinel, Microsoft Corporation",
+        "descriptionHtml": "<p><strong>Note:</strong> Please refer to the following before installing the solution:</p>\n<p>• Review the solution <a href=\"https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/Account_Lockout/ReleaseNotes.md\">Release Notes</a></p>\n<p>• There may be <a href=\"https://aka.ms/sentinelsolutionsknownissues\">known issues</a> pertaining to this Solution, please refer to them before installing.</p>\n<p>This Kusto Query Language (KQL) script is designed to analyze account lockout events (EventID 4740) over the last 5 working days, focusing on specific working hours (8 PM to 8 AM) in the US/Pacific time zone. The objective is to identify and highlight potential security anomalies where the frequency of lockouts exceeds the normal rate.</p>\n<p><strong>Analytic Rules:</strong> 1</p>\n<p><a href=\"https://aka.ms/azuresentinel\">Learn more about Microsoft Sentinel</a> | <a href=\"https://aka.ms/azuresentinelsolutionsdoc\">Learn more about Solutions</a></p>\n",
+        "contentKind": "Solution",
+        "contentProductId": "[variables('_solutioncontentProductId')]",
+        "id": "[variables('_solutioncontentProductId')]",
+        "icon": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/refs/heads/master/Logos/Azure_Sentinel.svg",
+        "contentId": "[variables('_solutionId')]",
+        "parentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "Account_Lockout",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "InspiraEnterprise"
+        },
+        "support": {
+          "name": "Microsoft Corporation",
+          "email": "support@microsoft.com",
+          "tier": "Microsoft",
+          "link": "https://support.microsoft.com"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "AnalyticsRule",
+              "contentId": "[variables('analyticRuleObject1')._analyticRulecontentId1]",
+              "version": "[variables('analyticRuleObject1').analyticRuleVersion1]"
+            }
+          ]
+        },
+        "firstPublishDate": "2024-09-20",
+        "lastPublishDate": "2024-09-20",
+        "providers": [
+          "Microsoft"
+        ],
+        "categories": {
+          "domains": [
+            "Security - Cloud Security"
+          ]
+        }
+      },
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]"
+    }
+  ],
   "outputs": {}
 }
