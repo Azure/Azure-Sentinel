@@ -200,10 +200,19 @@ ThreatIntelligenceIndicator
 | take 10
 ```
 
-## URL entities in RecordedFuture-IOC_Enrichment
-If `http` or `https` is missing from URL entities a 404 will be returned from Recorded Future api endpoint. Its possible to modify the logic app and add missing `https://` ... **ADD MORE HERE**
+## "Errors" in RecordedFuture-IOC_Enrichment
+If Recorded Future is missing data for a specific entity, when viewed within the Logic App "Previous Run" section, a error might be seen.
 
-Another way to handle the issue is addressing it at the source, depending on from where the incident is generated from, modify it to keep `http`or `https` when creating a incident. Changes in Analytic Rules might also fix the problem based on which column the URL is fetched from.
+<details>
+<summary> Example of "phantom error" </summary>
+
+![alt text](Images/ioc_enrichment_error_not.png)
+</details>
+</br>
+
+If the last box (Add Comment to incident (V3)) is green, then a comment has been created on the incident explaining what has happened.
+
+If `http://` or `https://` is missing from URL entities, we will add `https://` to our URL Enrichment.
 
 
 ### Report issues/errors
