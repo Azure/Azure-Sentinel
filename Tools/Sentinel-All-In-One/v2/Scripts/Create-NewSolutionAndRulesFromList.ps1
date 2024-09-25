@@ -11,7 +11,7 @@ $context = Get-AzContext
 
 
 if (!$context) {
-    Connect-AzAccount -Environment AzureUSGovernment
+    Connect-AzAccount 
     $context = Get-AzContext
 }
 
