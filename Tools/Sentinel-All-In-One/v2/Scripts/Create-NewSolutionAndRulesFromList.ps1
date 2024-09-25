@@ -27,7 +27,7 @@ Write-Output "TenantID: $TenantId"
 Write-Output "SubscriptionId: $SubscriptionId"
 Write-Output Get-AzContext -ListAvailable | ConvertTo-Json -Depth 10
 
-Set-AzContext -SubscriptionId $SubscriptionId -TenantId $TenantId
+Set-AzContext -TenantId $TenantId
 # Set-AzContext -SubscriptionId 9790d913-b5da-460d-b167-ac985d5f3b83 -TenantId ae0818a0-ede8-4da6-9786-2d9d5fd5295f
 
 $context = Get-AzContext
@@ -47,7 +47,7 @@ $baseUri = $serverUrl + "/subscriptions/${SubscriptionId}/resourceGroups/${Resou
 $alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
 
 Write-Output " Base Uri: $baseUri"
-Write-Output "authHeader: $authHeader"
+
 # Get a list of all the solutions
 $url = $baseUri + "/providers/Microsoft.SecurityInsights/contentProductPackages?api-version=2024-03-01"
 
