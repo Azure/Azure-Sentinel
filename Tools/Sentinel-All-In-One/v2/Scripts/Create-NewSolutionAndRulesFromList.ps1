@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Region,
     [Parameter(Mandatory = $true)][string[]]$Solutions,
     [Parameter(Mandatory = $false)][string[]]$SeveritiesToInclude = @("Informational", "Low", "Medium", "High"),
-    [Parameter(Mandatory = $false)][string]$IsGov = $false
+    [Parameter(Mandatory = $false)][string]$IsGov = $false,
+    [Parameter(Mandatory = $false)][string]$SubscriptionId
 )
 
 $VerbosePreference = "Continue"
@@ -18,9 +19,7 @@ if (!$context) {
     $context = Get-AzContext
 }
 
-Write-Output "Connected to Azure with context: " $context
 
-Write-Output "Connected to Azure with subscription: " $context.Subscription
 $context = Get-AzContext
 $instanceProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
 $profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($instanceProfile)
@@ -29,7 +28,7 @@ $authHeader = @{
     'Content-Type'  = 'application/json' 
     'Authorization' = 'Bearer ' + $token.AccessToken 
 }
-$SubscriptionId = $context.Subscription.Id
+# $SubscriptionId = $context.Subscription.Id
 $serverUrl = "https://management.azure.com"
 $baseUri = $serverUrl + "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${Workspace}"
 $alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
