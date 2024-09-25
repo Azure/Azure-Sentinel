@@ -18,7 +18,7 @@ if (!$context) {
     Connect-AzAccount 
     $context = Get-AzContext
 }
-Write-Output "TenantID: $context.TenantId"
+Write-Output "TenantID: $context.Tenant.Id"
 Write-Output "SubscriptionId: $SubscriptionId"
 # Set-AzContext -SubscriptionId $SubscriptionId
 Set-AzContext -SubscriptionId 9790d913-b5da-460d-b167-ac985d5f3b83
