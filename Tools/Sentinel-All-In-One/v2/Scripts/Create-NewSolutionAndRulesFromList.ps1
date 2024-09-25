@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Workspace,
     [Parameter(Mandatory = $true)][string]$Region,
     [Parameter(Mandatory = $true)][string[]]$Solutions,
-    [Parameter(Mandatory = $true)][string]$SubscriptionId
+    [Parameter(Mandatory = $true)][string]$SubscriptionId,
     [Parameter(Mandatory = $false)][string[]]$SeveritiesToInclude = @("Informational", "Low", "Medium", "High"),
     [Parameter(Mandatory = $false)][string]$IsGov = $false,
 )
