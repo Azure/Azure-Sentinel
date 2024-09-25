@@ -11,7 +11,7 @@ param(
 
 $VerbosePreference = "Continue"
 
-$Write-Output "Solutions $Solutions"
+Write-Output "Solutions $Solutions"
 
 # $result = Clear-AzContext -Force -PasSThru
 # Write-Output "Clear AzContext: $result"
