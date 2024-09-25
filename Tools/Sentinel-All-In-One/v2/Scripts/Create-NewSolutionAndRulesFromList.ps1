@@ -18,6 +18,8 @@ if (!$context) {
     $context = Get-AzContext
 }
 
+Write-Output "Connected to Azure with context: " $context
+
 Write-Output "Connected to Azure with subscription: " $context.Subscription
 $context = Get-AzContext
 $instanceProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
