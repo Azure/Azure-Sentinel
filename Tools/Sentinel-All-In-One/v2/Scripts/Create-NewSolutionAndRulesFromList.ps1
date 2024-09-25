@@ -3,9 +3,9 @@ param(
     [Parameter(Mandatory = $true)][string]$Workspace,
     [Parameter(Mandatory = $true)][string]$Region,
     [Parameter(Mandatory = $true)][string[]]$Solutions,
+    [Parameter(Mandatory = $true)][string]$SubscriptionId
     [Parameter(Mandatory = $false)][string[]]$SeveritiesToInclude = @("Informational", "Low", "Medium", "High"),
     [Parameter(Mandatory = $false)][string]$IsGov = $false,
-    [Parameter(Mandatory = $false)][string]$SubscriptionId
 )
 
 $VerbosePreference = "Continue"
@@ -19,6 +19,7 @@ if (!$context) {
     $context = Get-AzContext
 }
 
+Write-Output "SubscriptionId: " $SubscriptionId
 
 $context = Get-AzContext
 $instanceProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
