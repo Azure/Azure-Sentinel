@@ -22,7 +22,7 @@ Write-Output "TenantID: $context.Tenant.Id"
 Write-Output "SubscriptionId: $SubscriptionId"
 
 # Set-AzContext -SubscriptionId $SubscriptionId
-Set-AzContext -SubscriptionId 9790d913-b5da-460d-b167-ac985d5f3b83
+Set-AzContext -SubscriptionId 9790d913-b5da-460d-b167-ac985d5f3b83 -TenantId ae0818a0-ede8-4da6-9786-2d9d5fd5295f
 
 $context = Get-AzContext
 
