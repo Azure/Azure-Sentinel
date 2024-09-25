@@ -1,6 +1,7 @@
 """This file includes functions to collect domain details from Team Cymru Scout API for domain provided by user and send it to Sentinel."""
 
 import inspect
+import requests
 
 from SharedCode.logger import applogger
 from SharedCode.teamcymruscout_exception import TeamCymruScoutException
@@ -31,24 +32,14 @@ class DomainDataCollector:
                 self.logs_starts_with, __method_name
             )
         )
-        self.input_domain_values = self.utility_obj.get_data_from_input(
-            indicator_type="domain"
-        )
+        self.input_domain_values = self.utility_obj.get_data_from_input(indicator_type="domain")
         if len(self.input_domain_values) > 0:
-            self.get_domain_details_from_team_cymru_scout_send_to_sentinel(
-                self.input_domain_values
-            )
-        self.watchlist_domain_values = self.utility_obj.get_data_from_watchlists(
-            indicator_type="domain"
-        )
+            self.get_domain_details_from_team_cymru_scout_send_to_sentinel(self.input_domain_values)
+        self.watchlist_domain_values = self.utility_obj.get_data_from_watchlists(indicator_type="domain")
         if len(self.watchlist_domain_values) > 0:
-            self.get_domain_details_from_team_cymru_scout_send_to_sentinel(
-                self.watchlist_domain_values, watchlist_flag=True
-            )
+            self.get_domain_details_from_team_cymru_scout_send_to_sentinel(self.watchlist_domain_values, watchlist_flag=True)
 
-    def get_domain_details_from_team_cymru_scout_send_to_sentinel(
-        self, domains_list, watchlist_flag=False
-    ):
+    def get_domain_details_from_team_cymru_scout_send_to_sentinel(self, domains_list, watchlist_flag=False):
         """
         To retrieve domain details using Team Cymru Scout API for a list of domains and sends the domain details to Sentinel.
 
@@ -62,57 +53,35 @@ class DomainDataCollector:
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            domain_details = []
-            domain_indicator_list = []
             for domain in domains_list:
                 parsed_domain = domain.replace("[", "").replace("]", "")
                 if not self.utility_obj.validate_ip_domain(
                     indicator=parsed_domain,
-                    regex_pattern=consts.DOMAIN_REGEX,
                     indicator_type="domain",
                 ):
                     continue
-                domain_data = self.rest_helper_obj.make_rest_call(
-                    endpoint=consts.SEARCH_ENDPOINT, params={"query": parsed_domain}
-                )
+                domain_data = self.rest_helper_obj.make_rest_call(endpoint=consts.SEARCH_ENDPOINT, params={"query": parsed_domain})
                 parse_data = self.parse_domain_data(domain_data)
                 applogger.debug(
                     "{}(method={}) ip associated with domain {} are {}".format(
                         self.logs_starts_with, __method_name, domain, len(parse_data)
                     )
                 )
-                domain_details += [domain_ip for domain_ip in parse_data]
-                domain_indicator_list.append(domain)
-                if len(domain_details) >= consts.POST_CHUNK_SIZE:
-                    applogger.debug(
-                        "{}(method={}) Total data to post: {}".format(
-                            self.logs_starts_with, __method_name, len(domain_details)
-                        )
-                    )
-                    self.rest_helper_obj.send_data_to_sentinel(
-                        domain_details, consts.DOMAIN_TABLE_NAME, indicator_value=domain_indicator_list
-                    )
-                    if watchlist_flag:
-                        self.checkpoint_obj.save_checkpoint(
-                            domain, indicator_type="domain"
-                        )
-                    domain_details = []
-                    domain_indicator_list = []
-            if len(domain_details) > 0:
-                applogger.debug(
-                    "{}(method={}) Total data to post: {}".format(
-                        self.logs_starts_with, __method_name, len(domain_details)
-                    )
-                )
-                self.rest_helper_obj.send_data_to_sentinel(
-                    domain_details, consts.DOMAIN_TABLE_NAME, indicator_value=domain_indicator_list
-                )
+                applogger.debug("{}(method={}) Total data to post: {}".format(self.logs_starts_with, __method_name, len(parse_data)))
+                self.rest_helper_obj.send_data_to_sentinel(parse_data, consts.DOMAIN_TABLE_NAME, indicator_value=domain)
                 if watchlist_flag:
                     self.checkpoint_obj.save_checkpoint(domain, indicator_type="domain")
-        except Exception as err:
+        except requests.exceptions.Timeout as error:
             applogger.error(
-                "{}(method={}) {}".format(self.logs_starts_with, __method_name, err)
+                self.error_logs.format(
+                    self.logs_starts_with,
+                    __method_name,
+                    consts.TIME_OUT_ERROR_MSG.format(error),
+                )
             )
+            raise requests.exceptions.Timeout()
+        except Exception as err:
+            applogger.error("{}(method={}) {}".format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()
 
     def parse_domain_data(self, domain_data):
@@ -136,14 +105,10 @@ class DomainDataCollector:
             end_date = domain_data.get("end_date")
             if domain_ips:
                 for ip in domain_ips:
-                    ip.update(
-                        {"query": query, "start_date": start_date, "end_date": end_date}
-                    )
+                    ip.update({"query": query, "start_date": start_date, "end_date": end_date})
                     ip_tags = ip.get("tags", [])
                     if ip_tags:
-                        tags_ids, tags_names = (
-                            self.utility_obj.extract_ids_and_names_of_tags(ip_tags)
-                        )
+                        tags_ids, tags_names = self.utility_obj.extract_ids_and_names_of_tags(ip_tags)
                         ip.update({"tags_id": tags_ids, "tags_name": tags_names})
             else:
                 domain_ips = {
@@ -153,7 +118,5 @@ class DomainDataCollector:
                 }
             return domain_ips
         except Exception as err:
-            applogger.error(
-                "{}(method={}) {}".format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error("{}(method={}) {}".format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()

@@ -1,4 +1,5 @@
 """This __init__ file will be called once triggered is generated."""
+
 import time
 
 import azure.functions as func
@@ -19,4 +20,4 @@ def main(mytimer: func.TimerRequest) -> None:
     domain_data_collector = DomainDataCollector()
     domain_data_collector.get_domain_data_into_sentinel()
     end_time = time.time()
-    applogger.info("{} DomainDataCollector: Time taken to ingest domain data is {}".format(consts.LOGS_STARTS_WITH, end_time-start_time))
+    applogger.info("{} DomainDataCollector: Time taken to ingest domain data is {}".format(consts.LOGS_STARTS_WITH, end_time - start_time))

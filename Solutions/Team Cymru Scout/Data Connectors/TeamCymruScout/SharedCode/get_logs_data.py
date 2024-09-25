@@ -36,9 +36,7 @@ def get_logs_data(query):
     )
     client = LogsQueryClient(credential)
     try:
-        response = client.query_workspace(
-            workspace_id=consts.WORKSPACE_ID, query=query, timespan=None
-        )
+        response = client.query_workspace(workspace_id=consts.WORKSPACE_ID, query=query, timespan=None)
         if response.status == LogsQueryStatus.SUCCESS:
             data = response.tables
         else:
@@ -48,11 +46,7 @@ def get_logs_data(query):
         for table in data:
             rows = table.rows
             data_to_send.extend(parse_table_data(rows=rows))
-        applogger.debug(
-            "{} get_logs_data: Data count: {}".format(
-                consts.LOGS_STARTS_WITH, len(data_to_send)
-            )
-        )
+        applogger.debug("{} get_logs_data: Data count: {}".format(consts.LOGS_STARTS_WITH, len(data_to_send)))
         return data_to_send, True
     except Exception as error:
         table_not_exist = "Failed to resolve table expression"

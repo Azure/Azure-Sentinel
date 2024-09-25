@@ -1,5 +1,7 @@
 """This file includes functions to collect account usage details from Team Cymru Scout API and send it to Sentinel."""
+
 import inspect
+import requests
 from ..SharedCode import consts
 from ..SharedCode.logger import applogger
 from ..SharedCode.utils import TeamCymruScoutUtility
@@ -26,19 +28,18 @@ class AccountUsageDataCollector:
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            applogger.debug(
-                "{}(method={}) fetch account usages data from Cymru Scout.".format(
-                    self.logs_starts_with, __method_name
+            applogger.debug("{}(method={}) fetch account usages data from Cymru Scout.".format(self.logs_starts_with, __method_name))
+            account_data = self.rest_helper_obj.make_rest_call(endpoint=consts.ACCOUNT_USAGE_ENDPOINT, params={})
+            self.rest_helper_obj.send_data_to_sentinel(account_data, consts.ACCOUNT_USAGE_TABLE_NAME)
+        except requests.exceptions.Timeout as error:
+            applogger.error(
+                self.error_logs.format(
+                    self.logs_starts_with,
+                    __method_name,
+                    consts.TIME_OUT_ERROR_MSG.format(error),
                 )
             )
-            account_data = self.rest_helper_obj.make_rest_call(
-                endpoint=consts.ACCOUNT_USAGE_ENDPOINT, params={}
-            )
-            self.rest_helper_obj.send_data_to_sentinel(
-                account_data, consts.ACCOUNT_USAGE_TABLE_NAME
-            )
+            raise requests.exceptions.Timeout()
         except Exception as err:
-            applogger.error(
-                "{}(method={}) {}".format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error("{}(method={}) {}".format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()

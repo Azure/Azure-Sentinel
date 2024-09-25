@@ -1,6 +1,7 @@
 """This file includes functions to collect IP details from Team Cymru Scout API for IP address provided by user and send it to Sentinel."""
 
 import inspect
+import requests
 
 from SharedCode.logger import applogger
 from SharedCode.teamcymruscout_exception import TeamCymruScoutException
@@ -47,9 +48,7 @@ class IPDataCollector:
                     self.logs_starts_with, __method_name
                 )
             )
-            self.input_ip_values = self.utility_obj.get_data_from_input(
-                indicator_type="ip"
-            )
+            self.input_ip_values = self.utility_obj.get_data_from_input(indicator_type="ip")
             if len(self.input_ip_values) > 0:
                 input_ip_values_list = list(self.input_ip_values)
                 self.get_ip_data_from_api_type(input_ip_values_list)
@@ -58,17 +57,11 @@ class IPDataCollector:
                     self.logs_starts_with, __method_name
                 )
             )
-            self.watchlist_ip_values = self.utility_obj.get_data_from_watchlists(
-                indicator_type="ip"
-            )
+            self.watchlist_ip_values = self.utility_obj.get_data_from_watchlists(indicator_type="ip")
             if len(self.watchlist_ip_values) > 0:
-                self.get_ip_data_from_api_type(
-                    self.watchlist_ip_values, watchlist_flag=True
-                )
+                self.get_ip_data_from_api_type(self.watchlist_ip_values, watchlist_flag=True)
         except Exception as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error(self.error_logs.format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()
 
     def get_ip_data_from_api_type(self, ip_list, watchlist_flag=False):
@@ -98,19 +91,9 @@ class IPDataCollector:
         valid_ip_values = []
         for ip in ip_list:
             parsed_ip = ip.replace("[", "").replace("]", "")
-            if not (
-                self.utility_obj.validate_ip_domain(
-                    indicator=parsed_ip,
-                    regex_pattern=consts.IPv4_REGEX,
-                    indicator_type="ip",
-                    ip_type="IPv4",
-                )
-                or self.utility_obj.validate_ip_domain(
-                    indicator=parsed_ip,
-                    regex_pattern=consts.IPv6_REGEX,
-                    indicator_type="ip",
-                    ip_type="IPv6",
-                )
+            if not self.utility_obj.validate_ip_domain(
+                indicator=parsed_ip,
+                indicator_type="ip",
             ):
                 continue
             valid_ip_values.append(parsed_ip)
@@ -124,9 +107,7 @@ class IPDataCollector:
             ip_details (dict): The IP data to add tags to.
         """
         if ip_details.get("tags", []):
-            tags_ids, tags_names = self.utility_obj.extract_ids_and_names_of_tags(
-                ip_details.get("tags", [])
-            )
+            tags_ids, tags_names = self.utility_obj.extract_ids_and_names_of_tags(ip_details.get("tags", []))
             ip_details["tags_id"] = tags_ids
             ip_details["tags_name"] = tags_names
 
@@ -142,11 +123,7 @@ class IPDataCollector:
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            applogger.debug(
-                "{}(method={}) Getting data from Foundation API.".format(
-                    self.logs_starts_with, __method_name
-                )
-            )
+            applogger.debug("{}(method={}) Getting data from Foundation API.".format(self.logs_starts_with, __method_name))
             ip_chunks = self.divide_chunks(ip_list)
             for list_indicator in ip_chunks:
                 valid_ip_values = self.validate_ip_values(list_indicator)
@@ -159,7 +136,7 @@ class IPDataCollector:
                     if len(foundation_data) == 0:
                         applogger.info(
                             "{}(method={}) No Foundation data found for {} IPs.".format(
-                                self.logs_starts_with, __method_name, list_indicator
+                                self.logs_starts_with, __method_name, valid_ip_values
                             )
                         )
                         continue
@@ -168,16 +145,21 @@ class IPDataCollector:
                     self.rest_helper_obj.send_data_to_sentinel(
                         foundation_data,
                         "{}_{}".format(consts.IP_TABLE_NAME, "Foundation"),
-                        indicator_value=list_indicator
+                        indicator_value=valid_ip_values,
                     )
                 if watchlist_flag:
-                    self.checkpoint_obj.save_checkpoint(
-                        data=list_indicator[-1], indicator_type="ip"
-                    )
-        except Exception as err:
+                    self.checkpoint_obj.save_checkpoint(data=list_indicator[-1], indicator_type="ip")
+        except requests.exceptions.Timeout as error:
             applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
+                self.error_logs.format(
+                    self.logs_starts_with,
+                    __method_name,
+                    consts.TIME_OUT_ERROR_MSG.format(error),
+                )
             )
+            raise requests.exceptions.Timeout()
+        except Exception as err:
+            applogger.error(self.error_logs.format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()
 
     def get_ip_data_from_details_api(self, ip_list, watchlist_flag=False):
@@ -193,41 +175,28 @@ class IPDataCollector:
         """
         __method_name = inspect.currentframe().f_code.co_name
         try:
-            applogger.debug(
-                "{}(method={}) Getting data from Details API.".format(
-                    self.logs_starts_with, __method_name
-                )
-            )
+            applogger.debug("{}(method={}) Getting data from Details API.".format(self.logs_starts_with, __method_name))
             valid_ip_count = 0
             for ip in ip_list:
                 parsed_ip = ip.replace("[", "").replace("]", "")
-                if self.utility_obj.validate_ip_domain(
-                    indicator=parsed_ip,
-                    regex_pattern=consts.IPv4_REGEX,
-                    indicator_type="ip",
-                    ip_type="IPv4",
-                ) or self.utility_obj.validate_ip_domain(
-                    indicator=parsed_ip,
-                    regex_pattern=consts.IPv6_REGEX,
-                    indicator_type="ip",
-                    ip_type="IPv6",
-                ):
+                if self.utility_obj.validate_ip_domain(indicator=parsed_ip, indicator_type="ip"):
                     valid_ip_count += 1
-                    ip_data = self.rest_helper_obj.make_rest_call(
-                        endpoint=consts.IP_DETAILS_ENDPOINT.format(parsed_ip)
-                    )
+                    ip_data = self.rest_helper_obj.make_rest_call(endpoint=consts.IP_DETAILS_ENDPOINT.format(parsed_ip))
                     self.parse_ip_data_and_ingest_into_sentinel(ip_data=ip_data, indicator_value=ip)
                 if watchlist_flag:
                     self.checkpoint_obj.save_checkpoint(data=ip, indicator_type="ip")
-            applogger.debug(
-                "{}(method={}) Total data ingested for {} IPs.".format(
-                    self.logs_starts_with, __method_name, valid_ip_count
+            applogger.debug("{}(method={}) Total data ingested for {} IPs.".format(self.logs_starts_with, __method_name, valid_ip_count))
+        except requests.exceptions.Timeout as error:
+            applogger.error(
+                self.error_logs.format(
+                    self.logs_starts_with,
+                    __method_name,
+                    consts.TIME_OUT_ERROR_MSG.format(error),
                 )
             )
+            raise requests.exceptions.Timeout()
         except Exception as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error(self.error_logs.format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()
 
     def process_ip_data(self, ip_data, parent_key, child_key, table_name, indicator_value):
@@ -263,14 +232,14 @@ class IPDataCollector:
                             item["start_date"] = ip_data.get("start_date")
                             item["end_date"] = ip_data.get("end_date")
                     self.rest_helper_obj.send_data_to_sentinel(
-                        child_data, "{}_{}".format(consts.IP_TABLE_NAME, table_name), indicator_value=indicator_value
+                        child_data,
+                        "{}_{}".format(consts.IP_TABLE_NAME, table_name),
+                        indicator_value=indicator_value,
                     )
                     parent_data.pop(child_key)
             return parent_data
         except Exception as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error(self.error_logs.format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()
 
     def parse_ip_data_and_ingest_into_sentinel(self, ip_data, indicator_value):
@@ -291,14 +260,26 @@ class IPDataCollector:
                 )
             )
             communications = self.process_ip_data(
-                ip_data, "communications", "peers", "Communications", indicator_value=indicator_value
+                ip_data,
+                "communications",
+                "peers",
+                "Communications",
+                indicator_value=indicator_value,
             )
             pdns = self.process_ip_data(ip_data, "pdns", "pdns", "PDNS", indicator_value=indicator_value)
             fingerprints = self.process_ip_data(
-                ip_data, "fingerprints", "fingerprints", "Fingerprints", indicator_value=indicator_value
+                ip_data,
+                "fingerprints",
+                "fingerprints",
+                "Fingerprints",
+                indicator_value=indicator_value,
             )
             openports = self.process_ip_data(
-                ip_data, "open_ports", "open_ports", "OpenPorts", indicator_value=indicator_value
+                ip_data,
+                "open_ports",
+                "open_ports",
+                "OpenPorts",
+                indicator_value=indicator_value,
             )
             x509 = self.process_ip_data(ip_data, "x509", "x509", "x509", indicator_value=indicator_value)
 
@@ -314,29 +295,41 @@ class IPDataCollector:
             ip_data["open_ports"] = openports
             ip_data["x509"] = x509
             self.rest_helper_obj.send_data_to_sentinel(
-                ip_data, "{}_{}".format(consts.IP_TABLE_NAME, "Details"), indicator_value=indicator_value
+                ip_data,
+                "{}_{}".format(consts.IP_TABLE_NAME, "Details"),
+                indicator_value=indicator_value,
             )
             if summary_details:
                 summary_pdns = self.process_ip_data(
-                    summary_details, "pdns", "top_pdns", "Summary_PDNS", indicator_value=indicator_value
+                    summary_details,
+                    "pdns",
+                    "top_pdns",
+                    "Summary_PDNS",
+                    indicator_value=indicator_value,
                 )
                 summary_openports = self.process_ip_data(
-                    summary_details, "open_ports", "top_open_ports", "Summary_OpenPorts", indicator_value=indicator_value
+                    summary_details,
+                    "open_ports",
+                    "top_open_ports",
+                    "Summary_OpenPorts",
+                    indicator_value=indicator_value,
                 )
                 summary_certs = self.process_ip_data(
-                    summary_details, "certs", "top_certs", "Summary_Certs", indicator_value=indicator_value
+                    summary_details,
+                    "certs",
+                    "top_certs",
+                    "Summary_Certs",
+                    indicator_value=indicator_value,
                 )
                 summary_fingerprints = self.process_ip_data(
                     summary_details,
                     "fingerprints",
                     "top_fingerprints",
                     "Summary_Fingerprints",
-                    indicator_value=indicator_value
+                    indicator_value=indicator_value,
                 )
                 if summary_tags:
-                    summary_tags_ids, summary_tags_names = (
-                        self.utility_obj.extract_ids_and_names_of_tags(summary_tags)
-                    )
+                    summary_tags_ids, summary_tags_names = self.utility_obj.extract_ids_and_names_of_tags(summary_tags)
                     summary_details["tags_id"] = summary_tags_ids
                     summary_details["tags_name"] = summary_tags_names
                 summary_details["pdns"] = summary_pdns
@@ -345,10 +338,9 @@ class IPDataCollector:
                 summary_details["fingerprints"] = summary_fingerprints
                 self.rest_helper_obj.send_data_to_sentinel(
                     summary_details,
-                    "{}_{}".format(consts.IP_TABLE_NAME, "Summary_Details"), indicator_value=indicator_value
+                    "{}_{}".format(consts.IP_TABLE_NAME, "Summary_Details"),
+                    indicator_value=indicator_value,
                 )
         except Exception as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error(self.error_logs.format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()

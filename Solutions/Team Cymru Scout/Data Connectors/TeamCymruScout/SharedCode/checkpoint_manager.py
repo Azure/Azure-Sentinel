@@ -17,9 +17,7 @@ class CheckpointManager:
         Args:
             file_path (str): path of the file.
         """
-        self.state = StateManager(
-            connection_string=consts.CONN_STRING, file_path=file_path
-        )
+        self.state = StateManager(connection_string=consts.CONN_STRING, file_path=file_path)
 
     def get_checkpoint(self, indicator_type):
         """
@@ -41,17 +39,11 @@ class CheckpointManager:
                 return last_data_index
             else:
                 applogger.debug(
-                    "{} (method={}): Checkpoint is not available for {}.".format(
-                        consts.LOGS_STARTS_WITH, __method_name, indicator_type
-                    )
+                    "{} (method={}): Checkpoint is not available for {}.".format(consts.LOGS_STARTS_WITH, __method_name, indicator_type)
                 )
                 return None
         except Exception as err:
-            applogger.error(
-                "{}: (method={}): {}".format(
-                    consts.LOGS_STARTS_WITH, __method_name, err
-                )
-            )
+            applogger.error("{}: (method={}): {}".format(consts.LOGS_STARTS_WITH, __method_name, err))
             raise TeamCymruScoutException()
 
     def save_checkpoint(self, data, indicator_type):
@@ -69,12 +61,8 @@ class CheckpointManager:
         try:
             self.state.post(data)
             applogger.info(
-                "{} (method={}) Checkpoint data={} saved for {}".format(
-                    consts.LOGS_STARTS_WITH, __method_name, data, indicator_type
-                )
+                "{} (method={}) Checkpoint data={} saved for {}".format(consts.LOGS_STARTS_WITH, __method_name, data, indicator_type)
             )
         except Exception as err:
-            applogger.error(
-                "{} (method={}) {}".format(consts.LOGS_STARTS_WITH, __method_name, err)
-            )
+            applogger.error("{} (method={}) {}".format(consts.LOGS_STARTS_WITH, __method_name, err))
             raise TeamCymruScoutException()

@@ -1,4 +1,5 @@
 """Handle the logger."""
+
 import logging
 import sys
 from .consts import DEFAULT_LOG_LEVEL, LOG_LEVEL

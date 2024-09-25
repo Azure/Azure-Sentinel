@@ -30,8 +30,6 @@ CONN_STRING = os.environ.get("AzureWebJobsStorage")
 
 # regex
 DOMAIN_REGEX = r"^(?:[a-zA-Z0-9-]+(?:\[\.\]|\.))+[a-zA-Z]{2,}(?:\s*,\s*(?:[a-zA-Z0-9-]+(?:\[\.\]|\.))+[a-zA-Z]{2,})*$"
-IPv4_REGEX = r"^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$"
-IPv6_REGEX = r"^(([0-9A-Fa-f]{1,4}:){7,7}[0-9A-Fa-f]{1,4}|([0-9A-Fa-f]{1,4}:){1,7}:|([0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|([0-9A-Fa-f]{1,4}:){1,5}(:[0-9A-Fa-f]{1,4}){1,2}|([0-9A-Fa-f]{1,4}:){1,4}(:[0-9A-Fa-f]{1,4}){1,3}|([0-9A-Fa-f]{1,4}:){1,3}(:[0-9A-Fa-f]{1,4}){1,4}|([0-9A-Fa-f]{1,4}:){1,2}(:[0-9A-Fa-f]{1,4}){1,5}|[0-9A-Fa-f]{1,4}:((:[0-9A-Fa-f]{1,4}){1,6})|::(?:ffff(:0{1,4}){0,1}:){0,1}((?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(?:25[0-5]|(?:2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$"
 
 # Other Constants
 IP_WATCHLIST_ALIAS = "TeamCymruScoutIPData"
@@ -50,3 +48,16 @@ LOGS_STARTS_WITH = "TeamCymruScout:"
 DEFAULT_LOG_LEVEL = "INFO"
 POST_CHUNK_SIZE = 100
 FOUNDATION_CHUNK_SIZE = 10
+INGESTION_ERROR_SLEEP_TIME = 30
+SENTINEL_RETRY_COUNT = 5
+MAX_TIMEOUT_SENTINEL = 180
+RETRY_STATUS_CODES = [429, 500, 503]
+
+
+# Error Messages for Exception
+JSON_DECODE_ERROR_MSG = "JSONDecode error : Error-{}"
+TIME_OUT_ERROR_MSG = "Timeout error : Error-{}"
+CONNECTION_ERROR_MSG = "Connection error : Error-{}"
+REQUEST_ERROR_MSG = "Request error : Error-{}"
+UNEXPECTED_ERROR_MSG = "Unexpected error : Error-{}"
+HTTP_ERROR_MSG = "HTTP error : Error-{}"

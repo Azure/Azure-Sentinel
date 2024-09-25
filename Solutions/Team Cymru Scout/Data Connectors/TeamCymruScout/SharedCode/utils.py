@@ -3,6 +3,7 @@
 from . import consts
 import inspect
 import re
+import ipaddress
 from .logger import applogger
 from .teamcymruscout_exception import TeamCymruScoutException
 from .get_logs_data import get_logs_data
@@ -51,13 +52,9 @@ class TeamCymruScoutUtility:
         if consts.AUTHENTICATION_TYPE == "API Key":
             required_params.update({"APIKey": consts.API_KEY})
         else:
-            required_params.update(
-                {"TeamCymruScoutUsername": consts.USERNAME, "TeamCymruScoutPassword": consts.PASSWORD}
-            )
+            required_params.update({"Username": consts.USERNAME, "Password": consts.PASSWORD})
         applogger.debug(
-            "{}(method={}) : Checking if all the environment variables exist or not.".format(
-                self.logs_starts_with, __method_name
-            )
+            "{}(method={}) : Checking if all the environment variables exist or not.".format(self.logs_starts_with, __method_name)
         )
         missing_required_field = False
         for label, params in required_params.items():
@@ -72,16 +69,35 @@ class TeamCymruScoutUtility:
                     )
                 )
         if missing_required_field:
-            raise TeamCymruScoutException(
-                "Error Occurred while validating params. Required fields missing."
-            )
+            raise TeamCymruScoutException("Error Occurred while validating params. Required fields missing.")
         applogger.info(
-            "{}(method={}) : All necessary variables are present in the Configuration.".format(
-                self.logs_starts_with, __method_name
-            )
+            "{}(method={}) : All necessary variables are present in the Configuration.".format(self.logs_starts_with, __method_name)
         )
 
-    def validate_ip_domain(self, indicator, regex_pattern, indicator_type, ip_type=None):
+    def validate_ip(self, indicator):
+        """
+        To validate if the given indicator is a valid IP.
+
+        Args:
+            indicator (str): The IP indicator to be validated.
+
+        Returns:
+            bool: True if the indicator is a valid IPv4 or IPv6, False otherwise.
+        """
+        __method_name = inspect.currentframe().f_code.co_name
+        try:
+            ip_obj = ipaddress.ip_address(indicator)
+            if ip_obj.version == 4:
+                applogger.debug("{}(method={}) : {} is a valid IPv4.".format(self.logs_starts_with, __method_name, indicator))
+                return True
+            elif ip_obj.version == 6:
+                applogger.debug("{}(method={}) : {} is a valid IPv6.".format(self.logs_starts_with, __method_name, indicator))
+                return True
+        except ValueError:
+            applogger.debug("{}(method={}) : {} is not a valid IP address.".format(self.logs_starts_with, __method_name, indicator))
+            return False
+
+    def validate_ip_domain(self, indicator, indicator_type):
         """
         To validate if the given indicator is a valid IP or domain.
 
@@ -93,21 +109,13 @@ class TeamCymruScoutUtility:
             bool: True if the indicator is a valid IP or domain, False otherwise.
         """
         __method_name = inspect.currentframe().f_code.co_name
-        if re.search(regex_pattern, indicator):
+        if indicator_type == "ip":
+            return self.validate_ip(indicator)
+        elif re.search(consts.DOMAIN_REGEX, indicator):
+            applogger.debug("{}(method={}) : {} is a valid domain.".format(self.logs_starts_with, __method_name, indicator))
             return True
         else:
-            if indicator_type == "ip":
-                applogger.debug(
-                    "{}(method={}) : {} is not a valid {} for {}".format(
-                        self.logs_starts_with, __method_name, indicator, indicator_type, ip_type
-                    )
-                )
-            else:
-                applogger.debug(
-                    "{}(method={}) : {} is not a valid {}".format(
-                        self.logs_starts_with, __method_name, indicator, indicator_type
-                    )
-                )
+            applogger.debug("{}(method={}) : {} is not a valid domain.".format(self.logs_starts_with, __method_name, indicator))
             return False
 
     def get_data_from_input(self, indicator_type):
@@ -127,14 +135,10 @@ class TeamCymruScoutUtility:
         try:
             if not self.constants.get(indicator_type):
                 applogger.info(
-                    "{} (method={}) : No {} values found in the input.".format(
-                        self.logs_starts_with, __method_name, indicator_type
-                    )
+                    "{} (method={}) : No {} values found in the input.".format(self.logs_starts_with, __method_name, indicator_type)
                 )
                 return []
-            input_values = set(
-                [data.strip() for data in self.constants.get(indicator_type).split(",")]
-            )
+            input_values = set([data.strip() for data in self.constants.get(indicator_type).split(",")])
             applogger.debug(
                 "{} (method={}) : {} data to fetch for input data: {}".format(
                     self.logs_starts_with, __method_name, indicator_type, input_values
@@ -142,9 +146,7 @@ class TeamCymruScoutUtility:
             )
             return input_values
         except Exception as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error(self.error_logs.format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()
 
     def get_data_from_watchlists(self, indicator_type):
@@ -166,31 +168,15 @@ class TeamCymruScoutUtility:
             logs_data, flag = get_logs_data(self.query_constants.get(indicator_type))
             if not flag:
                 applogger.info(
-                    "{} (method={}) : No {} values found in the watchlist.".format(
-                        self.logs_starts_with, __method_name, indicator_type
-                    )
+                    "{} (method={}) : No {} values found in the watchlist.".format(self.logs_starts_with, __method_name, indicator_type)
                 )
                 return []
             watchlist_data = [data[indicator_type].strip() for data in logs_data]
             last_checkpoint_data = self.checkpoint_obj.get_checkpoint(indicator_type)
-            applogger.debug(
-                "{}(method={}) Last Checkpoint Data: {}".format(
-                    self.logs_starts_with, __method_name, last_checkpoint_data
-                )
-            )
+            applogger.debug("{}(method={}) Last Checkpoint Data: {}".format(self.logs_starts_with, __method_name, last_checkpoint_data))
             watchlist_values = sorted(set(watchlist_data))
-            if (
-                last_checkpoint_data is not None
-                and last_checkpoint_data != watchlist_data[-1]
-            ):
-                watchlist_values = sorted(
-                    set(
-                        watchlist_data[
-                            watchlist_data.index(last_checkpoint_data)
-                            + 1: len(watchlist_data)
-                        ]
-                    )
-                )
+            if last_checkpoint_data is not None and last_checkpoint_data != watchlist_data[-1]:
+                watchlist_values = sorted(set(watchlist_data[watchlist_data.index(last_checkpoint_data) + 1: len(watchlist_data)]))
             applogger.debug(
                 "{} (method={}) : {} data to fetch for watchlist data: {}".format(
                     self.logs_starts_with,
@@ -202,16 +188,13 @@ class TeamCymruScoutUtility:
             return watchlist_values
         except ValueError:
             applogger.info(
-                "{}(method={}) Checkpoint data does not exist in watchlists data. Hence considering watchlist data from initial value in ascending order.".format(
-                    self.logs_starts_with, __method_name
-                )
+                "{}(method={}) Checkpoint data does not exist in watchlists data."
+                " Hence considering watchlist data from initial value in ascending order.".format(self.logs_starts_with, __method_name)
             )
             self.checkpoint_obj.save_checkpoint(data="", indicator_type="domain")
             return watchlist_values
         except Exception as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error(self.error_logs.format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()
 
     def extract_ids_and_names_of_tags(self, tags):
@@ -233,14 +216,10 @@ class TeamCymruScoutUtility:
                 names.append(item.get("name", ""))
                 tags_children = item.get("children", {})
                 if tags_children:
-                    child_ids, child_names = self.extract_ids_and_names_of_tags(
-                        tags_children
-                    )
+                    child_ids, child_names = self.extract_ids_and_names_of_tags(tags_children)
                     ids.extend(child_ids)
                     names.extend(child_names)
             return ids, names
         except Exception as err:
-            applogger.error(
-                self.error_logs.format(self.logs_starts_with, __method_name, err)
-            )
+            applogger.error(self.error_logs.format(self.logs_starts_with, __method_name, err))
             raise TeamCymruScoutException()
