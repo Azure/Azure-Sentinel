@@ -20,7 +20,8 @@ if (!$context) {
 }
 Write-Output "TenantID: $context.TenantId"
 Write-Output "SubscriptionId: $SubscriptionId"
-Set-AzContext -SubscriptionId $SubscriptionId
+# Set-AzContext -SubscriptionId $SubscriptionId
+Set-AzContext -SubscriptionId 9790d913-b5da-460d-b167-ac985d5f3b83
 
 $context = Get-AzContext
 $instanceProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
