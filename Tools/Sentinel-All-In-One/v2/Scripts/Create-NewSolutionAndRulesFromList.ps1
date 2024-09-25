@@ -11,6 +11,8 @@ param(
 
 $VerbosePreference = "Continue"
 
+$Write-Output "Solutions $Solutions"
+
 # $result = Clear-AzContext -Force -PasSThru
 # Write-Output "Clear AzContext: $result"
 # Connect-AzAccount -Tenant $TenantId -Subscription $SubscriptionId -UseDeviceAuthentication
