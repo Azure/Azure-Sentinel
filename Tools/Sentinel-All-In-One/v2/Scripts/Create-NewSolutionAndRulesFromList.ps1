@@ -19,7 +19,7 @@ if (!$context) {
     $context = Get-AzContext
 }
 
-Write-Output "SubscriptionId: " $SubscriptionId
+Write-Output "SubscriptionId: $SubscriptionId"
 Set-AzContext -SubscriptionId $SubscriptionId
 
 $context = Get-AzContext
