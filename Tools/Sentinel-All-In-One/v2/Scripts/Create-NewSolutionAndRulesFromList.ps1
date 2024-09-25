@@ -15,7 +15,6 @@ if (!$context) {
     $context = Get-AzContext
 }
 
-
 Write-Output "Connected to Azure with subscription: " $context.Subscription
 $context = Get-AzContext
 $instanceProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
@@ -26,12 +25,7 @@ $authHeader = @{
     'Authorization' = 'Bearer ' + $token.AccessToken 
 }
 $SubscriptionId = $context.Subscription.Id
-
 $serverUrl = "https://management.azure.com"
-#if ($isGov -eq $true) {
-#    $serverUrl = "https://management.usgovcloudapi.net"
-#}
-
 $baseUri = $serverUrl + "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${Workspace}"
 $alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
 
