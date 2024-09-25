@@ -14,7 +14,7 @@ $VerbosePreference = "Continue"
 $result = Clear-AzContext -Force -PasSThru
 Write-Output "Clear AzContext: $result"
 
-Connect-AzAccount -Tenant $TenandId -Subscription $SubscriptionId
+Connect-AzAccount -Tenant $TenantId -Subscription $SubscriptionId
 
 $context = Get-AzContext
 Write-Output "Connected to Azure with context: " $context
