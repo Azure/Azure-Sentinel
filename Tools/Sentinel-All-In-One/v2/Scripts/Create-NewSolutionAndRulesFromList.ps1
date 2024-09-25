@@ -48,6 +48,8 @@ $alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
 
 Write-Output " Base Uri: $baseUri"
 
+Write-Output $authHeader | ConvertTo-Json -Depth 10
+
 # Get a list of all the solutions
 $url = $baseUri + "/providers/Microsoft.SecurityInsights/contentProductPackages?api-version=2024-03-01"
 
