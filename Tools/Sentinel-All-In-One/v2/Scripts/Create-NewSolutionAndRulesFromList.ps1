@@ -10,7 +10,6 @@ param(
 )
 
 $VerbosePreference = "Continue"
-Write-Verbose "This is a verbose message"
 
 $context = Get-AzContext
 Write-Output "Connected to Azure with context: " $context
@@ -19,8 +18,10 @@ if (!$context) {
     Connect-AzAccount 
     $context = Get-AzContext
 }
-Write-Output "TenantID: $context.Tenant.Id"
+
+Write-Output "TenantID: " $TenantId
 Write-Output "SubscriptionId: $SubscriptionId"
+Write-Output "All subscriptions: " Get-AzContext -ListAvailable
 
 Set-AzContext -SubscriptionId $SubscriptionId -TenantId $TenantId
 # Set-AzContext -SubscriptionId 9790d913-b5da-460d-b167-ac985d5f3b83 -TenantId ae0818a0-ede8-4da6-9786-2d9d5fd5295f
