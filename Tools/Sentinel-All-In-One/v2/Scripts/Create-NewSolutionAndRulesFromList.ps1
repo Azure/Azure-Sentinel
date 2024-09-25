@@ -20,10 +20,14 @@ if (!$context) {
 }
 Write-Output "TenantID: $context.Tenant.Id"
 Write-Output "SubscriptionId: $SubscriptionId"
+
 # Set-AzContext -SubscriptionId $SubscriptionId
 Set-AzContext -SubscriptionId 9790d913-b5da-460d-b167-ac985d5f3b83
 
 $context = Get-AzContext
+
+Write-Output $context | ConvertTo-Json -Depth 10
+
 $instanceProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
 $profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($instanceProfile)
 $token = $profileClient.AcquireAccessToken($context.Subscription.TenantId)
