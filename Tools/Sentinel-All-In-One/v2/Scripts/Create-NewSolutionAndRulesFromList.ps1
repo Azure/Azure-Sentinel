@@ -11,7 +11,7 @@ $VerbosePreference = "Continue"
 Write-Verbose "This is a verbose message"
 
 $context = Get-AzContext
-
+Write-Output "Connected to Azure with context: " $context
 
 if (!$context) {
     Connect-AzAccount 
