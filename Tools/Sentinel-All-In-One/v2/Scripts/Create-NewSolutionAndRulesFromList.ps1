@@ -11,7 +11,9 @@ param(
 
 $VerbosePreference = "Continue"
 
-Clear-AzContext
+$result = Clear-AzContext -Force -PasSThru
+Write-Output "Clear AzContext: $result"
+
 Connect-AzAccount -Tenant $TenandId -Subscription $SubscriptionId
 
 $context = Get-AzContext
