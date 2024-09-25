@@ -7,6 +7,9 @@ param(
     [Parameter(Mandatory = $false)][string]$IsGov = $false
 )
 
+$VerbosePreference = "Continue"
+Write-Verbose "This is a verbose message"
+
 $context = Get-AzContext
 
 
