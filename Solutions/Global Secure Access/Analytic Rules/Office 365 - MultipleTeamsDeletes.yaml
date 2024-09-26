@@ -1,0 +1,39 @@
+id: db60e4b6-a845-4f28-a18c-94ebbaad6c6c
+name: Multiple Teams deleted by a single user
+description: |
+  'This detection flags the occurrences of deleting multiple teams within an hour.
+  This data is a part of Office 365 Connector in Microsoft Sentinel.'
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+  - T1489
+query: |
+    let max_delete_count = 3;
+    EnrichedMicrosoft365AuditLogs
+    | where Workload =~ "MicrosoftTeams"
+    | where Operation =~ "TeamDeleted"
+    | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), DeletedTeams = make_set(tostring(AdditionalProperties.TeamName), 1000) by UserId
+    | where array_length(DeletedTeams) > max_delete_count
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.4
+kind: Scheduled
