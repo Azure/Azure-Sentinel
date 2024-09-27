@@ -11,7 +11,9 @@ param(
 
 $VerbosePreference = "Continue"
 
-Write-Output "Solutions $Solutions"
+Write-Output "Pausing for 5 minutes"
+Start-Sleep -Seconds 300
+Write-Output "Pause finished"
 
 # $result = Clear-AzContext -Force -PasSThru
 # Write-Output "Clear AzContext: $result"
