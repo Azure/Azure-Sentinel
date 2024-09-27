@@ -40,7 +40,7 @@ The Recorded Future solution uses the following connectors:
 
 - **/azuresentinel** - <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors</a>
 
-- **/microsoftgraphsecurity** - <a href="https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/" target="_blank">Documentation on Microsoft power platform connectors</a>. The playbooks using this API is being DEPRECATED and will transition to new playbooks using **/azuresentinel** API.
+- **/microsoftgraphsecurity** - <a href="https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/" target="_blank">Documentation on Microsoft power platform connectors</a>. The playbooks using this API is being _DEPRECATED_ and will transition to new playbooks using **/azuresentinel** API.
 
 ## Ingestion and Operational costs
 Playbook(Logic apps) may result in additional ingestion or operational costs:
@@ -200,15 +200,24 @@ ThreatIntelligenceIndicator
 | take 10
 ```
 
-## URL entities in RecordedFuture-IOC_Enrichment
-If `http` or `https` is missing from URL entities a 404 will be returned from Recorded Future api endpoint. Its possible to modify the logic app and add missing `https://` ... **ADD MORE HERE**
+## "Errors" in RecordedFuture-IOC_Enrichment
+If Recorded Future is missing data for a specific entity, when viewed within the Logic App "Previous Run" section, a error might be seen.
 
-Another way to handle the issue is addressing it at the source, depending on from where the incident is generated from, modify it to keep `http`or `https` when creating a incident. Changes in Analytic Rules might also fix the problem based on which column the URL is fetched from.
+<details>
+<summary> Example of "phantom error" </summary>
+
+![alt text](Images/ioc_enrichment_error_not.png)
+</details>
+</br>
+
+If the last box (Add Comment to incident (V3)) is green, then a comment has been created on the incident explaining what has happened.
+
+If `http://` or `https://` is missing from URL entities, we will add `https://` to our URL Enrichment.
 
 
 ### Report issues/errors
 
-When reporting issues or errors to Recorded Future on logic apps. Please include logic app version identifier that can be found in the version section in the azure portal.
+When reporting issues or errors to Recorded Future on logic apps. Please include logic app version identifier that can be found in the `<Logic App> -> Development Tools -> Versions` section in the Azure portal.
 
 ![alt text](Images/LogicAppVersion.png)
 

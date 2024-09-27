@@ -5,6 +5,7 @@ More information about Recorded Future Intelligence Solution for Microsoft Senti
 ## **Malware Sandbox Analysis**
 
 Uploads and detonate samples in Recorded Future's Malware Analysis Sandbox. The sandbox provides safe and immediate behavioral analysis, helping contextualize key artifacts in an investigation, leading to faster triage.
+
 ![](../Images/2023-06-26-10-04-42.png)
 
 ## RecordedFuture-Sandbox_Enrichment-Url
