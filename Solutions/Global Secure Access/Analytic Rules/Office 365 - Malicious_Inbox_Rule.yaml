@@ -1,0 +1,56 @@
+id: a9c76c8d-f60d-49ec-9b1f-bdfee6db3807
+name: Malicious Inbox Rule
+description: |
+  'Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.
+   This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.
+  Reference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+    let Keywords = dynamic(["helpdesk", "alert", "suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
+    EnrichedMicrosoft365AuditLogs
+    | where Workload =~ "Exchange"
+    | where Operation =~ "New-InboxRule" and (ResultStatus =~ "True" or ResultStatus =~ "Succeeded")
+    | where tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "Deleted Items" or tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "Junk Email" or tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "DeleteMessage"
+    | extend Events = parse_json(tostring(AdditionalProperties)).Parameters
+    | extend SubjectContainsWords = tostring(Events.SubjectContainsWords), BodyContainsWords = tostring(Events.BodyContainsWords), SubjectOrBodyContainsWords = tostring(Events.SubjectOrBodyContainsWords)
+    | where SubjectContainsWords has_any (Keywords) or BodyContainsWords has_any (Keywords) or SubjectOrBodyContainsWords has_any (Keywords)
+    | extend ClientIPAddress = case(ClientIp has ".", tostring(split(ClientIp, ":")[0]), ClientIp has "[", tostring(trim_start(@'[[]',tostring(split(ClientIp, "]")[0]))), ClientIp)
+    | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords), BodyContainsWords, SubjectOrBodyContainsWords)))
+    | extend RuleDetail = case(ObjectId contains '/', tostring(split(ObjectId, '/')[-1]), tostring(split(ObjectId, '\\')[-1]))
+    | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Operation, UserId, ClientIPAddress, ResultStatus, Keyword, ObjectId, RuleDetail
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: OriginatingServer
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIPAddress
+version: 2.0.4
+kind: Scheduled
