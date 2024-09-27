@@ -15,12 +15,7 @@ Write-Output "Pausing for 5 minutes"
 Start-Sleep -Seconds 300
 Write-Output "Pause finished"
 
-# $result = Clear-AzContext -Force -PasSThru
-# Write-Output "Clear AzContext: $result"
-# Connect-AzAccount -Tenant $TenantId -Subscription $SubscriptionId -UseDeviceAuthentication
-
 $context = Get-AzContext
-Write-Output "Connected to Azure with context: " $context
 
 if (!$context) {
     Connect-AzAccount 
@@ -29,14 +24,8 @@ if (!$context) {
 
 Write-Output "TenantID: $TenantId"
 Write-Output "SubscriptionId: $SubscriptionId"
-Write-Output Get-AzContext -ListAvailable | ConvertTo-Json -Depth 10
-
-# Set-AzContext -TenantId $TenantId
-# Set-AzContext -SubscriptionId 9790d913-b5da-460d-b167-ac985d5f3b83 -TenantId ae0818a0-ede8-4da6-9786-2d9d5fd5295f
 
 $context = Get-AzContext
-
-Write-Output $context | ConvertTo-Json -Depth 10
 
 $instanceProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
 $profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($instanceProfile)
@@ -45,7 +34,7 @@ $authHeader = @{
     'Content-Type'  = 'application/json' 
     'Authorization' = 'Bearer ' + $token.AccessToken 
 }
-# $SubscriptionId = $context.Subscription.Id
+
 $serverUrl = "https://management.azure.com"
 $baseUri = $serverUrl + "/subscriptions/${SubscriptionId}/resourceGroups/${ResourceGroup}/providers/Microsoft.OperationalInsights/workspaces/${Workspace}"
 $alertUri = "$baseUri/providers/Microsoft.SecurityInsights/alertRules/"
