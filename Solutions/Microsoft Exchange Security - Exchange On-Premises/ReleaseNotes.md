@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.1.5       | 27-09-2024                     |  Fixed Spelling error in title of data connector  |
+| 3.1.5       | 27-09-2024                     | Fixed Spelling error in title of **Data Connector**  |
 |             | 26-04-2024                     | Repackaged for fix on parser in maintemplate to have old parsername and parentid  |
 | 3.1.4       | 18-04-2024                     | Repackaged for parser issue while redeployment      |
 | 3.1.3       | 10-04-2024                     | Updated DataConnector last Log indicator and IsConnected queries by including Application and System Log Event Types      |
