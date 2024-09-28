@@ -123,3 +123,7 @@ c. Click on "Add Access Policy"
 	iv. Add
 d. Click "Save"
 ```
+
+## Issues with Identity
+
+If Azure Function is not able to get a token for it's own client id, which may result in error: `invalid_resource` - use [Option 2 from this external blog](https://blog.identitydigest.com/azuread-access-aws/).
