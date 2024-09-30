@@ -28,7 +28,7 @@ Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. 
 
-Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules" target="_blank">Microsoft Sentinel Domain Default Risk List </a> (requires login), Domain IOC with risk greater than 65 and adds the IOCs to the ThreatIntelligenceIndicator table.
+Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules" target="_blank">Microsoft Sentinel Domain Default Risk List </a> (requires Recorded Future login), Domain IOC with risk greater than 65 and adds the IOCs to the ThreatIntelligenceIndicator table.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-Domain-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-Domain-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -39,7 +39,7 @@ Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. 
 
-Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000846167-Hash-Risk-Rules" target="_blank">Microsoft Sentinel Hash Observed in Underground Testing Risk List </a> (requires login), Hashes based on the observedMalwareTesting Risk Rule and adds the IOCs to the ThreatIntelligenceIndicator table.
+Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000846167-Hash-Risk-Rules" target="_blank">Microsoft Sentinel Hash Observed in Underground Testing Risk List </a> (requires Recorded Future login), Hashes based on the observedMalwareTesting Risk Rule and adds the IOCs to the ThreatIntelligenceIndicator table.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-Hash-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-Hash-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -49,7 +49,7 @@ Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. 
 
-Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules" target="_blank">Actively Communicating Validated C&C Server Risk List </a> (requires login), Observing C2 communications with infected machines or adversary control by Recorded Future Network Traffic Analysis.
+Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules" target="_blank">Actively Communicating Validated C&C Server Risk List </a> (requires Recorded Future login), Observing C2 communications with infected machines or adversary control by Recorded Future Network Traffic Analysis.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-IP-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-IP-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -59,7 +59,7 @@ Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
 Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. 
 
-Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules" traget="_blank">Microsoft Sentinel URL Recently Reported by Insikt Group Risk List </a> (requires login), URLs based on the Recently Reported by Insikt Group rule and adds the IOCs to the ThreatIntelligenceIndicator table.
+Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules" traget="_blank">Microsoft Sentinel URL Recently Reported by Insikt Group Risk List </a> (requires Recorded Future login), URLs based on the Recently Reported by Insikt Group rule and adds the IOCs to the ThreatIntelligenceIndicator table.
 
 <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-URL-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FRecorded%2520Future%2FPlaybooks%2FIndicatorImport%2FRecordedFuture-URL-IndicatorImport%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
@@ -90,7 +90,7 @@ Change the Risk List to download and modify the description in the ```RecordedFu
 ![](../Images/2023-09-08-12-01-37.png)
 
 ## Configure Cadence of Risk List Ingestion 
-Its possible to adjust the cadence of Risk List download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (Require Recorded Future Login).
+Its possible to adjust the cadence of Risk List download to reduce traffic and cost. Recorded Future have the following recommendations [Risk-List-Download-Recommendations](https://support.recordedfuture.com/hc/en-us/articles/115010401968-Risk-List-Download-Recommendations) (requires Recorded Future login).
 
 The first step of IndicatorImport Playbooks is a recurrence step, adjust the cadence by modifying the interval and frequency parameters.\
 <img src="../Images/2023-12-12-10-00-53.png" width="1000">
