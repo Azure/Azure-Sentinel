@@ -5,7 +5,7 @@ import logging
 import asyncio
 import itertools
 from typing import Dict, List
-from utils import (
+from .utils import (
     OptionalEndTimeRange,
     FilterParam,
     MAP_RESOURCE_TO_LOGTYPE,

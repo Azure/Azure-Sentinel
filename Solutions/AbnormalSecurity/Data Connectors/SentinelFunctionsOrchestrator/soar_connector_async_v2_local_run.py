@@ -3,8 +3,8 @@ import os
 import asyncio
 import time
 from datetime import datetime, timedelta
-from soar_connector_async_v2 import get_cases, get_threats
-from utils import get_context, TIME_FORMAT
+from .soar_connector_async_v2 import get_cases, get_threats
+from .utils import get_context, TIME_FORMAT
 
 def find_duplicates(arr):
     from collections import Counter
