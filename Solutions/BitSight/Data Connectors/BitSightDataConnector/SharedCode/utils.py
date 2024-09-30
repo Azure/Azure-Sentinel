@@ -152,6 +152,8 @@ class CheckpointManager:
             logs_data, logs_flag = get_logs_data(checkpoint_query.format(table))
             if logs_flag:
                 return self.set_checkpoint_file_content(state, logs_data, company_flag=company_name_flag)
+            else:
+                return None
         except Exception as err:
             applogger.exception("{} GET LAST DATA Error: {}".format(LOGS_STARTS_WITH, err))
             raise BitSightException()
