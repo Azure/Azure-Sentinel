@@ -11,7 +11,6 @@ import asyncio
 import os
 import re
 
-
 import azure.durable_functions as df
 
 from .soar_connector_async import AbnormalSoarConnectorAsync
@@ -55,7 +54,9 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
     current_datetime = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
     if should_use_v2_logic():
-        logging.info("Using v2 fetching logic which accounts for Eventual consistentcy")
+        logging.info(
+            f"Using v2 fetching logic with inputs (threats, cases): ({stored_threats_datetime},{stored_cases_datetime})"
+        )
         asyncio.run(
             fetch_and_store_abnormal_data_v2(
                 context,
@@ -64,17 +65,18 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
                 current_datetime,
             )
         )
-        logging.info("V2 orchestration finished")
+        logging.info("Finished v2 fetching")
         return
     else:
-        logging.info("Going with legacy logic")
+        logging.info(
+            f"Running legacy logic with inputs (threats, cases): ({stored_threats_datetime},{stored_cases_datetime})"
+        )
 
     asyncio.run(transfer_abnormal_data_to_sentinel(stored_threats_datetime, stored_cases_datetime, current_datetime, context))
     logging.info("Orchestrator execution finished") 
     
 def should_reset_date_params():
     return RESET_ORCHESTRATION == "true"
-
 
 async def transfer_abnormal_data_to_sentinel(stored_threats_datetime,stored_cases_datetime, current_datetime, context):
     threats_date_filter = {"gte_datetime": stored_threats_datetime, "lte_datetime": current_datetime}
