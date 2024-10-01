@@ -160,7 +160,7 @@ async def fetch_and_store_abnormal_data_v2(
             asyncio.create_task(consume(sentinel_connector, queue)) for _ in range(3)
         ]
         await queue.join()  # Implicitly awaits consumers, too
-        await asyncio.gather(**consumers)
+        await asyncio.gather(*consumers)
         for c in consumers:
             c.cancel()
         await sentinel_connector.flushall()
