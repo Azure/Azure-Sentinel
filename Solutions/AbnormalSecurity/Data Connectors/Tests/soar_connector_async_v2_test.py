@@ -8,6 +8,7 @@ from SentinelFunctionsOrchestrator.utils import (
     OptionalEndTimeRange,
     Context,
     TimeRange,
+    try_str_to_datetime,
 )
 from datetime import datetime, timedelta
 from uuid import UUID
@@ -16,12 +17,15 @@ import aiohttp
 from aiohttp import web
 from unittest.mock import patch, MagicMock, AsyncMock
 import json
+import asyncio
 
 from SentinelFunctionsOrchestrator.soar_connector_async_v2 import (
     get_query_params,
     get_headers,
     compute_url,
     fetch_with_retries,
+    get_threats,
+    get_cases,
 )
 
 
@@ -248,6 +252,136 @@ class TestComputeUrl(unittest.TestCase):
 #     result = await fetch_with_retries(url, headers=headers, retries=3, backoff=0.01)
 #     assert result == response_data
 #     assert attempts == 3
+
+
+@pytest.mark.asyncio
+@patch(
+    "SentinelFunctionsOrchestrator.soar_connector_async_v2.fetch_with_retries",
+    new_callable=AsyncMock,
+)
+async def test_get_threats(mock_fetch):
+    mock_intervals = [
+        MagicMock(start="2024-10-01T13:00:00Z", end=None),
+    ]
+
+    mock_threat_campaign_response = {
+        "total": 1,
+        "threats": [{"threatId": "threat1"}],
+        "nextPageNumber": None,
+    }
+
+    mock_single_threat_response = {
+        "messages": [
+            {"abxMessageId": "message1", "remediationTimestamp": "2024-10-01T12:30:00Z"}
+        ]
+    }
+
+    # Mock the context and output queue
+    ctx = MagicMock()
+    ctx.BASE_URL = "http://example.com"
+    ctx.MAX_PAGE_NUMBER = 10
+    ctx.NUM_CONCURRENCY = 2
+    ctx.CLIENT_FILTER_TIME_RANGE.start = try_str_to_datetime("2024-10-01T12:00:00Z")
+    ctx.CLIENT_FILTER_TIME_RANGE.end = try_str_to_datetime("2024-10-01T13:00:00Z")
+
+    output_queue = asyncio.Queue()
+
+    # Mock the functions and methods used in get_threats
+    mock_fetch.side_effect = [
+        mock_threat_campaign_response,
+        mock_single_threat_response,
+    ]
+
+    with patch(
+        "SentinelFunctionsOrchestrator.soar_connector_async_v2.compute_intervals",
+        return_value=mock_intervals,
+    ):
+        with patch(
+            "SentinelFunctionsOrchestrator.soar_connector_async_v2.get_query_params"
+        ) as mock_get_query_params:
+            with patch(
+                "SentinelFunctionsOrchestrator.soar_connector_async_v2.get_headers",
+                return_value={"Authorization": "Bearer token"},
+            ):
+                await get_threats(ctx, output_queue)
+
+    # Ensure fetch_with_retries was called with expected values
+    assert mock_fetch.call_count == 2
+
+    # Ensure the messages were put into the output queue
+    assert output_queue.qsize() == 1
+
+    # Validate the content of the output queue
+    output_message = await output_queue.get()
+    expected_record = (
+        "ABNORMAL_THREAT_MESSAGES",
+        {"abxMessageId": "message1", "remediationTimestamp": "2024-10-01T12:30:00Z"},
+    )
+    assert output_message == expected_record
+    assert output_queue.empty()
+
+
+@pytest.mark.asyncio
+@patch(
+    "SentinelFunctionsOrchestrator.soar_connector_async_v2.fetch_with_retries",
+    new_callable=AsyncMock,
+)
+async def test_get_cases(mock_fetch):
+    # Mock the context and output queue
+    ctx = MagicMock()
+    ctx.BASE_URL = "http://example.com"
+    ctx.MAX_PAGE_NUMBER = 10
+    ctx.NUM_CONCURRENCY = 2
+    ctx.CLIENT_FILTER_TIME_RANGE.start = try_str_to_datetime("2024-10-01T12:00:00Z")
+    ctx.CLIENT_FILTER_TIME_RANGE.end = try_str_to_datetime("2024-10-01T13:00:00Z")
+
+    output_queue = asyncio.Queue()
+
+    mock_intervals = [
+        MagicMock(start="2024-10-01T13:00:00Z", end=None),
+    ]
+
+    mock_cases_response = {
+        "total": 1,
+        "cases": [{"caseId": "case1"}],
+        "nextPageNumber": None,
+    }
+
+    mock_single_case_response = {
+        "caseId": "case1",
+        "customerVisibleTime": "2024-10-01T12:30:00Z",
+    }
+
+    # Mock the functions and methods used in get_cases
+    mock_fetch.side_effect = [mock_cases_response, mock_single_case_response]
+
+    with patch(
+        "SentinelFunctionsOrchestrator.soar_connector_async_v2.compute_intervals",
+        return_value=mock_intervals,
+    ):
+        with patch(
+            "SentinelFunctionsOrchestrator.soar_connector_async_v2.get_query_params"
+        ) as mock_get_query_params:
+            with patch(
+                "SentinelFunctionsOrchestrator.soar_connector_async_v2.get_headers",
+                return_value={"Authorization": "Bearer token"},
+            ):
+                await get_cases(ctx, output_queue)
+
+    # Ensure fetch_with_retries was called with expected values
+    assert mock_fetch.call_count == 2
+
+    # Ensure the cases were put into the output queue
+    assert output_queue.qsize() == 1
+
+    # Validate the content of the output queue
+    output_message = await output_queue.get()
+    expected_record = (
+        "ABNORMAL_CASES",
+        {"caseId": "case1", "customerVisibleTime": "2024-10-01T12:30:00Z"},
+    )
+    assert output_message == expected_record
+
 
 if __name__ == "__main__":
     unittest.main()
