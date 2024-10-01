@@ -17,6 +17,40 @@ from .teamcymruscout_exception import TeamCymruScoutException
 from .sentinel import MicrosoftSentinel
 from . import consts
 
+def raise_error(retry_state):
+    """raise error when number of retries exceeded
+
+    Args:
+        retry_state (obj): Retry state object
+
+    Raises:
+        TeamCymruScoutException: raise error when number of retries exceeded
+    """
+    applogger.error(
+        "{} Maximum retries exceeded. Hence stopping the execution.".format(consts.LOGS_STARTS_WITH)
+    )
+    raise TeamCymruScoutException()
+
+def retry_on_status_code(status_code):
+    """Check and retry based on a list of status codes.
+
+    Args:
+        response(): API response is passed
+
+    Returns:
+        Bool: if given status code is in list then true else false
+    """
+    __method_name = inspect.currentframe().f_code.co_name
+    if status_code in consts.RETRY_STATUS_CODES:
+        applogger.info(
+            "{}(method={}) Retrying due to status code : {}".format(
+                consts.LOGS_STARTS_WITH,
+                __method_name,
+                status_code,
+            )
+        )
+        return True
+    return False
 
 class TeamCymruScout:
     """Class for interacting with TeamCymruScout APIs and posting data to Sentinel."""
@@ -40,41 +74,6 @@ class TeamCymruScout:
         else:
             self.auth = HTTPBasicAuth(username=consts.USERNAME, password=consts.PASSWORD)
             applogger.debug("{} Username and password based authentication is selected.".format(self.logs_starts_with))
-
-    def raise_error(retry_state):
-        """raise error when number of retries exceeded
-
-        Args:
-            retry_state (obj): Retry state object
-
-        Raises:
-            TeamCymruScoutException: raise error when number of retries exceeded
-        """
-        applogger.error(
-            "{} Maximum retries exceeded. Hence stopping the execution.".format(consts.LOGS_STARTS_WITH)
-        )
-        raise TeamCymruScoutException()
-
-    def retry_on_status_code(status_code):
-        """Check and retry based on a list of status codes.
-
-        Args:
-            response(): API response is passed
-
-        Returns:
-            Bool: if given status code is in list then true else false
-        """
-        __method_name = inspect.currentframe().f_code.co_name
-        if status_code in consts.RETRY_STATUS_CODES:
-            applogger.info(
-                "{}(method={}) Retrying due to status code : {}".format(
-                    consts.LOGS_STARTS_WITH,
-                    __method_name,
-                    status_code,
-                )
-            )
-            return True
-        return False
 
     @retry(
         reraise=True,

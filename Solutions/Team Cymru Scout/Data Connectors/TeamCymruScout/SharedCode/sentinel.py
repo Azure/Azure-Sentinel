@@ -220,3 +220,4 @@ class MicrosoftSentinel:
                 )
             )
             raise TeamCymruScoutException()
+        return None

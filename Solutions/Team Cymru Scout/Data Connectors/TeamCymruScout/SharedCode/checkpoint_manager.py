@@ -17,7 +17,7 @@ class CheckpointManager:
         Args:
             file_path (str): path of the file.
         """
-        self.state = StateManager(connection_string=consts.CONN_STRING, file_path=file_path)
+        self.state = StateManager(connection_string=consts.CONN_STRING, file_path=file_path, share_name="teamcymruscout-checkpoints")
 
     def get_checkpoint(self, indicator_type):
         """

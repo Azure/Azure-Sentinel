@@ -95,7 +95,7 @@ class TeamCymruScoutUtility:
                 return True
         except ValueError:
             applogger.debug("{}(method={}) : {} is not a valid IP address.".format(self.logs_starts_with, __method_name, indicator))
-            return False
+        return False
 
     def validate_ip_domain(self, indicator, indicator_type):
         """
