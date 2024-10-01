@@ -71,7 +71,7 @@ async def fetch_with_retries(url, retries=3, backoff=1, timeout=10, headers=None
                 return response
             except aiohttp.ClientResponseError as e:
                 if 500 <= e.status < 600:
-                    print(f"Attempt {attempt} failed with error: {e}")
+                    logging.error("Attempt {attempt} failed with error", exc_info=e)
                     if attempt == retries:
                         raise
                     else:
@@ -79,7 +79,7 @@ async def fetch_with_retries(url, retries=3, backoff=1, timeout=10, headers=None
                 else:
                     raise
             except aiohttp.ClientError as e:
-                print(f"Request failed with non-retryable error: {e}")
+                logging.error("Request failed with non-retryable error", exc_info=e)
                 raise
 
 

@@ -5,6 +5,7 @@ import os
 from uuid import uuid4, UUID
 from pydantic import BaseModel, model_validator
 import azure.durable_functions as df
+import logging
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 TIME_FORMAT_WITHMS = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -100,7 +101,7 @@ def compute_intervals(ctx: Context) -> List[OptionalEndTimeRange]:
     timerange = ctx.TIME_RANGE
 
     start_time, current_time = timerange.start, timerange.end
-    print(f"Specified timerange: {start_time} : {current_time}")
+    logging.info(f"Specified timerange: {start_time} : {current_time}")
 
     if current_time - start_time > ctx.OUTAGE_TIME:
         start_time = current_time - ctx.OUTAGE_TIME
@@ -110,7 +111,7 @@ def compute_intervals(ctx: Context) -> List[OptionalEndTimeRange]:
     start = start_time.replace() - ctx.LAG_ON_BACKEND
     current = current_time.replace()
 
-    print(f"Modified timerange: {start} : {current}")
+    logging.info(f"Modified timerange: {start} : {current}")
 
     assert current > start
 

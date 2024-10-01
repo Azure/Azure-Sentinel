@@ -56,7 +56,7 @@ if __name__ == "__main__":
     idlist = []
     while not output_threats_queue.empty():
         current = output_threats_queue.get_nowait()
-        print(current)
+        logging.info(current)
         idlist.append(current[1]["abxMessageId"])
 
     idset = set(idlist)
@@ -64,12 +64,12 @@ if __name__ == "__main__":
     duplicates = find_duplicates(idlist)
     missedids = list(filter(lambda x: x not in idset, list(range(1, maxid + 1))))
 
-    print("\n\n\nSummary of the operation")
+    logging.info("\n\n\nSummary of the operation")
 
-    print("Ingested values", idlist)
-    print(f"Max ID: {maxid}")
-    print(f"Duplicates: {duplicates}")
-    print(f"Missed IDs: {missedids}")
+    logging.info("Ingested values", idlist)
+    logging.info(f"Max ID: {maxid}")
+    logging.info(f"Duplicates: {duplicates}")
+    logging.info(f"Missed IDs: {missedids}")
 
     assert len(idset) == len(idlist), "Duplicates threats exist"
     assert len(duplicates) == 0, "There are duplicates threats"
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     idlist = []
     while not output_cases_queue.empty():
         current = output_cases_queue.get_nowait()
-        print(current)
+        logging.info(current)
         idlist.append(current[1]["caseId"])
 
     idset = set(idlist)
@@ -88,12 +88,12 @@ if __name__ == "__main__":
     duplicates = find_duplicates(idlist)
     missedids = list(filter(lambda x: x not in idset, list(range(1, maxid + 1))))
 
-    print("\n\n\nSummary of the operation")
+    logging.info("\n\n\nSummary of the operation")
 
-    print("Ingested values", idlist)
-    print(f"Max ID: {maxid}")
-    print(f"Duplicates: {duplicates}")
-    print(f"Missed IDs: {missedids}")
+    logging.info("Ingested values", idlist)
+    logging.info(f"Max ID: {maxid}")
+    logging.info(f"Duplicates: {duplicates}")
+    logging.info(f"Missed IDs: {missedids}")
 
     assert len(idset) == len(idlist), "Duplicate cases exist"
     assert len(duplicates) == 0, "There are duplicates cases"
