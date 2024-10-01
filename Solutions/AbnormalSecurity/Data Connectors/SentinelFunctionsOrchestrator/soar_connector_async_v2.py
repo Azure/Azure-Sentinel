@@ -167,9 +167,9 @@ async def call_single_threat_endpoint(
                 and remediation_time < ctx.CLIENT_FILTER_TIME_RANGE.end
             ):
                 filtered_messages.append(json.dumps(message, sort_keys=True))
-                logging.info(f"Successfully processed threat message: {message_id}")
+                logging.info(f"Successfully processed v2 threat message: {message_id}")
             else:
-                logging.warning(f"Skipped processing threat message: {message_id}")
+                logging.warning(f"Skipped processing v2 threat message: {message_id}")
 
         return filtered_messages
 
@@ -254,10 +254,10 @@ async def get_cases(ctx: Context, output_queue: asyncio.Queue) -> asyncio.Queue:
         record = (MAP_RESOURCE_TO_LOGTYPE[Resource.cases], loaded_case)
         visible_time = try_str_to_datetime(loaded_case["customerVisibleTime"])
         if visible_time >= ctx.CLIENT_FILTER_TIME_RANGE.start and visible_time < ctx.CLIENT_FILTER_TIME_RANGE.end:
-            logging.info(f"Successfully processed case id {loaded_case["caseId"]}")
+            logging.info(f"Successfully processed v2 case id {loaded_case.get('caseId')}")
             await output_queue.put(record)
         else:
-            logging.warning(f"Skipped processing case id {loaded_case["caseId"]}")
+            logging.warning(f"Skipped processing v2 case id {loaded_case.get('caseId')}")
 
     return
 
