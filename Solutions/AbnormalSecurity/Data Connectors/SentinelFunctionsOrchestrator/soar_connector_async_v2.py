@@ -99,7 +99,7 @@ async def call_threat_campaigns_endpoint(
         nextPageNumber = 1
         while nextPageNumber:
             params["pageNumber"] = nextPageNumber
-            endpoint = compute_url(ctx.BASE_URL, "/threats", params)
+            endpoint = compute_url(ctx.BASE_URL, "/v1/threats", params)
             headers = get_headers(ctx)
 
             response = await fetch_with_retries(url=endpoint, headers=headers)
@@ -132,7 +132,7 @@ async def call_cases_endpoint(
         nextPageNumber = 1
         while nextPageNumber:
             params["pageNumber"] = nextPageNumber
-            endpoint = compute_url(ctx.BASE_URL, "/cases", params)
+            endpoint = compute_url(ctx.BASE_URL, "/v1/cases", params)
             headers = get_headers(ctx)
 
             response = await fetch_with_retries(url=endpoint, headers=headers)
@@ -154,7 +154,7 @@ async def call_single_threat_endpoint(
     ctx: Context, threat_id: str, semaphore: asyncio.Semaphore
 ) -> List[str]:
     async with semaphore:
-        endpoint = compute_url(ctx.BASE_URL, f"/threats/{threat_id}", params={})
+        endpoint = compute_url(ctx.BASE_URL, f"/v1/threats/{threat_id}", params={})
         headers = get_headers(ctx)
 
         response = await fetch_with_retries(url=endpoint, headers=headers)
@@ -181,7 +181,7 @@ async def call_single_case_endpoint(
     ctx: Context, case_id: str, semaphore: asyncio.Semaphore
 ) -> str:
     async with semaphore:
-        endpoint = compute_url(ctx.BASE_URL, f"/cases/{case_id}", params={})
+        endpoint = compute_url(ctx.BASE_URL, f"/v1/cases/{case_id}", params={})
         headers = get_headers(ctx)
 
         response = await fetch_with_retries(url=endpoint, headers=headers)
