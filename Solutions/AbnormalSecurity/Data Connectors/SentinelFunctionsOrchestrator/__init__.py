@@ -60,10 +60,9 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         )
         asyncio.run(
             fetch_and_store_abnormal_data_v2(
-                context,
-                stored_threats_datetime,
-                stored_cases_datetime,
-                current_datetime,
+                context=context,
+                stored_threats_datetime=stored_threats_datetime,
+                stored_cases_datetime=stored_cases_datetime,
             )
         )
         logging.info("Finished v2 fetching")
