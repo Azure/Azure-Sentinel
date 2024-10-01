@@ -118,38 +118,43 @@ async def fetch_and_store_abnormal_data_v2(
     queue = asyncio.Queue()
     try:
         threats_ctx = get_context(stored_date_time=stored_threats_datetime)
-        cases_ctx = get_context(stored_date_time=stored_cases_datetime)
 
         logging.info(
-            f"Timestamps (stored, current) \
-                threats: ({stored_threats_datetime}, {threats_ctx.CURRENT_TIME}); \
-                cases: ({stored_cases_datetime}, {cases_ctx.CURRENT_TIME})",
+            f"Threats Timestamps (stored, current): ({stored_threats_datetime}, {threats_ctx.CURRENT_TIME})"
         )
 
-        # Execute threats first and then cases as cases can error out with a 403.
         await get_threats(ctx=threats_ctx, output_queue=queue)
+        logging.info("Fetching v2 threats completed")
 
-        logging.info("Fetching threats completed")
-
-        await get_cases(ctx=cases_ctx, output_queue=queue)
-
-        logging.info("Fetching cases completed")
     except Exception as e:
-        logging.error("Failed to process", exc_info=e)
+        logging.error("Failed to process v2 threats", exc_info=e)
     finally:
         set_date_on_entity(
             context=context,
             time=threats_ctx.CURRENT_TIME.strftime(TIME_FORMAT),
             resource=Resource.threats,
         )
-        logging.info("Stored new threats date")
+        logging.info("Stored new v2 threats date")
 
+    try:
+        cases_ctx = get_context(stored_date_time=stored_cases_datetime)
+
+        logging.info(
+            f"Cases Timestamps (stored, current): ({stored_cases_datetime}, {cases_ctx.CURRENT_TIME})"
+        )
+
+        await get_cases(ctx=cases_ctx, output_queue=queue)
+        logging.info("Fetching v2 cases completed")
+
+    except Exception as e:
+        logging.error("Failed to process v2 cases", exc_info=e)
+    finally:
         set_date_on_entity(
             context=context,
             time=cases_ctx.CURRENT_TIME.strftime(TIME_FORMAT),
             resource=Resource.cases,
         )
-        logging.info("Stored new cases date")
+        logging.info("Stored new v2 cases date")
 
     if should_persist_data_to_sentinel():
         logging.info("Persisting to sentinel")
