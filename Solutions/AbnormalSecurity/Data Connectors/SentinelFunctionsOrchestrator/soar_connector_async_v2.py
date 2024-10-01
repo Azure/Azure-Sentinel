@@ -50,7 +50,7 @@ def compute_url(base_url: str, pathname: str, params: Dict[str, str]) -> str:
     return endpoint
 
 
-async def fetch_with_retries(url, retries=3, backoff=1, timeout=10, headers=None):
+async def fetch_with_retries(url, retries=3, backoff=4, timeout=10, headers=None):
     logging.info(f"Fetching url: {url}")
     async def fetch(session, url):
         async with session.get(url, headers=headers, timeout=timeout) as response:
