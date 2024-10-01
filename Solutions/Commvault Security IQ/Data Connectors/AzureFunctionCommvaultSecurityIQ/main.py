@@ -21,8 +21,8 @@ blob_name = "timestamp"
 
 cs = os.environ.get('ConnectionString')
  
-customer_id = os.environ.get('WorkspaceID')
-shared_key = os.environ.get('WorkspaceKey')
+customer_id = os.environ.get('AzureSentinelWorkspaceId')
+shared_key = os.environ.get('AzureSentinelSharedKey')
 verify = False
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
@@ -32,7 +32,7 @@ if (not match):
     logging.info(f"Invalid url : {logAnalyticsUri}")
     raise Exception("Lookout: Invalid Log Analytics Uri.")
 
-key_vault_name = os.environ.get("KeyVaultName")
+key_vault_name = os.environ.get("KeyVaultName","Commvault-Integration-KV")
 uri = None
 url = None
 qsdk_token = None
