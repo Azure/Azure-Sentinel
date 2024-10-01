@@ -5,6 +5,7 @@ import logging
 import asyncio
 import itertools
 from typing import Dict, List
+from base64 import b64encode
 from .utils import (
     OptionalEndTimeRange,
     FilterParam,
@@ -29,7 +30,9 @@ def get_query_params(
 
 
 def get_headers(ctx: Context) -> Dict[str, str]:
+    sentinel_ctx = b64encode(ctx.model_dump_json(exclude="API_TOKEN").encode()).decode()
     return {
+        "X-Sentinel-Context": sentinel_ctx,
         "X-Abnormal-Trace-Id": str(ctx.TRACE_ID),
         "Authorization": f"Bearer {ctx.API_TOKEN}",
         "Soar-Integration-Origin": "AZURE SENTINEL",
