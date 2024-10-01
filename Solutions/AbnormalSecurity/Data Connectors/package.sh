@@ -26,4 +26,4 @@ cd ../..
 
 git checkout origin/master AbnormalSecurityConn.zip
 
-zip -r AbnormalSecurityConnTest.zip SentinelFunctionsOrchestrator .python_packages/lib/site-packages requirements.txt 
+zip -r AbnormalSecurityConn.zip SentinelFunctionsOrchestrator .python_packages/lib/site-packages requirements.txt 
