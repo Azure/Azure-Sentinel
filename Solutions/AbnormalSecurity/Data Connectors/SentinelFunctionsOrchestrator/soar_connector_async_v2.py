@@ -65,6 +65,7 @@ async def fetch_with_retries(url, retries=3, backoff=1, timeout=10, headers=None
             # response.raise_for_status()
             text = await response.text()
             logging.debug(f"API Response for URL: `{url}` is: `{text}`")
+            logging.info(f"API Response Status for URL: `{url}` is `{response.status}`")
             return json.loads(text)
 
     async with aiohttp.ClientSession() as session:
