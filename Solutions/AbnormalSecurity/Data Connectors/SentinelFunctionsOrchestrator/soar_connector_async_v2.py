@@ -51,6 +51,7 @@ def compute_url(base_url: str, pathname: str, params: Dict[str, str]) -> str:
 
 
 async def fetch_with_retries(url, retries=3, backoff=1, timeout=10, headers=None):
+    logging.info(f"Fetching url: {url}")
     async def fetch(session, url):
         async with session.get(url, headers=headers, timeout=timeout) as response:
             if 500 <= response.status < 600:
@@ -62,7 +63,9 @@ async def fetch_with_retries(url, retries=3, backoff=1, timeout=10, headers=None
                     headers=response.headers,
                 )
             # response.raise_for_status()
-            return json.loads(await response.text())
+            text = await response.text()
+            logging.info(f"API Response for URL: `{url}` is: `{text}`")
+            return json.loads(text)
 
     async with aiohttp.ClientSession() as session:
         for attempt in range(1, retries + 1):
