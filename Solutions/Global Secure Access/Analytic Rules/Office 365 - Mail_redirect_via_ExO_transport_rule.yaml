@@ -34,11 +34,12 @@ query: |
     | mv-expand ExpandedParameters = todynamic(Parameters)
     | where ExpandedParameters.Name in~ ("BlindCopyTo", "RedirectMessageTo") and isnotempty(ExpandedParameters.Value)
     | extend RedirectTo = ExpandedParameters.Value
-    | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIp)[0]
+    | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
     | extend From = ParsedParameters.From
     | project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, From, Operation, RuleName, Parameters
     | extend AccountName = tostring(split(UserId, "@")[0]), 
              AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+
   let enrichedLogsQuery = EnrichedMicrosoft365AuditLogs
     | where Workload == "Exchange"
     | where Operation in~ ("New-TransportRule", "Set-TransportRule")
@@ -53,11 +54,13 @@ query: |
     | mv-expand ExpandedParameters = todynamic(tostring(AdditionalProperties.Parameters))
     | where ExpandedParameters.Name in~ ("BlindCopyTo", "RedirectMessageTo") and isnotempty(ExpandedParameters.Value)
     | extend RedirectTo = ExpandedParameters.Value
-    | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIp)[0]
+    | extend ClientIPValues = extract_all(@'\[?(::ffff:)?(?P<IPAddress>(\d+\.\d+\.\d+\.\d+)|[^\]]+)\]?([-:](?P<Port>\d+))?', dynamic(["IPAddress", "Port"]), ClientIP)[0]
     | extend From = ParsedParameters.From
-    | project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, From, Operation, RuleName, Parameters = tostring(AdditionalProperties.Parameters)
+    | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+    | project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, From, Operation, RuleName, Parameters = tostring(AdditionalProperties.Parameters), UserAgent
     | extend AccountName = tostring(split(UserId, "@")[0]), 
              AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+
   // Combine both queries
   union isfuzzy=true officeActivityQuery, enrichedLogsQuery
   | summarize arg_min(TimeGenerated, *) by RuleName, RedirectTo
