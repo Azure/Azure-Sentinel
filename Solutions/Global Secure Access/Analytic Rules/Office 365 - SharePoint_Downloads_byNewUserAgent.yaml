@@ -17,14 +17,14 @@ tactics:
 relevantTechniques:
   - T1030
 query: |
-    let threshold = 5;
+  let threshold = 5;
   let szSharePointFileOperation = "SharePointFileOperation";
   let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
   let starttime = 14d;
   let endtime = 1d;
   // OfficeActivity - Base Events
   let BaseeventsOffice = OfficeActivity
-      | where TimeGenerated between (ago(starttime) .. ago(endtime))
+      | where TimeGenerated between (ago(starttime)..ago(endtime))
       | where RecordType =~ szSharePointFileOperation
       | where Operation in~ (szOperations)
       | where isnotempty(UserAgent);
@@ -44,11 +44,11 @@ query: |
       | where Operation in~ (szOperations)
       | where isnotempty(UserAgent)
       | where UserAgent in~ (FrequentUAOffice)
-      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), OfficeObjectIdCount = dcount(OfficeObjectId), OfficeObjectIdList = make_set(OfficeObjectId), UserAgentSeenCount = count()
-      by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url;
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OfficeObjectIdCount = dcount(OfficeObjectId), OfficeObjectIdList = make_set(OfficeObjectId), UserAgentSeenCount = count()
+        by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url;
   // EnrichedMicrosoft365AuditLogs - Base Events
   let BaseeventsEnriched = EnrichedMicrosoft365AuditLogs
-      | where TimeGenerated between (ago(starttime) .. ago(endtime))
+      | where TimeGenerated between (ago(starttime)..ago(endtime))
       | where RecordType == szSharePointFileOperation
       | where Operation in (szOperations)
       | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
@@ -72,8 +72,8 @@ query: |
       | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
       | where isnotempty(UserAgent)
       | where UserAgent in (FrequentUAEnriched)
-      | summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), ObjectIdCount = dcount(ObjectId), ObjectIdList = make_set(ObjectId), UserAgentSeenCount = count()
-      by RecordType, Operation, UserAgent, UserId, ClientIp, Site_Url;
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ObjectIdCount = dcount(ObjectId), ObjectIdList = make_set(ObjectId), UserAgentSeenCount = count()
+        by RecordType, Operation, UserAgent, UserId, ClientIp, Site_Url;
   // Combine Baseline and Recent Activity, Calculate Deviation, and Deduplicate
   let UserBehaviorAnalysisOffice = UserBaseLineOffice
       | join kind=inner (RecentActivityOffice) on UserId, Operation, Site_Url
@@ -87,7 +87,8 @@ query: |
   // Filter and Format Final Results
   CombinedUserBehaviorAnalysis
       | where Deviation > 0.25
-      | extend UserIdName = tostring(split(UserId, '@')[0]), UserIdUPNSuffix = tostring(split(UserId, '@')[1])
+      | extend UserIdName = tostring(split(UserId, '@')[0]), 
+               UserIdUPNSuffix = tostring(split(UserId, '@')[1])
       | project-reorder StartTime, EndTime, UserAgent, UserAgentSeenCount, UserId, ClientIP, Site_Url
       | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc
 entityMappings:
@@ -102,7 +103,7 @@ entityMappings:
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: ClientIp
+        columnName: ClientIP
   - entityType: URL
     fieldMappings:
       - identifier: Url
