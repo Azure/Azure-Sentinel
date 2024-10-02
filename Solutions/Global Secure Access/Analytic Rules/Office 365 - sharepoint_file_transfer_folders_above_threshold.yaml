@@ -1,5 +1,5 @@
 id: abd6976d-8f71-4851-98c4-4d086201319c
-name: Office 365 - Sharepoint File Transfer Above Threshold
+name: GSA Enriched Office 365 - Sharepoint File Transfer Above Threshold
 description: |
   Identifies Office365 Sharepoint File Transfers with a distinct folder count above a certain threshold in a 15-minute time period.
   Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.
@@ -17,15 +17,36 @@ tactics:
 relevantTechniques:
   - T1020
 query: |
-  let threshold = 500;
-  EnrichedMicrosoft365AuditLogs
-  | where Workload has_any("SharePoint", "OneDrive") and Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
-  | extend EventSource = tostring(parse_json(tostring(AdditionalProperties)).EventSource)
-  | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
-  | summarize count_distinct_ObjectId = dcount(ObjectId), dirlist = make_set(ObjectId, 10000) by UserId, ClientIp, UserAgent, bin(TimeGenerated, 15m)
-  | where count_distinct_ObjectId >= threshold
-  | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField","_", tostring(hash(tostring(dirlist)))))
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    let threshold = 500;
+      // OfficeActivity Query
+      let OfficeEvents = OfficeActivity
+          | where EventSource == "SharePoint" 
+          | where OfficeWorkload has_any("SharePoint", "OneDrive") 
+          | where Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
+          | summarize count_distinct_SourceRelativeUrl = dcount(SourceRelativeUrl), dirlist = make_set(SourceRelativeUrl, 10000)
+          by UserId, ClientIP, UserAgent, bin(TimeGenerated, 15m)
+          | where count_distinct_SourceRelativeUrl >= threshold
+          | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField", "_", tostring(hash(tostring(dirlist)))))
+          | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+      // EnrichedMicrosoft365AuditLogs Query
+      let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+          | where Workload has_any("SharePoint", "OneDrive")
+          | where Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
+          | extend EventSource = tostring(parse_json(tostring(AdditionalProperties)).EventSource)
+          | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+          | summarize count_distinct_ObjectId = dcount(ObjectId), dirlist = make_set(ObjectId, 10000)
+          by UserId, ClientIp, UserAgent, bin(TimeGenerated, 15m)
+          | where count_distinct_ObjectId >= threshold
+          | extend DirSample = iff(array_length(dirlist) == 1, tostring(dirlist[0]), strcat("SeeDirListField", "_", tostring(hash(tostring(dirlist)))))
+          | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+      // Combine Office and Enriched Logs
+      let CombinedEvents = OfficeEvents
+          | union EnrichedEvents
+          | summarize arg_min(TimeGenerated, *) by UserId, ClientIP, UserAgent;
+      // Final Output
+      CombinedEvents
+          | project TimeGenerated, UserId, ClientIP, UserAgent, AccountName, AccountUPNSuffix, DirSample, count_distinct_SourceRelativeUrl
+          | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -57,5 +78,5 @@ incidentConfiguration:
       - Account
     groupByAlertDetails: []
     groupByCustomDetails: []
-version: 1.0.5
+version: 1.0.6
 kind: Scheduled
