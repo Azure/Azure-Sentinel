@@ -1,5 +1,5 @@
 id: 3d6d0c04-7337-40cf-ace6-c471d442356d
-name: User added to Teams and immediately uploads file
+name: GSA Enriched Office 365 - User added to Teams and immediately uploads file
 description: |
   'This hunting query identifies users who are added to a Teams Channel or Teams chat
   and within 1 minute of being added upload a file via the chat. This might be
@@ -13,25 +13,50 @@ tactics:
 relevantTechniques:
   - T1566
 query: |
-  let threshold = 1m;
-  let MemberAddedEvents = EnrichedMicrosoft365AuditLogs
-    | where Workload == "MicrosoftTeams"
-    | where Operation == "MemberAdded"
-    | extend TeamName = tostring(parse_json(AdditionalProperties).TeamName)
-    | project TimeGenerated, UploaderID = UserId, TeamName;
-  let FileUploadEvents = EnrichedMicrosoft365AuditLogs
-    | where RecordType == "SharePointFileOperation"
-    | where ObjectId has "Microsoft Teams Chat Files"
-    | where Operation == "FileUploaded"
-    | extend SourceFileName = tostring(parse_json(AdditionalProperties).SourceFileName)
-    | project UploadTime = TimeGenerated, UploaderID = UserId, FileLocation = ObjectId, SourceFileName;
-  MemberAddedEvents
-    | join kind=inner (FileUploadEvents) on UploaderID
-    | where UploadTime > TimeGenerated and UploadTime < TimeGenerated + threshold
-    | extend timestamp = TimeGenerated, AccountCustomEntity = UploaderID
+    let threshold = 1m;
+      // Define MemberAddedEvents for EnrichedMicrosoft365AuditLogs
+      let MemberAddedEvents_Enriched = EnrichedMicrosoft365AuditLogs
+        | where Workload == "MicrosoftTeams"
+        | where Operation == "MemberAdded"
+        | extend TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+        | project TimeGenerated, UploaderID = UserId, TeamName;
+      // Define FileUploadEvents for EnrichedMicrosoft365AuditLogs
+      let FileUploadEvents_Enriched = EnrichedMicrosoft365AuditLogs
+        | where RecordType == "SharePointFileOperation"
+        | where ObjectId has "Microsoft Teams Chat Files"
+        | where Operation == "FileUploaded"
+        | extend SourceFileName = tostring(parse_json(tostring(AdditionalProperties)).SourceFileName)
+        | project UploadTime = TimeGenerated, UploaderID = UserId, FileLocation = ObjectId, SourceFileName;
+      // Perform join for EnrichedMicrosoft365AuditLogs
+      let EnrichedResults = MemberAddedEvents_Enriched
+        | join kind=inner (FileUploadEvents_Enriched) on UploaderID
+        | where UploadTime > TimeGenerated and UploadTime < TimeGenerated + threshold
+        | extend timestamp = TimeGenerated, AccountCustomEntity = UploaderID;
+      // Define MemberAddedEvents for OfficeActivity
+      let MemberAddedEvents_Office = OfficeActivity
+        | where OfficeWorkload == "MicrosoftTeams"
+        | where Operation == "MemberAdded"
+        | extend TeamName = iff(isempty(TeamName), Members[0].UPN, TeamName)
+        | project TimeGenerated, UploaderID = UserId, TeamName;
+      // Define FileUploadEvents for OfficeActivity
+      let FileUploadEvents_Office = OfficeActivity
+        | where RecordType == "SharePointFileOperation"
+        | where SourceRelativeUrl has "Microsoft Teams Chat Files"
+        | where Operation == "FileUploaded"
+        | project UploadTime = TimeGenerated, UploaderID = UserId, FileLocation = OfficeObjectId, FileName = SourceFileName;
+      // Perform join for OfficeActivity
+      let OfficeResults = MemberAddedEvents_Office
+        | join kind=inner (FileUploadEvents_Office) on UploaderID
+        | where UploadTime > TimeGenerated and UploadTime < TimeGenerated + threshold
+        | project-away UploaderID1
+        | extend timestamp = TimeGenerated, AccountCustomEntity = UploaderID;
+      // Union both results
+      EnrichedResults
+      | union OfficeResults
+      | order by timestamp desc;
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
         columnName: AccountCustomEntity
-version: 2.0.1
+version: 2.0.2
