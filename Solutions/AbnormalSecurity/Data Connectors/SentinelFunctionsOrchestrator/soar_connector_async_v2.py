@@ -258,10 +258,10 @@ async def get_cases(ctx: Context, output_queue: asyncio.Queue) -> asyncio.Queue:
         record = (MAP_RESOURCE_TO_LOGTYPE[Resource.cases], loaded_case)
         visible_time = try_str_to_datetime(loaded_case["customerVisibleTime"])
         if visible_time >= ctx.CLIENT_FILTER_TIME_RANGE.start and visible_time < ctx.CLIENT_FILTER_TIME_RANGE.end:
-            logging.info(f"Successfully processed v2 case id {loaded_case.get('caseId')}")
+            logging.info(f"Successfully processed v2 case id {loaded_case['caseId']}")
             await output_queue.put(record)
         else:
-            logging.warning(f"Skipped processing v2 case id {loaded_case.get('caseId')}")
+            logging.warning(f"Skipped processing v2 case id {loaded_case['caseId']}")
 
     return
 
