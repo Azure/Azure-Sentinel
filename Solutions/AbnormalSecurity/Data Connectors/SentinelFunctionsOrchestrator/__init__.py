@@ -119,6 +119,7 @@ async def fetch_and_store_abnormal_data_v2(
     try:
         threats_ctx = get_context(stored_date_time=stored_threats_datetime)
 
+        logging.info(f"Logging out threats ctx: {threats_ctx.model_dump_json(exclude="API_TOKEN")}")
         logging.info(
             f"Threats Timestamps (stored, current): ({stored_threats_datetime}, {threats_ctx.CURRENT_TIME})"
         )
@@ -138,7 +139,8 @@ async def fetch_and_store_abnormal_data_v2(
 
     try:
         cases_ctx = get_context(stored_date_time=stored_cases_datetime)
-
+        
+        logging.info(f"Logging out cases ctx: {cases_ctx.model_dump_json(exclude="API_TOKEN")}")
         logging.info(
             f"Cases Timestamps (stored, current): ({stored_cases_datetime}, {cases_ctx.CURRENT_TIME})"
         )
