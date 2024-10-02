@@ -53,7 +53,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
 
     current_datetime = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    logging.info(f"Using python version: {sys.version}")
+    logging.info(f"Current python version: {sys.version}")
     if should_use_v2_logic():
         logging.info(
             f"Using v2 fetching logic with inputs (threats, cases): ({stored_threats_datetime},{stored_cases_datetime})"
