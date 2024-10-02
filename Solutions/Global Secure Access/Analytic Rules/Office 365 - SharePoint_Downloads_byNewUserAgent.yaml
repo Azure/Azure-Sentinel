@@ -1,87 +1,124 @@
-id: 30375d00-68cc-4f95-b89a-68064d566358
-name: GSA Enriched Office 365 - Sharepoint File Transfer Above Threshold
+id: efd17c5f-5167-40f8-a1e9-0818940785d9
+name: GSA Enriched Office 365 - SharePointFileOperation via devices with previously unseen user agents
 description: |
-  Identifies Office365 Sharepoint File Transfers above a certain threshold in a 15-minute time period.
-  Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.
+  Identifies anomalies if the number of documents uploaded or downloaded from device(s) associated with a previously unseen user agent exceeds a threshold (default is 5) and deviation (default is 25%).
 severity: Medium
 status: Available
 requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - EnrichedMicrosoft365AuditLogs
-queryFrequency: 15m
-queryPeriod: 15m
+queryFrequency: 1d
+queryPeriod: 14d
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - Exfiltration
 relevantTechniques:
-  - T1020
+  - T1030
 query: |
-  let threshold = 5000;
+  let threshold = 5;
+  let szSharePointFileOperation = "SharePointFileOperation";
+  let szOperations = dynamic(["FileDownloaded", "FileUploaded"]);
+  let starttime = 14d;
+  let endtime = 1d;
   
-  // EnrichedMicrosoft365AuditLogs Query
-  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
-      | where Workload has_any("SharePoint", "OneDrive") 
-      | where Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
-      | summarize count_distinct_ObjectId = dcount(ObjectId), fileslist = make_set(ObjectId, 10000) 
-          by UserId, ClientIP, bin(TimeGenerated, 15m)
-      | where count_distinct_ObjectId >= threshold
-      | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField", "_", tostring(hash(tostring(fileslist)))))
-      | extend AccountName = tostring(split(UserId, "@")[0]), 
-               AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  // OfficeActivity - Base Events
+  let BaseeventsOffice = OfficeActivity
+      | where TimeGenerated between (ago(starttime)..ago(endtime))
+      | where RecordType =~ szSharePointFileOperation
+      | where Operation in~ (szOperations)
+      | where isnotempty(UserAgent);
   
-  // OfficeActivity Query
-  let OfficeEvents = OfficeActivity
-      | where EventSource == "SharePoint" 
-      | where OfficeWorkload has_any("SharePoint", "OneDrive") 
-      | where Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
-      | summarize count_distinct_OfficeObjectId = dcount(OfficeObjectId), fileslist = make_set(OfficeObjectId, 10000) 
-          by UserId, ClientIP, bin(TimeGenerated, 15m)
-      | where count_distinct_OfficeObjectId >= threshold
-      | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField", "_", tostring(hash(tostring(fileslist)))))
-      | extend AccountName = tostring(split(UserId, "@")[0]), 
-               AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  // OfficeActivity - Frequent User Agents
+  let FrequentUAOffice = BaseeventsOffice
+      | summarize FUACount = count() by UserAgent, RecordType, Operation
+      | where FUACount >= threshold
+      | distinct UserAgent;
+  
+  // OfficeActivity - User Baseline
+  let UserBaseLineOffice = BaseeventsOffice
+      | summarize Count = count() by UserId, Operation, Site_Url
+      | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;
+  
+  // OfficeActivity - Recent User Activity
+  let RecentActivityOffice = OfficeActivity
+      | where TimeGenerated > ago(endtime)
+      | where RecordType =~ szSharePointFileOperation
+      | where Operation in~ (szOperations)
+      | where isnotempty(UserAgent)
+      | where UserAgent in~ (FrequentUAOffice)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), OfficeObjectIdCount = dcount(OfficeObjectId), OfficeObjectIdList = make_set(OfficeObjectId), UserAgentSeenCount = count()
+          by RecordType, Operation, UserAgent, UserType, UserId, ClientIP, OfficeWorkload, Site_Url;
+  
+  // EnrichedMicrosoft365AuditLogs - Base Events
+  let BaseeventsEnriched = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated between (ago(starttime)..ago(endtime))
+      | where RecordType == szSharePointFileOperation
+      | where Operation in (szOperations)
+      | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+      | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+      | where isnotempty(UserAgent);
+  
+  // EnrichedMicrosoft365AuditLogs - Frequent User Agents
+  let FrequentUAEnriched = BaseeventsEnriched
+      | summarize FUACount = count() by UserAgent, RecordType, Operation
+      | where FUACount >= threshold
+      | distinct UserAgent;
+  
+  // EnrichedMicrosoft365AuditLogs - User Baseline
+  let UserBaseLineEnriched = BaseeventsEnriched
+      | summarize Count = count() by UserId, Operation, Site_Url
+      | summarize AvgCount = avg(Count) by UserId, Operation, Site_Url;
+  
+  // EnrichedMicrosoft365AuditLogs - Recent User Activity
+  let RecentActivityEnriched = EnrichedMicrosoft365AuditLogs
+      | where TimeGenerated > ago(endtime)
+      | where RecordType == szSharePointFileOperation
+      | where Operation in (szOperations)
+      | extend UserAgent = tostring(parse_json(tostring(AdditionalProperties)).UserAgent)
+      | extend Site_Url = tostring(parse_json(tostring(AdditionalProperties)).SiteUrl)
+      | where isnotempty(UserAgent)
+      | where UserAgent in (FrequentUAEnriched)
+      | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ObjectIdCount = dcount(ObjectId), ObjectIdList = make_set(ObjectId), UserAgentSeenCount = count()
+          by RecordType, Operation, UserAgent, UserId, ClientIP, Site_Url;
+  
+  // Combine Baseline and Recent Activity, Calculate Deviation, and Deduplicate
+  let UserBehaviorAnalysisOffice = UserBaseLineOffice
+      | join kind=inner (RecentActivityOffice) on UserId, Operation, Site_Url
+      | extend Deviation = abs(UserAgentSeenCount - AvgCount) / AvgCount;
+  
+  let UserBehaviorAnalysisEnriched = UserBaseLineEnriched
+      | join kind=inner (RecentActivityEnriched) on UserId, Operation, Site_Url
+      | extend Deviation = abs(UserAgentSeenCount - AvgCount) / AvgCount;
   
   // Combine Office and Enriched Logs
-  let CombinedEvents = OfficeEvents
-      | union EnrichedEvents
-      | summarize arg_min(TimeGenerated, *) by UserId, ClientIP;
+  let CombinedUserBehaviorAnalysis = UserBehaviorAnalysisOffice
+      | union UserBehaviorAnalysisEnriched;
   
-  // Final Output
-  CombinedEvents
-      | project TimeGenerated, UserId, ClientIP, AccountName, AccountUPNSuffix, FileSample, count_distinct_ObjectId, fileslist
-      | order by TimeGenerated desc
+  // Filter and Format Final Results
+  CombinedUserBehaviorAnalysis
+      | where Deviation > 0.25
+      | extend UserIdName = tostring(split(UserId, '@')[0]), 
+               UserIdUPNSuffix = tostring(split(UserId, '@')[1])
+      | project-reorder StartTimeUtc, EndTimeUtc, UserAgent, UserAgentSeenCount, UserId, ClientIP, Site_Url
+      | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
         columnName: UserId
       - identifier: Name
-        columnName: AccountName
+        columnName: UserIdName
       - identifier: UPNSuffix
-        columnName: AccountUPNSuffix
+        columnName: UserIdUPNSuffix
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: ClientIP
-  - entityType: File
+  - entityType: URL
     fieldMappings:
-      - identifier: Name
-        columnName: FileSample
-customDetails:
-  TransferCount: count_distinct_ObjectId
-  FilesList: fileslist
-incidentConfiguration:
-  createIncident: true
-  groupingConfiguration:
-    enabled: true
-    reopenClosedIncident: false
-    lookbackDuration: 5h
-    matchingMethod: Selected
-    groupByEntities:
-      - Account
-    groupByAlertDetails: []
-    groupByCustomDetails: []
-version: 2.0.6
+      - identifier: Url
+        columnName: Site_Url
+version: 2.2.6
 kind: Scheduled
