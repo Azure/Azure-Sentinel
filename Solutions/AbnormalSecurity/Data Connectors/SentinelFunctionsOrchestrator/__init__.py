@@ -130,12 +130,13 @@ async def fetch_and_store_abnormal_data_v2(
     except Exception as e:
         logging.error("Failed to process v2 threats", exc_info=e)
     finally:
+        threats_time = threats_ctx.CURRENT_TIME.strftime(TIME_FORMAT)
         set_date_on_entity(
             context=context,
-            time=threats_ctx.CURRENT_TIME.strftime(TIME_FORMAT),
+            time=threats_time,
             resource=Resource.threats,
         )
-        logging.info("Stored new v2 threats date")
+        logging.info(f"Stored new v2 threats date: {threats_time}")
 
     try:
         cases_ctx = get_context(stored_date_time=stored_cases_datetime)
@@ -151,12 +152,13 @@ async def fetch_and_store_abnormal_data_v2(
     except Exception as e:
         logging.error("Failed to process v2 cases", exc_info=e)
     finally:
+        cases_time = cases_ctx.CURRENT_TIME.strftime(TIME_FORMAT)
         set_date_on_entity(
             context=context,
-            time=cases_ctx.CURRENT_TIME.strftime(TIME_FORMAT),
+            time=cases_time,
             resource=Resource.cases,
         )
-        logging.info("Stored new v2 cases date")
+        logging.info(f"Stored new v2 cases date: {cases_time}")
 
     if should_persist_data_to_sentinel():
         logging.info("Persisting to sentinel")
