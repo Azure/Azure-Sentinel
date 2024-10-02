@@ -16,6 +16,13 @@ else
     exit 1
 fi
 
+if [[ "$(uname)" == "Linux" ]]; then
+    echo "The operating system is Linux."
+else
+    echo "Assertion failed: The operating system is not Linux."
+    exit 1
+fi
+
 python3 -m venv .python_packages
 source .python_packages/bin/activate
 pip install -r requirements.txt
