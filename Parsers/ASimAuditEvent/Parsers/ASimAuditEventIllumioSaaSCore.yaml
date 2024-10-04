@@ -245,13 +245,11 @@ ParserQuery: |
         'user.create', 'User created', 'Cloud Resource', 'User', 'Create',
         'user.delete', 'User deleted', 'Cloud Resource', 'User', 'Delete',
         'user.invite', 'User invited', 'Cloud Resource', 'User', 'Other',
-        'user.login', 'User logged in', 'Cloud Resource', 'User', 'Other',
-        'user.login_session_terminated', 'User login session terminated', 'Cloud Resource', 'User', 'Other',
-        'user.logout', 'User logged', 'Cloud Resource', 'User', 'Other',
-        'user.pce_session_terminated', 'User session terminated', 'Cloud Resource', 'User', 'Other',
+        'user.update', 'User information updated', 'Cloud Resource', 'User', 'Set',        
         'user.reset_password', 'User password reset', 'Cloud Resource', 'User', 'Other',
-        'user.sign_in', 'User session created', 'Cloud Resource', 'User', 'Other',
-        'user.sign_out', 'User session terminated', 'Cloud Resource', 'User', 'Other',
+        'user.pce_session_terminated', 'User session terminated', 'Cloud Resource', 'User', 'Other',
+        'user.login_session_terminated', 'User login session terminated', 'Cloud Resource', 'User', 'Other',
+        'user.reset_password', 'User password reset', 'Cloud Resource', 'User', 'Other',
         'user.update', 'User information updated', 'Cloud Resource', 'User', 'Set',
         'user.update_password', 'User password updated', 'Cloud Resource', 'User', 'Set',
         'user.use_expired_password', 'User entered expired password', 'Cloud Resource', 'User', 'Other',
@@ -326,7 +324,7 @@ ParserQuery: |
     ];
     let parser = (disabled: bool = false) {
         Illumio_Auditable_Events_CL
-        | where not(disabled)
+        | where not(disabled) and event_type !startswith "user" // filter out user auth events 
         | lookup EventTypeLookup on event_type // fetch Object, ObjectType,EventType, Operation from lookup
         | lookup EventSeverityLookup on severity // fetch EventSeverity from lookup
         | lookup EventResultLookup on status // fetch EventResult from lookup
@@ -337,29 +335,13 @@ ParserQuery: |
                 isnotnull(created_by.agent), created_by.agent.hostname,
                 "Unknown"
             )
+        | extend ActorUsernameType = "Simple",
+            temp_resource_changes = parse_json(resource_changes),            
+            temp_notifications = parse_json(notifications)
         | extend
-             ActorUsernameType = case(
-              isnotnull(created_by.system), "System",
-              isnotnull(created_by.user), "User",
-              isnotnull(created_by.agent), "Agent",
-              "Unknown"
-          )                      
-        | extend temp_resource_changes = parse_json(resource_changes)
-        | extend temp_action = parse_json(action)
-        | extend temp_notifications = parse_json(notifications)
-        | extend
-            NewValue = case(
-                isnotnull(temp_resource_changes), temp_resource_changes[0].changes,
-                'Unknown'
-            ),
-            EventMessage = case(
-                isnotnull(temp_resource_changes), temp_resource_changes[0].resource,
-                'Unknown'
-            ),
-            SrcIpAddr = case(
-                isnotnull(temp_action), temp_action.src_ip,
-                ''
-            ),
+            NewValue = iff(isnotnull(temp_resource_changes), temp_resource_changes[0].changes, ''),
+            EventMessage = iff(isnotnull(temp_resource_changes), temp_resource_changes[0].resource, ''),                
+            SrcIpAddr = iff(action.src_ip == 'FILTERED', "", action.src_ip)
             EventCount = int(1),
             EventStartTime = TimeGenerated,
             EventEndTime= TimeGenerated,
@@ -369,7 +351,8 @@ ParserQuery: |
             EventSchema = 'AuditEvent',
             Dvc = pce_fqdn,
             EventType = iff(isnull(EventType), event_type, EventType),
-            EventOriginalUid = href
+            EventOriginalUid = href,
+            EventUid = _ItemId
         //aliases
         | extend        
             IpAddr = SrcIpAddr,
@@ -389,4 +372,4 @@ ParserQuery: |
             href, // used by EventOriginalUid
             TenantId
     };
-    parser(disabled=false)
+    parser(disabled=disabled)
