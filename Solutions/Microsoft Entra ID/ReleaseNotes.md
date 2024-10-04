@@ -1,5 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                                                                                                                                         |
 | ----------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 3.2.9       | 27-08-2024                     | Updated **Analytical Rule** for missing TTP	    																																		|
+| 3.2.8       | 19-08-2024                     | Exclude Result Reason "RoleAssignmentExists"	from **Analytic Rule** [NRT PIM Elevation Request Rejected]                						                        |
 | 3.2.7       | 12-06-2024                     | Fixed the bugs from **Analytic Rules**        																																		|
 | 3.2.6       | 06-06-2024                     | Successful logon from IP and failure from a different IP fixes       																												        |
 | 3.2.5       | 28-05-2024                     | Updated Entity mappings and changed description in **Analytic Rule**         																												|

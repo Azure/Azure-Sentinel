@@ -57,21 +57,21 @@ For more information, see the [solution template documentation](https://docs.mic
 
 After creating both the `mainTemplate.json` and the `createUIDefinition.json` files, validate them, and package them into a .zip file that you can upload as part of the publishing process (Step 3).
 
-Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V2) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V2/README.md) to use the tool and package your content.
+Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V3) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md) to use the tool and package your content.
 
 ### Updating your solution
 
 If you already have an Microsoft Sentinel solution and want to update your package, use the package creation tool with updated content to create a new version of the package.
 
-For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `1.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
+For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `3.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
 
 When updating your package, make sure to raise the version value, regardless of how small or trivial the change is, including typo fixes in a content or solution definition file.
 
-For example, if your original package version is `1.0.1`, you might update your versions as follows:
+For example, if your original package version is `3.0.1`, you might update your versions as follows:
 
-* **Major updates** have a new version of 2.0.0 - this is usually reserved for major tooling or package level changes
-* **Minor updates**, for changes in content of the package, might have a new version of `1.1.0`
-* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `1.0.2`
+* **Major updates** have a new version of 3.0.0 - this is usually reserved for major tooling or package level changes
+* **Minor updates**, for changes in content of the package, might have a new version of `3.1.0`
+* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `3.0.2`
 
 Since solutions use ARM templates, you can customize the solution text as well as tabs as needed to cater to specific scenarios.
 
