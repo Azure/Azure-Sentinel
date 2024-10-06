@@ -1,7 +1,7 @@
 id: 30375d00-68cc-4f95-b89a-68064d566358
 name: GSA Enriched Office 365 - Sharepoint File Transfer Above Threshold
 description: |
-  'Identifies Office365 Sharepoint File Transfers above a certain threshold in a 15-minute time period.
+  'Identifies Office365 SharePoint file transfers above a certain threshold in a 15-minute time period.
   Please note that entity mapping for arrays is not supported, so when there is a single value in an array, we will pull that value from the array as a single string to populate the entity to support entity mapping features within Sentinel. Additionally, if the array is multivalued, we will input a string to indicate this with a unique hash so that matching will not occur.'
 severity: Medium
 status: Available
@@ -22,39 +22,37 @@ relevantTechniques:
   - T1020
 query: |
   let threshold = 5000;
-  
   // EnrichedMicrosoft365AuditLogs Query
   let EnrichedEvents = EnrichedMicrosoft365AuditLogs
-      | where Workload has_any("SharePoint", "OneDrive") 
+      | where Workload has_any("SharePoint", "OneDrive")
       | where Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
       | extend ClientIP = ClientIp
-      | summarize count_distinct_ObjectId = dcount(ObjectId), fileslist = make_set(ObjectId, 10000) 
+      | summarize TransferCount = dcount(ObjectId), fileslist = make_set(ObjectId, 10000)
           by UserId, ClientIP, bin(TimeGenerated, 15m)
-      | where count_distinct_ObjectId >= threshold
-      | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField", "_", tostring(hash(tostring(fileslist)))))
-      | extend AccountName = tostring(split(UserId, "@")[0]), 
+      | where TransferCount >= threshold
+      | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]),
+               strcat("SeeFilesListField_", tostring(hash(tostring(fileslist)))))
+      | extend AccountName = tostring(split(UserId, "@")[0]),
                AccountUPNSuffix = tostring(split(UserId, "@")[1]);
-  
   // OfficeActivity Query
   let OfficeEvents = OfficeActivity
-      | where EventSource == "SharePoint" 
-      | where OfficeWorkload has_any("SharePoint", "OneDrive") 
+      | where EventSource == "SharePoint"
+      | where OfficeWorkload has_any("SharePoint", "OneDrive")
       | where Operation has_any("FileDownloaded", "FileSyncDownloadedFull", "FileSyncUploadedFull", "FileUploaded")
-      | summarize count_distinct_OfficeObjectId = dcount(OfficeObjectId), fileslist = make_set(OfficeObjectId, 10000) 
+      | summarize TransferCount = dcount(OfficeObjectId), fileslist = make_set(OfficeObjectId, 10000)
           by UserId, ClientIP, bin(TimeGenerated, 15m)
-      | where count_distinct_OfficeObjectId >= threshold
-      | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]), strcat("SeeFilesListField", "_", tostring(hash(tostring(fileslist)))))
-      | extend AccountName = tostring(split(UserId, "@")[0]), 
+      | where TransferCount >= threshold
+      | extend FileSample = iff(array_length(fileslist) == 1, tostring(fileslist[0]),
+               strcat("SeeFilesListField_", tostring(hash(tostring(fileslist)))))
+      | extend AccountName = tostring(split(UserId, "@")[0]),
                AccountUPNSuffix = tostring(split(UserId, "@")[1]);
-  
   // Combine Office and Enriched Logs
   let CombinedEvents = OfficeEvents
       | union EnrichedEvents
       | summarize arg_min(TimeGenerated, *) by UserId, ClientIP;
-  
   // Final Output
   CombinedEvents
-      | project TimeGenerated, UserId, ClientIP, AccountName, AccountUPNSuffix, FileSample, count_distinct_ObjectId, fileslist
+      | project TimeGenerated, UserId, ClientIP, AccountName, AccountUPNSuffix, FileSample, TransferCount, fileslist
       | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
@@ -74,7 +72,7 @@ entityMappings:
       - identifier: Name
         columnName: FileSample
 customDetails:
-  TransferCount: count_distinct_OfficeObjectId
+  TransferCount: TransferCount
   FilesList: fileslist
 incidentConfiguration:
   createIncident: true
@@ -84,8 +82,6 @@ incidentConfiguration:
     lookbackDuration: PT5H
     matchingMethod: Selected
     groupByEntities:
-    - Account
-    groupByAlertDetails: []
-    groupByCustomDetails: []
+      - Account
 version: 1.0.5
 kind: Scheduled
