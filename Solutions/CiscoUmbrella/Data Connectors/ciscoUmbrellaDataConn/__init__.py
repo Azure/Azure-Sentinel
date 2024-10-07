@@ -321,7 +321,8 @@ class UmbrellaClient:
                 yield event
 
     def parse_csv_proxy(self, csv_file):
-        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        clean_file = csv_file.replace('\x00', '')  # Remove null characters
+        csv_reader = csv.reader(clean_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
                 if len(row) >= 21:
