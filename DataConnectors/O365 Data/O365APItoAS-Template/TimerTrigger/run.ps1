@@ -159,7 +159,7 @@ function Get-AuthToken{
             [string]$TenantGUID
         )
     # Create app of type Web app / API in Azure AD, generate a Client Secret, and update the client id and client secret here
-    if ([string]::IsNullOrEmpty($loginURL)){$loginURL = "https://login.microsoftonline.com"}
+    if ([string]::IsNullOrEmpty($loginURL)){$loginURL = "https://login.microsoftonline.com/"}
     # Get the tenant GUID from Properties | Directory ID under the Azure Active Directory section
     
     $resource = "https://$managementApi"
@@ -250,7 +250,7 @@ if (-Not [string]::IsNullOrEmpty($LAURI)){
 		Exit
 	}
 }
-$LoginURL = $env:loginEndpoint
+$LoginURL = $env:loginEndpoint.TrimEnd('/')
 if (-Not [string]::IsNullOrEmpty($LoginURL)){
 	if($LoginURL.Trim() -notin @("https://login.microsoftonline.us/","https://login.partner.microsoftonline.cn/","https://login.microsoftonline.com/"))
 	{
