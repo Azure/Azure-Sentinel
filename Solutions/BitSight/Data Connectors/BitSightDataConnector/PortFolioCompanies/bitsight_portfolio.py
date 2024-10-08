@@ -9,7 +9,7 @@ from ..SharedCode.consts import (
     COMPANIES_TABLE_NAME,
     ENDPOINTS,
     LOGS_STARTS_WITH,
-    PORTFOLIO_PAGE_SIZE,
+    PORTFOLIO_PAGE_SIZE
 )
 from ..SharedCode.get_logs_data import get_logs_data
 from ..SharedCode.logger import applogger

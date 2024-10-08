@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+import FncRestClient
 from fnc.api.api_client import ApiContext
 from fnc.fnc_client import FncClient
 from globalVariables import INTEGRATION_NAME
@@ -9,8 +10,6 @@ from sentinel import post_data
 
 API_TOKEN = os.environ.get("FncApiToken")
 ACCOUNT_UUID = os.environ.get("FncAccountUuid")
-INCLUDE_PDNS = os.environ.get("FncAccountUuid")
-INCLUDE_DHCP = os.environ.get("IncludeDhcp")
 INCLUDE_EVENTS = os.environ.get("IncludeEvents")
 POLLING_DELAY = int(os.environ.get("PollingDelay") or 10)
 DOMAIN = os.environ.get("FncApiDomain")
@@ -80,8 +79,9 @@ def add_events_to_detections(detections, detection_events):
 def fetch_and_send_detections(
     ctx: ApiContext, event_type: str, start_date: str
 ):
+    rest_client = FncRestClient.FncSentinelRestClient()
     client = FncClient.get_api_client(
-        name=INTEGRATION_NAME, api_token=API_TOKEN, domain=DOMAIN
+        name=INTEGRATION_NAME, api_token=API_TOKEN, domain=DOMAIN, rest_client=rest_client
     )
     loggerLever = logging.getLevelName(LOGGER_LEVEL.upper())
     client.get_logger().set_level(level=loggerLever)
@@ -94,8 +94,6 @@ def fetch_and_send_detections(
         "pull_muted_devices": PULL_MUTED,
         "include_description": INCLUDE_DESCRIPTION,
         "include_signature": INCLUDE_SIGNATURE,
-        "include_pdns": INCLUDE_PDNS,
-        "include_dhcp": INCLUDE_DHCP,
         "include_events": INCLUDE_EVENTS,
         "filter_training_detections": True,
         "start_date": start_date,

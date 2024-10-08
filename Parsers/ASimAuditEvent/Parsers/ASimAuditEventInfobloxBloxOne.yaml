@@ -1,0 +1,143 @@
+Parser:
+  Title: AuditEvent ASIM parser for Infoblox BloxOne
+  Version: '0.1.0'
+  LastUpdated: Sep 11, 2024
+Product:
+  Name: Infoblox BloxOne
+Normalization:
+  Schema: AuditEvent
+  Version: '0.1'
+References:
+- Title: ASIM AuditEvent Schema
+  Link: https://aka.ms/ASimAuditEventDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Infoblox BloxOne Documentation
+- Link: https://docs.infoblox.com/space/BloxOneThreatDefense/35406922/DNS+Query%2FResponse+Log+Message+Mapping
+Description: |
+  This ASIM parser supports normalizing AuditEvent logs from Infoblox BloxOne to the ASIM AuditEvent normalized schema. These events are captured through the Azure Monitor Agent (AMA) which are sent by the Data Connector Service of Infoblox BloxOne.
+ParserName: ASimAuditEventInfobloxBloxOne
+EquivalentBuiltInParser: _ASim_AuditEvent_InfobloxBloxOne
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: 
+  let EventSeverityLookup = datatable (LogSeverity:string, EventSeverity:string)
+      [
+      "0", "Low",
+      "1", "Low",
+      "2", "Low",
+      "3", "Low",
+      "4", "Medium",
+      "5", "Medium",
+      "6", "Medium",
+      "7", "High",
+      "8", "High",
+      "9", "High",
+      "10", "High"
+  ];
+  let OperationLookup = datatable (DeviceAction:string, Object:string, ObjectType:string)
+  [
+    "CreateSecurityPolicy", "Security Policy", "Policy Role",
+    "UpdateSecurityPolicy", "Security Policy", "Policy",
+    "Create", "Network Resource", "Service",
+    "Update", "Network Resource", "Service",
+    "Restore", "Infoblox Resource", "Service",
+    "CreateOrGetDoHFQDN", "DOHFQDN", "Service",
+    "CreateOrUpdateDfpService", "Dfp Service", "Service",
+    "MoveToRecyclebin", "Recyclebin", "Other",
+    "CreateCategoryFilter", "Category Filter", "Other",
+    "GetLookalikeThreatCounts", "Lookalike Threat Counts", "Other",
+    "GetLookalikeDomainCounts", "Lookalike Domain Counts", "Other",
+    "CreateRoamingDeviceGroup", "Roaming Device Group", "Configuration Atom",
+    "UpdatePartialRoamingDeviceGroup", "Partial Roaming Device Group", "Configuration Atom"
+  ];
+  let parser = (disabled:bool=false) {
+      CommonSecurityLog
+      | where not(disabled)
+          and DeviceVendor == "Infoblox"
+          and DeviceEventClassID has "AUDIT"
+      | parse-kv AdditionalExtensions as (InfobloxHTTPReqBody:string, InfobloxHTTPRespBody:string) with (pair_delimiter=";", kv_delimiter="=")
+      | lookup EventSeverityLookup on LogSeverity
+      | lookup OperationLookup on DeviceAction
+      | invoke _ASIM_ResolveDvcFQDN('CollectorHostName')
+      | project-rename
+          EventResult = EventOutcome,
+          Operation = DeviceAction,
+          ActorUsername = SourceUserName,
+          SrcIpAddr = SourceIP,
+          EventOriginalSeverity = LogSeverity,
+          EventMessage = Message,
+          EventOriginalType = DeviceEventClassID,
+          EventUid = _ItemId
+      | extend
+          Dvc = DvcHostname,
+          EventEndTime = TimeGenerated,
+          EventStartTime = TimeGenerated,
+          EventType = case(
+                  Operation has_any ("update", "upsert"),
+                  "Set", 
+                  Operation has "create",
+                  "Create",
+                  Operation has "delete",
+                  "Delete",
+                  "Other"
+              ),
+          Object = iff(isempty(Object), "Infoblox Network Resource", Object),
+          ObjectType = iff(isempty(ObjectType), "Service", ObjectType),
+          Src = SrcIpAddr,
+          ActorUserType = _ASIM_GetUserType(ActorUsername, ""),
+          AdditionalFields = bag_pack(
+                        "InfobloxHTTPReqBody",
+                        InfobloxHTTPReqBody,
+                        "InfobloxHTTPRespBody",
+                        InfobloxHTTPRespBody
+                    ),
+          User = ActorUsername,
+          IpAddr = SrcIpAddr,
+          ActorUsernameType = _ASIM_GetUsernameType(ActorUsername)
+      | extend
+          EventCount = toint(1),
+          EventProduct = "BloxOne",
+          EventVendor = "Infoblox",
+          EventSchema = "AuditEvent",
+          EventSchemaVersion = "0.1"
+      | project-away
+          Source*,
+          Destination*,
+          Device*,
+          AdditionalExtensions,
+          CommunicationDirection,
+          Protocol,
+          SimplifiedDeviceAction,
+          ExternalID,
+          EndTime,
+          FieldDevice*,
+          Flex*,
+          File*,
+          Old*,
+          MaliciousIP*,
+          OriginalLogSeverity,
+          Process*,
+          ReceivedBytes,
+          SentBytes,
+          Remote*,
+          Request*,
+          StartTime,
+          TenantId,
+          ReportReferenceLink,
+          ReceiptTime,
+          Indicator*,
+          _ResourceId,
+          ThreatConfidence,
+          ThreatDescription,
+          ThreatSeverity,
+          Computer,
+          ApplicationProtocol,
+          ExtID,
+          Reason,
+          Activity,
+          Infoblox*
+  };
+  parser(disabled=disabled)
