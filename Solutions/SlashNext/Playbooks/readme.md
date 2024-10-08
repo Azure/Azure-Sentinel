@@ -70,8 +70,7 @@ Once deployment is complete, authorize SlashNext Logic Apps Connector connection
 4. Select relevant permission and save
 5. Repeat above steps for the following permissions
     1. Log Analytics Reader
-    2. Microsoft Sentinel Contributor
-    
+    2. Microsoft Sentinel Contributor  
 
 #### c. Set following Variables in Logic App as per the Environment
 
