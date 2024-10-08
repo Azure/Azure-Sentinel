@@ -2,7 +2,7 @@
 
 ARM template for ASIM AuditEvent schema parser for Illumio Core.
 
-This ASIM parser supports normalizing Illumio Core audit events logs ingested in 'Illumio_Auditable_Events_CL' table to the ASIM Audit Event schema.
+This ASIM parser supports normalizing Illumio Core audit events logs ingested in 'Illumio_Auditable_Events_CL' table to the ASIM Audit Event schema. Test
 
 
 The Advanced Security Information Model (ASIM) enables you to use and create source-agnostic content, simplifying your analysis of the data in your Microsoft Sentinel workspace.
