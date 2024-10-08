@@ -390,4 +390,4 @@ for file in parser_yaml_files:
         senddtosentinel(immutable_id,data_result,stream_name,flag)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
-        continue
+        continue 
