@@ -303,6 +303,7 @@ for file in parser_yaml_files:
         continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
+    print(f"Reading Asim Parser file from {asim_parser_url}")
     asim_parser = read_github_yaml(asim_parser_url)
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
@@ -312,6 +313,7 @@ for file in parser_yaml_files:
     SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
     SampleDataUrl = sample_data_url+SampleDataFile
+    print(f"Sample data log file reading from url: {SampleDataUrl}")
     response = requests.get(SampleDataUrl)
     if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
