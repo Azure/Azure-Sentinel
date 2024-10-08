@@ -78,3 +78,4 @@ Once deployment is complete, authorize SlashNext Logic Apps Connector connection
 2. Workspace Id
 3. Resource Group
 4. Workspace Name
+
