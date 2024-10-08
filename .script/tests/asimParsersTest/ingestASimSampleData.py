@@ -303,7 +303,7 @@ for file in parser_yaml_files:
         continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
-    print(f"Reading Asim Parser file from {asim_parser_url}")
+    print(f"Reading Asim Parser file from : {asim_parser_url}")
     asim_parser = read_github_yaml(asim_parser_url)
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
