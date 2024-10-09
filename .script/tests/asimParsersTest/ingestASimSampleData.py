@@ -68,19 +68,36 @@ def convert_schema_csv_to_json(csv_file):
     return data
 
 def convert_data_csv_to_json(csv_file):
+    def convert_value(value):
+        # Try to convert the value to an integer, then to a float, and keep it as a string if those fail
+        try:
+            # Try integer conversion
+            return int(value)
+        except ValueError:
+            try:
+                # Try float conversion
+                return float(value)
+            except ValueError:
+                # Return the value as-is (string) if it's not numeric
+                return value
+
     data = []
-    with open(csv_file, 'r',encoding='utf-8-sig') as file:
+    with open(csv_file, 'r', encoding='utf-8-sig') as file:
         reader = csv.DictReader(file)
         for row in reader:
-            table_name=row['Type']
-            data.append(row)
+            table_name = row['Type']
+            # Convert each value in the row to its appropriate type
+            processed_row = {key: convert_value(value) for key, value in row.items()}
+            data.append(processed_row)
+        
         for item in data:
             for key in list(item.keys()):
-                # If the key matches 'TimeGenerated [UTC]', rename it
-                if key.endswith('[UTC]'):
-                    substring = key.split(" [")[0] 
-                    item[substring] = item.pop(key)                               
-    return data , table_name
+                # If the key matches '[UTC]' or '[Local Time]', rename it
+                if key.endswith(('[UTC]', '[Local Time]')):
+                    substring = key.split(" [")[0]
+                    item[substring] = item.pop(key)
+
+    return data, table_name
 
 def check_for_custom_table(table_name):
     if table_name in lia_supported_builtin_table:
@@ -275,15 +292,28 @@ commit_number = get_current_commit_number()
 prnumber = sys.argv[1]
 
 for file in parser_yaml_files:
+    SchemaNameMatch = re.search(r'ASim(\w+)/', file)
+    if SchemaNameMatch:
+        SchemaName = SchemaNameMatch.group(1)
+    else:
+        SchemaName = None
+    # Check if changed file is a union parser. If Yes, skip the file
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')):
+        print(f"Ignoring this {file} because it is a union parser file")
+        continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
+    print(f"Reading Asim Parser file from : {asim_parser_url}")
     asim_parser = read_github_yaml(asim_parser_url)
     parser_query = asim_parser.get('ParserQuery', '')
+    normalization = asim_parser.get('Normalization', {})
+    schema = normalization.get('Schema')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
-    SampleDataFile = f'{event_vendor}_{event_product}_{schema_name}_IngestedLogs.csv'
+    SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
     SampleDataUrl = sample_data_url+SampleDataFile
+    print(f"Sample data log file reading from url: {SampleDataUrl}")
     response = requests.get(SampleDataUrl)
     if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
@@ -360,4 +390,4 @@ for file in parser_yaml_files:
         senddtosentinel(immutable_id,data_result,stream_name,flag)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
-        continue
+        continue 
