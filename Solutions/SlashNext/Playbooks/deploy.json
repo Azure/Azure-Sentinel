@@ -1,5 +1,5 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
     "Web Access log Assessment Playbook Name": {
@@ -324,14 +324,14 @@
 										},
 										{
 											"name": "FUNCTIONS_EXTENSION_VERSION",
-											"value": "~2"
+											"value": "~4"
 										},
 										{
 											"name": "FUNCTIONS_WORKER_RUNTIME",
 											"value": "python"
 										}
 									],
-									"linuxFxVersion": "python|3.6"
+									"linuxFxVersion": "python|3.10"
 								}
 							},
 							"resources": [{
@@ -367,8 +367,8 @@
 							"name": "[variables('serverFarmName')]",
 							"location": "[resourceGroup().location]",
 							"sku": {
-								"name": "S1",
-								"tier": "Standard"
+								"name": "P0V3",
+								"tier": "Premium v3"
 							},
 							"kind": "elastic",
 							"properties": {
@@ -1118,178 +1118,267 @@
                     }
                   },
                   "actions": {
-                    "Add_comment_to_incident": {
-                      "runAfter": {
-                        "Sentinel_Comment_Condition": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "ApiConnection",
-                      "inputs": {
-                        "body": {
-                          "incidentArmId": "@triggerBody()?['object']?['id']",
-                          "message": "\u003cp\u003e@{variables('message')}\u003c/p\u003e"
-                        },
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                          }
-                        },
-                        "method": "post",
-                        "path": "/Incidents/Comment"
-                      }
-                    },
-                    "Entities_-_Get_URLs": {
-                      "runAfter": {
-                      },
-                      "type": "ApiConnection",
-                      "inputs": {
-                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
-                        "host": {
-                          "connection": {
-                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                          }
-                        },
-                        "method": "post",
-                        "path": "/entities/url"
-                      }
-                    },
-                    "For_each": {
-                      "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
-                      "actions": {
-                        "Condition": {
-                          "actions": {
-                            "Append_Malicious_URL": {
-                              "runAfter": {
+                      "Add_comment_to_incident": {
+                          "inputs": {
+                              "body": {
+                                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                                  "message": "<p>@{variables('message')}</p>"
                               },
-                              "type": "AppendToArrayVariable",
-                              "inputs": {
-                                "name": "malicious_urls",
-                                "value": "@items('For_each')?['Url']"
-                              }
-                            }
+                              "host": {
+                                  "connection": {
+                                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                              },
+                              "method": "post",
+                              "path": "/Incidents/Comment"
                           },
                           "runAfter": {
-                            "Repute": [
-                              "Succeeded"
-                            ]
+                              "If_Incident_has_both_Malicious_and_Benign_URLs": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "ApiConnection"
+                      },
+                      "Benign_URLs": {
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "benign_urls",
+                                      "type": "array",
+                                      "value": []
+                                  }
+                              ]
+                          },
+                          "runAfter": {
+                              "Malicious_URLs": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable"
+                      },
+                      "Entities_-_Get_URLs": {
+                          "inputs": {
+                              "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                              "host": {
+                                  "connection": {
+                                      "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                  }
+                              },
+                              "method": "post",
+                              "path": "/entities/url"
+                          },
+                          "runAfter": {},
+                          "type": "ApiConnection"
+                      },
+                      "If_Incident_has_both_Malicious_and_Benign_URLs": {
+                          "actions": {
+                              "Prepare_message": {
+                                  "inputs": {
+                                      "name": "message",
+                                      "value": "According to SlashNext connector below mentioned URLs are \nMalicious: @{variables('malicious_urls')}\nBenign: @{variables('benign_urls')}"
+                                  },
+                                  "runAfter": {},
+                                  "type": "SetVariable"
+                              }
                           },
                           "expression": {
-                            "and": [
-                              {
-                                "equals": [
-                                  "@body('Repute')?['total_malicious_urls']",
-                                  1
-                                ]
-                              }
-                            ]
+                              "and": [
+                                  {
+                                      "greaterOrEquals": [
+                                          "@length(variables('malicious_urls'))",
+                                          1
+                                      ]
+                                  },
+                                  {
+                                      "greaterOrEquals": [
+                                          "@length(variables('benign_urls'))",
+                                          1
+                                      ]
+                                  }
+                              ]
+                          },
+                          "runAfter": {
+                              "Malicious_Comment_Condition": [
+                                  "Succeeded"
+                              ]
                           },
                           "type": "If"
-                        },
-                        "Repute": {
-                          "runAfter": {
-                          },
-                          "type": "ApiConnection",
-                          "inputs": {
-                            "body": {
-                              "urls": [
-                                "@items('For_each')?['Url']"
-                              ]
-                            },
-                            "host": {
-                              "connection": {
-                                "name": "@parameters('$connections')['SlashNext']['connectionId']"
+                      },
+                      "Iterate_each_URL_in_the_incident": {
+                          "actions": {
+                              "If_Benign": {
+                                  "actions": {
+                                      "Append_Benign_URL": {
+                                          "inputs": {
+                                              "name": "benign_urls",
+                                              "value": "@items('Iterate_each_URL_in_the_incident')?['Url']"
+                                          },
+                                          "runAfter": {},
+                                          "type": "AppendToArrayVariable"
+                                      }
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "greaterOrEquals": [
+                                                  "@body('Repute')?['total_benign_urls']",
+                                                  1
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "runAfter": {
+                                      "Repute": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "If_Malicious": {
+                                  "actions": {
+                                      "Append_Malicious_URL": {
+                                          "inputs": {
+                                              "name": "malicious_urls",
+                                              "value": "@items('Iterate_each_URL_in_the_incident')?['Url']"
+                                          },
+                                          "runAfter": {},
+                                          "type": "AppendToArrayVariable"
+                                      }
+                                  },
+                                  "expression": {
+                                      "and": [
+                                          {
+                                              "greaterOrEquals": [
+                                                  "@body('Repute')?['total_malicious_urls']",
+                                                  1
+                                              ]
+                                          }
+                                      ]
+                                  },
+                                  "runAfter": {
+                                      "Repute": [
+                                          "Succeeded"
+                                      ]
+                                  },
+                                  "type": "If"
+                              },
+                              "Repute": {
+                                  "inputs": {
+                                      "body": {
+                                          "urls": [
+                                              "@items('Iterate_each_URL_in_the_incident')?['Url']"
+                                          ]
+                                      },
+                                      "host": {
+                                          "connection": {
+                                              "name": "@parameters('$connections')['SlashNext']['connectionId']"
+                                          }
+                                      },
+                                      "method": "post",
+                                      "path": "/api/v1/urls/repute"
+                                  },
+                                  "runAfter": {},
+                                  "type": "ApiConnection"
                               }
-                            },
-                            "method": "post",
-                            "path": "/api/v1/urls/repute"
-                          }
-                        }
-                      },
-                      "runAfter": {
-                        "Message": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "Foreach"
-                    },
-                    "Malicious_URLs": {
-                      "runAfter": {
-                        "Entities_-_Get_URLs": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
-                            "name": "malicious_urls",
-                            "type": "array",
-                            "value": [
-                            ]
-                          }
-                        ]
-                      }
-                    },
-                    "Message": {
-                      "runAfter": {
-                        "Malicious_URLs": [
-                          "Succeeded"
-                        ]
-                      },
-                      "type": "InitializeVariable",
-                      "inputs": {
-                        "variables": [
-                          {
-                            "name": "message",
-                            "type": "string",
-                            "value": "''"
-                          }
-                        ]
-                      }
-                    },
-                    "Sentinel_Comment_Condition": {
-                      "actions": {
-                        "Message_For_Multiple_Incidents": {
-                          "runAfter": {
                           },
-                          "type": "SetVariable",
+                          "foreach": "@body('Entities_-_Get_URLs')?['URLs']",
+                          "runAfter": {
+                              "Message": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "Foreach"
+                      },
+                      "Malicious_Comment_Condition": {
+                          "actions": {
+                              "Message_For_Malicious_Incident(s)": {
+                                  "inputs": {
+                                      "name": "message",
+                                      "value": "According to SlashNext connector below mentioned URLs are malicious\n@{variables('malicious_urls')}"
+                                  },
+                                  "runAfter": {},
+                                  "type": "SetVariable"
+                              }
+                          },
+                          "else": {
+                              "actions": {
+                                  "Benign_Comment_Condition": {
+                                      "actions": {
+                                          "Message_For_Benign_Incident(s)": {
+                                              "inputs": {
+                                                  "name": "message",
+                                                  "value": "According to SlashNext connector below mentioned URL(s) are benign\n@{variables('benign_urls')}"
+                                              },
+                                              "runAfter": {},
+                                              "type": "SetVariable"
+                                          }
+                                      },
+                                      "expression": {
+                                          "and": [
+                                              {
+                                                  "greaterOrEquals": [
+                                                      "@length(variables('benign_urls'))",
+                                                      1
+                                                  ]
+                                              }
+                                          ]
+                                      },
+                                      "runAfter": {},
+                                      "type": "If"
+                                  }
+                              }
+                          },
+                          "expression": {
+                              "and": [
+                                  {
+                                      "greaterOrEquals": [
+                                          "@length(variables('malicious_urls'))",
+                                          1
+                                      ]
+                                  }
+                              ]
+                          },
+                          "runAfter": {
+                              "Iterate_each_URL_in_the_incident": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "If"
+                      },
+                      "Malicious_URLs": {
                           "inputs": {
-                            "name": "message",
-                            "value": "According to SlashNext connector below mentioned URLs are malicious\n@{variables('malicious_urls')}"
-                          }
-                        }
+                              "variables": [
+                                  {
+                                      "name": "malicious_urls",
+                                      "type": "array",
+                                      "value": []
+                                  }
+                              ]
+                          },
+                          "runAfter": {
+                              "Entities_-_Get_URLs": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable"
                       },
-                      "runAfter": {
-                        "For_each": [
-                          "Succeeded"
-                        ]
-                      },
-                      "else": {
-                        "actions": {
-                          "Message_For_Single_Incident": {
-                            "runAfter": {
-                            },
-                            "type": "SetVariable",
-                            "inputs": {
-                              "name": "message",
-                              "value": "According to SlashNext connector below mentioned URL is malicious\n@{variables('malicious_urls')}"
-                            }
-                          }
-                        }
-                      },
-                      "expression": {
-                        "and": [
-                          {
-                            "greater": [
-                              "@length(variables('malicious_urls'))",
-                              1
-                            ]
-                          }
-                        ]
-                      },
-                      "type": "If"
-                    }
+                      "Message": {
+                          "inputs": {
+                              "variables": [
+                                  {
+                                      "name": "message",
+                                      "type": "string",
+                                      "value": "No URL extracted from Entities"
+                                  }
+                              ]
+                          },
+                          "runAfter": {
+                              "Benign_URLs": [
+                                  "Succeeded"
+                              ]
+                          },
+                          "type": "InitializeVariable"
+                      }
                   },
                   "outputs": {
                   }
