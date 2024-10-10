@@ -9,8 +9,7 @@ Welcome to the **MDTI Actor Lookup** project! This repository focuses on using t
 3. Getting Started
 4. Deployment
 5. Usage
-6. Contributing
-7. License
+
 
 ## Introduction
 
@@ -59,23 +58,30 @@ You can however just use the MDTI API and the function app and hook them into wh
 
 Follow these steps to deploy the application to Azure:
 
-1. Deploy using the button below.
-2. Choose your regions for app services deployment, you might encounter an error with the API version (different regions support different versions), if so correct in the template and redeploy.
-3. The files will be deployed but some settings in function_app.py will remain so you will need to edit the file. Fill in your client id, secret and tenant info and away you go.
+1. Deploy a function app using the Azure Portal or VSCode (Recommended) - https://learn.microsoft.com/en-us/azure/azure-functions/create-first-function-vs-code-python
+2. Download the MDTIAFunc.zip file and extract the files.
+3. Open extracted folder in VSCode and modify the section in function_app.py for your MDTI client, client secret and tenant ID.
+4. In VSCode, publish to your function app and verify that you see the trigger working.
+5. Note the code to connect to your function app, you'll want to add this to a keyvault to avoid connecting in plaintext
+
+Why no arm template?  Well the function_app.py trigger will fail because the API information is not prefilled, which will mean you have to essentially do everything I mention above anyway to fill it and then republish so I'm saving you the headache of troubleshooting :D
 
 ## Deployment of the Logic App
 
+1. Once your function app is deployed, first deploy the Content Hub solution called "Microsoft Defender Threat Intelligence"
+2. Configure the playbook MDTI-Base with your client id, client secret and publish the playbook
+3. Run the deployment arm template from the button below
+4. Whenever you deploy a logic app from template you have to establish the connections for Sentinel/Copilot and your keyvault, just click on the items and set the account
+5. Test your playbook by running it on any incident with an external IP/domain
+
+<a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FMrSharpBones%2FMDTI%2Frefs%2Fheads%2Fmain%2FMDTI%2520Actor%2520Lookup%2FLogic%2520App%2Fazuredeploy.json" target="_blank">
+  <img src="https://aka.ms/deploytoazurebutton"/>
+</a>
 
 
 ## Usage
 
-Once deployed, you can attach the playbook to any/all Sentinel playbooks, Copilot will only be invoked should an actor group show up on in the results.  The MDTI API allows for unlimited (but throttled) API queries, so you can use this as much as you want without the worry of overage fees.
+Once deployed, you can attach the playbook to any/all Sentinel playbooks, Copilot will only be invoked should an actor group show up on in the results.  The MDTI API allows for unlimited (but throttled) API queries, so you can use this as much as you want without the worry of overage fees.  This could run tens of thousands of API queries a day, without creating any noise without a hit(s)
 
-## License
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
-
----
-
-Happy coding! If you have any questions or need further assistance, feel free to reach out.
 
