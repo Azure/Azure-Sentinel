@@ -25,6 +25,7 @@ MAX_QUEUE_MESSAGES_MAIN_QUEUE = constants.MAX_QUEUE_MESSAGES_MAIN_QUEUE
 ALLOWED_TRAFFIC = constants.ALLOWED_TRAFFIC
 POTENTIALLY_BLOCKED_TRAFFIC = constants.POTENTIALLY_BLOCKED_TRAFFIC
 BLOCKED_TRAFFIC = constants.BLOCKED_TRAFFIC
+UNKNOWN_TRAFFIC = constants.UNKNOWN_TRAFFIC
 ALL_TRAFFIC = constants.ALL_TRAFFIC
 MAX_ACCUMULATED_FILE_SIZE = 500 * 1000  # 500kb
 MAX_AZURE_QUEUE_SIZE_PER_ELEMENT_LIMIT = 64 * 1000  # 64KB
@@ -112,12 +113,15 @@ def skip_processing_network_traffic_file(file_path):
         ALLOWED_TRAFFIC: "pd=0",
         POTENTIALLY_BLOCKED_TRAFFIC: "pd=1",
         BLOCKED_TRAFFIC: "pd=2",
+        UNKNOWN_TRAFFIC: "pd=3",
     }
+
     if ALL_TRAFFIC in NETWORK_TRAFFIC_LOGS_TO_CONSUME:
         return False
 
     # Suppose file_pd is "pd=2", which means customer wants to ingest only blocked traffic
-    # and file_path contains pd=0 (allowed), then this method returns
+    # and file_path contains pd=0 (allowed), then this method returns True, as in, skip the file
+    # else return False and process it
     for pd in NETWORK_TRAFFIC_LOGS_TO_CONSUME:
         if pd_mapping[pd] in file_path:
             return False

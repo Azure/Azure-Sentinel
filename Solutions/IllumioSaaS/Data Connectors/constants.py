@@ -26,6 +26,7 @@ AUDIT_EVENTS = "Auditable Events"
 ALLOWED_TRAFFIC = "allowed"
 POTENTIALLY_BLOCKED_TRAFFIC = "potentially_blocked"
 BLOCKED_TRAFFIC = "blocked"
+UNKNOWN_TRAFFIC = "unknown"
 ALL_TRAFFIC = "All"
 
 # Azure config
