@@ -29,39 +29,51 @@ query: |
   | where EventID == 4688
   | where Process has_any ("powershell.exe","powershell_ise.exe","pwsh.exe") and CommandLine has_cs "-exec bypass -w 1 -enc"
   | where CommandLine  contains_cs "UwB0AGEAcgB0AC0ASgBvAGIAIAAtAFMAYwByAGkAcAB0AEIAbABvAGMAawAgAHsAKABzAGEAcABzACAAKAAiAHAA"
-  | extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, ProcessCustomEntity = Process
+  | extend DvcHostName = Computer, ProcessID = ProcessId
   ),
   (DeviceProcessEvents
   | where FileName =~ "powershell.exe" and ProcessCommandLine has_cs "-exec bypass -w 1 -enc"  
   | where ProcessCommandLine contains_cs "UwB0AGEAcgB0AC0ASgBvAGIAIAAtAFMAYwByAGkAcAB0AEIAbABvAGMAawAgAHsAKABzAGEAcABzACAAKAAiAHAA" 
-  | extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName, ProcessCustomEntity = InitiatingProcessFileName
+  | extend DvcHostName = DeviceName, ProcessID = InitiatingProcessId
   ),
   (imProcessCreate
   | where Process has_any ("powershell.exe","powershell_ise.exe","pwsh.exe") and CommandLine has_cs "-exec bypass -w 1 -enc"
   | where CommandLine  contains_cs "UwB0AGEAcgB0AC0ASgBvAGIAIAAtAFMAYwByAGkAcAB0AEIAbABvAGMAawAgAHsAKABzAGEAcABzACAAKAAiAHAA"
-  | extend timestamp = TimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = DvcHostname, ProcessCustomEntity = Process
+  | extend ProcessID = TargetProcessId
   )
   )
+  | extend AccountName = tostring(split(ActorUsername, "\\")[0]), AccountNTDomain = tostring(split(ActorUsername, "\\")[1]), ProcessID = TargetProcessId
+  | extend HostName = tostring(split(DvcHostname, ".")[0]), DomainIndex = toint(indexof(DvcHostname, '.'))
+  | extend HostNameDomain = iff(DomainIndex != -1, substring(DvcHostname, DomainIndex + 1), DvcHostname)
+ 
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: FullName
-        columnName: AccountCustomEntity
+        columnName: ActorUsername
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: HostCustomEntity
+        columnName: DvcHostname
+      - identifier: HostName
+        columnName: HostName
+      - identifier: NTDomain
+        columnName: HostNameDomain
   - entityType: Process
     fieldMappings:
       - identifier: ProcessId
-        columnName: ProcessCustomEntity
-version: 1.0.2
+        columnName: ProcessID
+version: 1.0.4
 kind: Scheduled
 metadata:
     source:
         kind: Community
     author:
-        name: Ajeet Prakash
+        name: Microsoft Security Research
     support:
         tier: Community
     categories:

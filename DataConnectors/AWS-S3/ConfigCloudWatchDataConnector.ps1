@@ -31,7 +31,7 @@ function Get-RoleAndCloudWatchS3Policy
                 'AWS': '$RoleArn'
             },
             'Action': ['s3:GetObject'],
-            'Resource': 'arn:aws:s3:::$BucketName/*'
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*'
         },
         {
             'Sid': 'Allow CloudWatch to upload objects to the bucket',
@@ -40,7 +40,7 @@ function Get-RoleAndCloudWatchS3Policy
                 'Service': 'logs.$regionConfiguration.amazonaws.com'
             },
             'Action': 's3:PutObject',
-            'Resource': 'arn:aws:s3:::$BucketName/*'
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*'
         },
 		{
             'Sid': 'AWSCloudWatchAclCheck',
@@ -49,14 +49,14 @@ function Get-RoleAndCloudWatchS3Policy
                 'Service': 'logs.$regionConfiguration.amazonaws.com'
             },
             'Action': 's3:GetBucketAcl',
-            'Resource': 'arn:aws:s3:::${bucketName}'
+            'Resource': '$($AwsCloudResource):s3:::${bucketName}'
         },
         {
             'Sid': 'Deny non-HTTPS access',
             'Effect': 'Deny',
             'Principal': '*',
             'Action': 's3:*',
-            'Resource': 'arn:aws:s3:::$BucketName/*',
+            'Resource': '$($AwsCloudResource):s3:::$BucketName/*',
             'Condition': {
                 'Bool': {
                     'aws:SecureTransport': 'false'
@@ -75,6 +75,8 @@ Write-Log -Message "Starting data connector configuration script" -LogFileName $
 Write-Log -Message "This script creates an Assume Role with minimal permissions to grant Azure Sentinel access to your logs in a designated S3 bucket & SQS of your choice, enable S3 bucket, SQS Queue, and S3 notifications." -LogFileName $LogFileName -LinePadding 2
 Write-ScriptNotes
 
+# Add an Identity Provider
+New-OidcProvider
 New-ArnRole
 Write-Log -Message "Executing: aws iam get-role --role-name $roleName" -LogFileName $LogFileName -Severity Verbose
 $roleArnObject = aws iam get-role --role-name $roleName

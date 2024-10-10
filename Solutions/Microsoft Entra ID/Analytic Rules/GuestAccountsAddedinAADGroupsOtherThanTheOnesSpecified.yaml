@@ -25,14 +25,17 @@ query: |
   let GroupIDs = dynamic(["List with Custom AAD GROUP OBJECT ID 1","Custom AAD GROUP OBJECT ID 2"]);
   AuditLogs
   | where OperationName in ('Add member to group', 'Add owner to group')
-  | extend InitiatedByActionUserInformation = iff(isnotempty(InitiatedBy.user.userPrincipalName), InitiatedBy.user.userPrincipalName, InitiatedBy.app.displayName)
-  | extend InitiatedByIPAdress = InitiatedBy.user.ipAddress 
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
   // Uncomment the following line to filter events where the inviting user was a guest user
   //| where InitiatedBy has_any ("CUSTOM DOMAIN NAME#", "#EXT#")
   | mv-apply TargetResource = TargetResources on 
     (
         where TargetResource.type =~ "User"
-        | extend InvitedUser = trim(@'"',tostring(TargetResource.userPrincipalName)),
+        | extend InvitedUserPrincipalName = trim(@'"',tostring(TargetResource.userPrincipalName)),
                  Properties = TargetResource.modifiedProperties
     )
   | mv-apply Property = Properties on 
@@ -40,34 +43,50 @@ query: |
         where Property.displayName =~ "Group.DisplayName"
         | extend AADGroup = trim('"',tostring(Property.newValue))
     )
-  | where InvitedUser has_any ("CUSTOM DOMAIN NAME#", "#EXT#")
+  | where InvitedUserPrincipalName has_any ("CUSTOM DOMAIN NAME#", "#EXT#")
   | mv-apply Property = Properties on
      (
        where Property.displayName =~ "Group.ObjectID"
        | extend AADGroupId = trim('"',tostring(Property.newValue))
      )
+  | project-away TargetResource, Property
   | where AADGroupId !in (GroupIDs)
-  | extend Name = tostring(split(InitiatedByActionUserInformation,'@',0)[0]), UPNSuffix = tostring(split(InitiatedByActionUserInformation,'@',1)[0])
+  | extend Name = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+  | extend InvitedUserName = tostring(split(InvitedUserPrincipalName,'@',0)[0]), InvitedUPNSuffix = tostring(split(InvitedUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InvitedUserPrincipalName
       - identifier: Name
-        columnName: InvitedUser
+        columnName: InvitedUserName
+      - identifier: UPNSuffix
+        columnName: InvitedUPNSuffix
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
       - identifier: Name
         columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
   - entityType: IP
     fieldMappings:
       - identifier: Address
-        columnName: InitiatedByIPAdress
+        columnName: InitiatingIpAddress
   - entityType: SecurityGroup
     fieldMappings:
       - identifier: DistinguishedName
         columnName: AADGroup
       - identifier: ObjectGuid
         columnName: AADGroupId
-version: 1.0.5
+version: 1.0.6
 kind: Scheduled

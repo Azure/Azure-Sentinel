@@ -1,0 +1,86 @@
+Parser:
+  Title: Dhcp Event ASIM filtering parser for Microsoft Sentinel native Dhcp Event table
+  Version: '0.1.0'
+  LastUpdated: Mar 12 2024
+Product:
+  Name: Native
+Normalization:
+  Schema: DhcpEvent
+  Version: '0.1'
+References:
+- Title: ASIM Dhcp Event Schema
+  Link: https://aka.ms/ASimDhcpEventDoc
+- Title: ASIM
+  Link: https:/aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports filtering and normalizing the native Dhcp Event table (ASimDhcpEventLogs) to the ASIM Dhcp Event normalized schema. While the native table is ASIM compliant, the parser is needed to add capabilities, such as aliases, available only at query time.
+ParserName: vimDhcpEventNative
+EquivalentBuiltInParser: _Im_DhcpEvent_Native
+ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: srcipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: srchostname_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: srcusername_has_any
+    Type: dynamic 
+    Default: dynamic([])
+  - Name: eventresult
+    Type: string
+    Default: '*'
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let parser = (
+    starttime:datetime=datetime(null), 
+    endtime:datetime=datetime(null),
+    srcipaddr_has_any_prefix:dynamic=dynamic([]),
+    srchostname_has_any:dynamic=dynamic([]),
+    srcusername_has_any:dynamic=dynamic([]),
+    eventresult:string='*',
+    disabled:bool=false
+  )
+  {
+    ASimDhcpEventLogs
+    | where not(disabled)
+    | where (isnull(starttime) or TimeGenerated >= starttime) 
+        and (isnull(endtime) or TimeGenerated <= endtime)
+        and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(SrcIpAddr, srcipaddr_has_any_prefix))
+        and (array_length(srchostname_has_any) == 0 or (SrcHostname has_any (srchostname_has_any)))
+        and (array_length(srcusername_has_any) == 0 or (SrcUsername has_any (srcusername_has_any)))
+        and ((eventresult == "*") or (EventResult == eventresult))
+    | project-rename
+        EventUid = _ItemId
+    | extend          
+        EventSchema = "DhcpEvent",
+        DvcScopeId = iff(isempty(DvcScopeId), _SubscriptionId, DvcScopeId)
+    //  -- Aliases
+    | extend
+        EventEndTime = iff (isnull(EventEndTime), TimeGenerated, EventEndTime),
+        EventStartTime = iff (isnull(EventEndTime), TimeGenerated, EventStartTime),
+        Dvc = coalesce (DvcFQDN, DvcHostname, DvcIpAddr, DvcId, _ResourceId),
+        Rule = coalesce(RuleName, tostring(RuleNumber)),
+        SessionId = DhcpSessionId,
+        Duration = DhcpSessionDuration,
+        Src = coalesce (SrcFQDN, SrcHostname, SrcIpAddr, SrcDvcId),
+        User = SrcUsername,
+        IpAddr = SrcIpAddr,
+        Hostname = SrcHostname
+  };
+  parser (
+      starttime                = starttime,
+      endtime                  = endtime,
+      srcipaddr_has_any_prefix = srcipaddr_has_any_prefix,
+      srchostname_has_any      = srchostname_has_any,
+      srcusername_has_any      = srcusername_has_any,
+      eventresult              = eventresult,
+      disabled                 = disabled
+  )

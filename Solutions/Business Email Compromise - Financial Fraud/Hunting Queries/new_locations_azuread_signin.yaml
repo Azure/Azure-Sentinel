@@ -30,7 +30,7 @@ query: |
   | summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), perIdentityAuthCount = count()
   by UserPrincipalName, locationString = strcat(tostring(LocationDetails["countryOrRegion"]), "/", tostring(LocationDetails["state"]), "/",
   tostring(LocationDetails["city"]), ";" , tostring(LocationDetails["geoCoordinates"]))
-  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), distinctAccountCount = count(), identityList=makeset(UserPrincipalName) by locationString
+  | summarize StartTime = min(StartTimeUtc), EndTime = max(EndTimeUtc), distinctAccountCount = count(), identityList=makeset(tolower(UserPrincipalName)) by locationString
   | extend identityList = iff(distinctAccountCount<10, identityList, "multiple (>10)")
   | join kind= anti (
   SigninLogs
@@ -43,26 +43,24 @@ query: |
   // select threshold above which #new accounts from a new location is deemed suspicious
   | where distinctAccountCount > countThreshold
   | mv-expand todynamic(identityList)
-  | extend timestamp = StartTime, Account_0_Name = identityList
+  | extend timestamp = StartTime, Account_0_Name = tostring(identityList)
   | join kind=leftouter (
       IdentityInfo
       | summarize LatestReportTime = arg_max(TimeGenerated, *) by AccountUPN
-      | extend BlastRadiusInt = iif(BlastRadius == "High", 1, 0)
-      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled, BlastRadiusInt
+      | project AccountUPN, Tags, JobTitle, GroupMembership, AssignedRoles, UserType, IsAccountEnabled
       | summarize
           Tags = make_set(Tags, 1000),
           GroupMembership = make_set(GroupMembership, 1000),
           AssignedRoles = make_set(AssignedRoles, 1000),
-          BlastRadiusInt = sum(BlastRadiusInt),
           UserType = make_set(UserType, 1000),
           UserAccountControl = make_set(UserType, 1000)
       by AccountUPN
       | extend UserPrincipalName=tolower(AccountUPN)
       | project-rename Account_0_Name = AccountUPN
-  ) on Account_0_Name
+  ) on $left.Account_0_Name == $right.UserPrincipalName
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
         columnName: identityList
-version: 2.0.1
+version: 2.0.2

@@ -38,11 +38,15 @@ query: |
             where Property.displayName =~ "Role.DisplayName"
             | extend RoleName = trim('"',tostring(Property.oldValue))
         )
-  | where RoleName =~ "Global Administrator" // Add other Privileged role if applicable 
-  | extend InitiatingApp = tostring(InitiatedBy.app.displayName) 
-  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName)) 
+  | where RoleName =~ "Global Administrator" // Add other Privileged role if applicable
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName) 
   | where Initiator != "MS-PIM"  // Filtering PIM events  
-  | summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target,100) by OperationName,  RoleName, Initiator, Result; 
+  | summarize RemovedGlobalAdminTime = max(TimeGenerated), TargetAdmins = make_set(Target,100) by OperationName, RoleName, Initiator, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIpAddress, Result; 
   let GlobalAdminsAdded = AuditLogs 
   | where TimeGenerated > ago(lookback) 
   | where Category =~ "RoleManagement" 
@@ -59,25 +63,47 @@ query: |
             where Property.displayName =~ "Role.DisplayName"
             | extend RoleName = trim('"',tostring(Property.newValue))
         )
-  | where RoleName =~ "Global Administrator" // Add other Privileged role if applicable 
-  | extend InitiatingApp = tostring(InitiatedBy.app.displayName) 
-  | extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(InitiatedBy.user.userPrincipalName)) 
+  | where RoleName =~ "Global Administrator" // Add other Privileged role if applicable
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, tostring(InitiatedBy.user.userPrincipalName)) 
   | where Initiator != "MS-PIM"  // Filtering PIM events 
-  | summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName,  RoleName, Target, Initiator, Result 
-  | extend AccountCustomEntity = Target; 
+  | summarize AddedGlobalAdminTime = max(TimeGenerated) by OperationName, RoleName, Target, Initiator, Result;
   GlobalAdminsAdded 
   | join kind= inner GlobalAdminsRemoved on $left.Target == $right.Initiator 
   | where AddedGlobalAdminTime < RemovedGlobalAdminTime 
   | extend NoofAdminsRemoved = array_length(TargetAdmins) 
   | where NoofAdminsRemoved > 1
-  | project AddedGlobalAdminTime, Initiator, Target, AccountCustomEntity, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved
-  | extend Name = tostring(split(AccountCustomEntity,'@',0)[0]), UPNSuffix = tostring(split(AccountCustomEntity,'@',1)[0])
+  | project AddedGlobalAdminTime, Initiator, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingIpAddress, Target, RemovedGlobalAdminTime, TargetAdmins, NoofAdminsRemoved
+  | extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0])
+  | extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: Target
       - identifier: Name
-        columnName: Name
+        columnName: TargetName
       - identifier: UPNSuffix
-        columnName: UPNSuffix
-version: 1.0.1
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName
+      - identifier: Name
+        columnName: InitiatedByName
+      - identifier: UPNSuffix
+        columnName: InitiatedByUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: InitiatingIpAddress
+version: 1.0.2
 kind: Scheduled

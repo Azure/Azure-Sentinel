@@ -1,0 +1,40 @@
+id: 03caa992-477f-4b19-8e2a-8cd58f8f9652
+name: Deletion of data on multiple drives using cipher exe
+description: |
+  This query checks for attempts to delete data on multiple drives using cipher.exe. This activity is typically done by ransomware to prevent recovery of data after encryption.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: MicrosoftThreatProtection
+    dataTypes:
+      - DeviceProcessEvents
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+  // Look for cipher.exe deleting data from multiple drives
+  DeviceProcessEvents
+  | where FileName =~ "cipher.exe" 
+  // cipher.exe /w flag used for deleting data 
+  | where ProcessCommandLine has "/w" 
+  | summarize CipherCount = dcount(ProcessCommandLine), CipherList = make_set(ProcessCommandLine, 1000) by DeviceId, DeviceName, bin(TimeGenerated, 1m) 
+  // cipher.exe accessing multiple drives in a short timeframe  
+  | where CipherCount > 1
+  | extend HostName = iff(DeviceName has '.', substring(DeviceName, 0, indexof(DeviceName, '.')), DeviceName)
+  | extend DnsDomain = iff(DeviceName has '.', substring(DeviceName, indexof(DeviceName, '.') + 1), "")
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: FullName
+        columnName: DeviceName
+      - identifier: HostName
+        columnName: HostName
+      - identifier: DnsDomain
+        columnName: DnsDomain
+version: 1.0.0
+kind: Scheduled

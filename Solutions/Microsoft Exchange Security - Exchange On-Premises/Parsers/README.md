@@ -34,11 +34,12 @@ Parsers are created [using functions in Azure monitor log queries](https://docs.
 ### Parser Definition
 
 - Title:           ESI - Exchange Configuration Parser
-- Version:         1.6
-- Last Updated:    13/10/2022
+- Version:         1.6.1
+- Last Updated:    19/12/2023
 
 |**Version**  |**Details**  |
 |---------|-----------------------------------------------------------------------------------------------------------------------|
+|v1.6.1    | <ul><li>Adding version in comment of the Parser</li></ul>  |
 |v1.6     | <ul><li>Change consumption of Identity_Name_S by IdentityString_s. Requires CollectExchSecIns Script version 7.5.1 minimum</li></ul>  |
 |v1.5     | <ul><li>Change the usage of TimeGenerated instead of EntryDate for filtering BaseRequest.</li><li>Change alllife duration to 1080 days instead of 90 days. </li></ul>       |
 |v1.4     | <ul><li>Capacity to find all configuration without date limitation with the keyword "alllife" in SpecificConfigurationDate</li></ul>   |

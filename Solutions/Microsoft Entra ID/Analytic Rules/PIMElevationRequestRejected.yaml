@@ -30,29 +30,45 @@ query: |
   | mv-apply ResourceItem = TargetResources on 
     (
         where ResourceItem.type =~ "User"
-        | extend User = trim(@'"',tostring(ResourceItem.userPrincipalName))
+        | extend TargetUserPrincipalName = trim(@'"',tostring(ResourceItem.userPrincipalName))
     )
-  | project-reorder TimeGenerated, User, Role, OperationName, Result, ResultDescription
   | where isnotempty(InitiatedBy.user)
-  | extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName), InitiatingIpAddress = tostring(InitiatedBy.user.ipAddress)
-  | extend InitiatingName = tostring(split(InitiatingUser,'@',0)[0]), InitiatingUPNSuffix = tostring(split(InitiatingUser,'@',1)[0])
-  | extend UserName = tostring(split(User,'@',0)[0]), UserUPNSuffix = tostring(split(User,'@',1)[0])
+  | extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+  | extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+  | extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+  | extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])
+  | extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])
+  | project-reorder TimeGenerated, TargetUserPrincipalName, Role, OperationName, Result, ResultDescription
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingUserPrincipalName    
       - identifier: Name
-        columnName: InitiatingName      
+        columnName: InitiatedByName      
       - identifier: UPNSuffix
-        columnName: InitiatingUPNSuffix
+        columnName: InitiatedByUPNSuffix
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: TargetUserPrincipalName   
       - identifier: Name
-        columnName: UserName      
+        columnName: TargetName      
       - identifier: UPNSuffix
-        columnName: UserUPNSuffix
+        columnName: TargetUPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: InitiatingAppServicePrincipalId
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: InitiatingIpAddress
-version: 1.0.7
+version: 1.0.8
 kind: Scheduled

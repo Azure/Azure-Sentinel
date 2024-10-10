@@ -24,26 +24,19 @@ def main(mytimer: func.TimerRequest, checkpoint: str) -> str:
     threat_intel_feed_request_helper = ThreatIntelFeedRequestHelper()
 
     try:
-        grid_feeds = threat_intel_feed_request_helper.get_threat_intel_feed(
+        latest_feed = threat_intel_feed_request_helper.get_threat_intel_feed(
             mimecast_start_date, mimecast_end_date, "malware_grid"
         )
+        if latest_feed is not None:
+            return latest_feed
+        logging.info("There are no Regional Threat Intel Feeds for this period.")
+        return mimecast_end_date
     except MimecastRequestError as e:
         logging.error(
             "Failed to get TI logs from Mimecast.", extra={"request_id": threat_intel_feed_request_helper.request_id}
         )
         e.request_id = threat_intel_feed_request_helper.request_id
         raise e
-    except Exception as e:
-        logging.error("Unknown Exception raised.", extra={"request_id": threat_intel_feed_request_helper.request_id})
-        raise e
-
-    try:
-        if grid_feeds:
-            latest_feed = threat_intel_feed_request_helper.send_feeds_to_azure(grid_feeds)
-            return latest_feed
-        else:
-            logging.info("There are no Regional Threat Intel Feeds for this period.")
-            return mimecast_end_date
     except GraphAPIRequestError as e:
         logging.error("Failed to send TI logs.", extra={"request_id": threat_intel_feed_request_helper.request_id})
         e.request_id = threat_intel_feed_request_helper.request_id

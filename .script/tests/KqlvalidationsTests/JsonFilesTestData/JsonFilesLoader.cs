@@ -23,7 +23,7 @@ namespace Kqlvalidations.Tests
                     return new List<string>();
                 }
 
-                var gitHubApiClient = GitHubApiClient.Instance;
+                var gitHubApiClient = GitHubApiClient.Create();
                 var basePath = Utils.GetTestDirectory(TestFolderDepth);
                 var prFilesListModified = GetModifiedFilePaths(gitHubApiClient, basePath);
 

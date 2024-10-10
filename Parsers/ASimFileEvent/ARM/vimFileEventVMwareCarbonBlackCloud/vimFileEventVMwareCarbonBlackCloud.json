@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "vimFileEventVMwareCarbonBlackCloud",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "File Event Parser for VMware Carbon Black Cloud",
+            "category": "ASIM",
+            "FunctionAlias": "vimFileEventVMwareCarbonBlackCloud",
+            "query": "let EventFieldsLookup = datatable(\n    sensor_action_s: string,\n    DvcAction: string,\n    EventResult: string\n)[\n    \"ACTION_ALLOW\", \"Allow\", \"Success\",\n    \"ACTION_BLOCK\", \"Block\", \"Failure\",\n    \"ACTION_TERMINATE\", \"Terminate\", \"Failure\",\n    \"ACTION_BREAK\", \"Break\", \"Failure\",\n    \"ACTION_SUSPEND\", \"Suspend\", \"Failure\",\n    \"\", \"\", \"Success\"\n];\nlet EventTypeLookup = datatable(action_s: string, EventType: string)[\n    \"ACTION_FILE_CREATE\", \"FileCreated\",\n    \"ACTION_FILE_DELETE\", \"FileDeleted\",\n    \"ACTION_FILE_LAST_WRITE\", \"FileModified\",\n    \"ACTION_FILE_LINK\", \"FileModified\",\n    \"ACTION_FILE_READ\", \"FileAccessed\",\n    \"ACTION_FILE_RENAME\", \"FileRenamed\",\n    \"ACTION_FILE_WRITE\", \"FileModified\",\n    \"ACTION_FILE_OPEN_DELETE\", \"FileDeleted\",\n    \"ACTION_FILE_OPEN_EXECUTE\", \"FileAccessed\",\n    \"ACTION_FILE_OPEN_SET_ATTRIBUTES\", \"FileAttributesUpdated\",\n    \"ACTION_FILE_OPEN_SET_SECURITY\", \"FileAttributesUpdated\",\n    \"ACTION_FILE_SET_SECURITY\", \"FileAttributesUpdated\",\n    \"ACTION_FILE_TRUNCATE\", \"FileModified\",\n    \"ACTION_FILE_OPEN_WRITE\", \"FileModified\",\n    \"ACTION_FILE_MOD_OPEN\", \"FileAccessed\",\n    \"ACTION_FILE_OPEN_READ\", \"FileAccessed\"\n];\nlet parser = (\n    starttime: datetime=datetime(null), \n    endtime: datetime=datetime(null), \n    eventtype_in: dynamic=dynamic([]), \n    srcipaddr_has_any_prefix: dynamic=dynamic([]), \n    actorusername_has_any: dynamic=dynamic([]), \n    targetfilepath_has_any: dynamic=dynamic([]), \n    srcfilepath_has_any: dynamic=dynamic([]), \n    hashes_has_any: dynamic=dynamic([]), \n    dvchostname_has_any: dynamic=dynamic([]), \n    disabled: bool=false\n    ) {\n    CarbonBlackEvents_CL\n    | where not(disabled)\n    | where ((isnull(starttime) or TimeGenerated >= starttime) and (isnull(endtime) or TimeGenerated <= endtime)) \n    | where eventType_s == \"endpoint.event.filemod\" and isnotempty(filemod_name_s)\n        and action_s !in (\"ACTION_INVALID\", \"ACTION_FILE_UNDELETE\")\n    | where array_length(srcfilepath_has_any) == 0\n        and (array_length(srcipaddr_has_any_prefix) == 0 or has_any_ipv4_prefix(device_external_ip_s, srcipaddr_has_any_prefix))\n        and (array_length(actorusername_has_any) == 0 or process_username_s has_any (actorusername_has_any))\n        and (array_length(targetfilepath_has_any) == 0 or filemod_name_s has_any (targetfilepath_has_any))\n        and (array_length(hashes_has_any) == 0 or filemod_hash_s has_any (hashes_has_any))\n        and (array_length(dvchostname_has_any) == 0 or device_name_s has_any (dvchostname_has_any))\n    | parse filemod_hash_s with * '[\"' TargetFileMD5: string '\",\"' TargetFileSHA256: string '\"]'\n    | lookup EventFieldsLookup on sensor_action_s\n    | extend temp_action = iff(action_s has \"|\", action_s, \"\")\n    | lookup EventTypeLookup on action_s\n    | extend EventType = case(\n                        isnotempty(EventType), EventType,\n                        temp_action has \"delete\", \"FileDeleted\",\n                        temp_action has \"link\", \"FileModified\",\n                        temp_action has \"rename\", \"FileRenamed\",\n                        temp_action has \"execute\", \"FileAccessed\",\n                        temp_action has_any (\"attributes\", \"security\"), \"FileAttributesUpdated\",\n                        temp_action has \"truncate\", \"FileModified\",\n                        temp_action has \"write\", \"FileModified\",\n                        temp_action has_any (\"read\", \"open\"), \"FileAccessed\",\n                        temp_action has \"create\", \"FileCreated\",\n                        \"\"\n                    )\n    | where (array_length(eventtype_in) == 0 or EventType has_any (eventtype_in))\n    | extend\n        EventStartTime = todatetime(split(createTime_s, '+')[0]),\n        TargetFilePathType = case(\n                        device_os_s == \"WINDOWS\" and filemod_name_s startswith \"\\\\\", \"Windows Share\",\n                        device_os_s == \"WINDOWS\", \"Windows Local\",\n                        device_os_s in (\"MAC\", \"LINUX\"), \"Unix\",\n                        \"\"\n                    ),\n        ActingProcessId = tostring(toint(process_pid_d)),\n        TargetFileName = tostring(split(filemod_name_s, '\\\\')[-1]),\n        AdditionalFields = bag_pack(\n                      \"org_key\", org_key_s,\n                      \"process_publisher\", process_publisher_s,\n                      \"process_reputation\", process_reputation_s,\n                      \"process_guid\", process_guid_s\n                  )\n    | invoke _ASIM_ResolveDvcFQDN('device_name_s')\n    | project-rename\n        ActorUsername = process_username_s,\n        DvcIpAddr = device_external_ip_s,\n        EventUid = _ItemId,\n        DvcScope = device_group_s,\n        ActingProcessCommandLine = process_cmdline_s,\n        ActingProcessName = process_path_s,\n        DvcId = device_id_s,\n        DvcOriginalAction = sensor_action_s,\n        DvcOs = device_os_s,\n        EventMessage = event_description_s,\n        EventOriginalType = action_s,\n        EventOriginalUid = event_id_g,\n        EventOwner = event_origin_s,\n        TargetFilePath = filemod_name_s\n    | extend \n        EventProduct = \"Carbon Black Cloud\",\n        EventSchema = \"FileEvent\",\n        EventSchemaVersion = \"0.2.1\",\n        EventVendor = \"VMware\",\n        EventCount = int(1),\n        SrcIpAddr = DvcIpAddr\n    | extend\n        EventEndTime = EventStartTime,\n        IpAddr = SrcIpAddr,\n        Dvc = coalesce(DvcFQDN, DvcId, DvcHostname, DvcIpAddr),\n        Src = SrcIpAddr,\n        FileName = TargetFileName,\n        FilePath = TargetFilePath,\n        Process = ActingProcessName,\n        User = ActorUsername,\n        Hash = coalesce(TargetFileSHA256, TargetFileMD5)\n    | extend\n        ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),\n        ActorUserType = _ASIM_GetUserType(ActorUsername, \"\"),\n        DvcIdType = iff(isnotempty(DvcId), \"Other\", \"\"),\n        HashType = case(\n              isnotempty(TargetFileSHA256),\n              \"TargetFileSHA256\",\n              isnotempty(TargetFileMD5),\n              \"TargetFileMD5\",\n              \"\"\n          )\n    | project-away\n        *_s,\n        *_d,\n        *_g,\n        *_b,\n        _ResourceId,\n        Computer,\n        MG,\n        ManagementGroupName,\n        RawData,\n        SourceSystem,\n        TenantId,\n        temp_action\n};\nparser(\n    starttime=starttime, \n    endtime=endtime, \n    eventtype_in=eventtype_in, \n    srcipaddr_has_any_prefix=srcipaddr_has_any_prefix, \n    actorusername_has_any=actorusername_has_any, \n    targetfilepath_has_any=targetfilepath_has_any, \n    srcfilepath_has_any=srcfilepath_has_any, \n    hashes_has_any=hashes_has_any, \n    dvchostname_has_any=dvchostname_has_any, \n    disabled=disabled\n)",
+            "version": 1,
+            "functionParameters": "starttime:datetime=datetime(null),endtime:datetime=datetime(null),eventtype_in:dynamic=dynamic([]),srcipaddr_has_any_prefix:dynamic=dynamic([]),actorusername_has_any:dynamic=dynamic([]),targetfilepath_has_any:dynamic=dynamic([]),srcfilepath_has_any:dynamic=dynamic([]),hashes_has_any:dynamic=dynamic([]),dvchostname_has_any:dynamic=dynamic([]),disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

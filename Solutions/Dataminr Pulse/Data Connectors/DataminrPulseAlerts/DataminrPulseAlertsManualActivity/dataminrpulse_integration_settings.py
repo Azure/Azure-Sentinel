@@ -306,7 +306,7 @@ class DataminrPulseConfigureSettings:
             }
             watchlists = []
             for id in self.list_ids:
-                watchlist = {"id": id, "brands": ["ALERT", "FLASH", "URGENT"]}
+                watchlist = {"id": str(id), "brands": ["ALERT", "FLASH", "URGENT"]}
                 watchlists.append(watchlist)
             body.update({"watchlists": watchlists})
             webhook_url = data.get("url")

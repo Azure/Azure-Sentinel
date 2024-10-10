@@ -417,12 +417,9 @@ In order to complete the installation process, you need:
 
 - SAP system details: Make a note of your SAP system IP address, system number, system ID, and client for use during the installation.
 
-- SAP change requests: Import any required change requests for your logs from the CR folder of this repository - https://github.com/Azure/Azure-Sentinel/tree/master/Solutions/SAP/CR.
-
-Configure the following SAP Log change requests to enable support for ingesting specific SAP logs into Azure Sentinel.
-- SAP Basis versions 7.5 and higher:  install NPLK900180
-- SAP Basis version 7.4:  install NPLK900179
-- To create your SAP role in any SAP version: install NPLK900163
+- SAP change requests: To enable support for ingesting specific SAP logs into Microsoft Sentinel, you may need to configure additional SAP log change requests. 
+  Some change requests are mandatory for proper integration. 
+  Please consult our documentation to identify which CRs are required and which ones are recommended based on your environment.
 
 Tip: To create your SAP role with all required authorizations, deploy the SAP change request NPLK900140 on your SAP system. 
 This change request creates the /msftsen/sentinel_connector role, and assigns the role to the ABAP connecting to Azure Sentinel.
@@ -550,6 +547,14 @@ if { [ "$MODE" == 'kvmi' ] && [ -z "$kv" ]; } || { [ "$MODE" == 'kvsi' ] && [ -z
 	read_value kv "KeyVault Name"
 fi
 
+validateKeyVault() {
+	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
+	if [ ! $? -eq 0 ]; then
+		echo "Cannot connect to Key Vault $kv. Agent identity must have 'Key Vault Secrets User' role or list, get secret permissions on the Key Vault."
+		exit 1
+	fi
+}
+
 if [ "$MODE" == "kvmi" ]; then
 	echo "Validating Azure managed identity"
 	az login --identity --allow-no-subscriptions >/dev/null 2>&1
@@ -557,6 +562,7 @@ if [ "$MODE" == "kvmi" ]; then
 		printf 'VM is not set with managed identity or the AZ client was not installed correctly.\nSet and grant relevant Key Vault permissions and make sure that Azure CLI is installed by running "az login"\nFor more information check - https://docs.microsoft.com/cli/azure/install-azure-cli'
 		exit 1
 	fi
+	validateKeyVault
 elif [ "$MODE" == "kvsi" ]; then
 	echo "Validating service principal identity"
 	az login --service-principal -u "$APPID" -p "$APPSECRET" --tenant "$TENANT" --allow-no-subscriptions >/dev/null 2>&1
@@ -564,11 +570,7 @@ elif [ "$MODE" == "kvsi" ]; then
 		echo "Logon with $APPID failed, please check application ID, secret and tenant ID. Ensure the application has been added as an enterprise application"
 		exit 1
 	fi
-	az keyvault secret list --id "https://$kv.vault.azure.net/" >/dev/null 2>&1
-	if [ ! $? -eq 0 ]; then
-		echo "Cannot connect to keyvault $kv. Make sure application $APPID has been granted privileges to the keyvault"
-		exit 1
-	fi
+	validateKeyVault
 fi
 
 echo 'Deploying Azure Sentinel SAP data connector.'
@@ -844,6 +846,14 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
     jq --arg intprefix "$intprefix" '.secrets_source += {"intprefix": $intprefix}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
     jq --arg keyvault "$kv" '.secrets_source += {"keyvault": $keyvault}' "$sysfileloc$sysconf" > "$sysfileloc$sysconf.tmp" && mv "$sysfileloc$sysconf.tmp" "$sysfileloc$sysconf"
 
+	log 'Setting secrets in Azure Key Vault'
+	log 'Please sign-in with a user that has access to set secrets in Azure Key Vault.'
+	az login
+	if [ ! $? -eq 0 ]; then
+		echo 'Unable to sign-in to Azure. Exiting.'
+		exit 1
+	fi
+
 	if [ ! $USESNC ]; then
 		az keyvault secret set --name "$intprefix"-ABAPPASS --value "$passvar" --description SECRET_ABAP_PASS --vault-name "$kv" >/dev/null
 		az keyvault secret set --name "$intprefix"-ABAPUSER --value "$uservar" --description SECRET_ABAP_USER --vault-name "$kv" >/dev/null
@@ -851,7 +861,7 @@ if [ "$MODE" == 'kvmi' ] || [ "$MODE" == 'kvsi' ]; then
 	az keyvault secret set --name "$intprefix"-LOGWSID --value "$logwsid" --description SECRET_LOGWSID --vault-name "$kv" >/dev/null
 	if [ ! $? -eq 0 ]; then
 		log 'Unable to set secrets in Azure Key Vault'
-		log 'Make sure the key vault has a read/write policy configured for the VM managed identity.'
+		log 'Make sure user identity has permission to set secrets in the Key Vault.'
 		exit 1
 	fi
 	az keyvault secret set --name "$intprefix"-LOGWSPUBLICKEY --value "$logpubkey" --description SECRET_LOGWSPUBKEY --vault-name "$kv" >/dev/null

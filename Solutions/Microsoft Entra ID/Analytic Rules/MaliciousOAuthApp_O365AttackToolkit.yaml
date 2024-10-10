@@ -49,14 +49,18 @@ query: |
   | where ConsentFull has_any (o365_attack)  
   | extend GrantScopeCount = countof(tolower(GrantScope1), o365_attack_regex, 'regex')
   | where GrantScopeCount > threshold
+  | extend GrantInitiatedByAppName = tostring(InitiatedBy.app.displayName)
+  | extend GrantInitiatedByAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+  | extend GrantInitiatedByUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+  | extend GrantInitiatedByAadUserId = tostring(InitiatedBy.user.id)
   | extend GrantIpAddress = iff(isnotempty(InitiatedBy.user.ipAddress), tostring(InitiatedBy.user.ipAddress), tostring(InitiatedBy.app.ipAddress))
-  | extend GrantInitiatedBy = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+  | extend GrantInitiatedBy = iff(isnotempty(GrantInitiatedByUserPrincipalName), GrantInitiatedByUserPrincipalName, GrantInitiatedByAppName)
   | mv-apply AdditionalDetail = AdditionalDetails on 
     (
         where AdditionalDetail.key =~ "User-Agent"
         | extend GrantUserAgent = AdditionalDetail.value
     )
-  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, GrantIpAddress, GrantUserAgent, AppClientId, OperationName, ConsentFull, CorrelationId
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, GrantInitiatedByUserPrincipalName, GrantInitiatedByAadUserId, GrantInitiatedByAppName, GrantInitiatedByAppServicePrincipalId, GrantIpAddress, GrantUserAgent, AppClientId, OperationName, ConsentFull, CorrelationId
   | join kind = leftouter (AuditLogs
     | where TimeGenerated > ago(joinLookback)
     | where LoggedByService =~ "Core Directory"
@@ -88,15 +92,25 @@ query: |
         | extend GrantOperation = OperationName
         | project GrantAuthentication, GrantOperation, CorrelationId
     ) on CorrelationId
-  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, AppReplyURLs, GrantIpAddress, GrantUserAgent, AppClientId, GrantAuthentication, OperationName, GrantOperation, CorrelationId, ConsentFull
-  | extend timestamp = TimeGenerated, Name = tostring(split(GrantInitiatedBy,'@',0)[0]), UPNSuffix = tostring(split(GrantInitiatedBy,'@',1)[0])
+  | project TimeGenerated, GrantConsentType, GrantScope1, GrantInitiatedBy, AppDisplayName, AppReplyURLs, GrantInitiatedByUserPrincipalName, GrantInitiatedByAadUserId, GrantInitiatedByAppName, GrantInitiatedByAppServicePrincipalId, GrantIpAddress, GrantUserAgent, AppClientId, GrantAuthentication, OperationName, GrantOperation, CorrelationId, ConsentFull
+  | extend Name = tostring(split(GrantInitiatedByUserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(GrantInitiatedByUserPrincipalName,'@',1)[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: GrantInitiatedByUserPrincipalName
       - identifier: Name
         columnName: Name
       - identifier: UPNSuffix
         columnName: UPNSuffix
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: GrantInitiatedByAadUserId
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: GrantInitiatedByAppServicePrincipalId
   - entityType: IP
     fieldMappings:
       - identifier: Address
@@ -105,5 +119,5 @@ entityMappings:
     fieldMappings:
       - identifier: Name
         columnName: AppDisplayName
-version: 1.1.1
+version: 1.1.2
 kind: Scheduled

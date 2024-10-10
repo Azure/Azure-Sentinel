@@ -23,6 +23,11 @@ variable "organization-id" {
   description = "Organization id"
 }
 
+resource "google_project_service" "enable-logging-api" {
+  service = "logging.googleapis.com"
+  project = data.google_project.project.project_id
+}
+
 resource "google_pubsub_topic" "sentinel-topic" {
   count = "${var.topic-name != "sentinel-topic" ? 0 : 1}"
   name = var.topic-name

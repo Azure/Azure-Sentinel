@@ -1,0 +1,34 @@
+id: 3539f855-611c-4787-b8a9-e3437f138805
+name: anomalous-payload-delivered-from-iso-file
+description: |
+  This query looks for lnk file executions from other locations than C: -drive, which can relate to mounted ISO-files.
+  Reference - https://threathunt.blog/detecting-a-payload-delivered-with-iso-files-using-mde/
+requiredDataConnectors:
+- connectorId: MicrosoftThreatProtection
+  dataTypes:
+  - DeviceProcessEvents
+  - DeviceEvents
+tactics:
+  - Execution
+relevantTechniques:
+  -  T1204.003
+query: |
+  DeviceEvents
+  | where Timestamp > ago(30d) 
+  | where ActionType == 'BrowserLaunchedToOpenUrl' 
+  | where RemoteUrl endswith ".lnk"
+  | where RemoteUrl !startswith "C:"
+  | project LNKLaunchTimestamp = Timestamp, DeviceName, RemoteUrl
+  | parse RemoteUrl with Drive '\\' *
+  | extend Drive= tostring(Drive)
+  | where isnotempty(Drive)
+  | join (
+  DeviceProcessEvents
+  | where Timestamp > ago(30d)
+  | where FolderPath !startswith "C:"
+  | parse FolderPath with Drive '\\' *
+  | project Drive= tostring(Drive), StartedProcessTimestamp = Timestamp, StartedProcessName = FileName, StartedProcessSHA1 = SHA1, StartedProcessCommandline = ProcessCommandLine, StartedProcessPath = FolderPath, DeviceName, StartedProcessParentName = InitiatingProcessFileName, StartedProcessParentCmdline = InitiatingProcessCommandLine, StartedParentProcessFolderPath = InitiatingProcessFolderPath, StartedProcessGrandParent = InitiatingProcessParentFileName, Timestamp
+  ) on DeviceName, Drive
+  | where StartedProcessTimestamp between (LNKLaunchTimestamp ..(LNKLaunchTimestamp+1m))
+  | project-away Drive1, DeviceName1
+  | project-reorder LNKLaunchTimestamp, StartedProcessTimestamp, DeviceName, RemoteUrl, Drive, StartedProcessName, StartedProcessSHA1, StartedProcessPath,StartedProcessCommandline, StartedProcessParentName, StartedProcessParentCmdline, StartedParentProcessFolderPath, StartedProcessGrandParent, Timestamp

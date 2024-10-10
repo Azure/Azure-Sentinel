@@ -42,6 +42,7 @@ if not match:
     raise Exception("Invalid Log Analytics Uri.")
 
 drop_files_array = []
+failed_files_array = []
 
 def _create_sqs_client():
     sqs_session = get_session()
@@ -100,8 +101,9 @@ def sort_files_by_bucket(array_obj):
     return sorted_array
 
 async def main(mytimer: func.TimerRequest):
-    global drop_files_array
+    global drop_files_array, failed_files_array
     drop_files_array.clear()
+    failed_files_array.clear()
     script_start_time = int(time.time())
     filepath = 'drop_files_array_file'
     state = StateManager(connection_string=connection_string, share_name='funcstatemarkershare', file_path=filepath)
@@ -118,7 +120,7 @@ async def main(mytimer: func.TimerRequest):
                 logging.info("Processing files which added to re-processing. Files: {}".format(last_dropped_messages_obj))
                 last_dropped_messages_obj_sorted = sort_files_by_bucket(last_dropped_messages_obj)
                 for reprocessing_file_msg in last_dropped_messages_obj_sorted:
-                    await download_message_files(reprocessing_file_msg, session)
+                    await download_message_files(reprocessing_file_msg, session, retrycount=1)
             logging.info('Trying to check messages off the queue...')
             try:
                 response = await client.receive_message(
@@ -130,7 +132,7 @@ async def main(mytimer: func.TimerRequest):
                     for msg in response['Messages']:
                         body_obj = json.loads(msg["Body"])
                         logging.info("Got message with MessageId {}. Start processing {} files from Bucket: {}. Path prefix: {}. Timestamp: {}.".format(msg["MessageId"], body_obj["fileCount"], body_obj["bucket"], body_obj["pathPrefix"], body_obj["timestamp"]))
-                        await download_message_files(body_obj, session)
+                        await download_message_files(body_obj, session, retrycount=0)
                         logging.info("Finished processing {} files from MessageId {}. Bucket: {}. Path prefix: {}".format(body_obj["fileCount"], msg["MessageId"], body_obj["bucket"], body_obj["pathPrefix"]))
                         try:
                             await client.delete_message(
@@ -147,7 +149,10 @@ async def main(mytimer: func.TimerRequest):
         logging.info("list of files that were not processed: {}".format(drop_files_array))
         state.post(str(json.dumps(drop_files_array)))
 
-async def process_file(bucket, s3_path, client, semaphore, session):
+    if len(failed_files_array) > 0:
+        logging.info("list of files that were not processed after defined no. of retries: {}".format(failed_files_array))
+        
+async def process_file(bucket, s3_path, client, semaphore, session, retrycount):
     async with semaphore:
         total_events = 0
         logging.info("Start processing file {}".format(s3_path))
@@ -186,13 +191,18 @@ async def process_file(bucket, s3_path, client, semaphore, session):
             total_events += sentinel.successfull_sent_events_number
             logging.info("Finish processing file {}. Sent events: {}".format(s3_path, sentinel.successfull_sent_events_number))
         except Exception as e:
-            logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
-            drop_files_array.append({'bucket': bucket, 'path': s3_path})
+            if(retrycount<=0):
+                logging.warn("Processing file {} was failed. Error: {}".format(s3_path,e))
+                drop_files_array.append({'bucket': bucket, 'path': s3_path})
+            else:
+                logging.warn("Processing file {} was failed after defined no. of retries. Error: {}".format(s3_path,e))
+                failed_files_array.append({'bucket': bucket, 'path': s3_path})
+                
 
-async def download_message_files(msg, session):
+async def download_message_files(msg, session, retrycount):
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_PROCESSING_FILES)
     async with _create_s3_client() as client:
         cors = []
         for s3_file in msg['files']:
-            cors.append(process_file(msg['bucket'], s3_file['path'], client, semaphore, session))
+            cors.append(process_file(msg['bucket'], s3_file['path'], client, semaphore, session, retrycount))
         await asyncio.gather(*cors)

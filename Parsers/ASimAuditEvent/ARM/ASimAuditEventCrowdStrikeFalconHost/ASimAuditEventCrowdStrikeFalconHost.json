@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-08-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "Workspace": {
+      "type": "string",
+      "metadata": {
+        "description": "The Microsoft Sentinel workspace into which the function will be deployed. Has to be in the selected Resource Group."
+      }
+    },
+    "WorkspaceRegion": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The region of the selected workspace. The default value will use the Region selection above."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2017-03-15-preview",
+      "name": "[parameters('Workspace')]",
+      "location": "[parameters('WorkspaceRegion')]",
+      "resources": [
+        {
+          "type": "savedSearches",
+          "apiVersion": "2020-08-01",
+          "name": "ASimAuditEventCrowdStrikeFalconHost",
+          "dependsOn": [
+            "[concat('Microsoft.OperationalInsights/workspaces/', parameters('Workspace'))]"
+          ],
+          "properties": {
+            "etag": "*",
+            "displayName": "Audit Event ASIM parser for CrowdStrike Falcon Endpoint Protection",
+            "category": "ASIM",
+            "FunctionAlias": "ASimAuditEventCrowdStrikeFalconHost",
+            "query": "let EventFieldsLookup = datatable(\n    Activity: string,\n    Operation: string,\n    EventType_lookup: string,\n    EventSubType: string,\n    Object: string,\n    ObjectType: string\n) \n    [\n    \"delete_report_execution\", \"Delete Report Execution\", \"Delete\", \"\", \"Report Execution\", \"Scheduled Task\",\n    \"delete_scheduled_report\", \"Delete Scheduled Report\", \"Delete\", \"\", \"Scheduled Report\", \"Scheduled Task\",\n    \"update_scheduled_report\", \"Update Scheduled Report\", \"Set\", \"\", \"Scheduled Report\", \"Scheduled Task\",\n    \"create_scheduled_report\", \"Create Scheduled Report\", \"Create\", \"\", \"Scheduled Report\", \"Scheduled Task\",\n    \"update_class_action\", \"Update Class Action\", \"Set\", \"\", \"Class Action\", \"Other\",\n    \"update_policy\", \"Update Policy\", \"Set\", \"\", \"Policy\", \"Policy Rule\",\n    \"enable_policy\", \"Enable Policy\", \"Enable\", \"\", \"Policy\", \"Policy Rule\",\n    \"create_policy\", \"Create Policy\", \"Create\", \"\", \"Policy\", \"Policy Rule\",\n    \"remove_rule_group\", \"Remove Rule Group\", \"Other\", \"Remove\", \"Rule Group\", \"Service\",\n    \"create_rule_group\", \"Create Rule Group\", \"Create\", \"\", \"Rule Group\", \"Service\",\n    \"delete_rule_group\", \"Delete Rule Group\", \"Delete\", \"\", \"Rule Group\", \"Service\",\n    \"add_rule_group\", \"Add Rule Group\", \"Other\", \"Add\", \"Rule Group\", \"Service\",\n    \"delete_rule\", \"Delete Rule\", \"Delete\", \"\", \"Rule\", \"Policy Rule\",\n    \"update_rule\", \"Update Rule\", \"Set\", \"\", \"Rule\", \"Policy Rule\",\n    \"create_rule\", \"Create Rule\", \"Create\", \"\", \"Rule\", \"Policy Rule\",\n    \"disable_policy\", \"Disable Policy\", \"Disable\", \"\", \"Policy\", \"Policy Rule\",\n    \"delete_policy\", \"Delete Policy\", \"Delete\", \"\", \"Policy\", \"Policy Rule\",\n    \"update_priority\", \"Update Priority\", \"Set\", \"\", \"Policy\", \"Policy Rule\",\n    \"assign_policy\", \"Assign Policy\", \"Other\", \"Assign\", \"Policy\", \"Policy Rule\",\n    \"remove_policy\", \"Remove Policy\", \"Other\", \"Remove\", \"Policy\", \"Policy Rule\",\n    \"ip_rules_added\", \"IP Rules Added\", \"Create\", \"\", \"Rule\", \"Other\",\n    \"ip_rules_removed\", \"IP Rules Removed\", \"Delete\", \"\", \"Rule\", \"Other\",\n    \"hide_host_requested\", \"Hide Host Requested\", \"Delete\", \"\", \"Host\", \"Other\",\n    \"mobile_hide_host_requested\", \"Mobile Hide Host Requested\", \"Delete\", \"\", \"Mobile Host\", \"Other\",\n    \"CreateAPIClient\", \"Create API Client\", \"Create\", \"\", \"API Client\", \"Service\",\n    \"UpdateAPIClient\", \"Update API Client\", \"Set\", \"\", \"API Client\", \"Service\"\n];\nlet EventSeverityLookup = datatable (LogSeverity: string, EventSeverity: string)\n    [\n    \"0\", \"Informational\",\n    \"1\", \"Informational\",\n    \"2\", \"Low\",\n    \"3\", \"Medium\",\n    \"4\", \"High\",\n    \"5\", \"High\"\n];\nlet UserAuditActivities = dynamic([\"delete_report_execution\", \"delete_scheduled_report\", \"update_scheduled_report\", \"create_scheduled_report\", \"update_class_action\", \"update_policy\", \"enable_policy\", \"create_policy\", \"remove_rule_group\", \"create_rule_group\", \"delete_rule_group\", \"add_rule_group\", \"delete_rule\", \"update_rule\", \"create_rule\", \"disable_policy\", \"delete_policy\", \"update_priority\", \"assign_policy\", \"remove_policy\", \"ip_rules_added\", \"ip_rules_removed\", \"hide_host_requested\", \"mobile_hide_host_requested\"]);\nlet AuthAuditActivities = dynamic([\"CreateAPIClient\", \"UpdateAPIClient\"]);\nlet parser = (disabled: bool=false) {\n    CommonSecurityLog\n    | where not(disabled)\n    | where (DeviceVendor == \"CrowdStrike\" and DeviceProduct == \"FalconHost\")\n    | where (DeviceEventClassID == \"UserActivityAuditEvent\" and Activity in (UserAuditActivities)) or (DeviceEventCategory == \"AuthActivityAuditEvent\" and Activity in (AuthAuditActivities))\n    | lookup EventFieldsLookup on Activity\n    | lookup EventSeverityLookup on LogSeverity\n    | extend\n        EventType = EventType_lookup,\n        EventStartTime = case(\n                    DeviceEventClassID == \"UserActivityAuditEvent\",\n                    unixtime_milliseconds_todatetime(tolong(ReceiptTime)),\n                    DeviceEventCategory == \"AuthActivityAuditEvent\",\n                    todatetime(DeviceCustomDate1),\n                    datetime(null)\n                ),\n        EventOriginalType = case(\n                        DeviceEventClassID == \"UserActivityAuditEvent\",\n                        DeviceEventClassID,\n                        DeviceEventCategory == \"AuthActivityAuditEvent\",\n                        DeviceEventCategory,\n                        \"\"\n                    ),\n        EventResult = iff(EventOutcome == \"false\", \"Failure\", \"Success\"),\n        EventSchema = \"AuditEvent\",\n        EventSchemaVersion = \"0.1\",\n        EventCount = int(1),\n        DvcAction = \"Allowed\",\n        EventProduct = \"FalconHost\",\n        EventVendor = \"CrowdStrike\"\n    | project-rename\n        ActorUsername = DestinationUserName,\n        EventUid = _ItemId,\n        DvcIpAddr = DestinationTranslatedAddress,\n        EventOriginalSeverity = LogSeverity,\n        EventProductVersion = DeviceVersion,\n        TargetAppName = ProcessName,\n        EventOriginalResultDetails = EventOutcome,\n        EventOriginalSubType = Activity\n    | extend\n        EventEndTime = EventStartTime,\n        Application = TargetAppName,\n        TargetIpAddr = DvcIpAddr,\n        User = ActorUsername,\n        ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),\n        ActorUserType = _ASIM_GetUserType(ActorUsername, \"\"),\n        TargetAppType = iff(isnotempty(TargetAppName), \"Service\", \"\")\n    | extend\n        Dvc = coalesce(DvcIpAddr, EventProduct),\n        Dst = TargetIpAddr\n    | project-away \n        Source*,\n        Destination*,\n        Device*,\n        AdditionalExtensions,\n        CommunicationDirection,\n        Computer,\n        EndTime,\n        FieldDevice*,\n        Flex*,\n        File*,\n        Old*,\n        MaliciousIP*,\n        OriginalLogSeverity,\n        Process*,\n        Protocol,\n        ReceivedBytes,\n        SentBytes,\n        Remote*,\n        Request*,\n        SimplifiedDeviceAction,\n        StartTime,\n        TenantId,\n        Threat*,\n        ExternalID,\n        ReportReferenceLink,\n        ReceiptTime,\n        Reason,\n        ApplicationProtocol,\n        _ResourceId,\n        ExtID,\n        Message,\n        IndicatorThreatType,\n        EventType_*\n};\nparser(disabled=disabled)",
+            "version": 1,
+            "functionParameters": "disabled:bool=False"
+          }
+        }
+      ]
+    }
+  ]
+}

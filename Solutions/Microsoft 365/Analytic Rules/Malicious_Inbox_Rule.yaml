@@ -9,7 +9,7 @@ status: Available
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
-      - OfficeActivity
+      - OfficeActivity (Exchange)
 queryFrequency: 1d
 queryPeriod: 1d
 triggerOperator: gt
@@ -23,7 +23,8 @@ relevantTechniques:
 query: |
  let Keywords = dynamic(["helpdesk", " alert", " suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
  OfficeActivity
- | where Operation =~ "New-InboxRule"
+ | where OfficeWorkload =~ "Exchange" 
+ | where Operation =~ "New-InboxRule" and (ResultStatus =~ "True" or ResultStatus =~ "Succeeded")
  | where Parameters has "Deleted Items" or Parameters has "Junk Email"  or Parameters has "DeleteMessage"
  | extend Events=todynamic(Parameters)
  | parse Events  with * "SubjectContainsWords" SubjectContainsWords '}'*
@@ -37,9 +38,12 @@ query: |
  | extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\')[-1]))
  | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail
  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+ | extend OriginatingServerName = tostring(split(OriginatingServer, " ")[0])
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: UserId
       - identifier: Name
         columnName: AccountName
       - identifier: UPNSuffix
@@ -47,10 +51,10 @@ entityMappings:
   - entityType: Host
     fieldMappings:
       - identifier: FullName
-        columnName: OriginatingServer
+        columnName: OriginatingServerName
   - entityType: IP
     fieldMappings:
       - identifier: Address
         columnName: ClientIPAddress
-version: 2.0.2
+version: 2.0.4
 kind: Scheduled

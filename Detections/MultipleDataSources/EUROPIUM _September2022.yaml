@@ -95,17 +95,20 @@ query:  |
   | extend IPMatch = case( SourceIP in (IPList), "SourceIP", DestinationIP in (IPList), "DestinationIP", "None")
   | extend timestamp = TimeGenerated, File = tostring(split(Image, '\\', -1)[-1]), IPEntity = case(IPMatch == "SourceIP", SourceIP, IPMatch == "DestinationIP", DestinationIP, "None"), 
   HostEntity = Computer, AccountName = tostring(split(UserName, @'\')[1]), AccountDomain = tostring(split(UserName, @'\')[0])
+  | extend InitiatingProcessAccount = UserName
   ), 
   (OfficeActivity
   | where ClientIP in (IPList) 
   | project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, Type
   | extend timestamp = TimeGenerated, IPEntity = ClientIP, AccountName = tostring(split(UserId, "@")[0]), AccountDomain = tostring(split(UserId, "@")[1])
+  | extend InitiatingProcessAccount = UserId
   ),
   (DeviceNetworkEvents
   | where RemoteIP in (IPList) or InitiatingProcessSHA256 in (sha256Hashes)
   | project TimeGenerated, ActionType, DeviceId, Computer = DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, 
   InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type
   | extend timestamp = TimeGenerated, IPEntity = RemoteIP, HostEntity = Computer, AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain
+  | extend InitiatingProcessAccount = strcat(AccountDomain, "\\", AccountName)
   ),
   (WindowsFirewall
   | where SourceIP in (IPList) or DestinationIP in (IPList) 
@@ -119,6 +122,7 @@ query:  |
   | project Type, TimeGenerated, Computer, Account, IPAddress, CommandLine, FileHash
   | extend timestamp = TimeGenerated, IPEntity = IPAddress,  HostEntity = Computer, Algorithm = "SHA256", FileHash = tostring(FileHash)
   | extend AccountName = tostring(split(Account, @'\')[1]), AccountDomain = tostring(split(Account, @'\')[0])
+  | extend InitiatingProcessAccount = Account
   ),
   (DeviceFileEvents
   | where SHA256 has_any (sha256Hashes)
@@ -126,6 +130,7 @@ query:  |
   InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
   | extend timestamp = TimeGenerated, HostEntity = DeviceName, AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain, 
   Algorithm = "SHA256", FileHash = tostring(InitiatingProcessSHA256), CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend InitiatingProcessAccount = strcat(AccountDomain, "\\", AccountName)
   ),
   (DeviceImageLoadEvents
   | where SHA256 has_any (sha256Hashes)
@@ -133,6 +138,7 @@ query:  |
   InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type
   | extend timestamp = TimeGenerated, HostEntity = DeviceName, AccountName = InitiatingProcessAccountName, AccountDomain = InitiatingProcessAccountDomain, 
   Algorithm = "SHA256", FileHash = tostring(InitiatingProcessSHA256),  CommandLine = InitiatingProcessCommandLine,Image = InitiatingProcessFolderPath
+  | extend InitiatingProcessAccount = strcat(AccountDomain, "\\", AccountName)
   ),
   (Event
   | where Source =~ "Microsoft-Windows-Sysmon"
@@ -147,6 +153,7 @@ query:  |
   | project TimeGenerated, EventDetail, UserName, Computer, Type, Source, Hashes, CommandLine, Image
   | extend Type = strcat(Type, ": ", Source)
   | extend timestamp = TimeGenerated, HostEntity = Computer, AccountName = tostring(split(UserName, @'\')[1]), AccountUPNSuffix = tostring(split(UserName, @'\')[0]), FileHash = tostring(Hashes[1])
+  | extend InitiatingProcessAccount = UserName
   )
   )
   | extend HostName = tostring(split(HostEntity, ".")[0]), DomainIndex = toint(indexof(HostEntity, '.'))
@@ -154,12 +161,16 @@ query:  |
 entityMappings:
   - entityType: Account
     fieldMappings:
+      - identifier: FullName
+        columnName: InitiatingProcessAccount
       - identifier: Name
         columnName: AccountName
       - identifier: NTDomain
         columnName: AccountDomain
   - entityType: Host
     fieldMappings:
+      - identifier: FullName
+        columnName: HostEntity
       - identifier: HostName
         columnName: HostName
       - identifier: NTDomain
@@ -174,7 +185,7 @@ entityMappings:
         columnName: Algorithm
       - identifier: Value
         columnName: FileHash
-version: 1.1.0
+version: 1.1.1
 kind: Scheduled
 metadata:
     source:

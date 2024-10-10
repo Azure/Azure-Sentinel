@@ -46,6 +46,30 @@ $ContentKindDict.Add("AutomationRule", "ar")
 $ContentKindDict.Add("ResourcesDataConnector", "rdc")
 $ContentKindDict.Add("Standalone", "sa")
 
+function ReadFileContent($filePath) {
+    try {
+        if (!(Test-Path -Path "$filePath")) {
+            return $null;
+        }
+
+        $stream = New-Object System.IO.StreamReader -Arg "$filePath";
+        $content = $stream.ReadToEnd();
+        $stream.Close();
+
+        if ($null -eq $content) {
+            Write-Host "Error in reading file $filePath"
+            return $null;
+        } else {
+            $fileContent = $content | ConvertFrom-Json;
+            return $fileContent;
+        }
+    }
+    catch {
+        Write-Host "Error occured in ReadFileContent. Error details : $_"
+        return $null;
+    }
+}
+
 function handleEmptyInstructionProperties ($inputObj) {
     $outputObj = $inputObj |
     Get-Member -MemberType *Property |
@@ -229,7 +253,14 @@ function removePropertiesRecursively ($resourceObj, $isWorkbook = $false, $isAct
         else {
             if ($val -is [PSCustomObject]) {
                 if ($($val.PsObject.Properties).Count -eq 0) {
-                    $resourceObj.PsObject.Properties.Remove($key)
+                    if ($key -eq "dataSources") {
+                        $resourceObj.$key = "[variables('TemplateEmptyObject')]";
+                        if (!$global:baseMainTemplate.variables.TemplateEmptyArray) {
+                            $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyObject" -NotePropertyValue "[json('{}')]"
+                        }
+                    } else {
+                        $resourceObj.PsObject.Properties.Remove($key)
+                    }
                 }
                 else {
                     $resourceObj.$key = $(removePropertiesRecursively $val $isWorkbook $isAction $isInputs)
@@ -309,9 +340,9 @@ function getParserDetails($solutionName,$yaml,$isyaml)
             $parserTemplate = $templateContent.resources | Where-Object { $_.type -eq $parserResourceType.templateSpecParserType -or $_.type -eq $parserResourceType.workspaceType }
 
             if ($null -ne $parserTemplate) {
-                if($null -ne $parserTemplate.resources)
+                if($null -ne $parserTemplate)
                 {
-                    $parserTemplate = $parserTemplate.resources | Where-Object {$_.properties.category -eq "Samples" -and $_.type -eq $parserResourceType.normalParserType }
+                    $parserTemplate = $parserTemplate | Where-Object {$null -ne $_.properties.category -and $_.type -like "*savedSearches*" }
                 }
 
                 $parserTemplate = $parserTemplate | Where-Object {$_.properties.functionAlias -eq $(getFileNameFromPath $file)}
@@ -320,6 +351,28 @@ function getParserDetails($solutionName,$yaml,$isyaml)
                     $parserDisplayDetails.functionAlias = $parserTemplate.properties.functionAlias;
                     $parserDisplayDetails.displayName = $parserTemplate.properties.displayName;
                     $parserDisplayDetails.name = $parserTemplate.name.split('/')[-1];
+
+                    $parserNameValue = $parserTemplate.name
+
+                    if ($parserNameValue -like "*concat(parameters('workspace')*") {
+                        $splitParserObjectName = $parserNameValue -split ","
+                        $parserActualName = $splitParserObjectName[2].Replace("'", "").Replace(")]", "")
+                        $parserDisplayDetails.name = $parserActualName
+                    }
+
+                    if ($parserNameValue -like "*variables('parserObject*") {
+                        $splitParserObjectName = $parserNameValue -split "parserObject"
+                        $lastSingleQuoteIndex = $splitParserObjectName[1].LastIndexOf("'");
+                        $parserCountValue = $splitParserObjectName[1].Substring(0, $lastSingleQuoteIndex)
+
+                        $parserActualName = $templateVariables."parserObject$parserCountValue"."_parserName$parserCountValue"
+
+                        $replaceConcatValue = $parserActualName.LastIndexOf(",'") + 2
+                        $lastIndexOfQuotation = $parserActualName.LastIndexOf("'")
+                        $finalizedParserName = $parserActualName.Substring($replaceConcatValue, $lastIndexOfQuotation - $replaceConcatValue)
+
+                        $parserDisplayDetails.name = $finalizedParserName;
+                    }
 
                     $suppressedOutput = $parserDisplayDetails.displayName -match $variableExpressionRegex
                     if ($suppressedOutput -and $matches[1]) {
@@ -543,14 +596,35 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         {
             $newMetadata.Properties | Add-Member -Name 'support' -Type NoteProperty -value $supportDetails;
         }
+        
+        $hasDependentDomainSolutionIdsProp = [bool]($contentToImport.PSobject.Properties.Name.ToLower() -match "dependentdomainsolutionids")
+        if ($hasDependentDomainSolutionIdsProp -and $contentToImport.dependentDomainSolutionIds.Length -gt 0) {
+            if ($global:DependencyCriteria.Count -gt 0) {
+                # add solution dependencies
+                foreach($sid in $contentToImport.dependentDomainSolutionIds){
+                    $global:DependencyCriteria += [PSCustomObject]@{
+                        kind = "Solution";
+                        contentId = "$sid";
+                    };
+                }
 
-        $dependencies = [PSCustomObject]@{
-            operator = "AND";
-            criteria = $global:DependencyCriteria;
-        };
+                $dependencies = [PSCustomObject]@{
+                    criteria = $global:DependencyCriteria;
+                };
+
+                $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+            }
+        } else {
+            if ($global:DependencyCriteria.Count -gt 0) {
+                $dependencies = [PSCustomObject]@{
+                    operator = "AND";
+                    criteria = $global:DependencyCriteria;
+                };
         
-        $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
-        
+                $newMetadata.properties | Add-Member -Name 'dependencies' -Type NoteProperty -Value $dependencies;
+            }
+        }
+
         if ($json.firstPublishDate -and $json.firstPublishDate -ne "") 
         {
             $newMetadata.Properties | Add-Member -Name 'firstPublishDate' -Type NoteProperty -value $json.firstPublishDate;
@@ -1703,10 +1777,23 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     $global:playbookCounter += 1
     }
 
-    function GetDataConnectorMetadata($file, $contentResourceDetails)
+    $global:ccpCounter = 1
+    function GetDataConnectorMetadata($file, $contentResourceDetails, $dataFileMetadata, $solutionFileMetadata, $dcFolderName, $ccpDict = $null, $solutionBasePath, $solutionName, $ccpTables, $ccpTablesCounter)
     {
         Write-Host "Generating Data Connector using $file"
+        if ($null -ne $ccpDict)
+        {
+            # execute ccp integration code which is using CLV2
+            if ($global:ccpCounter -eq 1)
+            {
+                . "$PSScriptRoot/createCCPConnector.ps1" # load ccp resource creator
+                createCCPConnectorResources -contentResourceDetails $contentResourceDetails -dataFileMetadata $dataFileMetadata -solutionFileMetadata $solutionFileMetadata -dcFolderName $dcFolderName -ccpDict $ccpDict -solutionBasePath $solutionBasePath -solutionName $solutionName -ccpTables $ccpTables -ccpTablesCounter $ccpTablesCounter
+                $global:ccpCounter += 1
+            }
+            return
+        }
                     try {
+                        # BELOW IS OLD WAY OF CCP CONNECTOR CODE I.E CLV1 WHICH ONLY HAS CONNECTORUICONFIG AND POLLER CONFIG SECTION IN SOURCE 
                         $ccpPollingConfig = [PSCustomObject] @{}
                         $ccpConnector = $false
                         $connectorData = ConvertFrom-Json $rawData
@@ -1730,6 +1817,23 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                     catch {
                         Write-Host "Failed to deserialize $file" -ForegroundColor Red
                         break;
+                    }
+
+                    $hasStaticDataConnectorIdsProperty = [bool]($contentToImport.PSObject.Properties.Name.tolower() -match 'staticdataconnectorids') ? $true : $false
+
+                    $is1PConnector = $false
+                    if ($hasStaticDataConnectorIdsProperty) {
+                        $staticDataConnectorIdsArray = $contentToImport.StaticDataConnectorIds
+
+                        if ($null -ne $staticDataConnectorIdsArray -and $staticDataConnectorIdsArray.count -gt 0) {
+                            $dataConnectorId = $connectorData.id
+                            $hasDataConnectorId = [bool]($contentToImport.StaticDataConnectorIds | Where-Object { $_ -eq "$dataConnectorId"} )
+    
+                            if ($hasDataConnectorId) {
+                                # data connector id is specified in GenericDataConnectorIds array so we have to make this as generic connector
+                                $is1PConnector = $true
+                            }
+                        }
                     }
 
                     $global:DependencyCriteria += [PSCustomObject]@{
@@ -1793,7 +1897,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                             $global:baseMainTemplate.resources += $baseDataConnectorTemplateSpec
                         }
-                        if(!$contentToImport.Is1PConnector)
+                        if(!$is1PConnector)
                         {
                             $existingFunctionApp = $false;
                             $instructionArray = $templateSpecConnectorData.instructionSteps
@@ -1815,7 +1919,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                             {
                                                 foreach ($desc in $instructionItem.parameters.instructionSteps)
                                                 {
-                                                    if ($desc.description && $desc.description.IndexOf('Deploy To Azure') -gt 0)
+                                                    if ($desc.description -and $desc.description.IndexOf('Deploy To Azure') -gt 0)
                                                     {
                                                         $existingFunctionApp = $true
                                                         break
@@ -1832,24 +1936,31 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                 $templateSpecConnectorData.title = ($templateSpecConnectorData.title.Contains("using Azure Functions")) ? $templateSpecConnectorData.title : $templateSpecConnectorData.title + " (using Azure Functions)"
                             }
                         }
+
                         # Data Connector Content -- *Assumes GenericUI
-                        if($contentToImport.Is1PConnector)
+                        if($is1PConnector)
                         {
                             $1pconnectorData = $templateSpecConnectorData
                             $1pconnectorData = $1pconnectorData | Select-Object -Property id,title,publisher,descriptionMarkdown, graphQueries, connectivityCriterias,dataTypes
                         }
-                        $templateSpecConnectorUiConfig = ($contentToImport.Is1PConnector -eq $true) ? $1pconnectorData : $templateSpecConnectorData
+                        $templateSpecConnectorUiConfig = ($is1PConnector -eq $true) ? $1pconnectorData : $templateSpecConnectorData
                         $templateSpecConnectorUiConfig.id = "[variables('_uiConfigId$global:connectorCounter')]"
-                        if($contentToImport.Is1PConnector -eq $false)
+                        if($is1PConnector -eq $false)
                         {
-                            $templateSpecConnectorUiConfig.availability.isPreview =  ($templateSpecConnectorUiConfig.availability.isPreview -eq $true) ? $false : $templateSpecConnectorUiConfig.availability.isPreview
+                            $hasIsPreviewProperty = [bool]($templateSpecConnectorUiConfig.availability.PsObject.Properties.Name.tolower() -match "ispreview")
+
+                            if (!$hasIsPreviewProperty) {
+                                $templateSpecConnectorUiConfig.availability | Add-Member -NotePropertyName "isPreview" -NotePropertyValue $false
+                            } else {
+                                $templateSpecConnectorUiConfig.availability.isPreview =  ($templateSpecConnectorUiConfig.availability.isPreview -eq $true) ? $false : $templateSpecConnectorUiConfig.availability.isPreview
+                            }
                         }
                         $dataConnectorContent = [PSCustomObject]@{
                             name       = "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentId$global:connectorCounter'))]";
                             apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
-                            kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : (($ccpConnector -eq $true) ? $connectorData.resources[0].kind : "GenericUI");
+                            kind       = ($is1PConnector -eq $true) ? "StaticUI" : (($ccpConnector -eq $true) ? $connectorData.resources[0].kind : "GenericUI");
                             properties = [PSCustomObject]@{
                                 connectorUiConfig = $templateSpecConnectorUiConfig
                             }
@@ -1967,7 +2078,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             connectivityCriterias = $connectorData.connectivityCriterias;
                         }
 
-                        if(!$contentToImport.Is1PConnector)
+                        if(!$is1PConnector)
                         {
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "sampleQueries" -NotePropertyValue $connectorData.sampleQueries;
                             $standardConnectorUiConfig | Add-Member -NotePropertyName "availability" -NotePropertyValue $connectorData.availability;
@@ -1985,7 +2096,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             apiVersion = $contentResourceDetails.dataConnectorsApiVersion; #"2021-03-01-preview";
                             type       = "Microsoft.OperationalInsights/workspaces/providers/dataConnectors";
                             location   = "[parameters('workspace-location')]";
-                            kind       = ($contentToImport.Is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
+                            kind       = ($is1PConnector -eq $true) ? "StaticUI" : "GenericUI";
                             properties = [PSCustomObject]@{
                                 connectorUiConfig = $standardConnectorUiConfig
                             }
@@ -2001,7 +2112,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         $connectorData.resources[0] -and
                         $connectorData.resources[0].properties -and
                         $connectorData.resources[0].properties.connectorUiConfig -and
-                        $connectorData.resources[0].properties.pollingConfig) {
+                        $connectorData.resources[0].properties.pollingConfig) 
+                    {
                         # Else check if Polling connector
                         $connectorData = $connectorData.resources[0]
                         $connectorUiConfig = $connectorData.properties.connectorUiConfig
@@ -2500,11 +2612,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                         }
                         else
                         {
-                            $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue "[variables('TemplateEmptyArray')]";
-                            if (!$global:baseMainTemplate.variables.TemplateEmptyArray) 
-                            {
-                                $global:baseMainTemplate.variables | Add-Member -NotePropertyName "TemplateEmptyArray" -NotePropertyValue "[json('[]')]"
-                            }
+                            $alertRule | Add-Member -NotePropertyName requiredDataConnectors -NotePropertyValue @();
                         }
 
                         if (!$yaml.severity) {
@@ -2520,12 +2628,44 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                             }
                             $alertRule | Add-Member -NotePropertyName tactics -NotePropertyValue $yaml.tactics # Add Tactics property if exists
                         }
+
+                        $subtechniques = @()
+                        $techniques = @()
+
                         if ($yaml.relevantTechniques -and ($yaml.relevantTechniques.Count -gt 0) ) {
                             if ($yaml.relevantTechniques -match ' ') {
                                 $yaml.relevantTechniques = $yaml.relevantTechniques -replace ' ', ''
                             }
-                            $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue ([array]($yaml.relevantTechniques | ForEach-Object { ($_ -split "\.")[0] })) # Add relevantTechniques property if exists
+                        
+                            foreach ($item in [array]($yaml.relevantTechniques)) {
+                                if ($item.contains('.')) {
+                                    if (!$subtechniques.Contains($item)) {
+                                        $subtechniques += $item
+                                    }
+                                }
+
+                                if (!$techniques.Contains($item)) {
+                                    $techniques += ($item -split "\.")[0]
+                                }
+                            }
                         }
+
+                        if ($subtechniques.Count -gt 0) {
+                            Write-Host "Has Sub-Techniques for Analytic rule file name $fileName"
+                            $alertRule | Add-Member -NotePropertyName subTechniques -NotePropertyValue ([array]($subtechniques))
+                        }
+
+                        if ($techniques.Count -gt 0) {
+                            Write-Host "Has Techniques for Analytic rule file name $fileName"
+                            $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue ([array]($techniques))
+                        }
+
+                        # if ($yaml.relevantTechniques -and ($yaml.relevantTechniques.Count -gt 0) ) {
+                        #     if ($yaml.relevantTechniques -match ' ') {
+                        #         $yaml.relevantTechniques = $yaml.relevantTechniques -replace ' ', ''
+                        #     }
+                        #     $alertRule | Add-Member -NotePropertyName techniques -NotePropertyValue ([array]($yaml.relevantTechniques | ForEach-Object { ($_ -split "\.")[0] })) # Add relevantTechniques property if exists
+                        # }
                         $alertRule.description = $yaml.description.TrimEnd() #remove newlines at the end of the string if there are any.
                         if ($alertRule.description.StartsWith("'") -or $alertRule.description.StartsWith('"')) {
                             # Remove surrounding single-quotes (') from YAML block literal string, in case the string starts with a single quote in Yaml.
@@ -2877,18 +3017,22 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     # this function is to check if maintemplate and createUi files in package folder is valid or not
     function CheckJsonIsValid($solutionFolderBasePath)
     {
-        [array]$packageFolderFiles=Get-ChildItem "$solutionFolderBasePath\Package\*.json" -Recurse| select -expand fullname
-        Write-Host "************Validating if Package Json files are valid or not***************"
-        foreach ($filePath in $packageFolderFiles)
-        {
-            $isValid = Get-Content $filePath -Raw | Test-Json -ErrorAction SilentlyContinue
-            if ($isValid)
+        $packageFolderPath = "$solutionFolderBasePath\Package\*.json"
+        if ((Test-Path -Path "$packageFolderPath")) {
+            [array]$packageFolderFiles = Get-ChildItem "$packageFolderPath" -Recurse| select -expand fullname
+            Write-Host "************Validating if Package Json files are valid or not***************"
+
+            foreach ($filePath in $packageFolderFiles)
             {
-                Write-Host "File $filePath is a valid Json file!"
-            }
-            else
-            {
-                Write-Host "File $filePath is Not a valid Json file!"
+                $isValid = Get-Content "$filePath" -Raw | Test-Json -ErrorAction SilentlyContinue
+                if ($isValid)
+                {
+                    Write-Host "File $filePath is a valid Json file!"
+                }
+                else
+                {
+                    Write-Host "File $filePath is Not a valid Json file!"
+                }
             }
         }
     }
@@ -2897,6 +3041,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
     {
         if ($contentToImport.Description) {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", $contentToImport.Description
+            
+            $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionName}}", [URI]::EscapeDataString($solutionName)
         }
         else {
             $global:baseCreateUiDefinition.parameters.config.basics.description = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{SolutionDescription}}", ""
@@ -2907,10 +3053,19 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
         if ($contentResourceDetails.apiVersion -eq '3.0.0')
         {
             $updatecontentpackage = $baseMainTemplate.resources | Where-Object {$_.type -eq "Microsoft.OperationalInsights/workspaces/providers/contentPackages"}
-            $descriptionHtml = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{Logo}}\n\n", ""
-            $md = $descriptionHtml | ConvertFrom-Markdown
-            $updatecontentpackage.properties.descriptionHtml = $md.Html
-            $updatecontentpackage.properties.icon = $contentToImport.Logo
+            if ($updatecontentpackage -is [System.Object[]]) {
+                foreach($contentPackageItem in $updatecontentpackage) {
+                    $descriptionHtml = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{Logo}}\n\n", ""
+                    $md = $descriptionHtml | ConvertFrom-Markdown
+                    $contentPackageItem.properties.descriptionHtml = $md.Html
+                    $contentPackageItem.properties.icon = $contentToImport.Logo
+                }
+            } else {
+                $descriptionHtml = $global:baseCreateUiDefinition.parameters.config.basics.description -replace "{{Logo}}\n\n", ""
+                $md = $descriptionHtml | ConvertFrom-Markdown
+                $updatecontentpackage.properties.descriptionHtml = $md.Html
+                $updatecontentpackage.properties.icon = $contentToImport.Logo
+            }
         }
         # Update Logo in CreateUiDefinition Description
         if ($contentToImport.Logo) {
@@ -2948,12 +3103,14 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
             Write-Host "Failed to write output file $mainTemplateOutputPath" -ForegroundColor Red
             break;
         }
+
         try {
             # Sort UI Steps before writing to file
             $createUiDefinitionOrder = "dataconnectors", "parsers", "workbooks", "analytics", "huntingqueries", "watchlists", "playbooks"
             $global:baseCreateUiDefinition.parameters.steps = $global:baseCreateUiDefinition.parameters.steps | Sort-Object { $createUiDefinitionOrder.IndexOf($_.name) }
             # Ensure single-step UI Definitions have proper type for steps
-            if ($($global:baseCreateUiDefinition.parameters.steps).GetType() -ne [System.Object[]]) {
+            if ($null -ne $global:baseCreateUiDefinition.parameters.steps -and 
+            $($global:baseCreateUiDefinition.parameters.steps).GetType() -ne [System.Object[]]) {
                 $global:baseCreateUiDefinition.parameters.steps = @($global:baseCreateUiDefinition.parameters.steps)
             }
             $global:baseCreateUiDefinition | ConvertTo-Json -Depth $jsonConversionDepth | Out-File $createUiDefinitionOutputPath -Encoding utf8
@@ -3041,7 +3198,8 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                                     "Microsoft.OperationalInsights/workspaces/savedSearches",
                                     "Microsoft.OperationalInsights/workspaces/providers/Watchlists",
                                     "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
-                                    "Microsoft.OperationalInsights/workspaces/providers/contentPackages")
+                                    "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+                                    "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions")
                     }
             }
             elseif ($version.Major -eq 2)
@@ -3079,7 +3237,7 @@ function PrepareSolutionMetadata($solutionMetadataRawContent, $contentResourceDe
                 $dict.Add('huntingOperationalInsightsWorkspacesApiVersion', '2021-06-01')
                 $dict.Add('parserOperationalInsightsWorkspacesApiVersion', '2020-08-01')
                 $dict.Add('savedSearchesApiVersion', '2022-10-01')
-                $dict.Add('alertRuleApiVersion', '2022-04-01-preview')
+                $dict.Add('alertRuleApiVersion', '2023-02-01-preview')
                 $dict.Add('commonResourceMetadataApiVersion', '2022-01-01-preview')
                 $dict.Add('insightsWorkbookApiVersion', '2021-08-01')
             }
@@ -3259,7 +3417,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
                 "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
-                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
+                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
                 contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
                 kind      = "Parser";
                 version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
@@ -3354,7 +3512,7 @@ function addTemplateSpecParserResource($content,$yaml,$isyaml, $contentResourceD
                 "[variables('parserObject$global:parserCounter')._parserId$global:parserCounter]"
             );
             properties = [PSCustomObject]@{
-                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.displayName)')]"
+                parentId  = "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"
                 contentId = "[variables('parserObject$global:parserCounter').parserContentId$global:parserCounter]";
                 kind      = "Parser";
                 version   = "[variables('parserObject$global:parserCounter').parserVersion$global:parserCounter]";
@@ -3423,7 +3581,6 @@ function generateParserContent($file, $contentToImport, $contentResourceDetails)
     }
     
     $displayDetails = getParserDetails $global:solutionId $yaml $isyaml
-
     $objParserVariables | Add-Member -NotePropertyName "_parserName$global:parserCounter" -NotePropertyValue "[concat(parameters('workspace'),'/','$($displayDetails.name)')]"
 
     $objParserVariables | Add-Member -NotePropertyName "_parserId$global:parserCounter" -NotePropertyValue "[resourceId('Microsoft.OperationalInsights/workspaces/savedSearches', parameters('workspace'), '$($displayDetails.name)')]"

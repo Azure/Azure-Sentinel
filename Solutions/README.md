@@ -57,21 +57,21 @@ For more information, see the [solution template documentation](https://docs.mic
 
 After creating both the `mainTemplate.json` and the `createUIDefinition.json` files, validate them, and package them into a .zip file that you can upload as part of the publishing process (Step 3).
 
-Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V2) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V2/README.md) to use the tool and package your content.
+Use the [package creation tool](https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Create-Azure-Sentinel-Solution/V3) to help you create and validate the package, following the [solutions packaging tool guidance](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/README.md) to use the tool and package your content.
 
 ### Updating your solution
 
 If you already have an Microsoft Sentinel solution and want to update your package, use the package creation tool with updated content to create a new version of the package.
 
-For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `1.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
+For your solution's versioning format, always use `{Major}.{Minor}.{Revision}` syntax, such as `3.0.1`, to align with the Azure Marketplace recommendation and versioning support.  
 
 When updating your package, make sure to raise the version value, regardless of how small or trivial the change is, including typo fixes in a content or solution definition file.
 
-For example, if your original package version is `1.0.1`, you might update your versions as follows:
+For example, if your original package version is `3.0.1`, you might update your versions as follows:
 
-* **Major updates** have a new version of 2.0.0 - this is usually reserved for major tooling or package level changes
-* **Minor updates**, for changes in content of the package, might have a new version of `1.1.0`
-* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `1.0.2`
+* **Major updates** have a new version of 3.0.0 - this is usually reserved for major tooling or package level changes
+* **Minor updates**, for changes in content of the package, might have a new version of `3.1.0`
+* **Revisions**, such as those scoped to a single piece of content or just metadata or text updates, might have a new version of `3.0.2`
 
 Since solutions use ARM templates, you can customize the solution text as well as tabs as needed to cater to specific scenarios.
 
@@ -108,7 +108,6 @@ The following steps reference the Partner Center's more detailed documentation.
 
 8.	After the validation passes, [publish the offer live](https://docs.microsoft.com/azure/marketplace/create-new-azure-apps-offer-test-publish#publish-your-offer-live). This will trigger the certification process, which can take up to 3 business days. 
 
-**Note:** The Microsoft Sentinel team will need to modify your files so that your solution appears in the Microsoft Sentinel content hub. Therefore, before going live, email the  [Azure Sentinel Solutions Onboarding Team](mailto:AzureSentinelPartner@microsoft.com) with your solutions offer ID and your **Publisher ID** so that we can make the required changes.
 
 **Note:** You must make the offer public in order for it to show up in the Microsoft Sentinel content hub so that customers can find it.
 
@@ -136,6 +135,6 @@ Quite simply, it permits your Microsoft Sentinel solution to be deployed into Mi
 You are **not** joining the CSP program.  Each offer is individually enabled or disabled for deployability in CSP sourced subscriptions, and setting this flag for your Microsoft Sentinel solution does not affect any other offer in your Marketplace publishing account.
 
 #### What will happen if you do not enable “CSP opt-in” for your Microsoft Sentinel solution offer?
-If the customer, who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 
+If the customer who wants to deploy your solution offer, purchased their subscription from a CSP Reseller partner, the solution will not deploy and the customer will get an error message about why. 
 
 

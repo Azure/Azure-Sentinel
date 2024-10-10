@@ -15,7 +15,7 @@
         ],
         "entities": [ "host" ],
         "tags": ["Enrichment"],
-        "lastUpdateTime": "2022-11-18T00:00:00.000Z",
+        "lastUpdateTime": "2023-12-08T00:00:00.000Z",
         "support": {
             "tier": "developer",
             "link": "https://www.tanium.com"
@@ -28,6 +28,19 @@
         "PlaybookName": {
             "defaultValue": "Tanium-SecurityPatches",
             "type": "string"
+        },
+        "IntegrationAccountName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "The name of an existing Azure Integration Account (required to run inline JavaScript actions)"
+            }
+        },
+        "IntegrationAccountResourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "The resource group name for the existing Azure Integration Account"
+            }
         },
         "TaniumApiToken": {
             "defaultValue": "",
@@ -72,6 +85,9 @@
             ],
             "properties": {
                 "state": "Enabled",
+                "integrationAccount": {
+                    "id": "[resourceId(parameters('integrationAccountResourceGroupName'), 'Microsoft.Logic/integrationAccounts', parameters('integrationAccountName'))]"
+                },
                 "definition": {
                     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
                     "contentVersion": "1.0.0.0",
@@ -207,7 +223,7 @@
                             "type": "If",
                             "description": "If we don't then we'll use the refresh cursor until we have endpoint data."
                         },
-                        "Entities_-_Get_Hosts": {
+                        "Get_Hosts_From_Incident": {
                             "runAfter": {},
                             "type": "ApiConnection",
                             "inputs": {
@@ -253,7 +269,7 @@
                                 }
                             },
                             "runAfter": {
-                                "Entities_-_Get_Hosts": [
+                                "Get_Hosts_From_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -261,7 +277,7 @@
                                 "and": [
                                     {
                                         "less": [
-                                            "@length(body('Entities_-_Get_Hosts')?['Hosts'])",
+                                            "@length(body('Get_Hosts_From_Incident')?['Hosts'])",
                                             1
                                         ]
                                     }
@@ -577,174 +593,117 @@
                             },
                             "type": "Foreach"
                         },
-                        "For_each_incident_host": {
-                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
-                            "actions": {
-                                "If_ip_address": {
-                                    "actions": {
-                                        "Append_to_endpoint_filters": {
-                                            "runAfter": {
-                                                "Compose_endpoint_filter_for_host_and_ip_address": [
-                                                    "Succeeded"
-                                                ]
-                                            },
-                                            "type": "AppendToArrayVariable",
-                                            "inputs": {
-                                                "name": "endpoint filters",
-                                                "value": "@outputs('Compose_endpoint_filter_for_host_and_ip_address')"
-                                            }
-                                        },
-                                        "Compose_endpoint_filter_for_host_and_ip_address": {
-                                            "runAfter": {},
-                                            "type": "Compose",
-                                            "inputs": {
-                                                "filters": [
-                                                    {
-                                                        "op": "CONTAINS",
-                                                        "path": "ipAddress",
-                                                        "value": "@{body('Parse_host_json')?['additionalData']?['LastIpAddress']}"
-                                                    },
-                                                    {
-                                                        "path": "name",
-                                                        "value": "@{body('Parse_host_json')?['hostName']}"
-                                                    }
-                                                ]
-                                            }
-                                        }
-                                    },
-                                    "runAfter": {
-                                        "Parse_host_json": [
-                                            "Succeeded"
-                                        ]
-                                    },
-                                    "else": {
-                                        "actions": {
-                                            "Append_host_only_to_endpoint_filters": {
-                                                "runAfter": {
-                                                    "Compose_endpoint_filter_for_host_only": [
-                                                        "Succeeded"
-                                                    ]
-                                                },
-                                                "type": "AppendToArrayVariable",
-                                                "inputs": {
-                                                    "name": "endpoint filters",
-                                                    "value": "@outputs('Compose_endpoint_filter_for_host_only')"
-                                                }
-                                            },
-                                            "Compose_endpoint_filter_for_host_only": {
-                                                "runAfter": {},
-                                                "type": "Compose",
-                                                "inputs": {
-                                                    "filters": [
-                                                        {
-                                                            "path": "name",
-                                                            "value": "@{body('Parse_host_json')?['hostName']}"
-                                                        },
-                                                        {
-                                                            "sensor": {
-                                                                "column": "Install Status",
-                                                                "name": "Patch - Patch List Applicability",
-                                                                "params": [
-                                                                    {
-                                                                        "name": "bin",
-                                                                        "value": "0"
-                                                                    },
-                                                                    {
-                                                                        "name": "binCount",
-                                                                        "value": "1"
-                                                                    }
-                                                                ]
-                                                            },
-                                                            "value": "Not Installed"
-                                                        }
-                                                    ]
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "expression": {
-                                        "and": [
-                                            {
-                                                "not": {
-                                                    "equals": [
-                                                        "@body('Parse_host_json')?['additionalData']?['LastIpAddress']",
-                                                        "@null"
-                                                    ]
-                                                }
-                                            }
-                                        ]
-                                    },
-                                    "type": "If"
-                                },
-                                "Parse_host_json": {
-                                    "runAfter": {},
-                                    "type": "ParseJson",
-                                    "inputs": {
-                                        "content": "@items('For_each_incident_host')",
-                                        "schema": {
-                                            "properties": {
-                                                "Type": {
-                                                    "type": "string"
-                                                },
-                                                "additionalData": {
-                                                    "properties": {
-                                                        "AvStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "FQDN": {
-                                                            "type": "string"
-                                                        },
-                                                        "HealthStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastExternalIpAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastIpAddress": {
-                                                            "type": "string"
-                                                        },
-                                                        "LastSeen": {
-                                                            "type": "string"
-                                                        },
-                                                        "LoggedOnUsers": {
-                                                            "type": "string"
-                                                        },
-                                                        "MdatpDeviceId": {
-                                                            "type": "string"
-                                                        },
-                                                        "OnboardingStatus": {
-                                                            "type": "string"
-                                                        },
-                                                        "RiskScore": {
-                                                            "type": "string"
-                                                        }
-                                                    },
-                                                    "type": "object"
-                                                },
-                                                "friendlyName": {
-                                                    "type": "string"
-                                                },
-                                                "hostName": {
-                                                    "type": "string"
-                                                },
-                                                "osFamily": {
-                                                    "type": "string"
-                                                },
-                                                "osVersion": {
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "type": "object"
-                                        }
-                                    }
-                                }
+                        "Build_Endpoint_Filter_from_Hosts_With_FQDN": {
+                            "inputs": {
+                                "code": "var hosts = workflowContext.actions.Get_Hosts_From_Incident.outputs.body.Hosts;\r\nvar filters=[];for(let i=0;i<hosts.length;i++){var a=hosts[i].hostName,t=hosts[i].additionalData,e=null!=t,l=e&&null!==t.LastIpAddress&&void 0!==t.LastIpAddress,n=e&&null!==t.FQDN&&void 0!==t.FQDN&&t.FQDN.includes(\".\");if(null!=a&&\"\"!==a){var s={path:\"name\",value:a},d={sensor:{column:\"Install Status\",name:\"Patch - Patch List Applicability\",params:[{name:\"bin\",value:\"0\"},{name:\"binCount\",value:\"1\"}]},value:\"Not Installed\"};if(n&&l){filters.push({filters:[{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress},d,{any:!0,filters:[s,{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1}]});continue}if(n&&!l){filters.push({any:!0,filters:[s,d,{path:\"name\",value:hosts[i].additionalData.FQDN.trim()}],negated:!1});continue}}}\r\nreturn filters; "
                             },
                             "runAfter": {
-                                "Initialize_Endpoint_Filters_array": [
+                                "Initialize_Endpoint_Filter": [
                                     "Succeeded"
                                 ]
                             },
-                            "type": "Foreach"
+                            "type": "JavaScriptCode"
+                        },
+                        "Build_Endpoint_Filter_from_Hosts_Without_FQDN": {
+                            "inputs": {
+                                "code": "var filters = workflowContext.actions.Parse_Endpoint_Filter_so_next_code_block_can_access.outputs.body;\r\nvar hosts = workflowContext.actions.Get_Hosts_From_Incident.outputs.body.Hosts;\r\nfor(let i=0;i<hosts.length;i++){var a=hosts[i].hostName,l=hosts[i].additionalData,t=null!=l,s=t&&null!==l.LastIpAddress&&void 0!==l.LastIpAddress,e=t&&null!==l.FQDN&&void 0!==l.FQDN&&l.FQDN.includes(\".\");if(null!=a&&\"\"!==a){var n={path:\"name\",value:a},d={sensor:{column:\"Install Status\",name:\"Patch - Patch List Applicability\",params:[{name:\"bin\",value:\"0\"},{name:\"binCount\",value:\"1\"}]},value:\"Not Installed\"};if(s&&!e){filters.push({filters:[n,d,{op:\"CONTAINS\",path:\"ipAddress\",value:hosts[i].additionalData.LastIpAddress}]});continue}e||s||filters.push({filters:[n,d,]})}}\r\nreturn filters;"
+                            },
+                            "runAfter": {
+                                "Parse_Endpoint_Filter_so_next_code_block_can_access": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "JavaScriptCode"
+                        },
+                        "Initialize_Endpoint_Filter": {
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "endpoint filters",
+                                        "type": "array"
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_API_Gateway_Query": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable"
+                        },
+                        "Parse_Endpoint_Filter_so_next_code_block_can_access": {
+                            "inputs": {
+                                "content": "@variables('endpoint filters')",
+                                "schema": {
+                                    "type": "array"
+                                }
+                            },
+                            "runAfter": {
+                                "Set_Endpoint_Filter_if_Needed_from_Hosts_with_FQDN": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ParseJson"
+                        },
+                        "Set_Endpoint_Filter_if_Needed_from_Hosts_with_FQDN": {
+                            "actions": {
+                                "Set_Endpoint_filters_from_Hosts_with_FQDN": {
+                                    "inputs": {
+                                        "name": "endpoint filters",
+                                        "value": "@body('Build_Endpoint_Filter_from_Hosts_With_FQDN')"
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(outputs('Build_Endpoint_Filter_from_Hosts_With_FQDN')['body'])",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Build_Endpoint_Filter_from_Hosts_With_FQDN": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Set_Endpoint_Filter_if_needed_from_Hosts_without_FQDN": {
+                            "actions": {
+                                "Set_Endpoint_Filters_from_Hosts_Without_FQDN": {
+                                    "inputs": {
+                                        "name": "endpoint filters",
+                                        "value": "@body('Build_Endpoint_Filter_from_Hosts_Without_FQDN')"
+                                    },
+                                    "runAfter": {},
+                                    "type": "SetVariable"
+                                }
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@length(outputs('Build_Endpoint_Filter_from_Hosts_Without_FQDN')['body'])",
+                                                0
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Build_Endpoint_Filter_from_Hosts_Without_FQDN": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If"
                         },
                         "Initialize_API_Gateway_Query": {
                             "runAfter": {
@@ -800,7 +759,7 @@
                         },
                         "Initialize_API_Gateway_query_cursor": {
                             "runAfter": {
-                                "Parse_API_Gateway_response": [
+                                "Stop_If_Tanium_Has_No_Hosts_From_Incident": [
                                     "Succeeded"
                                 ]
                             },
@@ -832,25 +791,9 @@
                                 ]
                             }
                         },
-                        "Initialize_Endpoint_Filters_array": {
-                            "runAfter": {
-                                "Initialize_API_Gateway_Query": [
-                                    "Succeeded"
-                                ]
-                            },
-                            "type": "InitializeVariable",
-                            "inputs": {
-                                "variables": [
-                                    {
-                                        "name": "endpoint filters",
-                                        "type": "array"
-                                    }
-                                ]
-                            }
-                        },
                         "Initialize_Tanium_Endpoint_Source_to_TS": {
                             "runAfter": {
-                                "For_each_incident_host": [
+                                "Set_Endpoint_Filter_if_needed_from_Hosts_without_FQDN": [
                                     "Succeeded"
                                 ]
                             },
@@ -1103,10 +1046,22 @@
                                                                         "pageInfo": {
                                                                             "properties": {
                                                                                 "endCursor": {
-                                                                                    "type": "string"
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
                                                                                 },
                                                                                 "hasNextPage": {
                                                                                     "type": "boolean"
+                                                                                },
+                                                                                "hasPreviousPage": {
+                                                                                    "type": "boolean"
+                                                                                },
+                                                                                "startCursor": {
+                                                                                    "type": [
+                                                                                        "string",
+                                                                                        "null"
+                                                                                    ]
                                                                                 }
                                                                             },
                                                                             "type": "object"
@@ -1163,6 +1118,54 @@
                                         "equals": [
                                             "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['hasNextPage']",
                                             "@true"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        },
+                        "Stop_If_Tanium_Has_No_Hosts_From_Incident": {
+                            "actions": {
+                                "Add_comment_to_incident_(V3)_3": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p>No data found in Tanium for hosts.</p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Terminate_no_hosts_in_Tanium": {
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)_3": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "Terminate",
+                                    "inputs": {
+                                        "runStatus": "Succeeded"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_API_Gateway_response": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@body('Parse_API_Gateway_response')?['data']?['endpoints']?['pageInfo']?['endCursor']",
+                                            "@null"
                                         ]
                                     }
                                 ]
@@ -1252,10 +1255,22 @@
                                                         "pageInfo": {
                                                             "properties": {
                                                                 "endCursor": {
-                                                                    "type": "string"
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
                                                                 },
                                                                 "hasNextPage": {
                                                                     "type": "boolean"
+                                                                },
+                                                                "hasPreviousPage": {
+                                                                    "type": "boolean"
+                                                                },
+                                                                "startCursor": {
+                                                                    "type": [
+                                                                        "string",
+                                                                        "null"
+                                                                    ]
                                                                 }
                                                             },
                                                             "type": "object"

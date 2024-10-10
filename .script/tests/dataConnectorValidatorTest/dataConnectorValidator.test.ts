@@ -36,9 +36,10 @@ describe("dataConnectorValidator", () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingPublisherProperty.json", "SchemaError");
   });
 
-  it("should throw an exception when Syslog Data connector is missing a additional requirement banner property", async () => {
-    await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingAdditionalRequirementBanner.json", "SchemaError");
-  });
+  // Skipping as additional banner is no more mandatory.
+  // it("should throw an exception when Syslog Data connector is missing a additional requirement banner property", async () => {
+  //   await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/missingAdditionalRequirementBanner.json", "SchemaError");
+  // });
 
   it("should throw an exception when DataConnector FileName is having space in file name", async () => {
     await checkInvalid(".script/tests/dataConnectorValidatorTest/testFiles/spaceIn DataConnector FileName.json", "DataConnectorValidationError");
@@ -61,7 +62,7 @@ describe("dataConnectorValidator", () => {
   });
 
   it("should pass when Syslog data connector have valid set of permissions", async () => {
-    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validSyslogConnectorPermissions.json");
+    await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validSyslogConnectorPermissions.json") || await checkValid(".script/tests/dataConnectorValidatorTest/testFiles/validSyslogConnectorDataSourcesPermissions.json");
   });
 
   it("should throw an exception when Syslog data connector have Invalid set of permissions", async () => {

@@ -1,7 +1,7 @@
 Parser:
   Title: User Management ASIM parser for SentinelOne
-  Version: '0.1.0'
-  LastUpdated: Aug 24, 2023
+  Version: '0.1.1'
+  LastUpdated: Nov 07, 2023
 Product:
   Name: SentinelOne
 Normalization:
@@ -48,22 +48,55 @@ ParserQuery: |
       5006, "GroupDeleted", "Group Deleted", "",
       5008, "GroupCreated", "User created a Manual or Pinned Group", "",
       5011, "GroupModified", "Group Policy Reverted", "Newpolicy",
+      67, "", "User 2FA Modified", "",
+      145, "UserModified", "Enroll 2FA", "",
+      146, "UserModified", "Reset 2FA", "",
+      42, "", "Global 2FA modified", "",
+      147, "UserModified", "User Configured 2FA", ""
   ];
+  let UsermanagementactivityIds = dynamic([23, 24, 25, 37, 102, 110, 111, 140, 141, 142, 3522, 3523, 3524, 3710, 3711, 3715, 5006, 5008, 5011, 67, 145, 146, 42, 147]);
   let parser = (disabled: bool=false) {
       SentinelOne_CL
       | where not(disabled)
-          and event_name_s == "Activities."
-          and activityType_d in (23, 24, 25, 37, 102, 110, 111, 140, 141, 142, 3522, 3523, 3524, 3710, 3711, 3715, 5006, 5008, 5011)
-      | parse-kv DataFields_s as (byUser: string, username: string, email: string, ipAddress: string, group: string, groupName: string, name: string, oldDescription: string, oldRole: string, description: string, role: string, userScope: string, scopeLevelName: string, scopeName: string, roleName: string, modifiedFields: string, deactivationPeriodInDays: string, descriptionChanged: string, groupType: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
-      | parse modifiedFields with 'Modified fields: ' ModifiedFields:string
+      | where event_name_s == "Activities."
+          and activityType_d in (UsermanagementactivityIds)
+      | parse-kv DataFields_s as (byUser: string, username: string, email: string, ipAddress: string, group: string, groupName: string, name: string, oldDescription: string, oldRole: string, description: string, role: string, userScope: string, scopeLevelName: string, scopeName: string, roleName: string, modifiedFields: string, deactivationPeriodInDays: string, descriptionChanged: string, groupType: string, newValue: string) with (pair_delimiter=",", kv_delimiter=":", quote='"')
+      | parse modifiedFields with 'Modified fields: ' ModifiedFields: string
       | parse description_s with * "with id=" id: string "," restOfMessage
       | lookup EventTypeLookup on activityType_d
-      | extend 
+      | extend
+          EventType = case (
+                activityType_d in (67, 42) and primaryDescription_s has "enabled",
+                "UserEnabled",
+                activityType_d in (67, 42) and primaryDescription_s has "disabled",
+                "UserDisabled",
+                EventType
+            ),
+          PreviousPropertyValue = case(
+                              activityType_d in (67, 42) and primaryDescription_s has "enabled",
+                              "disabled",
+                              activityType_d in (67, 42) and primaryDescription_s has "disabled",
+                              "enabled",
+                              activityType_d == 141 and descriptionChanged == "true",
+                              oldDescription, 
+                              activityType_d == 141 and descriptionChanged == "false",
+                              oldRole,
+                              ""
+                          ),
+          NewPropertyValue = case(
+                        activityType_d in (67, 42) and primaryDescription_s has "enabled",
+                        "enabled", 
+                        activityType_d in (67, 42) and primaryDescription_s has "disabled",
+                        "disabled",
+                        activityType_d == 141 and descriptionChanged == "true",
+                        description, 
+                        activityType_d == 141 and descriptionChanged == "false",
+                        role,
+                        ""
+                    ),
           ActorUsername = iff(activityType_d == 102, "SentinelOne", coalesce(byUser, username, email)),        
           GroupName = coalesce(group, groupName, name),
-          TargetUsername = iff(isnotempty(byUser), username, ""),
-          PreviousPropertyValue = coalesce(oldDescription, oldRole),
-          NewPropertyValue = coalesce(description, role)
+          TargetUsername = iff(isnotempty(byUser) or activityType_d in (147, 42), username, "")
       | extend GroupName = iff(GroupName == "null", "", GroupName)
       | project-rename
           EventStartTime = createdAt_t,
@@ -89,8 +122,8 @@ ParserQuery: |
           IpAddr = SrcIpAddr,
           User = ActorUsername,
           UpdatedPropertyName = EventSubType,
-          ActorUserIdType = iff(isnotempty(ActorUserId),"Other",""),
-          ActorUserType = _ASIM_GetUserType(ActorUsername,ActorUserId),
+          ActorUserIdType = iff(isnotempty(ActorUserId), "Other", ""),
+          ActorUserType = _ASIM_GetUserType(ActorUsername, ActorUserId),
           ActorUsernameType = _ASIM_GetUsernameType(ActorUsername),
           GroupIdType = iff(isnotempty(GroupId), "UID", ""),
           GroupNameType = iff(isnotempty(GroupName), "Simple", ""),
@@ -139,6 +172,7 @@ ParserQuery: |
           Computer,
           MG,
           ManagementGroupName,
-          SourceSystem
+          SourceSystem,
+          newValue
   };
   parser(disabled=disabled)

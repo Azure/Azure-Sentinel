@@ -26,7 +26,7 @@ namespace Kqlvalidations.Tests
             try
             {
                 var directoryPaths = GetDirectoryPaths();
-                var gitHubApiClient = GitHubApiClient.Instance;
+                var gitHubApiClient = GitHubApiClient.Create();
 
                 // Fetch the PR number using the singleton instance
                 int prNumber = gitHubApiClient.GetPullRequestNumber();
