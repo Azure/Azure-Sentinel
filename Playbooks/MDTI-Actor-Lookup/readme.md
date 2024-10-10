@@ -52,7 +52,9 @@ Good question!  Organizations struggle to operationalize threat intel, meaning h
 
 To get started with the MDTI Actor Lookup project, you'll need to have an Azure account and the necessary permissions to deploy resources.  Also this playbook will use Copilot for Security to provide threat actor summaries.  The MDTI API is a licensed feature, if you do not have the license please reach out to your account representative for purchase info and/or trial assistance.
 
-You can however just use the MDTI API and the function app and hook them into whichever system you'd like.  You'll lose the SOAR functionality but you'll stil get the benefit of lightning fast infra chaining.
+You can however just use the MDTI API and the function app and hook them into whichever system you'd like.  You'll lose the SOAR functionality but you'll stil get the benefit of lightning fast infra chaining.  Also you could use Copilot for more enrichment also, consider also adding a teams card or an email to alert your internal groups that an actor group has been found.
+
+There is no current condition to limit the history of the lookup, this is because if you're too recent you might miss that you had some interaction months ago, as well you'd not be able to link groups together like in this video - 
 
 ## Deployment of the Function App
 
