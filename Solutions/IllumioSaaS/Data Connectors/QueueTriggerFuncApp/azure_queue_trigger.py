@@ -9,7 +9,7 @@ import azure.functions as func
 import urllib.parse
 from .. import constants
 from ..sentinel_connector import AzureSentinelConnectorAsync
-from helper import skip_processing_file
+from ..helper import skip_processing_file
 
 # Azure config
 AZURE_TENANT_ID = constants.AZURE_TENANT_ID

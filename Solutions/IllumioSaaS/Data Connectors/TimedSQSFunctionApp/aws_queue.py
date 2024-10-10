@@ -9,7 +9,7 @@ from ..azure_storage_queue import AzureStorageQueueHelper
 import traceback
 import base64
 from .. import constants
-from helper import skip_processing_file, check_if_script_runs_too_long
+from ..helper import skip_processing_file, check_if_script_runs_too_long
 
 AWS_KEY = constants.AWS_KEY
 AWS_SECRET = constants.AWS_SECRET

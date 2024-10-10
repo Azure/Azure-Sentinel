@@ -4,7 +4,7 @@ import logging
 import azure.functions as func
 from ..azure_storage_queue import AzureStorageQueueHelper
 from .. import constants
-from helper import check_if_script_runs_too_long
+from ..helper import check_if_script_runs_too_long
 
 MAX_SCRIPT_EXEC_TIME_MINUTES = constants.MAX_SCRIPT_EXEC_TIME_MINUTES
 AZURE_STORAGE_CONNECTION_STRING = constants.AZURE_STORAGE_CONNECTION_STRING
