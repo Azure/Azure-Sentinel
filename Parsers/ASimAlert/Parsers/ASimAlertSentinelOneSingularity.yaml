@@ -1,0 +1,103 @@
+Parser:
+  Title: Alert ASIM parser for SentinelOne
+  Version: '0.1.0'
+  LastUpdated: Oct 09, 2024
+Product:
+  Name: SentinelOne
+Normalization:
+  Schema: Alert
+  Version: '0.1'
+References:
+- Title: ASIM Alert Schema
+  Link: https://aka.ms/ASimAlertDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+Description: |
+  This ASIM parser supports normalizing the SentinelOne alerts to the ASIM Alert normalized schema.
+ParserName: ASimAlertSentinelOneSingularity
+EquivalentBuiltInParser: _ASim_Alert_SentinelOneSingularity
+ParserParams:
+  - Name: disabled
+    Type: bool
+    Default: false
+ParserQuery: |
+  let AlertVerdictLookup = datatable (alertInfo_analystVerdict_s: string, AlertVerdict: string)
+    [
+    "Undefined", "Unknown",
+    "true_positve", "malicious",
+    "suspicious","suspicious",
+  ];
+  let EventSubTypeLookup = datatable (ruleInfo_treatAsThreat_s:string, EventSubType:string)
+  [
+      "Malicious", "Threat",
+      "Suspicious", "Suspicious Activity"
+  ];
+  let parser = (
+      disabled: bool = false
+      ) {
+      SentinelOne_CL
+      | where event_name_s == "Alerts."
+      // Mapping Alert Fields
+      | extend 
+          AlertId = alertInfo_alertId_s,
+          AlertStatus = iif(alertInfo_incidentStatus_s == "Unresolved","Active",""),
+          AlertOriginalStatus = alertInfo_incidentStatus_s,
+          AlertDescription = alertInfo_indicatorDescription_s
+      | lookup AlertVerdictLookup on alertInfo_analystVerdict_s
+      // Mapping Inspection Fields
+      | extend 
+          ThreatIsActive = agentRealtimeInfo_infected_b,
+          ThreatFirstReportedTime = alertInfo_createdAt_t,
+          ThreatLastReportedTime = alertInfo_reportedAt_t,
+          ThreatLastUpdatedTime = alertInfo_updatedAt_t,
+          RuleNumber = toint(ruleInfo_id_s),
+          RuleName = ruleInfo_name_s,
+          RuleDescription = ruleInfo_description_s
+      // Mapping Dvc Fields
+      | extend 
+          DvcHostname = agentDetectionInfo_name_s,
+          DvcOs = agentDetectionInfo_osName_s,
+          DvcOsVersion = agentDetectionInfo_osRevision_s,
+          DvcId = agentRealtimeInfo_id_s
+      // Mapping IP Entity
+      | extend 
+          IpAddr = alertInfo_srcIp_s,
+          PortNumber = alertInfo_srcPort_s
+      // Mapping Process Entity
+      | extend 
+      // Parent Process Fields
+          ParentProcessCommandLine = sourceParentProcessInfo_commandline_s,
+          ParentProcessMD5 = sourceParentProcessInfo_fileHashMd5_g,
+          ParentProcessSHA1 = sourceParentProcessInfo_fileHashSha1_s,
+          ParentProcessSHA256 = sourceParentProcessInfo_fileHashSha256_s,
+          ParentProcessName = sourceParentProcessInfo_filePath_s,
+          ParentProcessFileCompany = sourceParentProcessInfo_fileSignerIdentity_s,
+          ParentProcessIntegrityLevel = sourceParentProcessInfo_integrityLevel_s,
+          ParentProcessId = sourceParentProcessInfo_pid_s,
+          ParentProcessCreationTime = sourceParentProcessInfo_pidStarttime_t,
+      // Process Fields
+          ProcessCommandLine = sourceProcessInfo_commandline_s,
+          ProcessMD5 = sourceProcessInfo_fileHashMd5_g,
+          ProcessSHA1 = sourceProcessInfo_fileHashSha1_s,
+          ProcessSHA256 = sourceProcessInfo_fileHashSha256_s,
+          ProcessName = sourceProcessInfo_filePath_s,
+          ProcessFileCompany = sourceProcessInfo_fileSignerIdentity_s,
+          ProcessIntegrityLevel = sourceProcessInfo_integrityLevel_s,
+          ProcessId = sourceProcessInfo_pid_s,
+          ProcessCreationTime =  sourceProcessInfo_pidStarttime_t
+      // Event Fields
+      | extend
+          EventOriginalUid = alertInfo_dvEventId_s,
+          EventOriginalSubType = alertInfo_eventType_s,
+          EventSeverity = iif(ruleInfo_severity_s == "Critical","High",ruleInfo_severity_s),
+          EventCount = int(1),
+          EventEndTime = TimeGenerated,
+          EventStartTime = TimeGenerated,
+          EventProduct = 'Singularity',
+          EventVendor = 'SentinelOne',
+          EventSchemaVersion = '0.1',
+          EventType = 'Alert'
+      | lookup EventSubTypeLookup on ruleInfo_treatAsThreat_s
+      | project-away *_s, *_g, SourceSystem, ManagementGroupName, Computer, RawData, *_t
+  };
+  parser (disabled = disabled)
