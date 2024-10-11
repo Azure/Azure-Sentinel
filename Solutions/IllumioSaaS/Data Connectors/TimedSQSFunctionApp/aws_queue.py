@@ -33,7 +33,7 @@ AZURE_QUEUE_SIZE_PER_ELEMENT_LIMIT = (
     0.5 * MAX_AZURE_QUEUE_SIZE_PER_ELEMENT_LIMIT
 )  # 32kb
 SQS_FILES_READ_LIMIT = constants.SQS_FILES_READ_LIMIT
-LOGS_TO_CONSUME = constants.LOGS_TO_CONSUME.downcase
+LOGS_TO_CONSUME = constants.LOGS_TO_CONSUME.lower()
 NETWORK_TRAFFIC_LOGS_TO_CONSUME = (
     constants.NETWORK_TRAFFIC_TO_CONSUME
 )  # this has to be an array of choices
@@ -96,7 +96,24 @@ def enqueue_message_helper(mainQueueHelper, backlogQueueHelper, file_arr):
         mainQueueHelper.send_to_queue(file_arr, True)
 
 
-def skip_processing_network_traffic_file(file_path):
+async def delete_file_from_sqs(client, msg, body_obj):
+    try:
+        await client.delete_message(
+            QueueUrl=SQS_QUEUE_URL,
+            ReceiptHandle=msg["ReceiptHandle"],
+        )
+        logging.info(
+            "Deleted file whose receipt handle is {}".format(msg["ReceiptHandle"])
+        )
+    except Exception as e:
+        logging.error(
+            "[AWSQueue] Error during deleting message with MessageId {} from queue. Bucket: {}. Error: {}".format(
+                msg["MessageId"], body_obj["s3"]["bucket"], e
+            )
+        )
+
+
+def skip_processing_network_traffic_file(file_path, network_traffic_logs_to_consume):
     """
     Network traffic is stored in s3 in the following format
     pce/pd=0/..
@@ -109,20 +126,26 @@ def skip_processing_network_traffic_file(file_path):
         file_path: file path should contain the mapping info
 
     """
+    # do not process audit event
+    if "auditable" in file_path:
+        return False
+
     pd_mapping = {
         ALLOWED_TRAFFIC: "pd=0",
         POTENTIALLY_BLOCKED_TRAFFIC: "pd=1",
         BLOCKED_TRAFFIC: "pd=2",
         UNKNOWN_TRAFFIC: "pd=3",
     }
+    network_traffic_logs_to_consume = network_traffic_logs_to_consume.split(",")
+    file_path = urllib.parse.unquote(file_path)
 
-    if ALL_TRAFFIC in NETWORK_TRAFFIC_LOGS_TO_CONSUME:
+    if ALL_TRAFFIC in network_traffic_logs_to_consume:
         return False
 
     # Suppose file_pd is "pd=2", which means customer wants to ingest only blocked traffic
     # and file_path contains pd=0 (allowed), then this method returns True, as in, skip the file
     # else return False and process it
-    for pd in NETWORK_TRAFFIC_LOGS_TO_CONSUME:
+    for pd in network_traffic_logs_to_consume:
         if pd_mapping[pd] in file_path:
             return False
 
@@ -202,15 +225,19 @@ async def main(mytimer: func.TimerRequest):
                                     LOGS_TO_CONSUME, file_path
                                 )
                             )
+                            await delete_file_from_sqs(client, msg, body_obj)
                             continue
 
                         # decide which network traffic file paths to consume
-                        if skip_processing_network_traffic_file(file_path):
+                        if skip_processing_network_traffic_file(
+                            file_path, NETWORK_TRAFFIC_LOGS_TO_CONSUME
+                        ):
                             logging.warn(
                                 "[AWSQueue] Skipping network traffic file since logs to be consumed is {}, but file is {}".format(
                                     NETWORK_TRAFFIC_LOGS_TO_CONSUME, file_path
                                 )
                             )
+                            await delete_file_from_sqs(client, msg, body_obj)
                             continue
 
                         files_processed += 1
@@ -226,18 +253,7 @@ async def main(mytimer: func.TimerRequest):
                             }
                         )
 
-                        try:
-                            await client.delete_message(
-                                QueueUrl=SQS_QUEUE_URL,
-                                ReceiptHandle=msg["ReceiptHandle"],
-                            )
-                        except Exception as e:
-                            logging.error(
-                                "[AWSQueue] Error during deleting message with MessageId {} from queue. Bucket: {}. Error: {}".format(
-                                    msg["MessageId"], body_obj["s3"]["bucket"], e
-                                )
-                            )
-                            continue
+                        await delete_file_from_sqs(client, msg, body_obj)
 
                         # ensure to return if files processed are more than the limit
                         if files_processed >= SQS_FILES_READ_LIMIT:
