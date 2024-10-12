@@ -21,51 +21,74 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  let AlertVerdictLookup = datatable (alertInfo_analystVerdict_s: string, AlertVerdict: string)
+  let AlertVerdictLookup = datatable (analystVerdict_s: string, AlertVerdict: string)
     [
     "Undefined", "Unknown",
-    "true_positve", "malicious",
-    "suspicious","suspicious",
+    "true_positive", "Malicious",
+    "suspicious", "Suspicious",
+    "false_positive", "FalsePositive"
   ];
-  let EventSubTypeLookup = datatable (ruleInfo_treatAsThreat_s:string, EventSubType:string)
-  [
+  let EventSubTypeLookup = datatable (ruleInfo_treatAsThreat_s: string, EventSubType: string)
+      [
       "Malicious", "Threat",
       "Suspicious", "Suspicious Activity"
+  ];
+  let ThreatCategoryArray = dynamic(["Malware", "Ransomware", "Trojan", "Virus", "Worm", "Adware", "Spyware", "Rootkit", "Cryptominor", "Phishing", "Spam", "MaliciousUrl", "Spoofing", "Security Policy Violation", "Unknown", "SuspiciousActivity"]);
+  let ThreatDetectionAnalyticsLookup = datatable (
+      threatInfo_engines_s: string,
+      ThreatDetectionAnalytics: string
+  )
+      [
+      "Intrusion Detection", "Intrusion Detection",
+      "User-Defined Blocklist", "User Defined Blocked List",
+      "Reputation", "Reputation"
   ];
   let parser = (
       disabled: bool = false
       ) {
       SentinelOne_CL
-      | where event_name_s == "Alerts."
+      | where event_name_s in ("Alerts.", "Threats.")
       // Mapping Alert Fields
       | extend 
-          AlertId = alertInfo_alertId_s,
-          AlertStatus = iif(alertInfo_incidentStatus_s == "Unresolved","Active",""),
-          AlertOriginalStatus = alertInfo_incidentStatus_s,
-          AlertDescription = alertInfo_indicatorDescription_s
-      | lookup AlertVerdictLookup on alertInfo_analystVerdict_s
+          AlertId = iif(event_name_s == "Alerts.", alertInfo_alertId_s, threatInfo_threatId_s),
+          AlertStatus = iif(event_name_s == "Alerts.", iif(alertInfo_incidentStatus_s == "Unresolved", "Active", ""), iif(threatInfo_incidentStatus_s == "resolved", "Closed", "Active")),
+          AlertOriginalStatus = iif(event_name_s == "Alerts.", alertInfo_incidentStatus_s, threatInfo_incidentStatus_s),
+          AlertDescription = alertInfo_indicatorDescription_s,
+          Names = extract_all('"name":"([^"]+)"', dynamic([1]), indicators_s)
+      | extend
+          AttackTechniques = tostring(extract_all('"(T[0-9]+\\.[0-9]+|T[0-9]+)"', dynamic([1]), tostring(Names))),
+          AttackTactics = extract_all('"([^T][^0-9]+)"', dynamic([1]), tostring(Names))
+      | project-away Names
+      | lookup ThreatDetectionAnalyticsLookup on threatInfo_engines_s
+      | extend analystVerdict_s = iif(event_name_s == "Alerts.", alertInfo_analystVerdict_s, threatInfo_analystVerdict_s)
+      | lookup AlertVerdictLookup on analystVerdict_s
       // Mapping Inspection Fields
-      | extend 
+      | extend
+          ThreatId = threatInfo_threatId_s,
+          ThreatName = threatInfo_threatName_s,
           ThreatIsActive = agentRealtimeInfo_infected_b,
-          ThreatFirstReportedTime = alertInfo_createdAt_t,
-          ThreatLastReportedTime = alertInfo_reportedAt_t,
-          ThreatLastUpdatedTime = alertInfo_updatedAt_t,
+          ThreatFirstReportedTime = iif(event_name_s == "Alerts.", alertInfo_reportedAt_t, threatInfo_identifiedAt_t),
+          ThreatLastUpdatedTime = iif(event_name_s == "Alerts.", alertInfo_updatedAt_t, threatInfo_updatedAt_t),
+          ThreatCategory = iif(threatInfo_classification_s in (ThreatCategoryArray), threatInfo_classification_s, ""),
+          ThreatOriginalCategory = threatInfo_classification_s,
           RuleNumber = toint(ruleInfo_id_s),
           RuleName = ruleInfo_name_s,
           RuleDescription = ruleInfo_description_s
       // Mapping Dvc Fields
       | extend 
-          DvcHostname = agentDetectionInfo_name_s,
-          DvcOs = agentDetectionInfo_osName_s,
-          DvcOsVersion = agentDetectionInfo_osRevision_s,
-          DvcId = agentRealtimeInfo_id_s
+          DvcHostname = coalesce(agentDetectionInfo_name_s, agentRealtimeInfo_agentComputerName_s),
+          DvcOs = coalesce(agentDetectionInfo_osName_s, agentRealtimeInfo_agentOsName_s),
+          DvcOsVersion = coalesce(agentDetectionInfo_osRevision_s, agentRealtimeInfo_agentOsRevision_s),
+          DvcId = coalesce(agentRealtimeInfo_id_s, agentRealtimeInfo_agentId_s),
+          DvcDomain = agentRealtimeInfo_agentDomain_s,
+          DvcIpAddr = agentDetectionInfo_agentIpV4_s
       // Mapping IP Entity
       | extend 
           IpAddr = alertInfo_srcIp_s,
           PortNumber = alertInfo_srcPort_s
       // Mapping Process Entity
       | extend 
-      // Parent Process Fields
+          // Parent Process Fields
           ParentProcessCommandLine = sourceParentProcessInfo_commandline_s,
           ParentProcessMD5 = sourceParentProcessInfo_fileHashMd5_g,
           ParentProcessSHA1 = sourceParentProcessInfo_fileHashSha1_s,
@@ -75,21 +98,32 @@ ParserQuery: |
           ParentProcessIntegrityLevel = sourceParentProcessInfo_integrityLevel_s,
           ParentProcessId = sourceParentProcessInfo_pid_s,
           ParentProcessCreationTime = sourceParentProcessInfo_pidStarttime_t,
-      // Process Fields
+          // Process Fields
           ProcessCommandLine = sourceProcessInfo_commandline_s,
           ProcessMD5 = sourceProcessInfo_fileHashMd5_g,
           ProcessSHA1 = sourceProcessInfo_fileHashSha1_s,
           ProcessSHA256 = sourceProcessInfo_fileHashSha256_s,
-          ProcessName = sourceProcessInfo_filePath_s,
+          ProcessName = iif(event_name_s == "Alerts.", sourceProcessInfo_filePath_s, threatInfo_originatorProcess_s),
           ProcessFileCompany = sourceProcessInfo_fileSignerIdentity_s,
           ProcessIntegrityLevel = sourceProcessInfo_integrityLevel_s,
           ProcessId = sourceProcessInfo_pid_s,
           ProcessCreationTime =  sourceProcessInfo_pidStarttime_t
+      // Mapping File Fields
+      | extend 
+          FileMD5 = threatInfo_md5_g,
+          FileSHA1 = threatInfo_sha1_s,
+          FileSHA256 = threatInfo_sha256_s,
+          FilePath=threatInfo_filePath_s,
+          FileSize = threatInfo_fileSize_d
+      // Mapping User Fields
+      | extend 
+          Username = agentDetectionInfo_agentLastLoggedInUpn_s
       // Event Fields
       | extend
+          EventOriginalType = event_name_s,
           EventOriginalUid = alertInfo_dvEventId_s,
           EventOriginalSubType = alertInfo_eventType_s,
-          EventSeverity = iif(ruleInfo_severity_s == "Critical","High",ruleInfo_severity_s),
+          EventSeverity = iif(ruleInfo_severity_s == "Critical", "High", ruleInfo_severity_s),
           EventCount = int(1),
           EventEndTime = TimeGenerated,
           EventStartTime = TimeGenerated,
@@ -98,6 +132,7 @@ ParserQuery: |
           EventSchemaVersion = '0.1',
           EventType = 'Alert'
       | lookup EventSubTypeLookup on ruleInfo_treatAsThreat_s
-      | project-away *_s, *_g, SourceSystem, ManagementGroupName, Computer, RawData, *_t
+      | extend EventSubType = iif(event_name_s == "Threats.", "Threat", EventSubType)
+      | project-away *_s, *_g, SourceSystem, ManagementGroupName, Computer, RawData, *_t, *_b, *_d
   };
   parser (disabled = disabled)
