@@ -330,12 +330,32 @@ class UmbrellaClient:
                 if len(row) >= 7:
                     event = {
                         'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
-                        'Identity': row[1],
-                        'Source IP': row[2],
-                        'Source Port': row[3],
-                        'Destination IP': row[4],
-                        'Destination Port': row[5],
-                        'Categories': row[6].split(',')
+                        'identities': row[1],
+                        'identity types': row[2],
+                        'generator id': row[3],
+                        'signature id': row[4],
+                        'signature message': row[5],
+                        'signature list id': row[6],
+                        'severity': row[7],
+                        'attack classification': row[8],
+                        'cves': row[9],
+                        'ip protocol': row[10],
+                        'session id': row[11],
+                        'source ip': row[12],
+                        'source port': row[13],
+                        'destination ip': row[14],
+                        'destination port': row[15],
+                        'action': row[16],
+                        'operation mode': row[17],
+                        'policy resource id': row[18],
+                        'direction': row[19],
+                        'firewall rule id': row[20],
+                        'ips config type': row[21],
+                        'aws region': row[22],
+                        'application id': row[23],
+                        'casi category ids': row[24],
+                        'data center': row[25],
+                        'organization id': row[26]
                     }
                 else:
                     event = {"message": convert_list_to_csv_line(row)}
