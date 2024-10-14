@@ -1,0 +1,58 @@
+id: 9eb64924-ec8d-44d0-b1f2-10665150fb74
+name: GSA Enriched Office 365 - Bots added to multiple teams
+description: |
+  'This hunting query helps identify bots added to multiple Teams in a short space of time.'
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1176
+  - T1119
+query: |
+  let threshold = 2;  // Adjust this threshold based on your environment
+  let time_threshold = timespan(5m);  // Adjust the time delta threshold
+  // OfficeActivity Query
+  let OfficeEvents = OfficeActivity
+      | where OfficeWorkload =~ "MicrosoftTeams"
+      | where Operation =~ "BotAddedToTeam"
+      | summarize Start = max(TimeGenerated), End = min(TimeGenerated), Teams = make_set(TeamName, 10000) by UserId
+      | extend CountOfTeams = array_length(Teams)
+      | extend TimeDelta = End - Start
+      | where CountOfTeams > threshold
+      | where TimeDelta >= time_threshold
+      | project Start, End, Teams, CountOfTeams, UserId
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+      | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix;
+  // EnrichedMicrosoft365AuditLogs Query
+  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+      | where Workload == "MicrosoftTeams"
+      | where Operation == "BotAddedToTeam"
+      | extend TeamName = tostring(parse_json(tostring(AdditionalProperties)).TeamName)
+      | summarize Start = max(TimeGenerated), End = min(TimeGenerated), Teams = make_set(TeamName, 10000) by UserId
+      | extend CountOfTeams = array_length(Teams)
+      | extend TimeDelta = End - Start
+      | where CountOfTeams > threshold
+      | where TimeDelta <= time_threshold
+      | project Start, End, Teams, CountOfTeams, UserId
+      | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+      | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix;
+  // Combine Office and Enriched Logs
+  let CombinedEvents = OfficeEvents
+      | union EnrichedEvents
+      | summarize arg_min(Start, *) by UserId;
+  // Final Output
+  CombinedEvents
+      | project Start, End, Teams, CountOfTeams, UserId, AccountName, AccountUPNSuffix
+      | order by Start desc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+version: 2.0.1

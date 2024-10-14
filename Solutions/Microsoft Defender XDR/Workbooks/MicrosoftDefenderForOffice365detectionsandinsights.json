@@ -1,0 +1,2510 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Microsoft Defender for Office 365 Detections and Insights | <img height=\"20\" src=\"https://img-prod-cms-rt-microsoft-com.akamaized.net/cms/api/am/imageFileData/RE1Mu3b\">\n\n### This workbook template will give you an example how to visualise and get insights for Microsoft Defender for Office 365. It allows you to visualise Microsoft Defender for Office 365 (MDO) data based on your organisation needs. The workbook using data from hunting tables streamed from [Microsoft Defender XDR](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-schema-tables) using the Sentinel Connector. Keep the data as long as needed in the [Log Analytics workspace](https://learn.microsoft.com/en-us/azure/sentinel/configure-data-retention) to get insights over a long period of time based on your organisation needs.\n---\n"
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "6e647d99-1a32-4bca-8147-403b5d37d773",
+            "version": "KqlParameterItem/1.0",
+            "name": "Subscription",
+            "type": 6,
+            "isRequired": true,
+            "value": null,
+            "typeSettings": {
+              "includeAll": false,
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "timeContextFromParameter": "TimeRange"
+          },
+          {
+            "id": "d57bcdf5-aec7-4f86-904c-67171864919b",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "type": 5,
+            "isRequired": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "value": null
+          },
+          {
+            "id": "2e238f92-709c-410b-93e0-60eab6150a75",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "isGlobal": true,
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "value": {
+              "durationMs": 10454400000,
+              "endTime": "2024-08-30T11:41:00.000Z"
+            }
+          }
+        ],
+        "style": "pills",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 1"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Detection Overview",
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let totalinbound = EmailEvents\r\n| where EmailDirection == \"Inbound\"\r\n| summarize Count = count()\r\n| extend Details = \"Total Inbound Emails\";\r\nlet totalintraorg = EmailEvents\r\n| where EmailDirection == \"Intra-org\"\r\n| summarize Count = count()\r\n| extend Details = \"Total Intra-org Emails\";\r\nlet totaloutbound = EmailEvents\r\n| where EmailDirection == \"Outbound\"\r\n| summarize Count = count()\r\n| extend Details = \"Total Outbound Emails\";\r\nlet totalwiththreat = EmailEvents\r\n| where isnotempty(ThreatTypes) \r\n| summarize Count = count()\r\n| extend Details = \"Total Emails with Threats\";\r\nlet phishingcount = EmailEvents\r\n| where ThreatTypes has ('Phish')\r\n| summarize Count= count()\r\n| extend Details = \"Emails Detected as Phish\";\r\nlet malwarecount = EmailEvents\r\n| where ThreatTypes has ('Malware')\r\n| summarize Count= count()\r\n| extend Details = \"Emails Detected as Malware\";\r\nlet spamcount = EmailEvents\r\n| where ThreatTypes has ('Spam')\r\n| summarize Count= count()\r\n| extend Details = \"Emails Detected as Spam\";\r\nlet usersubmissioncount = CloudAppEvents\r\n| extend Record= (parse_json(RawEventData)).RecordType\r\n| extend SubmissionState = (parse_json(RawEventData)).SubmissionState\r\n| where Record == 29 | where ActionType == \"UserSubmission\"\r\n| summarize Count= count()\r\n| extend Details = \"Total Emails Reported by Users\";\r\nlet adminsubmissioncount = CloudAppEvents\r\n| extend Record= (parse_json(RawEventData)).RecordType\r\n| extend SubmissionState = (parse_json(RawEventData)).SubmissionState\r\n| where Record == 29 | where ActionType == \"AdminSubmission\"\r\n| summarize Count= count()\r\n| extend Details = \"Total Emails Reported by Admins\";\r\nlet zapcount = EmailPostDeliveryEvents\r\n| where ActionResult == \"Success\"\r\n| where ActionType == \"Phish ZAP\" or ActionType == \"Malware ZAP\"\r\n| summarize Count= count()\r\n| extend Details = \"Total Emails Removed by ZAP\";\r\nunion totalinbound, phishingcount, malwarecount, spamcount, totalintraorg, totaloutbound, totalwiththreat, usersubmissioncount, zapcount, adminsubmissioncount\r\n| project Count, Details\r\n| order by Count desc",
+              "size": 3,
+              "title": "Total number of detections",
+              "timeContextFromParameter": "TimeRange",
+              "exportFieldName": "NetworkMessageIds",
+              "exportParameterName": "NetworkMessageIdsDomain",
+              "exportDefaultValue": "[]",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "tiles",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Count",
+                    "formatter": 4,
+                    "formatOptions": {
+                      "palette": "greenRed"
+                    }
+                  }
+                ]
+              },
+              "tileSettings": {
+                "titleContent": {
+                  "columnMatch": "Details",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "Count",
+                  "formatter": 4,
+                  "formatOptions": {
+                    "palette": "redGreen",
+                    "compositeBarSettings": {
+                      "labelText": "",
+                      "columnSettings": [
+                        {
+                          "columnName": "Count",
+                          "color": "lightBlue"
+                        }
+                      ]
+                    }
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "style": "decimal",
+                      "maximumFractionDigits": 2,
+                      "maximumSignificantDigits": 3
+                    }
+                  }
+                },
+                "showBorder": false,
+                "size": "auto"
+              },
+              "chartSettings": {
+                "xAxis": "Count",
+                "createOtherGroup": 0
+              },
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "sizeSettings": "Count",
+                "sizeAggregation": "Sum",
+                "legendMetric": "Count",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "type": "heatmap",
+                  "colorAggregation": "Sum",
+                  "nodeColorField": "Count",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "100",
+            "name": "query1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let totalinbound = EmailEvents\r\n| where EmailDirection == \"Inbound\"\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Total Inbound Emails\";\r\nlet totalintraorg = EmailEvents\r\n| where EmailDirection == \"Intra-org\"\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Total Intra-org Emails\";\r\nlet totaloutbound = EmailEvents\r\n| where EmailDirection == \"Outbound\"\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Total Outbound Emails\";\r\nlet totalwiththreat = EmailEvents\r\n| where isnotempty(ThreatTypes) \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Total Emails with Threat\";\r\nlet phishingcount = EmailEvents\r\n| where ThreatTypes has ('Phish')\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Emails Detected as Phish\";\r\nlet malwarecount = EmailEvents\r\n| where ThreatTypes has ('Malware')\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Emails Detected as Malware\";\r\nlet spamcount = EmailEvents\r\n| where ThreatTypes has ('Spam')\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Emails Detected as Spam\";\r\nlet usersubmissioncount = CloudAppEvents\r\n| extend Record= (parse_json(RawEventData)).RecordType\r\n| extend SubmissionState = (parse_json(RawEventData)).SubmissionState\r\n| where Record == 29 | where ActionType == \"UserSubmission\"\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Total Emails Reported by Users\";\r\nlet adminsubmissioncount = CloudAppEvents\r\n| extend Record= (parse_json(RawEventData)).RecordType\r\n| extend SubmissionState = (parse_json(RawEventData)).SubmissionState\r\n| where Record == 29 | where ActionType == \"AdminSubmission\"\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Total Emails Reported by Admins\";\r\nlet zapcount = EmailPostDeliveryEvents\r\n| where ActionResult == \"Success\"\r\n| where ActionType == \"Phish ZAP\" or ActionType == \"Malware ZAP\"\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Total Emails Removed by ZAP\";\r\nunion totalinbound, phishingcount, malwarecount, spamcount, totalintraorg, totaloutbound, totalwiththreat, usersubmissioncount, zapcount, adminsubmissioncount\r\n| project Count, Details, Timestamp",
+              "size": 0,
+              "title": "Detection trend over time",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "xAxis": "Timestamp",
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Total Inbound Emails",
+                    "label": "Inbound Emails"
+                  },
+                  {
+                    "seriesName": "Total Emails with Threat",
+                    "label": "Emails with Threat"
+                  },
+                  {
+                    "seriesName": "Emails Detected as Phish",
+                    "label": "Emails with Phish"
+                  },
+                  {
+                    "seriesName": "Emails Detected as Malware",
+                    "label": "Emails with Malware"
+                  },
+                  {
+                    "seriesName": "Total Intra-org Emails",
+                    "label": "Intra-org Emails"
+                  },
+                  {
+                    "seriesName": "Emails Detected as Spam",
+                    "label": "Emails with Spam"
+                  },
+                  {
+                    "seriesName": "Total Outbound Emails",
+                    "label": "Outbound Emails"
+                  },
+                  {
+                    "seriesName": "Total Emails Removed by ZAP",
+                    "label": "Emails ZAP-d"
+                  },
+                  {
+                    "seriesName": "Total Emails Reported by Users",
+                    "label": "User Reported Emails"
+                  }
+                ]
+              }
+            },
+            "customWidth": "100",
+            "name": "query - 1"
+          }
+        ],
+        "exportParameters": true
+      },
+      "customWidth": "100",
+      "name": "Detection Overview (Dan)"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Email - Malware Detections",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Malware\" \r\n| make-series MalwareDetections = count() default = 0 on Timestamp step 1d ",
+              "size": 0,
+              "title": "Malware Detection Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 0",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Malware\" \r\n| summarize count() by SenderIPv4\r\n| extend GeoInfo = geo_info_from_ip_address(SenderIPv4)\r\n| extend Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\r\n| project SenderIPv4, Latitude, Longitude, count_\r\n\r\n",
+              "size": 0,
+              "title": "Sender Heatmap(IPv4)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "map",
+              "gridSettings": {
+                "sortBy": [
+                  {
+                    "itemKey": "count_",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "count_",
+                  "sortOrder": 2
+                }
+              ],
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "locInfoColumn": "GeoInfo",
+                "latitude": "Latitude",
+                "longitude": "Longitude",
+                "sizeSettings": "count_",
+                "sizeAggregation": "Sum",
+                "labelSettings": "SenderIPv4",
+                "legendMetric": "count_",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "nodeColorField": "count_",
+                  "colorAggregation": "Sum",
+                  "type": "heatmap",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where DetectionMethods has 'Malware' \r\n| project Timestamp, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) | summarize count() by Malware=tostring(column_ifexists('Malware', ''))\r\n| sort by count_ desc",
+              "size": 0,
+              "title": "Detection Technologies used for Malware Detections",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "Malware",
+                "yAxis": [
+                  "count_"
+                ],
+                "xSettings": {
+                  "label": ""
+                },
+                "ySettings": {
+                  "label": ""
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 2",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where isnotempty(ThreatNames) \r\n| summarize count() by ThreatNames \r\n| sort by count_",
+              "size": 0,
+              "title": "Top Malware Families",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "ThreatNames",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 3",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where ThreatTypes has \"Malware\" | summarize count() by SenderFromDomain | sort by count_ | top 10 by count_",
+              "size": 4,
+              "title": "Email Top 10 Domains sending Malware",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "SenderFromDomain",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "count_",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "SenderFromDomain",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "count_",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "xAxis": "SenderFromDomain",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 4",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where ThreatTypes has \"Malware\" | summarize count() by RecipientEmailAddress | sort by count_ | top 10 by count_",
+              "size": 4,
+              "title": "Email Top 10 Targeted Users (Malware)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "chartSettings": {
+                "xAxis": "RecipientEmailAddress",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 5",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where ThreatTypes has \"Malware\" | summarize count() by SenderFromDomain | sort by count_ | top 15 by count_",
+              "size": 0,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Emails",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "count_",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ]
+              },
+              "sortBy": []
+            },
+            "customWidth": "50",
+            "name": "query - 18",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where ThreatTypes has \"Malware\" and EmailDirection == \"Inbound\" | summarize count() by RecipientEmailAddress | sort by count_ | top 15 by count_",
+              "size": 0,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Emails",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "count_",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ]
+              },
+              "sortBy": []
+            },
+            "customWidth": "50",
+            "name": "query - 18",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 3"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Email - Phish Detections",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| where ThreatTypes has \"Phish\"\r\n| make-series PhishDetections = count() default = 0 on Timestamp step 1d \r\n",
+              "size": 0,
+              "title": "Phish Detections Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 0",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Phish\" \r\n| summarize count() by SenderIPv4\r\n| extend GeoInfo = geo_info_from_ip_address(SenderIPv4)\r\n| extend Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\r\n| project SenderIPv4, Latitude, Longitude, count_",
+              "size": 0,
+              "title": "Sender Heatmap (IPv4)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "map",
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "latitude": "Latitude",
+                "longitude": "Longitude",
+                "sizeSettings": "count_",
+                "sizeAggregation": "Sum",
+                "labelSettings": "SenderIPv4",
+                "legendMetric": "count_",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "nodeColorField": "count_",
+                  "colorAggregation": "Sum",
+                  "type": "heatmap",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 4",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has 'Phish' \r\n| project Timestamp, DT=parse_json(DetectionMethods) \r\n| evaluate bag_unpack(DT) \r\n| summarize count() by Phish=tostring(column_ifexists('Phish', ''))\r\n| sort by count_ desc",
+              "size": 0,
+              "title": "Detection Technologies used for Phish Detections",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "Phish",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "Detections",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "xAxis": "Phish",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "name": "query - 1"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Phish\"\r\n| summarize count() by SenderFromDomain\r\n| sort by count_\r\n| top 10 by count_\r\n",
+              "size": 4,
+              "title": "Top Domains sending Phish",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "SenderFromDomain",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "count_",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "xAxis": "SenderFromDomain",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 2",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| where ThreatTypes has \"Phish\"\r\n| summarize count() by RecipientEmailAddress\r\n| sort by count_\r\n| top 10 by count_",
+              "size": 4,
+              "title": "Top Targeted Users (Phish)",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "chartSettings": {
+                "xAxis": "RecipientEmailAddress",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 3",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Phish\"\r\n| summarize count() by SenderFromDomain\r\n| sort by count_\r\n| top 15 by count_\r\n| project SenderFromDomain,Emails=count_\r\n",
+              "size": 3,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Emails",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "count_",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ],
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_bar_Emails_1",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "$gen_bar_Emails_1",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query - 18",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| where ThreatTypes has \"Phish\" and EmailDirection == \"Inbound\"\r\n| summarize count() by RecipientEmailAddress\r\n| sort by count_\r\n| top 15 by count_\r\n| project RecipientEmailAddress,Emails=count_",
+              "size": 3,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Emails",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "count_",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ],
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_bar_Emails_1",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "$gen_bar_Emails_1",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query - 18",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 5"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Email - Spam Detections",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Spam\" \r\n| make-series Count = count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Emails with Spam\";",
+              "size": 0,
+              "title": "Spam Detection Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "Emails",
+                    "color": "redDark"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 13",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Spam\" \r\n| summarize count() by SenderIPv4\r\n| extend GeoInfo = geo_info_from_ip_address(SenderIPv4)\r\n| extend Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\r\n| project SenderIPv4, Latitude, Longitude, count_  ",
+              "size": 0,
+              "title": "Sender Heatmap(IPv4)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "map",
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "locInfoColumn": "SenderIPv4",
+                "latitude": "Latitude",
+                "longitude": "Longitude",
+                "sizeSettings": "count_",
+                "sizeAggregation": "Sum",
+                "labelSettings": "SenderIPv4",
+                "legendMetric": "count_",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "nodeColorField": "count_",
+                  "colorAggregation": "Sum",
+                  "type": "heatmap",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 14",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where DetectionMethods has 'Spam' \r\n| project Timestamp, DT=parse_json(DetectionMethods) | evaluate bag_unpack(DT) | summarize count() by Spam=tostring(column_ifexists('Spam', ''))\r\n| sort by count_",
+              "size": 0,
+              "title": "Detection Technologies used for Spam Detections",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "Spam",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "name": "query - 15",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Spam\" and EmailDirection ==\"Inbound\"\r\n| summarize count() by SenderFromDomain\r\n| sort by count_ desc \r\n| take 10",
+              "size": 4,
+              "title": "Email Top 10 Domains sending Spam",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "chartSettings": {
+                "group": "SenderFromDomain",
+                "createOtherGroup": 10,
+                "showMetrics": false,
+                "showLegend": true
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 17"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Spam\" and EmailDirection ==\"Inbound\" \r\n| summarize count() by RecipientEmailAddress \r\n| sort by count_ desc\r\n| take 10",
+              "size": 4,
+              "title": "Email Top 10 Targeted Users (Spam)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "chartSettings": {
+                "group": "RecipientEmailAddress",
+                "createOtherGroup": 10,
+                "showMetrics": false,
+                "showLegend": true
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 17 - Copy",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where ThreatTypes has \"Spam\" and EmailDirection ==\"Inbound\"\r\n| summarize count() by SenderFromDomain\r\n| sort by count_ desc\r\n| project SenderFromDomain,Emails=count_\r\n| take 15",
+              "size": 3,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Emails",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "count_",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ],
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_bar_Emails_1",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "$gen_bar_Emails_1",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query - 18",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where ThreatTypes has \"Spam\" and EmailDirection ==\"Inbound\" | summarize count() by RecipientEmailAddress| sort by count_ desc| take 15\r\n| project RecipientEmailAddress,Emails=count_",
+              "size": 3,
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "Emails",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    },
+                    "numberFormat": {
+                      "unit": 0,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  },
+                  {
+                    "columnMatch": "count_",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "blue"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "style": "decimal"
+                      }
+                    }
+                  }
+                ],
+                "sortBy": [
+                  {
+                    "itemKey": "$gen_bar_Emails_1",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "sortBy": [
+                {
+                  "itemKey": "$gen_bar_Emails_1",
+                  "sortOrder": 2
+                }
+              ]
+            },
+            "customWidth": "50",
+            "name": "query - 18 - Copy",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 6"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Email - Business Compromise Detections (BEC)",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where DetectionMethods has 'Spoof' \r\n| make-series Count = count() default = 0 on Timestamp step 1d \r\n| extend Details = \"SpoofEmails\";",
+              "size": 0,
+              "title": "Email Spoof Detection Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 0",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| where DetectionMethods contains 'spoof'\r\n//| project Timestamp, EmailDirection, SenderFromAddress, AdditionalFields, SenderIPv4 \r\n| summarize count()by SenderIPv4\r\n| extend GeoInfo = geo_info_from_ip_address(SenderIPv4)\r\n| extend Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\r\n| project SenderIPv4, Latitude, Longitude, count_  ",
+              "size": 0,
+              "title": "Spoof Sender Heatmap(IPv4)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "map",
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "latitude": "Latitude",
+                "longitude": "Longitude",
+                "sizeSettings": "count_",
+                "sizeAggregation": "Sum",
+                "labelSettings": "SenderIPv4",
+                "legendMetric": "count_",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "nodeColorField": "count_",
+                  "colorAggregation": "Sum",
+                  "type": "heatmap",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 3",
+            "styleSettings": {
+              "margin": "15px",
+              "padding": "15px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where DetectionMethods has 'Spoof' \r\n| project Timestamp, DT=parse_json(DetectionMethods) \r\n| evaluate bag_unpack(DT) \r\n| summarize count() by Phish=tostring(column_ifexists('Phish', ''))\r\n| sort by count_ desc",
+              "size": 0,
+              "title": "Email Spoof Detection Technology",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "Phish",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let spoofexternal = EmailEvents\r\n| where DetectionMethods has 'Spoof external domain' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Spoof external domain\";\r\nlet spoofinternal = EmailEvents\r\n| where DetectionMethods has 'Spoof intra-org'\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Spoof intra-org\";\r\nlet spoofdmarc = EmailEvents\r\n| where DetectionMethods has 'Spoof DMARC' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Spoof DMARC\";\r\nunion spoofexternal, spoofinternal, spoofdmarc\r\n| project Count, Details, Timestamp",
+              "size": 0,
+              "title": "Email Spoof Detection Technology Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "yAxis": [
+                  "Count"
+                ],
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "[\"Spoof external domain\"]",
+                    "color": "redDark"
+                  },
+                  {
+                    "seriesName": "[\"Spoof intra-org\"]",
+                    "color": "orangeDark"
+                  },
+                  {
+                    "seriesName": "[\"Spoof DMARC\"]",
+                    "color": "yellowDark"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 20",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where DetectionMethods has 'Impersonation' \r\n| make-series Count = count() default = 0 on Timestamp step 1d \r\n| extend Details = \"ImpersonatedEmails\";",
+              "size": 0,
+              "title": "Email Impersonation Detection Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 5",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| where DetectionMethods contains 'Impersonation'\r\n//| project Timestamp, EmailDirection, SenderFromAddress, AdditionalFields, SenderIPv4 \r\n| summarize count()by SenderIPv4\r\n| extend GeoInfo = geo_info_from_ip_address(SenderIPv4)\r\n| extend Latitude = tostring(GeoInfo.latitude), Longitude = tostring(GeoInfo.longitude)\r\n| project SenderIPv4, Latitude, Longitude, count_  ",
+              "size": 0,
+              "title": "Impersonation Heatmap(IPv4)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "map",
+              "mapSettings": {
+                "locInfo": "LatLong",
+                "latitude": "Latitude",
+                "longitude": "Longitude",
+                "sizeSettings": "count_",
+                "sizeAggregation": "Sum",
+                "legendMetric": "count_",
+                "legendAggregation": "Sum",
+                "itemColorSettings": {
+                  "nodeColorField": "count_",
+                  "colorAggregation": "Sum",
+                  "type": "heatmap",
+                  "heatmapPalette": "greenRed"
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 6",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| extend UIMP= DetectionMethods has_any('Impersonation user')\r\n| extend DIMP= DetectionMethods has_any('Impersonation domain')\r\n| extend MBIQ= DetectionMethods has_any ('Mailbox intelligence impersonation')\r\n| extend BIMP= DetectionMethods has_any ('Impersonation brand')\r\n| summarize ImpersonationUser = sum(UIMP), ImpersonationDomain = sum(DIMP), ImpersonationMailboxIntelligence = sum(MBIQ), ImpersonationBrand = sum(BIMP)// by bin(Timestamp, 1d)\r\n",
+              "size": 0,
+              "title": "Impersonation Detection Technology",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "tileSettings": {
+                "showBorder": false
+              },
+              "graphSettings": {
+                "type": 0
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 2",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let iuser = EmailEvents\r\n| where DetectionMethods has 'Impersonation user' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Impersonation user\";\r\nlet idomain = EmailEvents\r\n| where DetectionMethods has 'Impersonation domain'\r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Impersonation domain\";\r\nlet imailbox = EmailEvents\r\n| where DetectionMethods has 'Mailbox intelligence impersonation' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Mailbox intelligence impersonation\";\r\nlet ibrand = EmailEvents\r\n| where DetectionMethods has 'Impersonation brand' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Impersonation brand\";\r\nunion iuser, idomain, imailbox, ibrand\r\n| project Count, Details, Timestamp",
+              "size": 0,
+              "title": "Email Impersonation Detection Technology Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 7",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 7"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Email - Sender Authentication based Detections",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| extend CompAuthFail = AuthenticationDetails has_any ('CompAuth\":\"fail') \r\n| summarize CompAuthFail = sum(CompAuthFail) by bin (Timestamp,1d)",
+              "size": 0,
+              "title": "CompAuth Fail Trends",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "CompAuthFail",
+                    "color": "blueDark"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 21",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n|  extend DMARCFail = AuthenticationDetails has_any ('DMARC\":\"fail') \r\n| summarize DMARCFail = sum(DMARCFail) by bin (Timestamp,1d)",
+              "size": 0,
+              "title": "DMARC Fail Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "DMARCFail",
+                    "color": "orangeDark"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 22",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| extend SPFFail = AuthenticationDetails has_any ('SPF\":\"fail') \r\n| summarize SPFFail = sum(SPFFail) by bin (Timestamp,1d)",
+              "size": 0,
+              "title": "SPF Fail Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "SPFFail",
+                    "color": "purpleDark"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 23",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| extend DKIMFail = AuthenticationDetails has_any ('DKIM\":\"fail') \r\n| summarize DKIMCFail = sum(DKIMFail) by bin (Timestamp,1d)",
+              "size": 0,
+              "title": "DKIM Fail Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "DKIMCFail",
+                    "color": "yellowDark"
+                  }
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 24",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| extend DMARCFail = AuthenticationDetails has_any ('DMARC\":\"fail')\r\n| summarize DMARCFail = sum(DMARCFail) by P1Sender=SenderMailFromAddress, P2Sender=SenderFromAddress,SenderIPv4\r\n| top 10 by DMARCFail desc",
+              "size": 3,
+              "title": "Top 10 Spoof DMARC Senders (P1/P2)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "table",
+              "gridSettings": {
+                "formatters": [
+                  {
+                    "columnMatch": "DMARCFail",
+                    "formatter": 3,
+                    "formatOptions": {
+                      "palette": "redDark"
+                    }
+                  }
+                ]
+              }
+            },
+            "customWidth": "100",
+            "name": "query - 26",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 8"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "URL Detections and Clicks",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailUrlInfo\r\n| summarize  count() by UrlLocation, bin (Timestamp,1d)",
+              "size": 3,
+              "title": "URLs by location",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "name": "query - 5",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents\r\n| where EmailDirection == \"Inbound\" and DetectionMethods has \"Url\"\r\n| join EmailUrlInfo on NetworkMessageId\r\n| where UrlLocation == \"QRCode\"\r\n| summarize  count() by DetectionMethods, bin (Timestamp,1d)\r\n",
+              "size": 0,
+              "title": "Malicious Emails with QR code Urls",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 6",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "UrlClickEvents \r\n| where ActionType == \"ClickBlocked\" \r\n| summarize ClickBlocked=count() by bin(Timestamp,1d)\r\n",
+              "size": 0,
+              "title": "Blocked Clicks Trend",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "xAxis": "Timestamp",
+                "yAxis": [
+                  "ClickBlocked"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 4",
+            "styleSettings": {
+              "margin": "15px",
+              "padding": "15px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "UrlClickEvents \r\n| extend UrlBlocked = ActionType has_any(\"ClickBlocked\")\r\n| extend UrlAllowed = ActionType has_any(\"ClickAllowed\")\r\n| extend UrlPendingVerdict = ActionType has_any(\"UrlScanInProgress\")\r\n| extend ErrorPage = ActionType has_any(\"UrlErrorPage\")\r\n| summarize Blocked = sum(UrlBlocked), Allowed = sum(UrlAllowed), PendingVerdict = sum(UrlPendingVerdict), Error = sum(ErrorPage), ClickedThrough = sum(IsClickedThrough) by bin(Timestamp, 1d)\r\n",
+              "size": 0,
+              "title": "URL Clicks by Action",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "chartSettings": {
+                "xAxis": "Timestamp",
+                "yAxis": [
+                  "Allowed",
+                  "Blocked",
+                  "ClickedThrough",
+                  "Error",
+                  "PendingVerdict"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "UrlClickEvents \r\n| where ActionType == \"ClickAllowed\" or IsClickedThrough !=\"0\"\r\n| where isnotempty(ThreatTypes) \r\n| summarize count() by Workload",
+              "size": 3,
+              "title": "Malicious Clicks allowed (click-through)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart"
+            },
+            "customWidth": "33",
+            "name": "query - 2",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "UrlClickEvents \r\n| where isnotempty(ThreatTypes) \r\n| summarize count() by Workload, bin(Timestamp, 1d)",
+              "size": 3,
+              "title": "Malicious URL Clicks by workload",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart"
+            },
+            "customWidth": "33",
+            "name": "query - 3",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "UrlClickEvents\r\n| where isnotempty(ThreatTypes)\r\n| summarize count() by ThreatTypes,bin(Timestamp, 1d)",
+              "size": 3,
+              "title": "URL Click attempts by threat type",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart"
+            },
+            "customWidth": "33",
+            "name": "query - 4",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 9"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Email - Top Users/Senders",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where (ThreatTypes has \"Malware\" or ThreatTypes has \"Phish\" or ThreatTypes has \"Spam\") and EmailDirection == \"Inbound\"\r\n| summarize count() by RecipientEmailAddress | sort by count_  | take 10",
+              "size": 3,
+              "title": "Top 10 Targeted Users (Malware+Phish+Spam)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "RecipientEmailAddress",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "count_",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "RecipientEmailAddress",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "count_",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 27",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "UrlClickEvents| where ThreatTypes has \"Malware\" or ThreatTypes has \"Phish\" or ThreatTypes has \"Spam\"| summarize count() by AccountUpn | sort by count_ desc| take 10",
+              "size": 3,
+              "title": "Top 10 Users clicking on Malicious URLs (Malware+Phish+Spam)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "name": "query - 28",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where isnotempty(ThreatTypes) and EmailDirection == \"Inbound\"| summarize count() by SenderFromDomain| sort by count_ desc  | take 10",
+              "size": 3,
+              "title": "Top 10 Domains sending Malicious Emails (Malware+Phish+Spam)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "chartSettings": {
+                "createOtherGroup": 0
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 29",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where EmailDirection == \"Inbound\" | summarize count() by SenderFromAddress | sort by count_ desc | take 10",
+              "size": 3,
+              "title": "Top 10 External Senders",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart",
+              "chartSettings": {
+                "yAxis": [
+                  "count_"
+                ],
+                "createOtherGroup": 0
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 30",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 10"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Email - Detection Overrides",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents \r\n| where OrgLevelPolicy!=\"\"\"\" and OrgLevelAction == \"Allow\" \r\n| summarize count() by OrgLevelPolicy,bin(Timestamp, 1d)",
+              "size": 0,
+              "title": "Total Emails with Admin Overrides (Allow)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ]
+            },
+            "customWidth": "50",
+            "name": "query - 0",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents  \r\n| where UserLevelPolicy!=\"\"\"\" and UserLevelAction == \"Allow\" \r\n| summarize count() by UserLevelPolicy",
+              "size": 0,
+              "title": "Total Emails with User Overrides (Allow)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "UserLevelPolicy",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where  OrgLevelPolicy!=\"\"\"\" and OrgLevelAction == \"Block\"  | summarize count() by OrgLevelPolicy",
+              "size": 0,
+              "title": "Total Emails with Admin Overrides (Block)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "OrgLevelPolicy",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 2",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailEvents | where UserLevelPolicy!=\"\"\"\" and UserLevelAction == \"Block\" | summarize count() by UserLevelPolicy",
+              "size": 0,
+              "title": "Total Emails with User Overrides (Block)",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "UserLevelPolicy",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 3",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 12"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "False Negative/Positive Submissions",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let totalAdminSubmission = CloudAppEvents \r\n| where ActionType == \"AdminSubmission\"\r\n| make-series Count= count() default = 0 on Timestamp step 1d\r\n| extend Details = \"Admin submissions\";\r\nlet totalUserSubmission = CloudAppEvents \r\n| where ActionType == \"UserSubmission\"\r\n| make-series Count= count() default = 0 on Timestamp step 1d\r\n| extend Details = \"User submissions\";\r\nunion totalAdminSubmission,totalUserSubmission\r\n| project Count, Details, Timestamp",
+              "size": 0,
+              "title": "Admin and User Submission Trend ",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "name": "query - 4"
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents \r\n| where ActionType == \"UserSubmission\" or ActionType == \"AdminSubmission\" \r\n| summarize count() by ActionType, bin(Timestamp, 1d) ",
+              "size": 3,
+              "title": "Total Submissions by Submission Type",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "name": "query - 1",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents \r\n| extend Record = (parse_json(RawEventData)).RecordType \r\n| extend SubmissionState = (parse_json(RawEventData)).SubmissionState \r\n| extend UserKey = (parse_json(RawEventData)).UserKey\r\n| where Record == 29 \r\n| where ActionType == \"UserSubmission\" or ActionType == \"AdminSubmission\" \r\n| summarize count() by tostring(SubmissionState)//, bin(Timestamp, 1d) | sort by count_",
+              "size": 3,
+              "title": "Total Submissions by Submission State",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "name": "query - 0",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents \r\n| extend Record= (parse_json(RawEventData)).RecordType \r\n| extend SubmissionState = (parse_json(RawEventData)).SubmissionState \r\n| extend UserId = (parse_json(RawEventData)).UserId\r\n| where Record == 29\r\n| where ActionType == \"AdminSubmission\" \r\n| summarize count() by tostring(UserId) | sort by count_",
+              "size": 0,
+              "title": "Top Submitters - Admin Submissions",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart"
+            },
+            "customWidth": "50",
+            "name": "query - 2",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents \r\n| extend Record= (parse_json(RawEventData)).RecordType \r\n| extend SubmissionState = (parse_json(RawEventData)).SubmissionState  \r\n| extend UserId = (parse_json(RawEventData)).UserId \r\n| where Record == 29 \r\n| where ActionType == \"UserSubmission\" \r\n| summarize count() by tostring(UserId) | sort by count_",
+              "size": 0,
+              "title": "Top Submitters - User Submissions",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "UserId",
+                "yAxis": [
+                  "count_"
+                ]
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 3",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 11"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "File - Malware Detections (SharePoint, Teams and OneDrive)",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents\r\n| where ActionType == 'FileMalwareDetected'\r\n| make-series Count = count() default = 0 on Timestamp step 1d ",
+              "size": 0,
+              "title": "File Malware Detection Trend ",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart",
+              "tileSettings": {
+                "showBorder": false
+              },
+              "graphSettings": {
+                "type": 0
+              },
+              "chartSettings": {
+                "seriesLabelSettings": [
+                  {
+                    "seriesName": "FileMalwareDetections",
+                    "color": "redDark"
+                  }
+                ],
+                "showDataPoints": true
+              }
+            },
+            "customWidth": "100",
+            "name": "query - 0",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents\r\n| where ActionType == 'FileMalwareDetected' and UserAgent =~ 'MS Scanner ATP'\r\n| project ObjectName, UserAgent, RawinfoVirusInfo = RawEventData.VirusInfo\r\n| summarize count() by tostring(RawinfoVirusInfo) | sort by count_",
+              "size": 0,
+              "title": "Top Malware families - Defender for Office 365 detections",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "RawinfoVirusInfo",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "count_",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "graphSettings": {
+                "type": 0,
+                "topContent": {
+                  "columnMatch": "RawinfoVirusInfo",
+                  "formatter": 1
+                },
+                "centerContent": {
+                  "columnMatch": "count_",
+                  "formatter": 1,
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              },
+              "chartSettings": {
+                "xAxis": "RawinfoVirusInfo"
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 1",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents\r\n| where ActionType == 'FileMalwareDetected' and isempty(UserAgent)\r\n| project ObjectName, UserAgent, RawinfoVirusInfo = RawEventData.VirusInfo\r\n| summarize count() by tostring(RawinfoVirusInfo) | sort by count_",
+              "size": 0,
+              "title": "Top Malware families - Sharepoint Online AV detections",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "chartSettings": {
+                "xAxis": "RawinfoVirusInfo"
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 2",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents\r\n| where ActionType == 'FileMalwareDetected'\r\n| project location=(split(RawEventData.SiteUrl, '/')[4])\r\n| summarize count() by tostring(location)\r\n| sort by count_ desc",
+              "size": 0,
+              "title": "Malware detection - top targeted workload locations",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "barchart",
+              "tileSettings": {
+                "showBorder": false,
+                "titleContent": {
+                  "columnMatch": "location",
+                  "formatter": 1
+                },
+                "leftContent": {
+                  "columnMatch": "count_",
+                  "formatter": 12,
+                  "formatOptions": {
+                    "palette": "auto"
+                  },
+                  "numberFormat": {
+                    "unit": 17,
+                    "options": {
+                      "maximumSignificantDigits": 3,
+                      "maximumFractionDigits": 2
+                    }
+                  }
+                }
+              }
+            },
+            "customWidth": "50",
+            "name": "query - 4",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "CloudAppEvents\r\n| where ActionType == 'FileMalwareDetected'\r\n| extend Appwithteams = iff(Application =~ 'Microsoft SharePoint Online',strcat(Application,' / Teams Files'),Application)\r\n| extend Appwithteams = trim_start('Microsoft',Appwithteams) | summarize count() by Appwithteams\r\n| sort by count_ desc",
+              "size": 3,
+              "title": "Malware detection - by workload type",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "piechart"
+            },
+            "customWidth": "50",
+            "name": "query - 4",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 4"
+    },
+    {
+      "type": 12,
+      "content": {
+        "version": "NotebookGroup/1.0",
+        "groupType": "editable",
+        "title": "Post Delivery Detections and Admin Actions",
+        "expandable": true,
+        "expanded": true,
+        "items": [
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailPostDeliveryEvents \r\n| where ActionType has \"ZAP\"\r\n| make-series Count = count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Zapped Emails\";",
+              "size": 0,
+              "title": "Post Delivery Actions by ZAP",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 2",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let szap = EmailPostDeliveryEvents\r\n| where ActionType has 'Spam ZAP' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Spam ZAP\";\r\nlet pzap = EmailPostDeliveryEvents\r\n| where ActionType has 'Phish ZAP' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Phish ZAP\";\r\nlet mzap = EmailPostDeliveryEvents\r\n| where ActionType has 'Malware ZAP' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Malware ZAP\";\r\nunion szap, pzap, mzap\r\n| project Count, Details, Timestamp",
+              "size": 0,
+              "title": "Post Delivery Actions by ZAP Type",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 3",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "EmailPostDeliveryEvents\r\n| where ActionTrigger has \"AdminAction\"\r\n| summarize  count() by Action, bin (Timestamp,1d)\r\n",
+              "size": 0,
+              "title": "Post Delivery Actions by Admin",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 3",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          },
+          {
+            "type": 3,
+            "content": {
+              "version": "KqlItem/1.0",
+              "query": "let quarantine = EmailPostDeliveryEvents\r\n| where DeliveryLocation has 'Quarantine' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Quarantine\";\r\nlet Junk = EmailPostDeliveryEvents\r\n| where DeliveryLocation has 'Junk' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Junk\";\r\nlet Delete = EmailPostDeliveryEvents\r\n| where DeliveryLocation has 'Delete' \r\n| make-series Count= count() default = 0 on Timestamp step 1d \r\n| extend Details = \"Delete\";\r\nunion quarantine, Junk, Delete\r\n| project Count, Details, Timestamp",
+              "size": 0,
+              "title": "Post Delivery Actions by Location ",
+              "timeContextFromParameter": "TimeRange",
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "crossComponentResources": [
+                "{Workspace}"
+              ],
+              "visualization": "linechart"
+            },
+            "customWidth": "50",
+            "name": "query - 0",
+            "styleSettings": {
+              "margin": "10px",
+              "padding": "10px"
+            }
+          }
+        ]
+      },
+      "name": "group - 13"
+    }
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
