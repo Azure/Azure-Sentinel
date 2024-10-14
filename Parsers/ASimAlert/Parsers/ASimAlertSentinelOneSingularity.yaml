@@ -26,7 +26,7 @@ ParserQuery: |
     "Undefined", "Unknown",
     "true_positive", "Malicious",
     "suspicious", "Suspicious",
-    "false_positive", "FalsePositive"
+    "false_positive", "False Positive"
   ];
   let EventSubTypeLookup = datatable (ruleInfo_treatAsThreat_s: string, EventSubType: string)
       [
@@ -51,6 +51,7 @@ ParserQuery: |
       // Mapping Alert Fields
       | extend 
           AlertId = iif(event_name_s == "Alerts.", alertInfo_alertId_s, threatInfo_threatId_s),
+          AlertName = iif(event_name_s == "Threats.", threatInfo_threatName_s, ""),
           AlertStatus = iif(event_name_s == "Alerts.", iif(alertInfo_incidentStatus_s == "Unresolved", "Active", ""), iif(threatInfo_incidentStatus_s == "resolved", "Closed", "Active")),
           AlertOriginalStatus = iif(event_name_s == "Alerts.", alertInfo_incidentStatus_s, threatInfo_incidentStatus_s),
           AlertDescription = alertInfo_indicatorDescription_s,
@@ -81,38 +82,23 @@ ParserQuery: |
           DvcOsVersion = coalesce(agentDetectionInfo_osRevision_s, agentRealtimeInfo_agentOsRevision_s),
           DvcId = coalesce(agentRealtimeInfo_id_s, agentRealtimeInfo_agentId_s),
           DvcDomain = agentRealtimeInfo_agentDomain_s,
-          DvcIpAddr = agentDetectionInfo_agentIpV4_s
+          DvcIpAddr = coalesce(agentDetectionInfo_agentIpV4_s, alertInfo_srcIp_s)
       // Mapping IP Entity
       | extend 
-          IpAddr = alertInfo_srcIp_s,
+          IpAddr = DvcIpAddr,
           PortNumber = alertInfo_srcPort_s
       // Mapping Process Entity
       | extend 
-          // Parent Process Fields
-          ParentProcessCommandLine = sourceParentProcessInfo_commandline_s,
-          ParentProcessMD5 = sourceParentProcessInfo_fileHashMd5_g,
-          ParentProcessSHA1 = sourceParentProcessInfo_fileHashSha1_s,
-          ParentProcessSHA256 = sourceParentProcessInfo_fileHashSha256_s,
-          ParentProcessName = sourceParentProcessInfo_filePath_s,
-          ParentProcessFileCompany = sourceParentProcessInfo_fileSignerIdentity_s,
-          ParentProcessIntegrityLevel = sourceParentProcessInfo_integrityLevel_s,
-          ParentProcessId = sourceParentProcessInfo_pid_s,
-          ParentProcessCreationTime = sourceParentProcessInfo_pidStarttime_t,
-          // Process Fields
+          // Mapping Process Fields
           ProcessCommandLine = sourceProcessInfo_commandline_s,
-          ProcessMD5 = sourceProcessInfo_fileHashMd5_g,
-          ProcessSHA1 = sourceProcessInfo_fileHashSha1_s,
-          ProcessSHA256 = sourceProcessInfo_fileHashSha256_s,
           ProcessName = iif(event_name_s == "Alerts.", sourceProcessInfo_filePath_s, threatInfo_originatorProcess_s),
           ProcessFileCompany = sourceProcessInfo_fileSignerIdentity_s,
-          ProcessIntegrityLevel = sourceProcessInfo_integrityLevel_s,
-          ProcessId = sourceProcessInfo_pid_s,
-          ProcessCreationTime =  sourceProcessInfo_pidStarttime_t
+          ProcessId = sourceProcessInfo_pid_s
       // Mapping File Fields
       | extend 
-          FileMD5 = threatInfo_md5_g,
-          FileSHA1 = threatInfo_sha1_s,
-          FileSHA256 = threatInfo_sha256_s,
+          FileMD5 = coalesce(threatInfo_md5_g,sourceProcessInfo_fileHashMd5_g),
+          FileSHA1 = coalesce(threatInfo_sha1_s,sourceProcessInfo_fileHashSha1_s),
+          FileSHA256 = coalesce(threatInfo_sha256_s,sourceProcessInfo_fileHashSha256_s),
           FilePath=threatInfo_filePath_s,
           FileSize = threatInfo_fileSize_d
       // Mapping User Fields
@@ -130,7 +116,20 @@ ParserQuery: |
           EventProduct = 'Singularity',
           EventVendor = 'SentinelOne',
           EventSchemaVersion = '0.1',
-          EventType = 'Alert'
+          EventType = 'Alert',
+          AdditionalFields = bag_pack(
+                                      "ParentProcessCommandLine" = sourceParentProcessInfo_commandline_s,
+                                      "ParentProcessMD5" = sourceParentProcessInfo_fileHashMd5_g,
+                                      "ParentProcessSHA1" = sourceParentProcessInfo_fileHashSha1_s,
+                                      "ParentProcessSHA256" = sourceParentProcessInfo_fileHashSha256_s,
+                                      "ParentProcessName" = sourceParentProcessInfo_filePath_s,
+                                      "ParentProcessFileCompany" = sourceParentProcessInfo_fileSignerIdentity_s,
+                                      "ParentProcessIntegrityLevel" = sourceParentProcessInfo_integrityLevel_s,
+                                      "ParentProcessId" = sourceParentProcessInfo_pid_s,
+                                      "ParentProcessCreationTime" = sourceParentProcessInfo_pidStarttime_t,
+                                      "ProcessIntegrityLevel" = sourceProcessInfo_integrityLevel_s,
+                                      "ProcessCreationTime" =  sourceProcessInfo_pidStarttime_t
+          )
       | lookup EventSubTypeLookup on ruleInfo_treatAsThreat_s
       | extend EventSubType = iif(event_name_s == "Threats.", "Threat", EventSubType)
       | project-away *_s, *_g, SourceSystem, ManagementGroupName, Computer, RawData, *_t, *_b, *_d
