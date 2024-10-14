@@ -50,47 +50,54 @@ def filter_yaml_files(modified_files):
 
 def convert_schema_csv_to_json(csv_file):
     data = []
-    main_data=[]
-    output_dict=[]
     with open(csv_file, 'r',encoding='utf-8-sig') as file:
-        suffixes = ['_s', '_d','_b','_g']
         reader = csv.DictReader(file)
         for row in reader:
             if row['ColumnName'] in reserved_columns:
                 continue
             elif row['ColumnType'] == "bool":
                 data.append({        
-                'name': row['ColumnName'].rsplit("_",1)[0],
+                'name': row['ColumnName'],
                 'type': "boolean",
                 })
             else:
                 data.append({        
-                'name': row['ColumnName'].rsplit("_",1)[0],
+                'name': row['ColumnName'],
                 'type': row['ColumnType'],
-                })
-        for item in data:
-            output_dict = {key[:-2] if any(key.endswith(suffix) for suffix in suffixes) else key: value 
-               for key, value in item.items()}
-            main_data.append(output_dict)                         
-    return main_data
+                })                       
+    return data
 
 def convert_data_csv_to_json(csv_file):
+    def convert_value(value):
+        # Try to convert the value to an integer, then to a float, and keep it as a string if those fail
+        try:
+            # Try integer conversion
+            return int(value)
+        except ValueError:
+            try:
+                # Try float conversion
+                return float(value)
+            except ValueError:
+                # Return the value as-is (string) if it's not numeric
+                return value
+
     data = []
-    output_dict=[]
-    with open(csv_file, 'r',encoding='utf-8-sig') as file:
-        suffixes = ['_s', '_d','_b','_g']
+    with open(csv_file, 'r', encoding='utf-8-sig') as file:
         reader = csv.DictReader(file)
         for row in reader:
-            table_name=row['Type']
-            output_dict = {key[:-2] if any(key.endswith(suffix) for suffix in suffixes) else key: value 
-               for key, value in row.items()}
-            data.append(output_dict)
+            table_name = row['Type']
+            # Convert each value in the row to its appropriate type
+            processed_row = {key: convert_value(value) for key, value in row.items()}
+            data.append(processed_row)
+        
         for item in data:
             for key in list(item.keys()):
-                # If the key matches 'TimeGenerated [UTC]', rename it
-                if key == 'TimeGenerated [UTC]':
-                    item['TimeGenerated'] = item.pop(key)                               
-    return data , table_name
+                # If the key matches '[UTC]' or '[Local Time]', rename it
+                if key.endswith(('[UTC]', '[Local Time]')):
+                    substring = key.split(" [")[0]
+                    item[substring] = item.pop(key)
+
+    return data, table_name
 
 def check_for_custom_table(table_name):
     if table_name in lia_supported_builtin_table:
@@ -119,6 +126,18 @@ def create_table(schema,table):
      method="PUT"
      url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}/tables/{table}?api-version=2022-10-01"
      return request_object , url , method
+
+def get_table_status(table):
+    while True:
+        table_name=table
+        url=f"https://management.azure.com/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.OperationalInsights/workspaces/{workspaceName}/tables/{table_name}?api-version=2022-10-01"
+        method="GET"
+        time.sleep(3)
+        response = hit_api(url,"",method)
+        if response.status_code == 200:
+            print(f"Custom Table {table_name} is created successfully")
+            break
+    return response.status_code  
 
 def get_schema_for_builtin(query_table):
     # Obtain the access token
@@ -205,7 +224,13 @@ def hit_api(url,request,method):
     "Authorization": f"Bearer {access_token}",
     "Content-Type": "application/json"
     }
-    response = requests.request(method, url, headers=headers, json=request)
+    try:
+        if method == "GET":
+            response = requests.request(method, url, headers=headers)
+        else:
+            response = requests.request(method, url, headers=headers, json=request)
+    except Exception as e:
+        print(f"Upload failed: {e}")       
     return response
 
 def senddtosentinel(immutable_id,data_result,stream_name,flag_status):
@@ -251,11 +276,11 @@ subscriptionId = "4383ac89-7cd1-48c1-8061-b0b3c5ccfd97"
 dataCollectionEndpointname = "asim-schemadatatester-githubshared"
 endpoint_uri = "https://asim-schemadatatester-githubshared-uetl.eastus-1.ingest.monitor.azure.com" # logs ingestion endpoint of the DCR
 SENTINEL_REPO_RAW_URL = f'https://raw.githubusercontent.com/Azure/Azure-Sentinel'
-SAMPLE_DATA_PATH = '/Sample%20Data/ASIM/'
+SAMPLE_DATA_PATH = 'Sample%20Data/ASIM/'
 dcr_directory=[]
 
 lia_supported_builtin_table = ['ADAssessmentRecommendation','ADSecurityAssessmentRecommendation','Anomalies','ASimAuditEventLogs','ASimAuthenticationEventLogs','ASimDhcpEventLogs','ASimDnsActivityLogs','ASimDnsAuditLogs','ASimFileEventLogs','ASimNetworkSessionLogs','ASimProcessEventLogs','ASimRegistryEventLogs','ASimUserManagementActivityLogs','ASimWebSessionLogs','AWSCloudTrail','AWSCloudWatch','AWSGuardDuty','AWSVPCFlow','AzureAssessmentRecommendation','CommonSecurityLog','DeviceTvmSecureConfigurationAssessmentKB','DeviceTvmSoftwareVulnerabilitiesKB','ExchangeAssessmentRecommendation','ExchangeOnlineAssessmentRecommendation','GCPAuditLogs','GoogleCloudSCC','SCCMAssessmentRecommendation','SCOMAssessmentRecommendation','SecurityEvent','SfBAssessmentRecommendation','SharePointOnlineAssessmentRecommendation','SQLAssessmentRecommendation','StorageInsightsAccountPropertiesDaily','StorageInsightsDailyMetrics','StorageInsightsHourlyMetrics','StorageInsightsMonthlyMetrics','StorageInsightsWeeklyMetrics','Syslog','UCClient','UCClientReadinessStatus','UCClientUpdateStatus','UCDeviceAlert','UCDOAggregatedStatus','UCServiceUpdateStatus','UCUpdateAlert','WindowsEvent','WindowsServerAssessmentRecommendation']
-reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG"]
+reserved_columns = ["_ResourceId", "id", "_SubscriptionId", "TenantId", "Type", "UniqueId", "Title","_ItemId","verbose_b","verbose","MG","_ResourceId_s"]
 
 SentinelRepoUrl = "https://github.com/Azure/Azure-Sentinel"
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -267,15 +292,28 @@ commit_number = get_current_commit_number()
 prnumber = sys.argv[1]
 
 for file in parser_yaml_files:
+    SchemaNameMatch = re.search(r'ASim(\w+)/', file)
+    if SchemaNameMatch:
+        SchemaName = SchemaNameMatch.group(1)
+    else:
+        SchemaName = None
+    # Check if changed file is a union parser. If Yes, skip the file
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')):
+        print(f"Ignoring this {file} because it is a union parser file")
+        continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
+    print(f"Reading Asim Parser file from : {asim_parser_url}")
     asim_parser = read_github_yaml(asim_parser_url)
     parser_query = asim_parser.get('ParserQuery', '')
+    normalization = asim_parser.get('Normalization', {})
+    schema = normalization.get('Schema')
     event_vendor, event_product, schema_name = extract_event_vendor_product(parser_query, file)
 
-    SampleDataFile = f'{event_vendor}_{event_product}_{schema_name}_IngestedLogs.csv'
+    SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
     SampleDataUrl = sample_data_url+SampleDataFile
+    print(f"Sample data log file reading from url: {SampleDataUrl}")
     response = requests.get(SampleDataUrl)
     if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
@@ -302,8 +340,12 @@ for file in parser_yaml_files:
         # create table 
         request_body, url_to_call , method_to_use = create_table(json.dumps(schema_result, indent=4),table_name)
         response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of table creation: {response_body.status_code}")
-        time.sleep(5)
+        print(f"Response of table creation: {response_body.text} {response_body.status_code}")
+        if response_body.status_code != 202 and response_body.status_code != 200:
+            print(f"Table creation failed for {table_name}")
+            continue
+        else:
+            get_table_status(table_name)
         #Once table is created now creating DCR
         request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema_result, indent=4),table_name,"Custom")  
         response_body=hit_api(url_to_call,request_body,method_to_use)
@@ -348,4 +390,4 @@ for file in parser_yaml_files:
         senddtosentinel(immutable_id,data_result,stream_name,flag)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
-        continue
+        continue 

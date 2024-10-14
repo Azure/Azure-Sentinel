@@ -1,0 +1,95 @@
+id: d49fc965-aef3-49f6-89ad-10cc4697eb5b
+name: GSA Enriched Office 365 - Office Mail Forwarding - Hunting Version
+description: |
+  Adversaries often abuse email-forwarding rules to monitor victim activities, steal information, and gain intelligence on the victim or their organization. This query highlights cases where user mail is being forwarded, including to external domains.
+description-detailed: |
+  Adversaries often abuse email-forwarding rules to monitor activities of a victim, steal information and further gain intelligence on
+  victim or victim's organization. This query over Office Activity data highlights cases where user mail is being forwarded and shows if 
+  it is being forwarded to external domains as well.
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+tactics:
+  - Collection
+  - Exfiltration
+relevantTechniques:
+  - T1114
+  - T1020
+query: |
+    let starttime = todatetime('{{StartTimeISO}}');
+      let endtime = todatetime('{{EndTimeISO}}');
+      
+      // Enriched Logs Query for forwarding rule operations
+      let EnrichedForwardRules = EnrichedMicrosoft365AuditLogs
+          | where TimeGenerated between (starttime .. endtime)
+          | where Workload == "Exchange"
+          | where (Operation == "Set-Mailbox" and tostring(parse_json(tostring(AdditionalProperties))) contains 'ForwardingSmtpAddress') 
+              or (Operation in ('New-InboxRule', 'Set-InboxRule') and (tostring(parse_json(tostring(AdditionalProperties))) contains 'ForwardTo' or tostring(parse_json(tostring(AdditionalProperties))) contains 'RedirectTo'))
+          | extend parsed = parse_json(tostring(AdditionalProperties))
+          | extend fwdingDestination_initial = iif(Operation == "Set-Mailbox", tostring(parsed.ForwardingSmtpAddress), coalesce(tostring(parsed.ForwardTo), tostring(parsed.RedirectTo)))
+          | where isnotempty(fwdingDestination_initial)
+          | extend fwdingDestination = iff(fwdingDestination_initial has "smtp", (split(fwdingDestination_initial, ":")[1]), fwdingDestination_initial)
+          | parse fwdingDestination with * '@' ForwardedtoDomain 
+          | parse UserId with * '@' UserDomain
+          | extend subDomain = ((split(strcat(tostring(split(UserDomain, '.')[-2]), '.', tostring(split(UserDomain, '.')[-1])), '.'))[0])
+          | where ForwardedtoDomain !contains subDomain
+          | extend Result = iff(ForwardedtoDomain != UserDomain, "Mailbox rule created to forward to External Domain", "Forward rule for Internal domain")
+          | extend ClientIPAddress = case(ClientIp has ".", tostring(split(ClientIp, ":")[0]), ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))), ClientIp)
+          | extend Port = case(ClientIp has ".", (split(ClientIp, ":")[1]), ClientIp has "[", tostring(split(ClientIp, "]:")[1]), ClientIp)
+          | extend Host = tostring(parse_json(tostring(AdditionalProperties)).OriginatingServer)
+          | extend HostName = tostring(split(Host, ".")[0])
+          | extend DnsDomain = tostring(strcat_array(array_slice(split(Host, '.'), 1, -1), '.'))
+          | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, Port, ObjectId, fwdingDestination, HostName, DnsDomain
+          | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+          | extend IP_0_Address = ClientIPAddress, Host_0_HostName = HostName, Host_0_DnsDomain = DnsDomain, Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix;
+      // Office Activity Query for forwarding rule operations
+      let OfficeForwardRules = OfficeActivity
+          | where TimeGenerated between (starttime .. endtime)
+          | where OfficeWorkload == "Exchange"
+          | where (Operation =~ "Set-Mailbox" and Parameters contains 'ForwardingSmtpAddress') 
+              or (Operation in~ ('New-InboxRule', 'Set-InboxRule') and (Parameters contains 'ForwardTo' or Parameters contains 'RedirectTo'))
+          | extend parsed = parse_json(Parameters)
+          | extend fwdingDestination_initial = (iif(Operation =~ "Set-Mailbox", tostring(parsed[1].Value), tostring(parsed[2].Value)))
+          | where isnotempty(fwdingDestination_initial)
+          | extend fwdingDestination = iff(fwdingDestination_initial has "smtp", (split(fwdingDestination_initial, ":")[1]), fwdingDestination_initial)
+          | parse fwdingDestination with * '@' ForwardedtoDomain 
+          | parse UserId with * '@' UserDomain
+          | extend subDomain = ((split(strcat(tostring(split(UserDomain, '.')[-2]), '.', tostring(split(UserDomain, '.')[-1])), '.') [0]))
+          | where ForwardedtoDomain !contains subDomain
+          | extend Result = iff(ForwardedtoDomain != UserDomain, "Mailbox rule created to forward to External Domain", "Forward rule for Internal domain")
+          | extend ClientIPAddress = case(ClientIP has ".", tostring(split(ClientIP, ":")[0]), ClientIP has "[", tostring(trim_start(@'[[]', tostring(split(ClientIP, "]")[0]))), ClientIP)
+          | extend Port = case(ClientIP has ".", (split(ClientIP, ":")[1]), ClientIP has "[", tostring(split(ClientIP, "]:")[1]), ClientIP)
+          | extend Host = tostring(split(OriginatingServer, " (")[0])
+          | extend HostName = tostring(split(Host, ".")[0])
+          | extend DnsDomain = tostring(strcat_array(array_slice(split(Host, '.'), 1, -1), '.'))
+          | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, Port, HostName, DnsDomain
+          | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+          | extend IP_0_Address = ClientIPAddress, Host_0_HostName = HostName, Host_0_DnsDomain = DnsDomain, Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix;
+      // Combine the results from both Enriched and Office Activity logs
+      let CombinedForwardRules = EnrichedForwardRules
+          | union OfficeForwardRules
+          | summarize arg_min(TimeGenerated, *) by UserId, ForwardedtoDomain, Operation
+          | project TimeGenerated, UserId, UserDomain, subDomain, Operation, ForwardedtoDomain, ClientIPAddress, Result, Port, ObjectId, fwdingDestination, Host_0_HostName, Host_0_DnsDomain, IP_0_Address, Account_0_Name, Account_0_UPNSuffix;  
+      // Final output
+      CombinedForwardRules
+          | order by TimeGenerated desc;
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIPAddress
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Host_0_HostName
+      - identifier: DnsDomain
+        columnName: Host_0_DnsDomain
+version: 2.0.2
+kind: Scheduled

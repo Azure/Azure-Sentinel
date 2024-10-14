@@ -1,0 +1,105 @@
+id: a9c76c8d-f60d-49ec-9b1f-bdfee6db3807
+name: GSA Enriched Office 365 - Malicious Inbox Rule
+description: |
+  Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.
+  This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.
+  Reference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - EnrichedMicrosoft365AuditLogs
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity (Exchange)
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - DefenseEvasion
+relevantTechniques:
+  - T1098
+  - T1078
+query: |
+  let Keywords = dynamic(["helpdesk", "alert", "suspicious", "fake", "malicious", "phishing", "spam", "do not click", "do not open", "hijacked", "Fatal"]);
+  // OfficeActivity Query
+  let OfficeEvents = OfficeActivity
+    | where OfficeWorkload =~ "Exchange" 
+    | where Operation =~ "New-InboxRule" and (ResultStatus =~ "True" or ResultStatus =~ "Succeeded")
+    | where Parameters has "Deleted Items" or Parameters has "Junk Email" or Parameters has "DeleteMessage"
+    | extend Events = todynamic(Parameters)
+    | parse Events with * "SubjectContainsWords" SubjectContainsWords '}'*
+    | parse Events with * "BodyContainsWords" BodyContainsWords '}'*
+    | parse Events with * "SubjectOrBodyContainsWords" SubjectOrBodyContainsWords '}'*
+    | where SubjectContainsWords has_any (Keywords)
+        or BodyContainsWords has_any (Keywords)
+        or SubjectOrBodyContainsWords has_any (Keywords)
+    | extend ClientIPAddress = case(
+        ClientIP has ".", tostring(split(ClientIP, ":")[0]),
+        ClientIP has "[", tostring(trim_start(@'[[]', tostring(split(ClientIP, "]")[0]))),
+        ClientIP
+      )
+    | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, iff(isnotempty(BodyContainsWords), BodyContainsWords, SubjectOrBodyContainsWords))
+    | extend RuleDetail = case(
+        OfficeObjectId contains '/', tostring(split(OfficeObjectId, '/')[-1]),
+        OfficeObjectId contains '\\', tostring(split(OfficeObjectId, '\\')[-1]),
+        "Unknown"
+      )
+    | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+    | extend OriginatingServerName = tostring(split(OriginatingServer, " ")[0]);
+  
+  // EnrichedMicrosoft365AuditLogs Query
+  let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+    | where Workload =~ "Exchange"
+    | where Operation =~ "New-InboxRule" and (ResultStatus =~ "True" or ResultStatus =~ "Succeeded")
+    | where tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "Deleted Items" 
+        or tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "Junk Email" 
+        or tostring(parse_json(tostring(AdditionalProperties)).Parameters) has "DeleteMessage"
+    | extend Events = parse_json(tostring(AdditionalProperties)).Parameters
+    | extend SubjectContainsWords = tostring(Events.SubjectContainsWords), 
+             BodyContainsWords = tostring(Events.BodyContainsWords), 
+             SubjectOrBodyContainsWords = tostring(Events.SubjectOrBodyContainsWords)
+    | where SubjectContainsWords has_any (Keywords) 
+        or BodyContainsWords has_any (Keywords) 
+        or SubjectOrBodyContainsWords has_any (Keywords)
+    | extend ClientIPAddress = case(
+        ClientIp has ".", tostring(split(ClientIp, ":")[0]),
+        ClientIp has "[", tostring(trim_start(@'[[]', tostring(split(ClientIp, "]")[0]))),
+        ClientIp
+      )
+    | extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, iff(isnotempty(BodyContainsWords), BodyContainsWords, SubjectOrBodyContainsWords))
+    | extend RuleDetail = case(
+        ObjectId contains '/', tostring(split(ObjectId, '/')[-1]),
+        ObjectId contains '\\', tostring(split(ObjectId, '\\')[-1]),
+        "Unknown"
+      )
+    | summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by Operation, UserId, ClientIPAddress, ResultStatus, Keyword, ObjectId, RuleDetail
+    | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1]);
+  
+  // Combine and Deduplicate
+  let CombinedEvents = OfficeEvents
+    | union EnrichedEvents
+    | summarize arg_min(StartTimeUtc, *) by Operation, UserId, ClientIPAddress;
+  
+  // Final Output
+  CombinedEvents
+    | project StartTimeUtc, EndTimeUtc, Operation, UserId, ClientIPAddress, ResultStatus, Keyword, RuleDetail, AccountName, AccountUPNSuffix;
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: AccountUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIPAddress
+version: 2.0.6
+kind: Scheduled
