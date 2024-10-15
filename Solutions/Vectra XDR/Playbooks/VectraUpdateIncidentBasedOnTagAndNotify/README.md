@@ -27,7 +27,7 @@ This playbook runs hourly to identify entities with Medium severity incidents, c
    * TeamsChannelId: Enter Id of the Teams Channel where the adaptive card will be posted.
    * IncidentComment: Enter comment you want to add in incident which will be updated based on tag.
    * WorkspaceName: Enter name of the log analytics workspace where incidents are available using generated using analytic rule.
-   * GenerateAccessTokenPlaybookName: Enter Playbook name which is deployed as part of prerequisites.
+   * GenerateAccessCredPlaybookName: Enter Playbook name which is deployed as part of prerequisites.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraUpdateIncidentBasedOnTagAndNotify%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraUpdateIncidentBasedOnTagAndNotify%2Fazuredeploy.json)
 
