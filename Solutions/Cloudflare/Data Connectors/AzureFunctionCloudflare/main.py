@@ -1,3 +1,5 @@
+# This is function version 2.0.0 supporting python > 3.9
+
 import os
 import asyncio
 from azure.storage.blob.aio import ContainerClient
@@ -69,11 +71,9 @@ async def main(mytimer: func.TimerRequest):
                     try:
                         cor = conn.process_blob(blob, container_client, session)
                         cors.append(cor)
-                        logging.info(f'len(cors) is {len(cors)}')
                     except Exception as e:
                         logging.error(f'Exception in processing blob is {e}')
                     if len(cors) >= MAX_PAGE_SIZE:
-                        logging.info(f'len(cors) is {len(cors)}')
                         await asyncio.gather(*cors)
                         cors = []
                     if conn.check_if_script_runs_too_long():
@@ -107,8 +107,8 @@ class AzureBlobStorageConnector:
             return ContainerClient.from_connection_string(self.__conn_string, self.__container_name, logging_enable=False, max_single_get_size=MAX_CHUNK_SIZE_MB*1024*1024, max_chunk_get_size=MAX_CHUNK_SIZE_MB*1024*1024)
         except Exception as ex:
             logging.error('An error occurred in _create_container_client: {}'.format(str(ex)))
-            logging.error(traceback.format_exc())    
-            return None    
+            logging.error(traceback.format_exc())
+            return None        
         
     async def get_blobs(self):
         try:
@@ -161,6 +161,7 @@ class AzureBlobStorageConnector:
                                 except JSONDecodeError as je:
                                     logging.error('JSONDecode error while loading json event at line value {}. blob name: {}. Error {}'.format(
                                         line, blob['name'], str(je)))
+                                    raise je
                                 except ValueError as e:
                                     logging.error('Error while loading json Event at line value {}. blob name: {}. Error: {}'.format(
                                         line, blob['name'], str(e)))
@@ -173,6 +174,7 @@ class AzureBlobStorageConnector:
                     except JSONDecodeError as je:
                         logging.error('JSONDecode error while loading json event at line value {}. blob name: {}. Error {}'.format(
                             line, blob['name'], str(je)))
+                        raise je
                     except ValueError as e:
                         logging.error('Error while loading json Event at s value {}. blob name: {}. Error: {}'.format(
                             line, blob['name'], str(e)))
