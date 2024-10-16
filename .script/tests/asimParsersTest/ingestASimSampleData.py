@@ -267,6 +267,28 @@ def extract_event_vendor_product(parser_query,parser_file):
         print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
     return event_vendor, event_product ,schema_name   
 
+def convert_data_type(schema_result, data_result):
+    for data in data_result:
+        for schema in schema_result:
+            field_name = schema["name"]
+            field_type = schema["type"]
+            
+            if field_name in data:
+                value = data[field_name]
+                
+                # Handle conversion based on schema type
+                
+                if field_type == "string":
+                    # Convert to string
+                    data[field_name] = str(value)
+                elif field_type == "boolean":
+                    # Convert to boolean
+                    if isinstance(value, str) and value.lower() in ["true", "false"]:
+                        data[field_name] = value.lower() == "true"
+
+    return data_result
+
+
 #main starting point of script
 
 workspace_id = "e9beceee-7d61-429f-a177-ee5e2b7f481a"
@@ -303,6 +325,7 @@ for file in parser_yaml_files:
         continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
+    print(f"Reading Asim Parser file from : {asim_parser_url}")
     asim_parser = read_github_yaml(asim_parser_url)
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
@@ -312,6 +335,7 @@ for file in parser_yaml_files:
     SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
     SampleDataUrl = sample_data_url+SampleDataFile
+    print(f"Sample data log file reading from url: {SampleDataUrl}")
     response = requests.get(SampleDataUrl)
     if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
@@ -334,7 +358,11 @@ for file in parser_yaml_files:
         else:
             print(f"::error::An error occurred while trying to get content of Schema file located at {schemaUrl}: {response.text}")
             continue        
-        schema_result = convert_schema_csv_to_json('tempfile.csv') 
+        schema_result = convert_schema_csv_to_json('tempfile.csv')
+        data_result = convert_data_type(schema_result, data_result)
+        # conversion of datatype is needed for boolean and string values because during testing it has been observed that 
+        # boolean values are consider as string and numerical value of type string are consider 
+        # as integer which leds to non ingestion of those value in sentinel    
         # create table 
         request_body, url_to_call , method_to_use = create_table(json.dumps(schema_result, indent=4),table_name)
         response_body=hit_api(url_to_call,request_body,method_to_use)
@@ -388,4 +416,4 @@ for file in parser_yaml_files:
         senddtosentinel(immutable_id,data_result,stream_name,flag)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
-        continue
+        continue 
