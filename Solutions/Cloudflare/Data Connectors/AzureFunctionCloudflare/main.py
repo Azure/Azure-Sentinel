@@ -30,11 +30,11 @@ WORKSPACE_ID = os.environ['WORKSPACE_ID']
 SHARED_KEY = os.environ['SHARED_KEY']
 LOG_TYPE = 'Cloudflare'
 LINE_SEPARATOR = os.environ.get(
-    'lineSeparator',  '[\n\r\x0b\v\x0c\f\x1c\x1d\x85\x1e\u2028\u2029]+')
+    'lineSeparator',  '[\n\r]+')
 
 # Defines how many files can be processed simultaneously
 MAX_CONCURRENT_PROCESSING_FILES = int(
-    os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 10))
+    os.environ.get('MAX_CONCURRENT_PROCESSING_FILES', 5))
 
 # Defines page size while listing files from blob storage. New page is not processed while old page is processing.
 MAX_PAGE_SIZE = int(MAX_CONCURRENT_PROCESSING_FILES * 20)
@@ -43,7 +43,7 @@ MAX_PAGE_SIZE = int(MAX_CONCURRENT_PROCESSING_FILES * 20)
 MAX_BUCKET_SIZE = int(os.environ.get('MAX_BUCKET_SIZE', 2000))
 
 # Defines max chunk download size for blob storage in MB
-MAX_CHUNK_SIZE_MB = int(os.environ.get('MAX_CHUNK_SIZE_MB', 1))
+MAX_CHUNK_SIZE_MB = int(os.environ.get('MAX_CHUNK_SIZE_MB', 30))
 
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
