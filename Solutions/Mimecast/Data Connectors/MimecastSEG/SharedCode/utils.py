@@ -21,6 +21,28 @@ from tenacity import (
 from requests.exceptions import ConnectionError
 
 
+def retry_on_status_code(response):
+    """Check and retry based on a list of status codes.
+
+    Args:
+        response (): API response is passed
+
+    Returns:
+        Bool: if given status code is in list then true else false
+    """
+    __method_name = inspect.currentframe().f_code.co_name
+    if isinstance(response, dict):
+        return False
+    if response.status_code in consts.RETRY_STATUS_CODE:
+        applogger.info(
+            "{}(method={}) : Retrying due to status code : {}".format(
+                consts.LOGS_STARTS_WITH, __method_name, response.status_code
+            )
+        )
+        return True
+    return False
+
+
 class Utils:
     """Utils Class."""
 
@@ -197,27 +219,6 @@ class Utils:
             )
             raise MimecastException()
 
-    def retry_on_status_code(response):
-        """Check and retry based on a list of status codes.
-
-        Args:
-            response (): API response is passed
-
-        Returns:
-            Bool: if given status code is in list then true else false
-        """
-        __method_name = inspect.currentframe().f_code.co_name
-        if isinstance(response, dict):
-            return False
-        if response.status_code in consts.RETRY_STATUS_CODE:
-            applogger.info(
-                "{}(method={}) : Retrying due to status code : {}".format(
-                    consts.LOGS_STARTS_WITH, __method_name, response.status_code
-                )
-            )
-            return True
-        return False
-
     @retry(
         stop=stop_after_attempt(consts.MAX_RETRIES),
         wait=wait_exponential(
@@ -310,6 +311,8 @@ class Utils:
                 )
                 response_json = response.json()
                 fail_json = response_json.get("fail", [])
+                error_code = None
+                error_message = None
                 if fail_json:
                     error_code = fail_json[0].get("code")
                     error_message = fail_json[0].get("message")
