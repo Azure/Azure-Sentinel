@@ -7,31 +7,24 @@ import aiohttp
 import logging
 import azure.functions as func
 import urllib.parse
-from .. import constants
-from ..sentinel_connector import AzureSentinelConnectorAsync
-from ..helper import skip_processing_file
-
-# Azure config
-AZURE_TENANT_ID = constants.AZURE_TENANT_ID
-AZURE_CLIENT_ID = constants.AZURE_CLIENT_ID
-AZURE_CLIENT_SECRET = constants.AZURE_CLIENT_SECRET
-DCE_ENDPOINT = constants.DCE_ENDPOINT
-DCR_ID = constants.DCR_ID
-LOG_ANALYTICS_URI = constants.LOG_ANALYTICS_URI
-WORKSPACE_ID = constants.WORKSPACE_ID
-FLOW_LOGS_CUSTOM_TABLE = constants.FLOW_LOGS_CUSTOM_TABLE
-AUDIT_LOGS_CUSTOM_TABLE = constants.AUDIT_LOGS_CUSTOM_TABLE
-LOGS_TO_CONSUME = constants.LOGS_TO_CONSUME
-FLOW_EVENTS = constants.FLOW_EVENTS
-AUDIT_EVENTS = constants.AUDIT_EVENTS
-
-# AWS config
-AWS_KEY = constants.AWS_KEY
-AWS_SECRET = constants.AWS_SECRET
-AWS_REGION_NAME = constants.AWS_REGION_NAME
-VISIBILITY_TIMEOUT = 1800
-LINE_SEPARATOR = constants.LINE_SEPARATOR
-MAX_SCRIPT_EXEC_TIME_MINUTES = constants.MAX_SCRIPT_EXEC_TIME_MINUTES
+from ..CommonCode.sentinel_connector import AzureSentinelConnectorAsync
+from ..CommonCode.constants import (
+    AZURE_TENANT_ID,
+    AZURE_CLIENT_ID,
+    AZURE_CLIENT_SECRET,
+    DCE_ENDPOINT,
+    DCR_ID,
+    FLOW_LOGS_CUSTOM_TABLE,
+    AUDIT_LOGS_CUSTOM_TABLE,
+    LOGS_TO_CONSUME,
+    AWS_KEY,
+    AWS_SECRET,
+    AWS_REGION_NAME,
+    LINE_SEPARATOR,
+    ALL_TRAFFIC,
+    FLOW_EVENTS,
+    AUDIT_EVENTS,
+)
 
 
 # Defining the S3 Client object based on AWS Credentials
@@ -52,14 +45,24 @@ def _create_s3_client():
     )
 
 
+def fileToBeFiltered(file_path):
+    if LOGS_TO_CONSUME == ALL_TRAFFIC:
+        return False
+
+    if "auditable" in file_path:
+        return FLOW_EVENTS in LOGS_TO_CONSUME
+    else:
+        return AUDIT_EVENTS in LOGS_TO_CONSUME
+
+
 async def _generate_sentinel_connectors(session):
     stream_names = []
     sentinel_connectors = {}
-    if LOGS_TO_CONSUME == "All":
+    if LOGS_TO_CONSUME == ALL_TRAFFIC:
         stream_names.append(FLOW_LOGS_CUSTOM_TABLE)
         stream_names.append(AUDIT_LOGS_CUSTOM_TABLE)
 
-    elif LOGS_TO_CONSUME == "Auditable Events":
+    elif LOGS_TO_CONSUME == AUDIT_EVENTS:
         stream_names.append(AUDIT_LOGS_CUSTOM_TABLE)
     else:
         stream_names.append(FLOW_LOGS_CUSTOM_TABLE)
@@ -104,7 +107,7 @@ async def main(msg: func.QueueMessage):
             file_size = obj.get("file_size", 0)
             accumulated_file_size += file_size
 
-            if skip_processing_file(link):
+            if fileToBeFiltered(link):
                 continue
 
             sqs_ids_seen_so_far += 1

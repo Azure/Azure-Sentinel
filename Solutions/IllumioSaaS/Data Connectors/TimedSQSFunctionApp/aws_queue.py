@@ -5,40 +5,41 @@ import time
 import logging
 import azure.functions as func
 import urllib.parse
-from ..azure_storage_queue import AzureStorageQueueHelper
 import traceback
 import base64
-from .. import constants
-from ..helper import skip_processing_file, check_if_script_runs_too_long
+from ..CommonCode.azure_storage_queue import AzureStorageQueueHelper
+from ..CommonCode.helper import skip_processing_file, check_if_script_runs_too_long
+from ..CommonCode.constants import (
+    AWS_KEY,
+    AWS_REGION_NAME,
+    AWS_SECRET,
+    SQS_QUEUE_URL,
+    VISIBILITY_TIMEOUT,
+    LINE_SEPARATOR,
+    MAX_SCRIPT_EXEC_TIME_MINUTES,
+    FLOW_LOGS_CUSTOM_TABLE,
+    AUDIT_LOGS_CUSTOM_TABLE,
+    AZURE_STORAGE_CONNECTION_STRING,
+    MAX_QUEUE_MESSAGES_MAIN_QUEUE,
+    SQS_FILES_READ_LIMIT,
+    LOGS_TO_CONSUME,
+    ALL_TRAFFIC,
+    FLOW_EVENTS,
+    AUDIT_EVENTS,
+    AZURE_STORAGE_BACKLOG_QUEUE,
+    AZURE_STORAGE_PRIMARY_QUEUE,
+    NETWORK_TRAFFIC_TO_CONSUME,
+    ALLOWED_TRAFFIC,
+    POTENTIALLY_BLOCKED_TRAFFIC,
+    BLOCKED_TRAFFIC,
+    UNKNOWN_TRAFFIC,
+)
 
-AWS_KEY = constants.AWS_KEY
-AWS_SECRET = constants.AWS_SECRET
-AWS_REGION_NAME = constants.AWS_REGION_NAME
-SQS_QUEUE_URL = constants.SQS_QUEUE_URL
-VISIBILITY_TIMEOUT = 1800
-LINE_SEPARATOR = constants.LINE_SEPARATOR
-MAX_SCRIPT_EXEC_TIME_MINUTES = constants.MAX_SCRIPT_EXEC_TIME_MINUTES
-FLOW_LOGS_CUSTOM_TABLE = constants.FLOW_LOGS_CUSTOM_TABLE
-AUDIT_LOGS_CUSTOM_TABLE = constants.AUDIT_LOGS_CUSTOM_TABLE
-AZURE_STORAGE_CONNECTION_STRING = constants.AZURE_STORAGE_CONNECTION_STRING
-MAX_QUEUE_MESSAGES_MAIN_QUEUE = constants.MAX_QUEUE_MESSAGES_MAIN_QUEUE
-ALLOWED_TRAFFIC = constants.ALLOWED_TRAFFIC
-POTENTIALLY_BLOCKED_TRAFFIC = constants.POTENTIALLY_BLOCKED_TRAFFIC
-BLOCKED_TRAFFIC = constants.BLOCKED_TRAFFIC
-UNKNOWN_TRAFFIC = constants.UNKNOWN_TRAFFIC
-ALL_TRAFFIC = constants.ALL_TRAFFIC
 MAX_ACCUMULATED_FILE_SIZE = 500 * 1000  # 500kb
 MAX_AZURE_QUEUE_SIZE_PER_ELEMENT_LIMIT = 64 * 1000  # 64KB
 AZURE_QUEUE_SIZE_PER_ELEMENT_LIMIT = (
     0.5 * MAX_AZURE_QUEUE_SIZE_PER_ELEMENT_LIMIT
 )  # 32kb
-SQS_FILES_READ_LIMIT = constants.SQS_FILES_READ_LIMIT
-LOGS_TO_CONSUME = constants.LOGS_TO_CONSUME.lower()
-NETWORK_TRAFFIC_LOGS_TO_CONSUME = (
-    constants.NETWORK_TRAFFIC_TO_CONSUME
-)  # this has to be an array of choices
-FLOW_EVENTS = constants.FLOW_EVENTS
-AUDIT_EVENTS = constants.AUDIT_EVENTS
 
 sentinel_connectors = {}
 
@@ -186,11 +187,11 @@ async def main(mytimer: func.TimerRequest):
     async with _create_sqs_client() as client:
         mainQueueHelper = AzureStorageQueueHelper(
             connectionString=AZURE_STORAGE_CONNECTION_STRING,
-            queueName="python-queue-items",
+            queueName=AZURE_STORAGE_PRIMARY_QUEUE,
         )
         backlogQueueHelper = AzureStorageQueueHelper(
             connectionString=AZURE_STORAGE_CONNECTION_STRING,
-            queueName="python-queue-items-backlog",
+            queueName=AZURE_STORAGE_BACKLOG_QUEUE,
         )
         files_processed = 0
         accumulated_file_size = (
@@ -230,11 +231,11 @@ async def main(mytimer: func.TimerRequest):
 
                         # decide which network traffic file paths to consume
                         if skip_processing_network_traffic_file(
-                            file_path, NETWORK_TRAFFIC_LOGS_TO_CONSUME
+                            file_path, NETWORK_TRAFFIC_TO_CONSUME
                         ):
                             logging.warn(
                                 "[AWSQueue] Skipping network traffic file since logs to be consumed is {}, but file is {}".format(
-                                    NETWORK_TRAFFIC_LOGS_TO_CONSUME, file_path
+                                    NETWORK_TRAFFIC_TO_CONSUME, file_path
                                 )
                             )
                             await delete_file_from_sqs(client, msg, body_obj)

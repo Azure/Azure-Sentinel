@@ -2,23 +2,32 @@ import os
 import time
 import logging
 import azure.functions as func
-from ..azure_storage_queue import AzureStorageQueueHelper
-from .. import constants
-from ..helper import check_if_script_runs_too_long
+from ..CommonCode.azure_storage_queue import AzureStorageQueueHelper
+from ..CommonCode.constants import (
+    MAX_SCRIPT_EXEC_TIME_MINUTES,
+    AZURE_STORAGE_CONNECTION_STRING,
+    MAX_QUEUE_MESSAGES_MAIN_QUEUE,
+    AZURE_STORAGE_PRIMARY_QUEUE,
+    AZURE_STORAGE_BACKLOG_QUEUE,
+)
 
-MAX_SCRIPT_EXEC_TIME_MINUTES = constants.MAX_SCRIPT_EXEC_TIME_MINUTES
-AZURE_STORAGE_CONNECTION_STRING = constants.AZURE_STORAGE_CONNECTION_STRING
-MAX_QUEUE_MESSAGES_MAIN_QUEUE = constants.MAX_QUEUE_MESSAGES_MAIN_QUEUE
+
+def check_if_script_runs_too_long(percentage, script_start_time):
+    now = int(time.time())
+    duration = now - script_start_time
+    max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * percentage)
+    return duration > max_duration
 
 
 async def main(mytimer: func.TimerRequest):
     script_start_time = int(time.time())
     mainQueueHelper = AzureStorageQueueHelper(
-        connectionString=AZURE_STORAGE_CONNECTION_STRING, queueName="python-queue-items"
+        connectionString=AZURE_STORAGE_CONNECTION_STRING,
+        queueName=AZURE_STORAGE_PRIMARY_QUEUE,
     )
     backlogQueueHelper = AzureStorageQueueHelper(
         connectionString=AZURE_STORAGE_CONNECTION_STRING,
-        queueName="python-queue-items-backlog",
+        queueName=AZURE_STORAGE_BACKLOG_QUEUE,
     )
 
     backlogQueueCount = backlogQueueHelper.get_queue_current_count()
