@@ -41,7 +41,10 @@ if logAnalyticsUri in (None, "") or str(logAnalyticsUri).isspace():
 pattern = r"https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$"
 match = re.match(pattern, str(logAnalyticsUri))
 if not match:
-    raise Exception("AWSSecurityHubFindingsDataconnector: Invalid Log Analytics Uri.")
+    raise Exception("AWSSecurityHubFindingsDataconnector: Invalid Log Analytics Uri. Please update configuration.")
+
+if client_id in (None, "") or str(client_id).isspace():
+    raise Exception("AWSSecurityHubFindingsDataconnector: Invalid Client ID. Please update configuration.")
 
 payload_fields = [
     "SchemaVersion",
