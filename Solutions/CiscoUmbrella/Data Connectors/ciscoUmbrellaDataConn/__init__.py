@@ -84,7 +84,8 @@ def main(mytimer: func.TimerRequest) -> None:
         'proxy': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_proxy', queue_size=10000, bulks_number=10),
         'ip': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_ip', queue_size=10000, bulks_number=10),
         'cloudfirewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_cloudfirewall', queue_size=10000, bulks_number=10),
-        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10)
+        'firewall': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_firewall', queue_size=10000, bulks_number=10),
+        'intrusion': AzureSentinelConnector(logAnalyticsUri, sentinel_customer_id, sentinel_shared_key, sentinel_log_type + '_intrusion', queue_size=10000, bulks_number=10)
                         }
         last_ts = None
         for obj in sorted(obj_list, key=lambda k: k['LastModified']):
@@ -93,12 +94,14 @@ def main(mytimer: func.TimerRequest) -> None:
                 sentinel = sentinel_dict['dns']
             elif 'proxylogs' in key.lower():
                 sentinel = sentinel_dict['proxy']
-            elif 'intrusionlogs' in key.lower():
+            elif 'iplogs' in key.lower():
                 sentinel = sentinel_dict['ip']
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 sentinel = sentinel_dict['cloudfirewall']
             elif 'firewalllogs' in key.lower():
-                sentinel = sentinel_dict['firewall']    
+                sentinel = sentinel_dict['firewall']  
+            elif 'intrusionlogs' in key.lower():
+                sentinel = sentinel_dict['intrusion']      
             else:
                 # skip files of unknown types
                 continue
@@ -238,7 +241,7 @@ class UmbrellaClient:
 
     def get_files_list(self, ts_from, ts_to):
         files = []
-        folders = ['dnslogs', 'proxylogs', 'intrusionlogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs']
+        folders = ['dnslogs', 'proxylogs', 'iplogs','firewalllogs', 'cloudfirewalllogs', 'cdfwlogs', 'intrusionlogs']
         if self.aws_s3_prefix:
             folders = [self.aws_s3_prefix + folder for folder in folders]
 
@@ -304,6 +307,26 @@ class UmbrellaClient:
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
         for row in csv_reader:
             if len(row) > 1:
+                if len(row) >= 7:
+                    event = {
+                        'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
+                        'Identity': row[1],
+                        'Source IP': row[2],
+                        'Source Port': row[3],
+                        'Destination IP': row[4],
+                        'Destination Port': row[5],
+                        'Categories': row[6].split(',')
+                    }
+                else:
+                    event = {"message": convert_list_to_csv_line(row)}
+                event = self.convert_empty_string_to_null_values(event)
+                event['EventType'] = 'iplogs'
+                yield event
+
+    def parse_csv_intrusionlogs(self, csv_file):
+        csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
+        for row in csv_reader:
+            if len(row) > 1:
                 if len(row) >= 16:
                     event = {
                         'Timestamp': self.format_date(row[0], self.input_date_format, self.output_date_format),
@@ -328,7 +351,7 @@ class UmbrellaClient:
                     event = {"message": convert_list_to_csv_line(row)}
                 event = self.convert_empty_string_to_null_values(event)
                 event['EventType'] = 'intrusionlogs'
-                yield event
+                yield event            
 
     def parse_csv_proxy(self, csv_file):
         csv_reader = csv.reader(csv_file.split('\n'), delimiter=',')
@@ -520,12 +543,14 @@ class UmbrellaClient:
                 parser_func = self.parse_csv_dns
             elif 'proxylogs' in key.lower():
                 parser_func = self.parse_csv_proxy
-            elif 'intrusionlogs' in key.lower():
+            elif 'iplogs' in key.lower():
                 parser_func = self.parse_csv_ip
             elif 'cloudfirewalllogs' in key.lower() or 'cdfwlogs' in key.lower():
                 parser_func = self.parse_csv_cdfw
             elif 'firewalllogs' in key.lower():
                 parser_func =  self.parse_csv_fw
+            elif 'intrusionlogs' in key.lower():
+                parser_func = self.parse_csv_intrusionlogs    
 
             if parser_func:
                 file_events = 0
