@@ -91,6 +91,9 @@ def main(mytimer: func.TimerRequest) -> None:
         token = token_meta.token
     except ClientAuthenticationError as error:
         logging.info("Authenticating to Azure AD: %s" % error)
+    
+    if not token:
+        raise Exception("Failed to authenticate to Azure AD. Token is empty.")
 
     sentinel = AzureSentinelConnector(
         logAnalyticsUri,
@@ -191,6 +194,9 @@ class SecurityHubClient:
             logging.info("Successfully assumed role with web identity.")
         except boto3.exceptions.Boto3Error as error:
             logging.info("Assuming role with web identity failed: %s" % error)
+
+        if not assumed_role_object:
+            raise Exception("Failed to assume role with web identity. Assumed role object is empty.")
 
         # from the response, get credentials
         credentials = assumed_role_object["Credentials"]
