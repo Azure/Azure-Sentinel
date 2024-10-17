@@ -1,22 +1,17 @@
 import base64
-import csv
 import datetime
-import gzip
 import hashlib
 import hmac
-import io
 import json
 import logging
 import os
 import re
-import sys
 import time
 from threading import Thread
 
 import azure.functions as func
 import boto3
 import boto3.exceptions
-import cffi
 import dateutil
 import requests
 from azure.core.exceptions import ClientAuthenticationError
@@ -26,7 +21,6 @@ from azure.identity import (
     DefaultAzureCredential,
     ManagedIdentityCredential,
 )
-from boto3.session import Session
 
 client_id = os.environ.get("ClientID")
 sentinel_customer_id = os.environ.get("WorkspaceID")
@@ -78,6 +72,7 @@ def main(mytimer: func.TimerRequest) -> None:
     logging.info("Starting program")
     # auth to azure ad
     logging.info("Authenticating to Azure AD.")
+    token = None
     try:
         managed_identity = ManagedIdentityCredential()
         azure_cli = AzureCliCredential()
@@ -91,9 +86,6 @@ def main(mytimer: func.TimerRequest) -> None:
         token = token_meta.token
     except ClientAuthenticationError as error:
         logging.info("Authenticating to Azure AD: %s" % error)
-    
-    if not token:
-        raise Exception("Failed to authenticate to Azure AD. Token is empty.")
 
     sentinel = AzureSentinelConnector(
         logAnalyticsUri,
@@ -185,6 +177,7 @@ class SecurityHubClient:
         sts_client = boto3.client("sts")
 
         # call assume_role method using input + client
+        assumed_role_object = None
         try:
             assumed_role_object = sts_client.assume_role_with_web_identity(
                 RoleArn=self.role_arn,
@@ -194,9 +187,6 @@ class SecurityHubClient:
             logging.info("Successfully assumed role with web identity.")
         except boto3.exceptions.Boto3Error as error:
             logging.info("Assuming role with web identity failed: %s" % error)
-
-        if not assumed_role_object:
-            raise Exception("Failed to assume role with web identity. Assumed role object is empty.")
 
         # from the response, get credentials
         credentials = assumed_role_object["Credentials"]
