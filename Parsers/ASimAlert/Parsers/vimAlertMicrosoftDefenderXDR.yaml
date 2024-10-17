@@ -1,5 +1,5 @@
 Parser:
-  Title: Alert ASIM parser for Microsoft Defender XDR
+  Title: Alert ASIM filtering parser for Microsoft Defender XDR
   Version: '0.1.0'
   LastUpdated: Oct 09, 2024
 Product:
@@ -14,9 +14,39 @@ References:
   Link: https://aka.ms/AboutASIM
 Description: |
   This ASIM parser supports normalizing the Microsoft Defender XDR logs to the ASIM Alert normalized schema.
-ParserName: ASimAlertMicrosoftDefenderXDR
-EquivalentBuiltInParser: _ASim_Alert_MicrosoftDefenderXDR
+ParserName: vimAlertMicrosoftDefenderXDR
+EquivalentBuiltInParser: _Im_Alert_MicrosoftDefenderXDR
 ParserParams:
+  - Name: starttime
+    Type: datetime
+    Default: datetime(null)
+  - Name: endtime
+    Type: datetime
+    Default: datetime(null)
+  - Name: ipaddr_has_any_prefix
+    Type: dynamic
+    Default: dynamic([])
+  - Name: hostname_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: username_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktactics_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: attacktechniques_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: threatcategory_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: alertverdict_has_any
+    Type: dynamic
+    Default: dynamic([])
+  - Name: eventseverity_has_any
+    Type: dynamic
+    Default: dynamic([])
   - Name: disabled
     Type: bool
     Default: false
@@ -64,10 +94,29 @@ ParserQuery: |
     ];
     let AttackTacticSet = dynamic(["Exfiltration", "PrivilegeEscalation", "Persistence", "LateralMovement", "Execution", "Discovery", "InitialAccess", "CredentialAccess", "DefenseEvasion", "CommandAndControl", "Impact"]);
     let ThreatCategorySet = dynamic(["Malware", "Ransomware", "Trojan", "Virus", "Worm", "Adware", "Spyware", "Rootkit", "Cryptominor", "Phishing", "Spam", "MaliciousUrl", "Spoofing", "Security Policy Violation", "Unknown", "SuspiciousActivity"]);
-    let parser = (
+    let parser = (starttime: datetime=datetime(null), 
+        endtime: datetime=datetime(null), 
+        ipaddr_has_any_prefix: dynamic=dynamic([]),
+        hostname_has_any: dynamic=dynamic([]),
+        username_has_any: dynamic=dynamic([]),
+        attacktactics_has_any: dynamic=dynamic([]),
+        attacktechniques_has_any: dynamic=dynamic([]),
+        threatcategory_has_any: dynamic=dynamic([]),
+        alertverdict_has_any: dynamic=dynamic([]),
+        eventseverity_has_any: dynamic=dynamic([]),
         disabled: bool=false) {
         AlertEvidence
         | where not(disabled)
+        | where (isnull(starttime) or TimeGenerated >= starttime)
+            and (isnull(endtime) or TimeGenerated <= endtime)
+            and ((array_length(ipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(DeviceId, ipaddr_has_any_prefix)) or (has_any_ipv4_prefix(tostring(AdditionalFields.Host.IpInterfaces[0].Address), ipaddr_has_any_prefix)) or (has_any_ipv4_prefix(RemoteIP, ipaddr_has_any_prefix)))
+            and ((array_length(hostname_has_any) == 0) or (DeviceName has_any (hostname_has_any)) or (tostring(AdditionalFields.Host.NetBiosName) has_any (hostname_has_any)))
+            and ((array_length(username_has_any) == 0) or (AccountUpn has_any (username_has_any)) or (tostring(AdditionalFields.Account.UserPrincipalName) has_any (username_has_any)))
+            and ((array_length(attacktactics_has_any) == 0) or (Categories has_any (attacktactics_has_any)))
+            and ((array_length(attacktechniques_has_any) == 0) or (AttackTechniques has_any (attacktechniques_has_any)))
+            // ThreatCategory filtering done later in the parser
+            // AlertVerdict filtering done later in the parser
+            and ((array_length(eventseverity_has_any) == 0)) // EventSeverity not set in this parser.
         // Mapping Alert Fields
         | extend 
             AlertId = AlertId,
@@ -79,6 +128,8 @@ ParserQuery: |
             AlertOriginalStatus = tostring(AdditionalFields.LastRemediationState),
             AlertStatus = iif(isnotempty(AdditionalFields.LastRemediationState), iif(AdditionalFields.LastRemediationState == "Active", "Active", "Closed"), "")
         | lookup AlertVerdictLookup on AlertVerdict_Custom
+        // Filter for AlertVerdict
+        | where ((array_length(alertverdict_has_any) == 0) or (AlertVerdict has_any (alertverdict_has_any)))
         | lookup IndicatorTypeLookup on EntityType
         | lookup IndicatorAssociationLookup on EvidenceRole
         | lookup AlertSourceAnalyticDetailsLookup on DetectionSource
@@ -86,6 +137,8 @@ ParserQuery: |
         | extend
             ThreatCategory = iif(Categories has_any (ThreatCategorySet), replace(@"[\[\]\""]", "", Categories), ""),
             ThreatIsActive = iif(isnotempty(AdditionalFields.LastRemediationState), iif(tostring(AdditionalFields.LastRemediationState) == "Active", True, False), bool(null))
+        // Filter for ThreatCategory
+        | where ((array_length(threatcategory_has_any) == 0) or (ThreatCategory has_any (threatcategory_has_any)))
         // Mapping User Entity
         | extend 
             UserId = coalesce(AccountObjectId, tostring(AdditionalFields.Account.AadUserId)),
@@ -181,5 +234,15 @@ ParserQuery: |
             AlertVerdict_Custom
     };
     parser(
+        starttime = starttime, 
+        endtime = endtime, 
+        ipaddr_has_any_prefix = ipaddr_has_any_prefix,
+        hostname_has_any = hostname_has_any,
+        username_has_any = username_has_any,
+        attacktactics_has_any = attacktactics_has_any,
+        attacktechniques_has_any = attacktechniques_has_any,
+        threatcategory_has_any = threatcategory_has_any,
+        alertverdict_has_any = alertverdict_has_any,
+        eventseverity_has_any = eventseverity_has_any,
         disabled = disabled
     )

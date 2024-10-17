@@ -1,5 +1,5 @@
 Parser:
-  Title: Alert ASIM parser for SentinelOne Singularity platform
+  Title: Alert ASIM filtering parser for SentinelOne Singularity platform
   Version: '0.1.0'
   LastUpdated: Oct 09, 2024
 Product:
@@ -14,14 +14,13 @@ References:
   Link: https://aka.ms/AboutASIM
 Description: |
   This ASIM parser supports normalizing the SentinelOne alerts to the ASIM Alert normalized schema.
-ParserName: ASimAlertSentinelOneSingularity
-EquivalentBuiltInParser: _ASim_Alert_SentinelOneSingularity
+ParserName: vimAlertSentinelOneSingularity
+EquivalentBuiltInParser: _Im_Alert_SentinelOneSingularity
 ParserParams:
   - Name: disabled
     Type: bool
     Default: false
 ParserQuery: |
-  
   let AlertVerdictLookup = datatable (analystVerdict_s: string, AlertVerdict: string)
     [
       "Undefined", "Unknown",
@@ -44,11 +43,30 @@ ParserQuery: |
       "User-Defined Blocklist", "User Defined Blocked List",
       "Reputation", "Reputation"
   ];
-  let parser = (
+  let parser = (starttime: datetime=datetime(null), 
+      endtime: datetime=datetime(null), 
+      ipaddr_has_any_prefix: dynamic=dynamic([]),
+      hostname_has_any: dynamic=dynamic([]),
+      username_has_any: dynamic=dynamic([]),
+      attacktactics_has_any: dynamic=dynamic([]),
+      attacktechniques_has_any: dynamic=dynamic([]),
+      threatcategory_has_any: dynamic=dynamic([]),
+      alertverdict_has_any: dynamic=dynamic([]),
+      eventseverity_has_any: dynamic=dynamic([]),
       disabled: bool=false) {
       SentinelOne_CL
       | where not(disabled)
       | where event_name_s in ("Alerts.", "Threats.")
+      | where (isnull(starttime) or TimeGenerated >= starttime)
+          and (isnull(endtime) or TimeGenerated <= endtime)
+          and ((array_length(ipaddr_has_any_prefix) == 0) or (has_any_ipv4_prefix(agentDetectionInfo_agentIpV4_s, ipaddr_has_any_prefix)) or (has_any_ipv4_prefix(alertInfo_srcIp_s, ipaddr_has_any_prefix)))
+          and ((array_length(hostname_has_any) == 0) or (agentDetectionInfo_name_s has_any (hostname_has_any)) or (agentRealtimeInfo_agentComputerName_s has_any (hostname_has_any)))
+          and ((array_length(username_has_any) == 0) or (agentDetectionInfo_agentLastLoggedInUpn_s has_any (username_has_any)))
+          and ((array_length(attacktactics_has_any) == 0) or (indicators_s has_any (attacktactics_has_any)))
+          and ((array_length(attacktechniques_has_any) == 0) or (indicators_s has_any (attacktechniques_has_any)))
+      // ThreatCategory filtering done later in the parser
+      // AlertVerdict filtering done later in the parser
+      // EventSeverity filtering done later in the parser
       // Mapping Alert Fields
       | extend 
           AlertId = iif(event_name_s == "Alerts.", alertInfo_alertId_s, threatInfo_threatId_s),
@@ -64,6 +82,8 @@ ParserQuery: |
       | lookup AlertSourceAnalyticDetailsLookup on threatInfo_engines_s
       | extend analystVerdict_s = iif(event_name_s == "Alerts.", alertInfo_analystVerdict_s, threatInfo_analystVerdict_s)
       | lookup AlertVerdictLookup on analystVerdict_s
+      // Filter for AlertVerdict
+      | where ((array_length(alertverdict_has_any) == 0) or (AlertVerdict has_any (alertverdict_has_any)))
       // Mapping Inspection Fields
       | extend
           ThreatId = threatInfo_threatId_s,
@@ -76,6 +96,8 @@ ParserQuery: |
           RuleNumber = toint(ruleInfo_id_s),
           RuleName = ruleInfo_name_s,
           RuleDescription = ruleInfo_description_s
+      // Filter for ThreatCategory
+      | where ((array_length(threatcategory_has_any) == 0) or (ThreatCategory has_any (threatcategory_has_any)))
       // Mapping Dvc Fields
       | extend 
           DvcHostname = coalesce(agentDetectionInfo_name_s, agentRealtimeInfo_agentComputerName_s),
@@ -89,7 +111,8 @@ ParserQuery: |
           IpAddr = DvcIpAddr,
           PortNumber = alertInfo_srcPort_s
       // Mapping Process Entity
-      | extend
+      | extend 
+          // Mapping Process Fields
           ProcessCommandLine = sourceProcessInfo_commandline_s,
           ProcessName = iif(event_name_s == "Alerts.", sourceProcessInfo_filePath_s, threatInfo_originatorProcess_s),
           ProcessFileCompany = sourceProcessInfo_fileSignerIdentity_s,
@@ -141,10 +164,22 @@ ParserQuery: |
                         "ProcessCreationTime",
                         sourceProcessInfo_pidStarttime_t
                     )
+      // Filter for EventSeverity
+      | where ((array_length(eventseverity_has_any) == 0) or EventSeverity has_any (eventseverity_has_any))
       | lookup EventSubTypeLookup on ruleInfo_treatAsThreat_s
       | extend EventSubType = iif(event_name_s == "Threats.", "Threat", EventSubType)
       | project-away *_s, *_g, SourceSystem, ManagementGroupName, Computer, RawData, *_t, *_b, *_d
   };
   parser (
+      starttime = starttime, 
+      endtime = endtime, 
+      ipaddr_has_any_prefix = ipaddr_has_any_prefix,
+      hostname_has_any = hostname_has_any,
+      username_has_any = username_has_any,
+      attacktactics_has_any = attacktactics_has_any,
+      attacktechniques_has_any = attacktechniques_has_any,
+      threatcategory_has_any = threatcategory_has_any,
+      alertverdict_has_any = alertverdict_has_any,
+      eventseverity_has_any = eventseverity_has_any,
       disabled = disabled
   )
