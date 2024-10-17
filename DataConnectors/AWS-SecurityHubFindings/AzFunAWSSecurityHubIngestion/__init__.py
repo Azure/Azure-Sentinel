@@ -44,7 +44,7 @@ if not match:
     raise Exception("AWSSecurityHubFindingsDataconnector: Invalid Log Analytics Uri. Please update configuration.")
 
 if client_id in (None, "") or str(client_id).isspace():
-    raise Exception("AWSSecurityHubFindingsDataconnector: Invalid Client ID. Please update configuration.")
+    raise Exception("AWSSecurityHubFindingsDataconnector: Missing Client ID. Please update configuration.")
 
 payload_fields = [
     "SchemaVersion",
