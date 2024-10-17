@@ -13,10 +13,10 @@ Microsoft Sentinel automation rules can run Logic App playbooks to integrate wit
 ![](Images/permissions.png)
 
 ## Installation
-1. Locate the Recorded Future Intelligence Solution in the Content Hub.
-1. Press **Install** and then **Create** and continue to configure the solution.  
+1. Locate the Recorded Future Intelligence Solution in Sentinel Content Hub.
+1. Press **Install** and continue to configure the solution.  
 1. If the installation was completed successfully, you will now have Enrichment Playbook templates installed.
-1. Locate the RecordedFuture-IOC_Enrichment template and press create
+1. Locate the RecordedFuture-IOC_Enrichment template in the Sentinel automation menue and press create
    ![](Images/playbookInstallation.png)
 1. Authorize all connections and press save
    ![](Images/auth.png)

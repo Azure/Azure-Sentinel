@@ -1,0 +1,46 @@
+id: c18bd8c2-50f0-4aa2-8122-d449243627d7
+name: Illumio VEN Deactivated Detection Rule
+description: |
+  'Create Microsoft Sentinel Incident When Ven Goes Into Deactivated state'
+severity: High
+status: Available
+requiredDataConnectors: 
+  - connectorId: IllumioSaaSDataConnector
+    dataTypes:
+      - Illumio_Auditable_Events_CL
+queryFrequency: 60m
+queryPeriod: 60m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+relevantTechniques:
+- T1562
+query: |
+  Illumio_Auditable_Events_CL
+  | where event_type has 'agent.deactivate'
+  | mv-expand resource_changes
+  | extend hostname = resource_changes['resource']['workload']['hostname'],
+      workload_href = resource_changes['resource']['workload']['href'],
+      workload_labels = resource_changes['resource']['workload']['labels']
+  | extend ipaddress = action.src_ip,       
+        ven_href = created_by.ven.href
+  | project-away resource_changes, action, version 
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: hostname
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipaddress            
+alertDetailsOverride:
+  alertDisplayNameFormat: | 
+    Illumio VEN Deactivated Incident for {{hostname}}
+  alertDescriptionFormat: | 
+    Illumio VEN Deactivated Incident for {{hostname}} generated at {{TimeGenerated}}
+version: 1.0.5
+kind: Scheduled
