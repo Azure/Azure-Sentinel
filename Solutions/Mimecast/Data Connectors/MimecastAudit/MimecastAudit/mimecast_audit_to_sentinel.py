@@ -307,7 +307,6 @@ class MimeCastAuditToSentinel(Utils):
                 int(time.time())
                 >= self.function_start_time + consts.FUNCTION_APP_TIMEOUT_SECONDS
             ):
-                valid_run = False
                 applogger.info(
                     self.log_format.format(
                         consts.LOGS_STARTS_WITH,
