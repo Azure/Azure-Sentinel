@@ -125,6 +125,7 @@ def post_data(body, log_type):
             )
             time.sleep(consts.INGESTION_ERROR_SLEEP_TIME)
             retry_count += 1
+            continue
         except requests.exceptions.Timeout as error:
             applogger.error(
                 "{}(method={}) : {} : sleeping - {} seconds and retrying.. Timeout Error: {}".format(
@@ -160,16 +161,15 @@ def post_data(body, log_type):
                 )
             )
             raise MimecastException()
-    if retry_count == consts.SENTINEL_RETRY_COUNT:
-        applogger.error(
-            "{}(method={}) : {} : Maximum Retry count of {} exceeded, hence stopping execution.".format(
-                consts.LOGS_STARTS_WITH,
-                __method_name,
-                consts.AUDIT_FUNCTION_NAME,
-                consts.SENTINEL_RETRY_COUNT,
-            )
+    applogger.error(
+        "{}(method={}) : {} : Maximum Retry count of {} exceeded, hence stopping execution.".format(
+            consts.LOGS_STARTS_WITH,
+            __method_name,
+            consts.AUDIT_FUNCTION_NAME,
+            consts.SENTINEL_RETRY_COUNT,
         )
-        raise MimecastException()
+    )
+    raise MimecastException()
 
 
 def handle_response(response, body):
