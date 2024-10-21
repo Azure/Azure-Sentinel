@@ -1,52 +1,162 @@
-id: ad1a5565-cc66-5ed2-bd32-85187d574bce
+id: 974718ae-c0a5-4d4a-bb42-63a0f394d66f
 Function:
-  Title: corelight_ssh parser for Corelight
-  Version: 1.0.0
-  LastUpdated: '2023-09-25'
+  Title: Corelight SSH Events
+  Version: '1.1.0'
+  LastUpdated: '2024-08-09'
 Category: Microsoft Sentinel Parser
 FunctionName: corelight_ssh
 FunctionAlias: corelight_ssh
-FunctionQuery: |+
-  let corelight_ssh = view () {
-      Corelight_v2_ssh_CL
-      | project-rename
-          _path=_path_s,
-          _system_name=_system_name_s,
-          _write_ts=_write_ts_t,
-          uid=uid_s,
-          id_orig_h=id_orig_h_s,
-          id_orig_p=id_orig_p_d,
-          id_resp_h=id_resp_h_s,
-          id_resp_p=id_resp_p_d,
-          version=version_d,
-          auth_success=auth_success_b,
-          auth_attempts=auth_attempts_d,
-          direction=direction_s,
-          client=client_s,
-          server=server_s,
-          cipher_alg=cipher_alg_s,
-          mac_alg=mac_alg_s,
-          compression_alg=compression_alg_s,
-          kex_alg=kex_alg_s,
-          host_key_alg=host_key_alg_s,
-          host_key=host_key_s,
-          remote_location_country_code=remote_location_country_code_s,
-          remote_location_region=remote_location_region_s,
-          remote_location_city=remote_location_city_s,
-          remote_location_latitude=remote_location_latitude_d,
-          remote_location_longitude=remote_location_longitude_d,
-          hasshVersion=hasshVersion_s,
-          cshka=cshka_s,
-          hasshAlgorithms=hasshAlgorithms_s,
-          sshka=sshka_s,
-          hasshServerAlgorithms=hasshServerAlgorithms_s,
-          inferences=inferences_s
-      | extend
-          EventVendor="Corelight",
-          EventProduct="CorelightSensor",
-          EventType="ssh",
-          ts=TimeGenerated
-  };
-  corelight_ssh
-
-...
+FunctionQuery: |
+    let InferencesLookup = datatable(
+        InferenceName: string,
+        inferences: string,
+        Description: string
+    )[
+        "Client Authentication Bypass Exploit","ABP","The client did not complete the SSH state machine for authentication and likely sent the server an exploit",
+        "Keystrokes","KS","Interactive session",
+        "Client Bruteforce Guessing","BF","The client failed to authenticate more than the configured threshold",
+        "Client Bruteforce Success","BFS","The client failed to authenticate more than the configured threshold but then successfully authenticated",
+        "Client Scanner Version","SV","This indicates a connection/scan attempt which terminated after server responded with version. nmap -p 22 localhost --script=ssh-hostkey",
+        "Client Scanner Capabilities","SC","This indicates a connection/scan attempt which terminated after server responded with capabilities. nmap -p 22 localhost --script=ssh2-enum-algos",
+        "Client Scanner Port","SP","Probes for SSH ports. nmap -p 22 -sV localhost",
+        "Client Scanner Authentication","SA","SSH clients which scanned the server for supported authentication methods. nmap -p 22 localhost --script=ssh-auth-methods",
+        "Small File Upload","SFU","This indicates a small file upload.",
+        "Small File Download","SFD","This indicates a small file download.",
+        "Large File Upload","LFU","This indicates a non interactive session where a file was possibly uploaded.",
+        "Large File Download","LFD","This indicates a non interactive session where a file was possibly downloaded.",
+        "Automated Password Authentication","APWA","The client auth'd with an automated password tool (like sshpass). This inference applies to only the auth type that succeeded. Before it, publickey or password authentication attempts could have occurred.",
+        "Interactive Password Authentication","IPWA","The client interactively typed their password to auth. The first authentication attempt which succeeded was interactive. This could mean that a tool such as winSCP was used to automatically authenticate but the tool was provided an incorrect password, prompted the user for a different password, and then the user authenticated.",
+        "Public Key Authentication","PKA","The client automatically auth'd using pubkey auth.  This inference applies to only the auth type that succeeded. Before it, publickey or password authentication attempts could have occurred.",
+        "None Authentication","NA","The client successfully authenticated using the None method",
+        "Multifactor authentication","MFA","After a password or public key was accepted, the server required a second form of auth (a code) and the client successfully provided it",
+        "Unknown authentication","UA","We weren't able to determine the authentication method. Telemetry around these could be used to improve authentication inferences.",
+        "Automated interaction","AUTO","The client was a script or automated utility and not driven by a user",
+        "Server Banner","BAN","The server sent the client a pre-authentication banner, likely for legal reasons",
+        "Client trusted server","CTS","The client likely already had an entry in its known_hosts file for this server",
+        "Client untrusted server","CUS","The client likely did NOT already have an entry in its known_hosts file for this server",
+        "Reverse SSH Provisioned (ssh -R)","RSP","The client connected with a -R flag, which provisions the ports to be used for a Reverse Session to be set up at any point onwards. ssh -R 31337:localhost:22 user@192.168.20.33",
+        "Reverse SSH Initiated","RSI","The Reverse session is inititated from the server back to the Client. This initiation can be done at any stage during the session. From the Server, the attacker would initiate the Reverse session by e.g.ssh victim@localhost -p 31337",
+        "Reverse SSH Initiation Automated","RSIA","Indicates that the initiation of the Reverse session happened very early in the packet stream, indicating automation",
+        "Reverse SSH Logged in","RSL","The Reverse tunnel login login has succeeded, the attacker now has shell on the victim's device",
+        "Reverse SSH Keystrokes","RSK","Keystrokes are detected within the Reverse tunnel",
+        "No Remote Command (ssh -N)","NRC","The -N flag was used in the SSH session. This is used when no interactivity is required/desired and that only the ports necessary for tunelling are transmitted. If this inference is seen with any of the R* inferences, it would be extremely suspicious. e.g ssh -N -R 31337:localhost:22 attacker@192.168.20.12",
+        "SSH Agent Forwarding Requested","AFR","Agent forwarding was requested by the Client e.g ssh -A -i ~/.ssh/id_1_rsa user@192.168.20.33"
+    ];
+    let dummy_table = datatable(TimeGenerated: datetime, uid_s: string) [];
+    let corelight_ssh = view () {
+        union isfuzzy=true Corelight_v2_ssh_CL, dummy_table
+        | summarize arg_max(TimeGenerated, *) by uid_s
+        | join kind=leftouter
+        ( corelight_conn
+        | project uid, local_orig, local_resp
+        ) on $left.uid_s == $right.uid
+        |project-away uid
+        | extend
+            path = column_ifexists("_path_s", ""),
+            system_name = column_ifexists("_system_name_s", ""),
+            write_ts = column_ifexists("_write_ts_t", ""),
+            auth_attempts = column_ifexists("auth_attempts_d", real(null)),
+            auth_success = column_ifexists("auth_success_b", ""),
+            cipher_alg = column_ifexists("cipher_alg_s", ""),
+            client = column_ifexists("client_s", ""),
+            compression_alg = column_ifexists("compression_alg_s", ""),
+            cshka = column_ifexists("cshka_s", ""),
+            hassh = column_ifexists("hassh_s", ""),
+            hasshAlgorithms = column_ifexists("hasshAlgorithms_s", ""),
+            hasshServer = column_ifexists("hasshServer_s", ""),
+            hasshServerAlgorithms = column_ifexists("hasshServerAlgorithms_s", ""),
+            hasshVersion = column_ifexists("hasshVersion_s", ""),
+            host_key = column_ifexists("host_key_s", ""),
+            host_key_alg = column_ifexists("host_key_alg_s", ""),
+            id_orig_h = column_ifexists("id_orig_h_s", ""),
+            id_orig_p = column_ifexists("id_orig_p_d", real(null)),
+            id_resp_h = column_ifexists("id_resp_h_s", ""),
+            id_resp_p = column_ifexists("id_resp_p_d", real(null)),
+            inferences = column_ifexists("inferences_s", ""),
+            kex_alg = column_ifexists("kex_alg_s", ""),
+            mac_alg = column_ifexists("mac_alg_s", ""),
+            server = column_ifexists("server_s", ""),
+            sshka = column_ifexists("sshka_s", ""),
+            uid = column_ifexists("uid_s", ""),
+            version = column_ifexists("version_d", real(null)),
+            remote_location_country_code = column_ifexists("remote_location_country_code_s", ""),
+            remote_location_region = column_ifexists("remote_location_region_s", ""),
+            remote_location_city = column_ifexists("remote_location_city_s", ""),
+            remote_location_latitude = column_ifexists("remote_location_latitude_d", real(null)),
+            remote_location_longitude = column_ifexists("remote_location_longitude_d", real(null)),
+            direction = column_ifexists("direction_s", "")
+        | mv-expand todynamic(inferences)
+        | extend inferences_string = tostring(inferences)
+        | lookup kind=leftouter InferencesLookup on $left.inferences_string == $right.inferences
+        | summarize InferenceNames = make_list(InferenceName), Descriptions = make_list(Description), Inferences = make_list(inferences_string), arg_max(TimeGenerated, *) by uid
+        | extend
+            EventVendor ="Corelight",
+            EventProduct ="CorelightSensor",
+            EventType ="ssh",
+            ts = TimeGenerated,
+            src = id_orig_h,
+            src_ip = id_orig_h,
+            src_port = id_orig_p,
+            dest = id_resp_h,
+            dest_ip = id_resp_h,
+            dest_port = id_resp_p,
+            sensor_name = coalesce(system_name, "unknown"),
+            action = iff(auth_success == "true", "Success", "Failure")
+        | extend
+            is_broadcast =iff(src in("0.0.0.0", "255.255.255.255") or dest in("255.255.255.255", "0.0.0.0"), "true", "false"),
+            is_dest_internal_ip = iff(local_resp == true, "true", "false"),
+            is_src_internal_ip = iff(local_orig == true, "true", "false")
+        | project
+            TimeGenerated,
+            path,
+            system_name,
+            write_ts,
+            auth_attempts,
+            auth_success,
+            cipher_alg,
+            client,
+            compression_alg,
+            cshka,
+            hassh,
+            hasshAlgorithms,
+            hasshServer,
+            hasshServerAlgorithms,
+            hasshVersion,
+            host_key,
+            host_key_alg,
+            id_orig_h,
+            id_orig_p,
+            id_resp_h,
+            id_resp_p,
+            Inferences,
+            kex_alg,
+            mac_alg,
+            server,
+            sshka,
+            uid,
+            version,
+            remote_location_country_code,
+            remote_location_region,
+            remote_location_city,
+            remote_location_latitude,
+            remote_location_longitude,
+            direction,
+            EventVendor,
+            EventProduct,
+            EventType,
+            ts,
+            src,
+            src_ip,
+            src_port,
+            dest,
+            dest_ip,
+            dest_port,
+            sensor_name,
+            action,
+            is_broadcast,
+            is_dest_internal_ip,
+            is_src_internal_ip,
+            InferenceNames,
+            Descriptions
+    };
+    corelight_ssh
