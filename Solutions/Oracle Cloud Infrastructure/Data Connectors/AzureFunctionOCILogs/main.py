@@ -143,6 +143,19 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                             if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
                                 event["data"]["stateChange"]["current"] = json.dumps(
                                     event["data"]["stateChange"]["current"])
+                        identity_fields = ["authType",
+                                           "callerId", "callerName", "principalName", "principalId",
+                                           "tenantId"]
+                        combined_identity = {}
+                        for field in identity_fields:
+                            if field in event["data"].get("identity", {}):
+                                combined_identity[field] = event["data"]["identity"].get(
+                                    field, '')
+                        if combined_identity:
+                            event["data"]["identity_combined"] = str(
+                                combined_identity)
+                            for field in identity_fields:
+                                event["data"]["identity"].pop(field, None)
                     sentinel.send(event)
 
         sentinel.flush()
