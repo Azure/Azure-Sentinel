@@ -164,12 +164,13 @@ If you need to test the parser execution without saving it as a function, add th
 ### Parser Definition
 
 - Title:           Microsoft Exchange Compare Data MRA Parser
-- Version:         1.0.0
-- Last Updated:    25/02/2024
+- Version:         1.1.0
+- Last Updated:    30/08/2024
 - Description:     This parser compare data from MRA and ESI Exchange Collector to find differences
 
 |**Version**  |**Details**  |
 |---------|-----------------------------------------------------------------------------------------------------------------------|
+|v1.1     | <ul><li>Function Adaptation for On-Premises table</li></ul> |
 |v1.0     | <ul><li>Function initilisation for Sentinel Solution</li></ul> |
 
 ### Parser Description
