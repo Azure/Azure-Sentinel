@@ -288,6 +288,14 @@ def main():
                 if parser_file['EquivalentBuiltInParser'] in read_exclusion_list_from_csv():
                     print(f"{YELLOW}The parser {parser_file_path} is listed in the exclusions file. Therefore, this workflow run will not fail because of it. To allow this parser to cause the workflow to fail, please remove its name from the exclusions list file located at: {exclusion_file_path}{RESET}")
                     sys.stdout.flush()
+                # If Failure count is due to EventResult and EventSchema is AuditEvent, then ignore the failure. 
+                # Audit Event is a special case where 'EventResult' validations could be partial like only 'Success' events.
+                elif len(result.failures) == 1:
+                    failure_message = result.failures[0][1]
+                    if "eventresult - validations for this parameter are partial" in failure_message:
+                        if parser_file['Normalization']['Schema'] == 'AuditEvent':
+                            print(f"{YELLOW} This single failure is due to partial result in 'EventResult' field in 'AuditEvent' schema. Audit Event is a special case where 'EventResult' validations could be partial like only 'Success' events. Ignoring this error. {RESET}")
+                            sys.stdout.flush()
                 else:
                     print(f"::error::Tests failed for {parser_file_path}")
                     sys.stdout.flush()  # Explicitly flush stdout
