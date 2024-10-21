@@ -74,4 +74,4 @@ def lambda_handler(event, context):
             
 
     except Exception as e:
-        print("    Error exporting %s in %s: %s" % (LOG_GROUP_NAME, log_stream_name, getattr(e, 'message', repr(e))))
+        print("    Error exporting %s: %s" % (LOG_GROUP_NAME, getattr(e, 'message', repr(e))))
