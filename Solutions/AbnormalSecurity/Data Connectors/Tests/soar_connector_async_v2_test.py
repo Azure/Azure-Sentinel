@@ -99,18 +99,20 @@ class TestGetHeaders(unittest.TestCase):
             STORED_TIME=datetime(2024, 10, 1, 12, 55),
             CURRENT_TIME=datetime(2024, 10, 1, 13, 0),
             TRACE_ID=self.trace_id,
+            PYTHON_VERSION="3.11"
         )
 
     def test_valid_headers(self):
         # Test case for valid headers
         headers = get_headers(self.ctx)
         expected_headers = {
-            "X-Sentinel-Context": "eyJMQUdfT05fQkFDS0VORCI6IlBUMzBTIiwiT1VUQUdFX1RJTUUiOiJQVDE1TSIsIkZSRVFVRU5DWSI6IlBUNU0iLCJMSU1JVCI6IlBUNk0iLCJOVU1fQ09OQ1VSUkVOQ1kiOjUsIk1BWF9QQUdFX05VTUJFUiI6MTAwLCJCQVNFX1VSTCI6Imh0dHA6Ly9leGFtcGxlLmNvbSIsIlRJTUVfUkFOR0UiOnsic3RhcnQiOiIyMDI0LTEwLTAxVDEyOjU1OjAwIiwiZW5kIjoiMjAyNC0xMC0wMVQxMzowMDowMCJ9LCJDTElFTlRfRklMVEVSX1RJTUVfUkFOR0UiOnsic3RhcnQiOiIyMDI0LTEwLTAxVDEyOjU0OjMwIiwiZW5kIjoiMjAyNC0xMC0wMVQxMjo1OTozMCJ9LCJTVE9SRURfVElNRSI6IjIwMjQtMTAtMDFUMTI6NTU6MDAiLCJDVVJSRU5UX1RJTUUiOiIyMDI0LTEwLTAxVDEzOjAwOjAwIiwiVFJBQ0VfSUQiOiJiZGIyYTEyNy1lZDNkLTQ2NGEtYjIwNS0zODIwY2NmNmQzZjIifQ==",
+            "X-Sentinel-Context": "eyJMQUdfT05fQkFDS0VORCI6IDMwLjAsICJPVVRBR0VfVElNRSI6IDkwMC4wLCAiRlJFUVVFTkNZIjogMzAwLjAsICJMSU1JVCI6IDM2MC4wLCAiTlVNX0NPTkNVUlJFTkNZIjogNSwgIk1BWF9QQUdFX05VTUJFUiI6IDEwMCwgIkJBU0VfVVJMIjogImh0dHA6Ly9leGFtcGxlLmNvbSIsICJUSU1FX1JBTkdFIjogeyJzdGFydCI6ICIyMDI0LTEwLTAxVDEyOjU1OjAwIiwgImVuZCI6ICIyMDI0LTEwLTAxVDEzOjAwOjAwIn0sICJDTElFTlRfRklMVEVSX1RJTUVfUkFOR0UiOiB7InN0YXJ0IjogIjIwMjQtMTAtMDFUMTI6NTQ6MzAiLCAiZW5kIjogIjIwMjQtMTAtMDFUMTI6NTk6MzAifSwgIlNUT1JFRF9USU1FIjogIjIwMjQtMTAtMDFUMTI6NTU6MDAiLCAiQ1VSUkVOVF9USU1FIjogIjIwMjQtMTAtMDFUMTM6MDA6MDAiLCAiVFJBQ0VfSUQiOiAiYmRiMmExMjctZWQzZC00NjRhLWIyMDUtMzgyMGNjZjZkM2YyIiwgIlBZVEhPTl9WRVJTSU9OIjogIjMuMTEifQ==",
             "X-Abnormal-Trace-Id": str(self.trace_id),
             "Authorization": f"Bearer {self.api_token}",
             "Soar-Integration-Origin": "AZURE SENTINEL",
             "Azure-Sentinel-Version": "2024-10-03 V2",
         }
+        self.maxDiff = None
         self.assertEqual(headers, expected_headers)
 
 

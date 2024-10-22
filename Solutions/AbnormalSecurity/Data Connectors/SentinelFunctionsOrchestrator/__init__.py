@@ -53,10 +53,10 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
 
     current_datetime = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    logging.info(f"Current python version: {sys.version}")
+    logging.info(f"Current python version:: {sys.version}")
     if should_use_v2_logic():
         logging.info(
-            f"Using v2 fetching logic with inputs (threats, cases): ({stored_threats_datetime},{stored_cases_datetime})"
+            f"Using v2 fetching logic with inputs (threats, cases):: ({stored_threats_datetime},{stored_cases_datetime})"
         )
         asyncio.run(
             fetch_and_store_abnormal_data_v2(
@@ -69,7 +69,7 @@ def orchestrator_function(context: df.DurableOrchestrationContext):
         return
     else:
         logging.info(
-            f"Running legacy logic with inputs (threats, cases): ({stored_threats_datetime},{stored_cases_datetime})"
+            f"Running legacy logic with inputs (threats, cases):: ({stored_threats_datetime},{stored_cases_datetime})"
         )
 
     asyncio.run(transfer_abnormal_data_to_sentinel(stored_threats_datetime, stored_cases_datetime, current_datetime, context))
@@ -119,7 +119,7 @@ async def fetch_and_store_abnormal_data_v2(
     try:
         threats_ctx = get_context(stored_date_time=stored_threats_datetime)
 
-        logging.info(f"Logging out threats ctx: {threats_ctx.model_dump_json(exclude='API_TOKEN')}")
+        logging.info(f"Logging out threats ctx:: {threats_ctx.json(exclude={'API_TOKEN'})}")
         logging.info(
             f"Threats Timestamps (stored, current): ({stored_threats_datetime}, {threats_ctx.CURRENT_TIME})"
         )
@@ -141,7 +141,7 @@ async def fetch_and_store_abnormal_data_v2(
     try:
         cases_ctx = get_context(stored_date_time=stored_cases_datetime)
         
-        logging.info(f"Logging out cases ctx: {cases_ctx.model_dump_json(exclude='API_TOKEN')}")
+        logging.info(f"Logging out cases ctx:: {cases_ctx.json(exclude={'API_TOKEN'})}")
         logging.info(
             f"Cases Timestamps (stored, current): ({stored_cases_datetime}, {cases_ctx.CURRENT_TIME})"
         )

@@ -3,9 +3,10 @@ from enum import Enum
 from typing import List, Optional
 import os
 from uuid import uuid4, UUID
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, root_validator
 import azure.durable_functions as df
 import logging
+import sys
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 TIME_FORMAT_WITHMS = "%Y-%m-%dT%H:%M:%S.%fZ"
@@ -23,13 +24,13 @@ class TimeRange(BaseModel):
     start: datetime
     end: datetime
 
-    @model_validator(mode="before")
+    @root_validator
     def check_start_less_than_end(cls, values):
         start = values.get("start")
         end = values.get("end")
 
         if start > end:
-            raise ValueError(f"Start time {start} is greater then end time {end}")
+            raise ValueError(f"Start time {start} is greater than end time {end}")
         return values
 
 
@@ -37,13 +38,13 @@ class OptionalEndTimeRange(BaseModel):
     start: datetime
     end: Optional[datetime]
 
-    @model_validator(mode="before")
+    @root_validator
     def check_start_less_than_end(cls, values):
         start = values.get("start")
         end = values.get("end")
 
         if end is not None and start > end:
-            raise ValueError(f"Start time {start} is greater then end time {end}")
+            raise ValueError(f"Start time {start} is greater than end time {end}")
         return values
 
 
@@ -61,6 +62,7 @@ class Context(BaseModel):
     STORED_TIME: datetime
     CURRENT_TIME: datetime
     TRACE_ID: UUID
+    PYTHON_VERSION: str
 
 
 class Resource(Enum):
@@ -169,6 +171,7 @@ def get_context(stored_date_time: str) -> Context:
         CURRENT_TIME=CURRENT_TIME,
         LIMIT=LIMIT,
         TRACE_ID=uuid4(),
+        PYTHON_VERSION=sys.version
     )
 
 

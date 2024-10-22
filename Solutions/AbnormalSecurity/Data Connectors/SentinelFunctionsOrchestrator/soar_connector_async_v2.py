@@ -30,7 +30,7 @@ def get_query_params(
 
 
 def get_headers(ctx: Context) -> Dict[str, str]:
-    sentinel_ctx = b64encode(ctx.model_dump_json(exclude="API_TOKEN").encode()).decode()
+    sentinel_ctx = b64encode(ctx.json(exclude={'API_TOKEN'}).encode()).decode()
     return {
         "X-Sentinel-Context": sentinel_ctx,
         "X-Abnormal-Trace-Id": str(ctx.TRACE_ID),

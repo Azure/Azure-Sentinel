@@ -74,13 +74,13 @@ class TestTimeRange(unittest.TestCase):
     def test_missing_start(self):
         # Test case where start is missing
         end = datetime(2024, 10, 1, 13, 0)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValidationError):
             TimeRange(end=end)
 
     def test_missing_end(self):
         # Test case where end is missing
         start = datetime(2024, 10, 1, 12, 0)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValidationError):
             TimeRange(start=start)
 
 
@@ -118,7 +118,7 @@ class TestOptionalEndTimeRange(unittest.TestCase):
     def test_missing_start(self):
         # Test case where start is missing
         end = datetime(2024, 10, 1, 13, 0)
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValidationError):
             OptionalEndTimeRange(end=end)
 
 
@@ -144,6 +144,7 @@ class TestComputeIntervals(unittest.TestCase):
             STORED_TIME=datetime(2024, 10, 1, 12, 55),
             CURRENT_TIME=datetime(2024, 10, 1, 13, 0),
             TRACE_ID=uuid4(),
+            PYTHON_VERSION="3.11"
         )
 
     def test_valid_intervals(self):
