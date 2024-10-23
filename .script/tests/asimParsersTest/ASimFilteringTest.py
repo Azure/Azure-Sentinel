@@ -288,10 +288,18 @@ def main():
                 if parser_file['EquivalentBuiltInParser'] in read_exclusion_list_from_csv():
                     print(f"{YELLOW}The parser {parser_file_path} is listed in the exclusions file. Therefore, this workflow run will not fail because of it. To allow this parser to cause the workflow to fail, please remove its name from the exclusions list file located at: {exclusion_file_path}{RESET}")
                     sys.stdout.flush()
+                # If Failure count is due to EventResult and EventSchema is AuditEvent, then ignore the failure. 
+                # Audit Event is a special case where 'EventResult' validations could be partial like only 'Success' events.
+                elif len(result.failures) == 1:
+                    failure_message = result.failures[0][1]
+                    if "eventresult - validations for this parameter are partial" in failure_message:
+                        if parser_file['Normalization']['Schema'] == 'AuditEvent':
+                            print(f"{YELLOW} This single failure is due to partial result in 'EventResult' field in 'AuditEvent' schema. Audit Event is a special case where 'EventResult' validations could be partial like only 'Success' events. Ignoring this error. {RESET}")
+                            sys.stdout.flush()
                 else:
                     print(f"::error::Tests failed for {parser_file_path}")
                     sys.stdout.flush()  # Explicitly flush stdout
-                    #sys.exit(1) # uncomment this line to fail workflow when tests are not successful.
+                    sys.exit(1) # uncomment this line to fail workflow when tests are not successful.
             except subprocess.CalledProcessError as e:
                 print(f"::error::An error occurred while reading parser file: {e}")
                 sys.stdout.flush()  # Explicitly flush stdout
@@ -585,13 +593,19 @@ class FilteringTest(unittest.TestCase):
 
             value = row[COLUMN_INDEX_IN_ROW]
             post = get_postfix(value, rows, substrings_list, delimiter)
-            # Post will equal value if: value dont contain the delimiter, post is in the list, post is contained in an item in the list.
-            if post != value:
+
+            # Add post to the list if it's not already present
+            if post not in substrings_list:
                 substrings_list.append(post)
-            else:
+
+            # If the list has reached the required number of substrings, break the loop
+            if len(substrings_list) == num_of_substrings:
+                break
+            
+            # If post is equal to value, also add pre to the list
+            if post == value:
                 pre = get_prefix(value, rows, substrings_list, delimiter)
-                # pre will equal value if: value dont contain the delimiter, pre is in the list, pre is contained in an item in the list.
-                if pre != value:
+                if pre not in substrings_list:
                     substrings_list.append(pre)
             
         return substrings_list
