@@ -258,13 +258,13 @@ def extract_event_vendor_product(parser_query,parser_file):
 
     match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_vendor = match.group(1).replace(" ", "")
+        event_vendor = match.group(1)
     else:
         print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
 
     match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_product = match.group(1).replace(" ", "")
+        event_product = match.group(1)
     else:
         print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
     return event_vendor, event_product ,schema_name   
@@ -417,7 +417,7 @@ for file in parser_yaml_files:
                 exit(1)
             cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
             guid_columns = cleaned_guid_columns
-            print("Re trying DCR creration after removing GUID columns")
+            print("Re trying DCR creation after removing GUID columns")
             schema = get_schema_for_builtin(table_name)
             request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
             response_body=hit_api(url_to_call,request_body,method_to_use)
