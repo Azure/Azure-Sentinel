@@ -27,7 +27,7 @@ This playbook will take input of group id and members from user via MS teams and
    * BaseURL: Enter the base URL of your Vectra account.
    * TeamsGroupId: Enter Id of the Teams Group where the adaptive card will be posted.
    * TeamsChannelId: Enter Id of the Teams Channel where the adaptive card will be posted.
-   * GenerateAccessTokenPlaybookName: Playbook name which is deployed as part of prerequisites.
+   * GenerateAccessCredPlaybookName: Playbook name which is deployed as part of prerequisites.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraStaticAssignMembersToGroup%2Fazuredeploy.json) [![Deploy to Azure](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FVectraXDR%2FPlaybooks%2FVectraStaticAssignMembersToGroup%2Fazuredeploy.json)
 

@@ -83,7 +83,7 @@ class BitSightFindingsSummary(BitSight):
         """
         count_companies = 0
         fetching_index = self.get_last_data_index(
-            company_names, self.checkpoint_obj, self.findings_summary_company_state
+            company_names, self.checkpoint_obj, self.findings_summary_company_state, table_name=consts.FINDINGS_SUMMARY_TABLE_NAME
         )
         for company_index in range(fetching_index + 1, len(logs_data)):
             company_name = logs_data[company_index].get("name_s")
@@ -103,6 +103,7 @@ class BitSightFindingsSummary(BitSight):
                 self.findings_summary_company_state,
                 company_name,
                 "findings_summary",
+                "{}_{}".format(consts.FINDINGS_SUMMARY_TABLE_NAME, "Company_Checkpoint"),
                 company_name_flag=True,
             )
         applogger.info(
@@ -232,7 +233,7 @@ class BitSightFindingsSummary(BitSight):
             company_guid (str): GUID of the company.
         """
         last_data = self.checkpoint_obj.get_last_data(
-            self.findings_summary_details_state
+            self.findings_summary_details_state, table_name=consts.FINDINGS_SUMMARY_TABLE_NAME
         )
         last_checkpoint_company = self.checkpoint_obj.get_endpoint_last_data(
             last_data, "findings_summary", company_guid
@@ -276,6 +277,7 @@ class BitSightFindingsSummary(BitSight):
             self.findings_summary_details_state,
             last_data,
             "findings_summary",
+            "{}_{}".format(consts.FINDINGS_SUMMARY_TABLE_NAME, "Checkpoint"),
             checkpoint_key,
             last_checkpoint_company,
         )
