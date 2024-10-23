@@ -1,0 +1,116 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "<<update>>",
+            "type": "String"
+        },
+        "functionAppExternalId": {
+            "defaultValue": "<<update>>",
+            "type": "String"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "<<update>>",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_HTTP_request_is_received": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "protocol": {
+                                            "type": "integer"
+                                        },
+                                        "port": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "PortBlockingFunction-runTrafficQuery": {
+                            "runAfter": {},
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@triggerBody()",
+                                "function": {
+                                    "id": "[concat(parameters('functionAppExternalId'), '/functions/runTrafficQuery')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": {
+                            "runAfter": {
+                                "PortBlockingFunction-runTrafficQuery": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-runTrafficQuery')",
+                                "function": {
+                                    "id": "[concat(parameters('functionAppExternalId'), '/functions/fetchVisibilityOnlyWorkloadsFromTrafficResults')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-createAndProvisionDenyRule": {
+                            "runAfter": {
+                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
+                                "function": {
+                                    "id": "[concat(parameters('functionAppExternalId'), '/functions/createAndProvisionDenyRule')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-changeWorkloadEnforcementState": {
+                            "runAfter": {
+                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
+                                "function": {
+                                    "id": "[concat(parameters('functionAppExternalId'), '/functions/changeWorkloadEnforcementState')]"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {}
+                    }
+                }
+            }
+        }
+    ]
+}
