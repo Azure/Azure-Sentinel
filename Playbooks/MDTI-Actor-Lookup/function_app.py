@@ -75,6 +75,7 @@ def list_grab(item):
             logging.info(f"Fetched {len(artifact_ids)} artifacts, total so far: {len(artifact_list)}")
         else:
             logging.warning(f"'value' key not found in response: {data}")
+            continue
         
         # Check for the presence of @odata.nextLink
         services = data.get('@odata.nextLink', None)
