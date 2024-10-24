@@ -4,8 +4,8 @@ import time
 import typing as t
 from datetime import datetime, timezone
 
-from integration.app.models import Config, EnvVariables, TokenStorage
-from integration.app.utils import (
+from integration.models import Config, EnvVariables, TokenStorage
+from integration.utils import (
     LastDetectionTimeHandler,
     RequestSender,
     TokenProvider,

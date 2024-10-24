@@ -23,6 +23,7 @@ class MissingCredentialsException(Exception):
 
 class InvalidCredentialsException(AuthenticationException):
     def __init__(self, e: AuthenticationException) -> None:
+        super().__init__(e.status, e.message)
         self.s = f"{e.status, e.message}. Failed to get token in init setup. Check your credentials."
         logging.error(self.s)
 
@@ -32,18 +33,9 @@ class InvalidCredentialsException(AuthenticationException):
 
 class TokenRefreshException(AuthenticationException):
     def __init__(self, e: AuthenticationException) -> None:
+        super().__init__(e.status, e.message)
         self.s = f"{e.status, e.message}. Failed to update access token. Refresh token may be invalid or expired."
         logging.error(self.s)
 
     def __str__(self) -> str:
         return self.s
-
-
-# class ServiceClientResponseError(ClientResponseError):
-#     def __init__(self, status, message,request_info, history):
-#         self.s = "ServiceClientResponseError happend"
-#         logging.error(self.s)
-#         super().__init__(status=status, message=message,request_info=request_info, history=history)
-#
-#     def __str__(self):
-#         return f"{self.s}"

@@ -58,11 +58,11 @@ class Config:
     def get_config_params(self) -> dict[str, t.Any] | t.Any:
         try:
             return yaml.safe_load(
-                resources.files(__package__ or "integration").joinpath("config", "config.yml").read_bytes()
+                resources.files(__package__ or "integration").parent.joinpath("config.yml").read_bytes()
             )
         except FileNotFoundError as e:
             logging.error(e)
-            raise FileNotFoundError("The config file is not found. Furhter processing is impossible.")
+            raise FileNotFoundError("The config file is not found. Further processing is impossible.")
 
 
 class EnvVariables:

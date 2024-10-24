@@ -11,14 +11,14 @@ from azure.data.tables import TableServiceClient
 from azure.identity.aio import DefaultAzureCredential
 from azure.monitor.ingestion.aio import LogsIngestionClient
 from cryptography.fernet import Fernet, InvalidToken
-from integration.app.exceptions import (
+from integration.exceptions import (
     AuthenticationException,
     InvalidCredentialsException,
     MissingCredentialsException,
     TokenRefreshException,
 )
-from integration.app.models import Config, EnvVariables, TokenStorage
-from integration.app.models_detections import Detection, Detections
+from integration.models import Config, EnvVariables, TokenStorage
+from integration.models_detections import Detection, Detections
 from pydantic import ValidationError
 
 

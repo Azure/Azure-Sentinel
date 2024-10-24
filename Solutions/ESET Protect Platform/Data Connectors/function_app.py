@@ -15,7 +15,7 @@ def timer_trigger(myTimer: func.TimerRequest) -> None:
 
     logging.info("MAIN execution")
     try:
-        from integration.app.main import main
+        from integration.main import main
 
         main()
     except Exception as e:
