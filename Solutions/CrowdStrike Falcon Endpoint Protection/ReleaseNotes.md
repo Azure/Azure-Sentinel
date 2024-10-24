@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                             |
 |-------------|--------------------------------|--------------------------------------------------------------------------------|
+| 3.0.9       | 20-09-2024                     | Updated the python runtime version to 3.11                                     |
 | 3.0.8 	  | 10-07-2024 					   | Deprecated **Data Connector** 										|
 | 3.0.7       | 20-06-2024                     | Shortlinks updated for **Data Connector** CrowdStrike Falcon Indicators of Compromise                   |
 | 3.0.6       | 06-06-2024                     | Renamed **Data Connector** *CrowdStrike Falcon Indicators of Compromise* to *CrowdStrike Falcon Adversary Intelligence* |
