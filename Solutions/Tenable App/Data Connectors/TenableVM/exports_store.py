@@ -17,38 +17,38 @@ class ExportsTableStore:
             try:
                 table_client.create_table()
             except ResourceExistsError:
-                logging.warn("Table already exists")
+                logging.warning("Table already exists")
 
     def post(self, pk: str, rk: str, data: dict = None):
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
             entity_template = {
-                'PartitionKey': pk,
-                'RowKey': rk,
+                "PartitionKey": pk,
+                "RowKey": rk,
             }
             if data is not None:
                 entity_template.update(data)
             try:
                 table_client.create_entity(entity_template)
             except Exception as e:
-                logging.warn('could not post entity to table')
-                logging.warn(e)
+                logging.warning("could not post entity to table")
+                logging.warning(e)
                 raise e
 
     def get(self, pk: str, rk: str):
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
             try:
                 logging.info(
-                    f'looking for {pk} - {rk} on table {self.table_name}')
+                    f"looking for {pk} - {rk} on table {self.table_name}")
                 return table_client.get_entity(pk, rk)
             except ResourceNotFoundError:
                 return None
 
     def upsert(self, pk: str, rk: str, data: dict = None):
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
-            logging.info(f'upserting {pk} - {rk} on table {self.table_name}')
+            logging.info(f"upserting {pk} - {rk} on table {self.table_name}")
             entity_template = {
-                'PartitionKey': pk,
-                'RowKey': rk,
+                "PartitionKey": pk,
+                "RowKey": rk,
             }
             if data is not None:
                 entity_template.update(data)
@@ -72,8 +72,8 @@ class ExportsTableStore:
     def query_for_finished_chunks_by_partition_key(self, pk):
         table_client = TableClient.from_connection_string(
             self.connection_string, self.table_name)
-        parameters = {'key': pk, 'status': TenableStatus.finished.value}
-        name_filter = 'PartitionKey eq @key and jobStatus eq @status'
+        parameters = {"key": pk, "status": TenableStatus.finished.value}
+        name_filter = "PartitionKey eq @key and jobStatus eq @status"
         try:
             return table_client.query_entities(name_filter, parameters=parameters)
         except HttpResponseError as e:
@@ -83,8 +83,8 @@ class ExportsTableStore:
     def query_for_all_finished_chunks(self):
         table_client = TableClient.from_connection_string(
             self.connection_string, self.table_name)
-        parameters = {'status': TenableStatus.finished.value}
-        name_filter = 'jobStatus eq @status'
+        parameters = {"status": TenableStatus.finished.value}
+        name_filter = "jobStatus eq @status"
         try:
             return table_client.query_entities(name_filter, parameters=parameters)
         except HttpResponseError as e:
@@ -94,8 +94,8 @@ class ExportsTableStore:
     def query_for_failed_chunks_by_partition_key(self, pk):
         table_client = TableClient.from_connection_string(
             self.connection_string, self.table_name)
-        parameters = {'key': pk, 'status': TenableStatus.failed.value}
-        name_filter = 'PartitionKey eq @key and jobStatus eq @status'
+        parameters = {"key": pk, "status": TenableStatus.failed.value}
+        name_filter = "PartitionKey eq @key and jobStatus eq @status"
         try:
             return table_client.query_entities(name_filter, parameters=parameters)
         except HttpResponseError as e:
@@ -105,8 +105,8 @@ class ExportsTableStore:
     def query_for_all_failed_chunks(self):
         table_client = TableClient.from_connection_string(
             self.connection_string, self.table_name)
-        parameters = {'status': TenableStatus.failed.value}
-        name_filter = 'jobStatus eq @status'
+        parameters = {"status": TenableStatus.failed.value}
+        name_filter = "jobStatus eq @status"
         try:
             return table_client.query_entities(name_filter, parameters=parameters)
         except HttpResponseError as e:
@@ -117,12 +117,12 @@ class ExportsTableStore:
         table_client = TableClient.from_connection_string(
             self.connection_string, self.table_name)
         parameters = {
-            'failedStatus': TenableStatus.failed.value,
-            'processingStatus': TenableStatus.processing.value,
-            'sentStatus': TenableStatus.sent_to_queue.value,
-            'sendingStatus': TenableStatus.sending_to_queue.value
+            "failedStatus": TenableStatus.failed.value,
+            "processingStatus": TenableStatus.processing.value,
+            "sentStatus": TenableStatus.sent_to_queue.value,
+            "sendingStatus": TenableStatus.sending_to_queue.value
         }
-        name_filter = 'jobStatus eq @failedStatus or jobStatus eq @processingStatus or jobStatus eq @sentStatus or jobStatus eq @sendingStatus'
+        name_filter = "jobStatus eq @failedStatus or jobStatus eq @processingStatus or jobStatus eq @sentStatus or jobStatus eq @sendingStatus"
         try:
             return table_client.query_entities(name_filter, parameters=parameters)
         except HttpResponseError as e:
@@ -140,10 +140,10 @@ class ExportsTableStore:
 
     def merge(self, pk: str, rk: str, data: dict = None):
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
-            logging.info(f'upserting {pk} - {rk} on table {self.table_name}')
+            logging.info(f"upserting {pk} - {rk} on table {self.table_name}")
             entity_template = {
-                'PartitionKey': pk,
-                'RowKey': rk,
+                "PartitionKey": pk,
+                "RowKey": rk,
             }
             if data is not None:
                 entity_template.update(data)
@@ -154,3 +154,6 @@ class ExportsTableNames(Enum):
     TenableExportStatsTable = "TenableExportStatsTable"
     TenableAssetExportTable = "TenableAssetExportTable"
     TenableVulnExportTable = "TenableVulnExportTable"
+    TenableComplianceExportTable = "TenableComplianceExportTable"
+    TenableExportCheckpointTable = "TenableExportCheckpointTable"
+
