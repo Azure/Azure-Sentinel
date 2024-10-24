@@ -18,8 +18,8 @@ Ingest all the SecurityHub findings returned by SecurityHub API, ingests only fr
 
 2. Fill in the required fields:
 ```
-WorkspaceId = Id of the Log Analytics-workspace you want to send logs to.
-WorkspaceKey = The access key of the Log Analytics-workspace you want to send logs to.
+WorkspaceId = guid Id of the Log Analytics-workspace you want to send logs to.
+WorkspaceKey = The secret access key of the Log Analytics-workspace you want to send logs to.
 AWSRegion = AWS Region your AWS Account is set to.
 AWSRoleArn = RoleArn is a combination of AWSAccountNumber and RoleName ("arn:aws:iam::<AWSAccountNumber>:role/SecurityHubIntegrationRole").
 AWSRoleSessionName = Name of the session variable. //Leave default
@@ -28,6 +28,10 @@ AWSRoleSessionName = Name of the session variable. //Leave default
 4. Go to Azure AD, Enterprise Applications and find the Managed Identity. 
    * Note the ApplicationId (ClientId).
 6. Under Settings, go to Configuration and paste the ApplicationId (ClientId) into the ClientID parameter.
+
+> [!IMPORTANT]
+> If managed identity is not able to obtain the token using `ClientId` scope - `invalid_resource` error. Register a new app in Entra and [grant managed identity permissions](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-assign-app-role-managed-identity-powershell) to use it, following [Option 2 from this external blog](https://blog.identitydigest.com/azuread-access-aws/).
+> When app registration is used `ClientId` value should match the exposed API name e.g. `api://00000000-0000-0000-0000-000000000000`.
 
 ### AWS
 
@@ -123,3 +127,7 @@ c. Click on "Add Access Policy"
 	iv. Add
 d. Click "Save"
 ```
+
+## Issues with Identity
+
+If Azure Function is not able to get a token for it's own client id, which may result in error: `invalid_resource` - use [Option 2 from this external blog](https://blog.identitydigest.com/azuread-access-aws/).
