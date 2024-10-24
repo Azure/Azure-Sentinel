@@ -1,0 +1,249 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Illumio Port Blocking Switch",
+            "type": "String",
+            "metadata": {
+                "description": "PlayBook Name"
+            }
+        },
+        "FunctionAppName": {
+            "defaultValue": "Illumio Port Blocking Function App",
+            "type": "String",
+            "metadata": {
+                "description": "Function app Name"
+            }
+        },
+        "PCE_FQDN": {
+            "type": "String",
+            "metadata": {
+                "description": "FQDN of PCE"
+            }
+        },
+        "PORT": {            
+            "type": "String",
+            "metadata": {
+                "description": "Port that PCE connects to, like 443"
+            }
+        },
+        "ORG_ID": {
+            "type": "String",
+            "metadata": {
+                "description": "Customer's org id"
+            }
+        },
+        "API_KEY": {
+            "type": "String",
+            "metadata": {
+                "description": "API key"
+            }
+        },
+        "API_SECRET": {
+            "type": "String",
+            "metadata": {
+                "description": "API secret"
+            }
+        }                                       
+    },
+    "variables": {
+        "functionWorkerRuntime": "dotnet",
+        "location": "[resourceGroup().location]",
+        "hostingPlanName": "[parameters('FunctionAppName')]",
+        "appInsightsLocation": "[resourceGroup().location]",
+        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
+        "functionAppName": "[parameters('FunctionAppName')]",
+        "StorageAccount": "Standard_LRS",
+        "applicationInsightsName": "[parameters('FunctionAppName')]",
+        "pceFQDN": "[parameters('PCE_FQDN')]",
+        "port": "[parameters('PORT')]",
+        "orgId": "[parameters('ORG_ID')]",
+        "apiKey": "[parameters('API_KEY')]",
+        "apiSecret": "[parameters('API_SECRET')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2020-06-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "computeMode": "Dynamic"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites",
+            "apiVersion": "2020-06-01",
+            "name": "[variables('functionAppName')]",
+            "location": "[variables('location')]",
+            "kind": "functionapp",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                "appSettings": [
+                    {
+                        "name": "AzureWebJobsStorage",
+                        "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+                    },
+                    {
+                        "name": "FUNCTIONS_EXTENSION_VERSION",
+                        "value": "~4"
+                    },
+                    {
+                        "name": "FUNCTIONS_WORKER_RUNTIME",
+                        "value": "node"
+                    },
+                    {
+                        "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                        "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
+                    },
+                    {
+                        "name": "FUNCTIONS_WORKER_RUNTIME",
+                        "value": "[variables('functionWorkerRuntime')]"
+                    },
+                    {
+                        "name": "PCE_FQDN",
+                        "value": "[variables('pceFQDN')]"
+                    },
+                    {
+                        "name": "PORT",
+                        "value": "[variables('port')]"
+                    },
+                    {
+                        "name": "ORG_ID",
+                        "value": "[variables('orgId')]"
+                    },
+                    {
+                        "name": "API_KEY",
+                        "value": "[variables('apiKey')]"
+                    },
+                    {
+                        "name": "API_SECRET",
+                        "value": "[variables('apiSecret')]"
+                    }
+                ]
+                },
+                "cors": {
+                "allowedOrigins": [
+                    "https://functions.azure.com",
+                    "https://functions-staging.azure.com",
+                    "https://functions-next.azure.com"
+                ],
+                "supportCredentials": false
+                }
+            }
+        },        
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "<<update>>",
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_HTTP_request_is_received": {
+                            "type": "Request",
+                            "kind": "Http",
+                            "inputs": {
+                                "method": "POST",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "protocol": {
+                                            "type": "integer"
+                                        },
+                                        "port": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "PortBlockingFunction-runTrafficQuery": {
+                            "runAfter": {},
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@triggerBody()",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/runTrafficQuery')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": {
+                            "runAfter": {
+                                "PortBlockingFunction-runTrafficQuery": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-runTrafficQuery')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/fetchVisibilityOnlyWorkloadsFromTrafficResults')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-createAndProvisionDenyRule": {
+                            "runAfter": {
+                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createAndProvisionDenyRule')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-changeWorkloadEnforcementState": {
+                            "runAfter": {
+                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/changeWorkloadEnforcementState')]"
+                                }
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {}
+                    }
+                }
+            }
+        }
+    ]
+}
