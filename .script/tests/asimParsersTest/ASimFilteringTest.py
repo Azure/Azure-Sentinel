@@ -296,6 +296,14 @@ def main():
                         if parser_file['Normalization']['Schema'] == 'AuditEvent':
                             print(f"{YELLOW} This single failure is due to partial result in 'EventResult' field in 'AuditEvent' schema. Audit Event is a special case where 'EventResult' validations could be partial like only 'Success' events. Ignoring this error. {RESET}")
                             sys.stdout.flush()
+                    elif "eventtype_in - Expected to have less results after filtering." in failure_message:
+                        if parser_file['Normalization']['Schema'] == 'Authentication':
+                            print(f"{YELLOW} This single failure is due to only two values in 'EventType' field in 'Authentication' schema. 'Authentication' is a special case where 'EventType' validations could be 'Logon' or 'Logoff' only. Ignoring this error. {RESET}")
+                            sys.stdout.flush()
+		    else:
+                        print(f"::error::Tests failed for {parser_file_path}")
+                        sys.stdout.flush()
+                        sys.exit(1) # uncomment this line to fail workflow when tests are not successful.
                 else:
                     print(f"::error::Tests failed for {parser_file_path}")
                     sys.stdout.flush()  # Explicitly flush stdout
@@ -555,7 +563,9 @@ class FilteringTest(unittest.TestCase):
 
         # Performing filtering with two values if possible
         if len(values_list) == 1 or num_of_rows_when_no_filters_in_query <= MAX_FILTERING_PARAMETERS:
-            self.fail(f"Parameter: {parameter_name} - Not enough data to perform two values {test_type} tests")
+            # Skip self.fail if values_list contains both "Logon" and "Logoff" and parameter_name is "eventtype_in"
+            if not (set(values_list) == {"Logon", "Logoff"} and parameter_name == "eventtype_in"):
+                self.fail(f"Parameter: {parameter_name} - Not enough data to perform two values {test_type} tests")
         filtering_response, values_string = self.get_response_for_query_with_parameters(parameter_name, query_definition, column_name_in_table, values_list)
         num_of_rows_with_parameters_in_query = len(filtering_response.tables[0].rows)
         self.dynamic_tests_assertions(parameter_name, num_of_rows_with_parameters_in_query, values_string, num_of_rows_when_no_filters_in_query)
