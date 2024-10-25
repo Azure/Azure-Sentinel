@@ -300,6 +300,10 @@ def main():
                         if parser_file['Normalization']['Schema'] == 'Authentication':
                             print(f"{YELLOW} This single failure is due to only two values in 'EventType' field in 'Authentication' schema. 'Authentication' is a special case where 'EventType' validations could be 'Logon' or 'Logoff' only. Ignoring this error. {RESET}")
                             sys.stdout.flush()
+		    else:
+                        print(f"::error::Tests failed for {parser_file_path}")
+                        sys.stdout.flush()
+                        sys.exit(1) # uncomment this line to fail workflow when tests are not successful.
                 else:
                     print(f"::error::Tests failed for {parser_file_path}")
                     sys.stdout.flush()  # Explicitly flush stdout
