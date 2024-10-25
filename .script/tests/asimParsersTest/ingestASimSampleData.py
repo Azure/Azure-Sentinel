@@ -399,6 +399,7 @@ for file in parser_yaml_files:
         #create dcr for ingestion
         guid_columns = []
         schema = get_schema_for_builtin(table_name)
+        data_result = convert_data_type(schema, data_result)
         request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
         response_body=hit_api(url_to_call,request_body,method_to_use)
         print(f"Response of DCR creation: {response_body.text}")
