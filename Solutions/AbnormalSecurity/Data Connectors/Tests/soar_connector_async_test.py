@@ -1,5 +1,5 @@
 import unittest
-from ..SentinelFunctionsOrchestrator.soar_connector_async import AbnormalSoarConnectorAsync
+from SentinelFunctionsOrchestrator.soar_connector_async import AbnormalSoarConnectorAsync
 from copy import deepcopy
 
 DUMMY_API_KEY = "DUMMY_API_KEY"
