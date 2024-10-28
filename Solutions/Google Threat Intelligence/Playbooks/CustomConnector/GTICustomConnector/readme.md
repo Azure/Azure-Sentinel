@@ -27,10 +27,7 @@ Microsoft Power Platform environment: Access to Power Automate or Power Apps to 
 API documentation
 For detailed information on the GTI API, please refer to the official documentation: https://developers.virustotal.com/v3.0/reference
 
-Deployment instructions
-To deploy this connector as a custom connector in Microsoft Power Automate and Power Apps, follow these instructions: https://docs.microsoft.com/en-us/connectors/custom-connectors/paconn-cli   
-
-## Deplyment
+## Deployment
 
 <a href="https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGoogle%2520Threat%2520Intelligence%2FPlaybooks%2FCustomConnectors%2FGTICustomConnector%2Fazuredeploy.json" target="_blank">![Deploy to Azure](https://aka.ms/deploytoazurebutton)</a>
 <a href="https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FSolutions%2FGoogle%2520Threat%2520Intelligence%2FPlaybooks%2FCustomConnectors%2FGTICustomConnector%2Fazuredeploy.json" target="_blank">![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)</a>
