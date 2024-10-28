@@ -115,7 +115,7 @@ function testParser([Parser] $parser) {
     
     Write-Host "***************************************************"
     Write-Host "${yellow}Running 'Data' tests for '$($parser.Name)' parser${reset}"
-    # Test with only last 30 minutes of data
+    # Test with only last 30 minutes of data.
     $dataTest = "$parserAsletStatement`r`n$letStatementName | where TimeGenerated >= ago(30min) | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
