@@ -1,5 +1,5 @@
 {
-    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "http://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
         "FunctionName": {
@@ -8,7 +8,7 @@
             "maxLength": 11,
             "type": "string"
         },
-        "Anomalies_table_name":{
+        "Anomalies_table_name": {
             "type": "string",
             "defaultValue": "Rubrik_Anomaly_Data_CL"
         },
@@ -16,7 +16,7 @@
             "type": "string",
             "defaultValue": "Rubrik_Ransomware_Data_CL"
         },
-        "ThreatHunts_table_name":{
+        "ThreatHunts_table_name": {
             "type": "string",
             "defaultValue": "Rubrik_ThreatHunt_Data_CL"
         },
@@ -37,10 +37,10 @@
         "LogLevel": {
             "type": "string",
             "allowedValues": [
-            "Debug",
-            "Info",
-            "Error",
-            "Warning"
+                "Debug",
+                "Info",
+                "Error",
+                "Warning"
             ],
             "defaultValue": "Info",
             "metadata": {
@@ -56,8 +56,10 @@
     },
     "variables": {
         "FunctionName": "[concat(toLower(parameters('FunctionName')), uniqueString(resourceGroup().id))]",
-         "StorageSuffix": "[environment().suffixes.storage]",
-         "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]"
+        "StorageSuffix": "[environment().suffixes.storage]",
+        "LogAnaltyicsUri": "[replace(environment().portal, 'https://portal', concat('https://', toLower(parameters('WorkspaceID')), '.ods.opinsights'))]",
+        "policyDefinitionId1": "92a89a79-6c52-4a7e-a03f-61306fc49312",
+        "policyDefinitionId2": "4fa4b6c0-31ca-4c0d-b10d-24b96f62a751"
     },
     "resources": [
         {
@@ -90,6 +92,8 @@
                     "defaultAction": "Allow"
                 },
                 "supportsHttpsTrafficOnly": true,
+                "allowBlobPublicAccess": false,
+                "allowCrossTenantReplication": false,
                 "encryption": {
                     "services": {
                         "file": {
@@ -102,6 +106,46 @@
                         }
                     },
                     "keySource": "Microsoft.Storage"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/policyAssignments",
+            "apiVersion": "2023-04-01",
+            "name": "Prevent cross tenant object replication storage accounts",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+            ],
+            "scope": "[concat('Microsoft.Storage/storageAccounts', '/', tolower(variables('FunctionName')))]",
+            "properties": {
+                "policyDefinitionId": "[concat('/providers/Microsoft.Authorization/policyDefinitions/', variables('policyDefinitionId1'))]",
+                "description": "Storage accounts should prevent cross tenant object replication",
+                "displayName": "Storage accounts should prevent cross tenant object replication",
+                "enforcementMode": "Default",
+                "parameters": {
+                    "effect": {
+                        "value": "Deny"
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Authorization/policyAssignments",
+            "apiVersion": "2023-04-01",
+            "name": "Prevent anonymous public read access to Azure Storage account",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', tolower(variables('FunctionName')))]"
+            ],
+            "scope": "[concat('Microsoft.Storage/storageAccounts', '/', tolower(variables('FunctionName')))]",
+            "properties": {
+                "policyDefinitionId": "[concat('/providers/Microsoft.Authorization/policyDefinitions/', variables('policyDefinitionId2'))]",
+                "description": "Prevent anonymous public read access to containers and blobs in Azure Storage accounts",
+                "displayName": "Prevent anonymous public read access to containers and blobs in Azure Storage accounts",
+                "enforcementMode": "Default",
+                "parameters": {
+                    "effect": {
+                        "value": "Deny"
+                    }
                 }
             }
         },
