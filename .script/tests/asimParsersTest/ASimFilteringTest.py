@@ -423,7 +423,7 @@ class FilteringTest(unittest.TestCase):
     def datetime_test(self, param, query_definition, column_name_in_table):
         param_name = param['Name']
         # Get count of rows without filtering
-        no_filter_query = query_definition + f"query()\n"
+        no_filter_query = query_definition + f"query() | project TimeGenerated \n"
         no_filter_response = self.send_query(no_filter_query)
         num_of_rows_when_no_filters_in_query = len(no_filter_response.tables[0].rows)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
