@@ -2,28 +2,6 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-    "dcrName": {
-      "type": "string",
-      "defaultValue": "DCR-Option7-HTTPProxyLogs",
-      "minLength": 1,
-      "metadata": {
-        "description": "Name of the data collection rule"
-      }
-    },
-    "location": {
-      "type": "string",
-      "defaultValue": "[resourceGroup().location]",
-      "metadata": {
-        "description": "Location for data collection rule"
-      }
-    },
-    "ExchangeInstallationPath": {
-      "type": "string",
-      "defaultValue": "C:\\Program Files\\Microsoft\\Exchange Server\\V15",
-      "metadata": {
-        "description": "Installation path of Exchange Servers if not the default one."
-      }
-    },
     "workspacename": {
       "type": "string",
       "minLength": 1,
@@ -31,27 +9,24 @@
         "description": "The log analitycs workspace name"
       }
     },
-    "dataCollectionEndpointName": {
+     "customtablename": {
       "type": "string",
+      "defaultValue": "ExchangeHttpProxy_CL",
       "minLength": 1,
       "metadata": {
-        "description": "The Data collection Endpoint name of Exchange Servers like 'ESI-ExchangeServers'"
+        "description": "The name of the Custom Table to create. By default uses 'ExchangeHttpProxy_CL', but you can change it to any other name but do it carefully and with full knowledge of the facts  ."
       }
     }
-    },
-    "variables": {
-        "dataCollectionEndpointId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.operationalinsights/dataCollectionEndpoints/',parameters('dataCollectionEndpointName'))]",
-        "workspaceResourceId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/Microsoft.operationalinsights/workspaces/',parameters('workspacename'))]"
     },
     "resources": [
         {
             "type": "Microsoft.OperationalInsights/workspaces/tables",
             "apiVersion": "2021-12-01-preview",
-            "name": "[concat(parameters('workspacename'), '/ExchangeHttpProxy_CL')]",
+            "name": "[concat(parameters('workspacename'), '/', parameters('customtablename'))]",
             "properties": {
                 "plan": "Analytics",
                 "schema": {
-                    "name": "ExchangeHttpProxy_CL",
+                    "name": "[parameters('customtablename')]",
                     "columns": [
                         {
                             "name": "AccountForestLatencyBreakup",
@@ -355,85 +330,6 @@
                         }
                     ]
                 }
-            }
-        },
-        {
-            "type": "Microsoft.Insights/dataCollectionRules",
-            "apiVersion": "2021-09-01-preview",
-            "name": "[parameters('dcrName')]",
-            "location": "[parameters('location')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces/tables',parameters('workspacename'), 'ExchangeHttpProxy_CL')]"
-            ],
-            "kind": "Windows",
-            "properties": {
-                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
-                "streamDeclarations": {
-                    "Custom-ExchangeHttpProxy_CL": {
-                        "columns": [
-                            {
-                                "name": "TimeGenerated",
-                                "type": "datetime"
-                            },
-                            {
-                                "name": "RawData",
-                                "type": "string"
-                            },
-                            {
-                                "name": "FilePath",
-                                "type": "string"
-                            }
-                        ]
-                    }
-                },
-                "dataSources": {
-                    "logFiles": [
-                        {
-                            "streams": [
-                                "Custom-ExchangeHttpProxy_CL"
-                            ],
-                            "filePatterns": [
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\Autodiscover\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\Eas\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\Ecp\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\Ews\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\Mapi\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\Oab\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\Owa\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\OwaCalendar\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\PowerShell\\*.log')]",
-                                "[concat(parameters('ExchangeInstallationPath'),'\\Logging\\HttpProxy\\RpcHttp\\*.log')]"
-                            ],
-                            "format": "text",
-                            "settings": {
-                                "text": {
-                                    "recordStartTimestampFormat": "ISO 8601"
-                                }
-                            },
-                            "name": "ExchangeHttpProxy_CL"
-                        }
-                    ]
-                },
-                "destinations": {
-                    "logAnalytics": [
-                        {
-                            "workspaceResourceId": "[variables('workspaceResourceId')]",
-                            "name": "la-data-destination"
-                        }
-                    ]
-                },
-                "dataFlows": [
-                    {
-                        "streams": [
-                            "Custom-ExchangeHttpProxy_CL"
-                        ],
-                        "destinations": [
-                            "la-data-destination"
-                        ],
-                        "transformKql": "source | extend d = split(RawData,',') | extend DateTime=todatetime(d[0]),RequestId=tostring(d[1]) ,MajorVersion=tostring(d[2]) ,MinorVersion=tostring(d[3]) ,BuildVersion=tostring(d[4]) ,RevisionVersion=tostring(d[5]) ,ClientRequestId=tostring(d[6]) ,Protocol=tostring(d[7]) ,UrlHost=tostring(d[8]) ,UrlStem=tostring(d[9]) ,ProtocolAction=tostring(d[10]) ,AuthenticationType=tostring(d[11]) ,IsAuthenticated=tostring(d[12]) ,AuthenticatedUser=tostring(d[13]) ,Organization=tostring(d[14]) ,AnchorMailbox=tostring(d[15]) ,UserAgent=tostring(d[16]) ,ClientIpAddress=tostring(d[17]) ,ServerHostName=tostring(d[18]) ,HttpStatus=tostring(d[19]) ,BackEndStatus=tostring(d[20]) ,ErrorCode=tostring(d[21]) ,Method=tostring(d[22]) ,ProxyAction=tostring(d[23]) ,TargetServer=tostring(d[24]) ,TargetServerVersion=tostring(d[25]) ,RoutingType=tostring(d[26]) ,RoutingHint=tostring(d[27]) ,BackEndCookie=tostring(d[28]) ,ServerLocatorHost=tostring(d[29]) ,ServerLocatorLatency=tostring(d[30]) ,RequestBytes=tostring(d[31]) ,ResponseBytes=tostring(d[32]) ,TargetOutstandingRequests=tostring(d[33]) ,AuthModulePerfContext=tostring(d[34]) ,HttpPipelineLatency=tostring(d[35]) ,CalculateTargetBackEndLatency=tostring(d[36]) ,GlsLatencyBreakup=tostring(d[37]) ,TotalGlsLatency=tostring(d[38]) ,AccountForestLatencyBreakup=tostring(d[39]) ,TotalAccountForestLatency=tostring(d[40]) ,ResourceForestLatencyBreakup=tostring(d[41]) ,TotalResourceForestLatency=tostring(d[42]) ,ADLatency=tostring(d[43]) ,SharedCacheLatencyBreakup=tostring(d[44]) ,TotalSharedCacheLatency=tostring(d[45]) ,ActivityContextLifeTime=tostring(d[46]) ,ModuleToHandlerSwitchingLatency=tostring(d[47]) ,ClientReqStreamLatency=tostring(d[48]) ,BackendReqInitLatency=tostring(d[49]) ,BackendReqStreamLatency=tostring(d[50]) ,BackendProcessingLatency=tostring(d[51]) ,BackendRespInitLatency=tostring(d[52]) ,BackendRespStreamLatency=tostring(d[53]) ,ClientRespStreamLatency=tostring(d[54]) ,KerberosAuthHeaderLatency=tostring(d[55]) ,HandlerCompletionLatency=tostring(d[56]) ,RequestHandlerLatency=tostring(d[57]) ,HandlerToModuleSwitchingLatency=tostring(d[58]) ,ProxyTime=tostring(d[59]) ,CoreLatency=tostring(d[60]) ,RoutingLatency=tostring(d[61]) ,HttpProxyOverhead=tostring(d[62]) ,TotalRequestTime=tostring(d[63]) ,RouteRefresherLatency=tostring(d[64]) ,UrlQuery=tostring(d[65]) ,BackEndGenericInfo=tostring(d[66]) ,GenericInfo=tostring(d[67]) ,GenericErrors=tostring(d[68]) ,EdgeTraceId=tostring(d[69]) ,DatabaseGuid=tostring(d[70]) ,UserADObjectGuid=tostring(d[71]) ,PartitionEndpointLookupLatency=tostring(d[72]) ,RoutingStatus=tostring(d[73]) | extend TimeGenerated = DateTime  | project-away d,RawData,DateTime | project-away d,RawData,DateTime",
-                        "outputStream": "Custom-ExchangeHttpProxy_CL"
-                    }
-                ]
             }
         }
     ]
