@@ -354,6 +354,7 @@ class BitSightStatistics(BitSight):
             next_link = response.get("links").get("next")
             alerts_data = []
             c_data = {}
+            query_parameter["offset"] = 0
             while next_link:
                 query_parameter["offset"] += query_parameter.get("limit")
                 c_data["next1"] = self.get_bitsight_data(url, query_parameter)
