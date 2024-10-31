@@ -3,16 +3,21 @@ package main
 // go get github.com/Azure/azure-sdk-for-go/sdk/storage/azblob
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"encoding/json"
-	"time"
-	"fmt"
-	"context"
-	"bytes"
 	"strings"
+	"time"
 
+	"function/pkg/bloodhound"
+	"function/pkg/connector"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/monitor/ingestion/azlogs"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 )
 
@@ -41,41 +46,41 @@ type Timestamp struct {
 // this stores the current run timestamp in an Azure storage blob
 func SetTimeStamp(lastRun, azureWebJobsStorage, storageAccountContainer string) (string, error) {
 	if lastRun == "" {
-			lastRun = time.Now().UTC().Format(time.RFC3339Nano)
+		lastRun = time.Now().UTC().Format(time.RFC3339Nano)
 	}
 
 	timestamp := Timestamp{LastRun: lastRun}
 	data, err := json.Marshal(timestamp)
 	if err != nil {
-			return "", fmt.Errorf("failed to marshal timestamp: %v", err)
+		return "", fmt.Errorf("failed to marshal timestamp: %v", err)
 	}
 
 	serviceClient, err := azblob.NewClientFromConnectionString(azureWebJobsStorage, nil)
 	if err != nil {
-			return "", fmt.Errorf("failed to create service client: %v", err)
+		return "", fmt.Errorf("failed to create service client: %v", err)
 	}
 
 	_, err = serviceClient.UploadBuffer(context.TODO(), storageAccountContainer, blobName, data, &azblob.UploadBufferOptions{})
 
 	if err != nil {
-			return "", fmt.Errorf("failed to upload blob: %v", err)
+		return "", fmt.Errorf("failed to upload blob: %v", err)
 	}
 
 	return lastRun, nil
 }
 
-// gets the current run timestamp in an Azure storage blob, 
+// gets the current run timestamp in an Azure storage blob,
 // otherwise if no blob found will create a new one for the current time
 func GetTimeStamp(azureWebJobsStorage, storageAccountContainer string) (string, error) {
 	serviceClient, err := azblob.NewClientFromConnectionString(azureWebJobsStorage, nil)
 	if err != nil {
-			return "", fmt.Errorf("failed to create service client: %v", err)
+		return "", fmt.Errorf("failed to create service client: %v", err)
 	}
 
 	get, err := serviceClient.DownloadStream(context.TODO(), storageAccountContainer, blobName, nil)
 
 	if err != nil {
-			return SetTimeStamp("", azureWebJobsStorage, storageAccountContainer)
+		return SetTimeStamp("", azureWebJobsStorage, storageAccountContainer)
 	}
 
 	downloadedData := bytes.Buffer{}
@@ -87,7 +92,7 @@ func GetTimeStamp(azureWebJobsStorage, storageAccountContainer string) (string, 
 	}
 
 	err = retryReader.Close()
-	
+
 	if err != nil {
 		return "", fmt.Errorf("failed to close the reader")
 	}
@@ -95,18 +100,51 @@ func GetTimeStamp(azureWebJobsStorage, storageAccountContainer string) (string, 
 	var timestamp Timestamp
 	err = json.Unmarshal(downloadedData.Bytes(), &timestamp)
 	if err != nil {
-			return "", fmt.Errorf("failed to unmarshal timestamp: %v", err)
+		return "", fmt.Errorf("failed to unmarshal timestamp: %v", err)
 	}
 
 	return timestamp.LastRun, nil
 }
 
+func sendError(w http.ResponseWriter, error string) {
+	sendResponse(w, "500", error)
+}
+
 func helloHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Handler was called...\n")
 
+	config, err := connector.LoadConfigFromEnv() // TODO
+	if err != nil {
+		sendError(w, fmt.Sprintf("Configuration initialization error: %v", err))
+		return
+	}
+
+	// Initialize the Bloodhound Client connection
+	bhClient, err := bloodhound.InitializeBloodhoundClient(config.BloodhoundAPIKey,
+		config.BloodhoundAPIKeyId,
+		config.BloodhoundDomain)
+	if err != nil {
+		sendError(w, fmt.Sprintf("Bloodhound client initialization error: %v key: %s, id: %s", err, config.BloodhoundAPIKey, config.BloodhoundAPIKeyId))
+		return
+	}
+
+	// This tries multiple ways to authenticate.
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		sendError(w, fmt.Sprintf("Failed to create credential: %v", err))
+		return
+	}
+
+	// Initialize the Azure Monitor Logs client
+	azureClient, err := azlogs.NewClient(config.IngestionEndpoint, cred, nil)
+	if err != nil {
+		sendError(w, fmt.Sprintf("Azure Monitor client initialization error: %v", err))
+		return
+	}
+
 	azureWebJobsStorage, ok := os.LookupEnv("AzureWebJobsStorage")
 	if !ok {
-		sendResponse(w, "500", "AzureWebJobsStorage env var could not be found")
+		sendError(w, "AzureWebJobsStorage env var could not be found")
 		return
 	}
 
@@ -115,7 +153,7 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(azureWebJobsStorage, "UseDevelopmentStorage") {
 		azureWebJobsStorage, ok = os.LookupEnv("AzureWebJobsStorageExternal")
 		if !ok {
-			sendResponse(w, "500", "AzureWebJobsStorageExternal env var could not be found")
+			sendError(w, "AzureWebJobsStorageExternal env var could not be found")
 			return
 		}
 	}
@@ -124,7 +162,7 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	lastRun, err := GetTimeStamp(azureWebJobsStorage, blobContainerName)
 
 	if err != nil {
-		sendResponse(w, "500", fmt.Sprintf("Error getting timestamp: %s", err.Error()))
+		sendError(w, fmt.Sprintf("Error getting timestamp: %s", err.Error()))
 		return
 	} else {
 		log.Printf("Last run timestamp: %s", lastRun)
@@ -132,35 +170,40 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 
 	//
 	// do stuff here
-  //
+	//
+	logs, err := connector.UploadLogsCallback(bhClient, azureClient, config.RuleId, config.MAX_UPLOAD_SIZE)
+	if err != nil {
+		sendError(w, fmt.Sprintf("Error in connector: %s logs: %v key: %s keyId: %s", err.Error(), logs, config.BloodhoundAPIKey, config.BloodhoundAPIKeyId))
+		return
+	}
 
 	// update the last run timestamp
 	lastRun, err = SetTimeStamp("", azureWebJobsStorage, blobContainerName)
 
 	if err != nil {
-		sendResponse(w, "500", fmt.Sprintf("Error setting timestamp: %s", err.Error()))
+		sendError(w, fmt.Sprintf("Error setting timestamp: %s", err.Error()))
 		return
 	} else {
 		log.Printf("Updated run timestamp: %s", lastRun)
 	}
 
-	sendResponse(w, "200", "Successfully processed BloodHound Enterprise events.")
+	sendResponse(w, "200", fmt.Sprintf("Successfully processed BloodHound Enterprise events.  logs: %v", logs))
 }
 
 func sendResponse(w http.ResponseWriter, statusCode string, message string) {
-		// create the response
-		response := HTTPResponse{}
-		response.Outputs.Res.StatusCode = statusCode
-		response.Logs = []string{message}
-		res, err := json.Marshal(response)
-	
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(res)
+	// create the response
+	response := HTTPResponse{}
+	response.Outputs.Res.StatusCode = statusCode
+	response.Logs = []string{message}
+	res, err := json.Marshal(response)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(res)
 }
 
 func main() {
@@ -168,6 +211,7 @@ func main() {
 	if val, ok := os.LookupEnv("FUNCTIONS_CUSTOMHANDLER_PORT"); ok {
 		listenAddr = ":" + val
 	}
+
 	http.HandleFunc("/AzureFunctionBloodHoundEnterprise", helloHandler)
 	log.Printf("About to listen on %s. Go to https://127.0.0.1%s/", listenAddr, listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, nil))
