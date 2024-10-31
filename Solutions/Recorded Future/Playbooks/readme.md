@@ -13,13 +13,13 @@ The **Threat Intelligence** solution from Microsoft Sentinel Content Hub must be
 
 Microsoft article that describes roles and permissions in Microsoft Sentinel <a href="https://learn.microsoft.com/en-us/azure/sentinel/roles" target="_blank">Roles and permissions in Microsoft Sentinel</a>
 
+- During installation, the person performing the installations of the playbooks require <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">_**Logic App Contributor**_</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">_**Microsoft Sentinel Contributor**_ </a> permissions on a **Resource Group** level, 
 
-- During installation, the permissions that are required on the resource group level to use and authorize the playbooks are, <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#microsoft-sentinel-contributor" target="_blank">Microsoft Sentinel Contributor</a> and <a href="https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles#logic-app-contributor" target="_blank">Logic App Contributor</a>.
+- If you use <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">managed identity</a> authorization for playbook (**Recommended**). The user performing the installation needs to have the role of **Owner (highest level)** or **Role Based Access Control Administrator** on resource group level. 
+
+- The users that are to interact with **Microsoft Sentinel** require _**Microsoft Sentinel Contributor**_ permissions
 
  
-- If you use <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">managed identity</a> authorization for playbook (**Recommended**). The user performing the installation needs to have the role of **Owner** or **Role Based Access Control Administrator** on resource group level. 
-
-
 ### Recorded Future API Key
 Recorded Future requires API keys to communicate with our API. To obtain API keys. <a href="https://go.recordedfuture.com/microsoft-azure-sentinel-free-trial?utm_campaign=&utm_source=microsoft&utm_medium=gta" target="_blank">Start a 30-day free trial of Recorded Future for Microsoft Sentinel from here</a> or visit <a href="https://support.recordedfuture.com/hc/en-us/articles/4411077373587-Requesting-API-Tokens" target="_blank">Recorded Future Requesting API Tokens</a> (Require Recorded Future Login) and request API token for ```Recorded Future for Microsoft Sentinel``` or/and ```Recorded Future Sandbox for Microsoft Sentinel```.
 
@@ -40,6 +40,10 @@ The Recorded Future solution uses the following connectors:
 - **/recordedfuturesandbo** - <a href="https://learn.microsoft.com/en-us/connectors/recordedfuturesandbo/" target="_blank">Microsoft power platform connector</a>.
 
 - **/azuresentinel** - <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors</a>
+
+- **/azureloganalyticsdatacollector** - <a href="https://learn.microsoft.com/en-us/connectors/azureloganalyticsdatacollector/" target="_blank">Documentation on Microsoft azure log analytics data collector</a>
+
+- **/azuremonitorlogs** - <a href="https://learn.microsoft.com/en-us/connectors/azuremonitorlogs/" target="_blank">Documentation on Microsoft azure monitor logs</a>
 
 - **/microsoftgraphsecurity** - <a href="https://learn.microsoft.com/en-us/connectors/microsoftgraphsecurity/" target="_blank">Documentation on Microsoft power platform connectors</a>. The playbooks using this API is being **_DEPRECATED_** and will transition to new playbooks using **/azuresentinel** API.
 
@@ -97,6 +101,7 @@ Consider your organizational use cases and install the corresponding playbooks t
 | Custom connectors | [Custom Connector](./Connectors/RecordedFuture-CustomConnector/readme.md) |
 | Deprecated playbooks | [Deprecated Risk List Playbooks](Deprecated/readme.md) |
 
+<a id="connectors-authorization"></a>
 ## Connector Authorization
 
 Each installed logic app uses various connectors that needs to be authorized, each of the connectors needs to be authorized in different ways depending on their type. 
@@ -126,7 +131,7 @@ After a logic app has been installed, the **Recorded Future Connector V2** needs
 
 <br>
 
-The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner** or **Role Based Access Control Administrator** on resource group level. 
+The **azuresentinel** connector needs to be authorized for the solution to write to Microsoft Sentinel. There are multiple ways to do this, but our recommendation is using <a href="https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview" target="_blank">**system assigned managed identity**</a>, this requires that the user performing the installation needs to have the role of **Owner (with highest permissions)** or **Role Based Access Control Administrator** on resource group level. 
 
 For more detailed information check out this Micrsoft <a href="https://learn.microsoft.com/en-us/azure/logic-apps/authenticate-with-managed-identity?tabs=consumption" target="_blank">guide</a>
 
@@ -144,6 +149,15 @@ These steps will be needed for each logic app that uses the **azuresentinel** / 
 
 </details>
 
+<details>
+<summary>Expand to see azureloganalyticsdatacollector and azuremonitorlogs managed identity authorization guide</summary>
+
+<br>
+
+1. Follow the steps outlined in the **azuresentinel** authorization guide
+2. Add the role _**Log Analytics Workspace Contributor**_ instead of _**Microsoft Sentinel Contributor**_
+
+</details>
 
 # Workbooks
 
