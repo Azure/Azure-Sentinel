@@ -166,7 +166,7 @@ func transformPostureDataArray(domainMap *map[string]sdk.ModelDomainSelector, da
 	return logs, nil
 }
 
-func transformConfigurationFinding(domainMap *map[string]sdk.ModelDomainSelector, domainId string, pathType string, finding MyModelListFinding, findingProps *Props) (*BloodhoundEnterpriseData, error) {
+func transformConfigurationFinding(domainMap *map[string]sdk.ModelDomainSelector, _ string, pathType string, finding MyModelListFinding, findingProps *Props) (*BloodhoundEnterpriseData, error) {
 	selector := (*domainMap)[*finding.DomainSID]
 
 	bhe_sentinel_data := &BloodhoundEnterpriseData{
@@ -188,7 +188,7 @@ func transformConfigurationFinding(domainMap *map[string]sdk.ModelDomainSelector
 	return bhe_sentinel_data, nil
 }
 
-func transformRelationshipFinding(domainMap *map[string]sdk.ModelDomainSelector, domainId string, pathType string, finding MyModelRelationshipFinding, fromProps *FromPrincipalProps, toProps *ToPrincipalProps) (*BloodhoundEnterpriseData, error) {
+func transformRelationshipFinding(domainMap *map[string]sdk.ModelDomainSelector, _ string, pathType string, finding MyModelRelationshipFinding, fromProps *FromPrincipalProps, toProps *ToPrincipalProps) (*BloodhoundEnterpriseData, error) {
 	selector := (*domainMap)[*finding.DomainSID]
 	bhe_sentinel_data := BloodhoundEnterpriseData{
 		DataType:             "posture_path",
@@ -241,7 +241,7 @@ func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data
 					fromPrincipalProps := x.FromPrincipalProps
 					d, err := transformRelationshipFinding(domainMap, domainId, pathType, relationshipFinding, fromPrincipalProps, toPrincipalProps)
 					if err != nil || d == nil {
-						log.Printf("Error transforming relationship finding, skipping", domainId, pathType)
+						log.Printf("Error transforming relationship finding, skipping %s, %s", domainId, pathType)
 						continue
 					} else {
 						bhd = append(bhd, *d)
@@ -255,7 +255,7 @@ func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data
 					props := x.Props
 					d, err := transformConfigurationFinding(domainMap, domainId, pathType, modelListFinding, props)
 					if err != nil || d == nil {
-						log.Printf("Error transforming configuration finding, skipping", domainId, pathType)
+						log.Printf("Error transforming configuration finding, skipping %s %s", domainId, pathType)
 						continue
 					} else {
 						bhd = append(bhd, *d)
@@ -284,7 +284,7 @@ func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, da
 	return bhd, nil
 }
 
-func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, domainId string, path_type string, data sdk.ModelRiskCounts) (BloodhoundEnterpriseData, error) {
+func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ string, path_type string, data sdk.ModelRiskCounts) (BloodhoundEnterpriseData, error) {
 
 	selector := (*domainMap)[*data.DomainSID]
 	bhe_sentinel_data := BloodhoundEnterpriseData{
@@ -314,13 +314,13 @@ func structToFieldListUsingJSON(theStruct interface{}, ignore map[string]bool) (
 	// Marshal to JSON
 	jsonData, err := json.Marshal(theStruct)
 	if err != nil {
-		return "", fmt.Errorf("Error marshaling JSON:", err)
+		return "", fmt.Errorf("Error marshaling JSON: %v", err)
 	}
 
 	// Unmarshal JSON into a map
 	var m map[string]interface{}
 	if err := json.Unmarshal(jsonData, &m); err != nil {
-		return "", fmt.Errorf("Error unmarshaling JSON:", err)
+		return "", fmt.Errorf("Error unmarshaling JSON: %v", err)
 	}
 
 	// Build the "key=value" string
@@ -342,7 +342,7 @@ func transformAudiLogs(logs []sdk.ModelAuditLog) ([]BloodhoundEnterpriseData, er
 	for _, data := range logs {
 		createdAt, err := time.Parse(time.RFC3339Nano, *data.CreatedAt)
 		if err != nil {
-			log.Printf("failed to parse created at time %s Error: %v", data.CreatedAt, err)
+			log.Printf("failed to parse created at time %s Error: %v", *data.CreatedAt, err)
 		}
 
 		// Format the log data into fields excluding request_id and actor_id
@@ -381,7 +381,7 @@ func transformTierZeroPrincipal(graph *sdk.ModelUnifiedGraphGraph, domainMap *ma
 		if *node.Kind == "Base" {
 			continue
 		}
-		if selector == nil {
+
 			sid, ok := props["domainsid"].(string)
 			if ok == true {
 				s, ok := (*domainMap)[sid]
@@ -389,7 +389,7 @@ func transformTierZeroPrincipal(graph *sdk.ModelUnifiedGraphGraph, domainMap *ma
 					selector = &s
 				}
 			}
-		}
+		
 		if selector == nil {
 			sid, ok := props["tenantid"].(string)
 			if ok == true {
@@ -437,6 +437,89 @@ func MakeConnectorCallback(bloodhoundClient *sdk.ClientWithResponses, azLogsClie
 	}
 }
 
+func CreateBatches(records []BloodhoundEnterpriseData, maxUploadSize int64) ([][]BloodhoundEnterpriseData, error) {
+	if len(records) == 0 {
+		return make([][]BloodhoundEnterpriseData, 0), nil
+	}
+
+	// We test a single record for size
+	// Get size of record list
+	singleRecordJson, err := json.Marshal(records[0])
+	if err != nil {
+		return nil, fmt.Errorf("Error marshaling the data %v", err)
+	}
+	n := int64(len(singleRecordJson))
+
+	if n >= maxUploadSize {
+		return nil, fmt.Errorf("Error marshalling the data.  A single record[bytes] %d is too large to upload. maxUploadSize[bytes] %d. ", n, maxUploadSize)
+	}
+
+	// We limit ourselves to maxUploadSize and then we are conservative and reduce the number of records per batch
+	recordsPerBatch := int(maxUploadSize / n)
+	if recordsPerBatch > 2 {
+		recordsPerBatch -= 2
+	}
+
+	var batchedRecords = make([][]BloodhoundEnterpriseData, 0)
+	
+	for i := 0; i < len(records); i += recordsPerBatch {
+		end := i + recordsPerBatch
+
+		if end > len(records) {
+			end = len(records)
+		}
+		batchedRecords = append(batchedRecords, records[i:end])
+	}
+
+	return batchedRecords, nil
+}
+
+func printSlice(s [][]BloodhoundEnterpriseData) {
+    var ptr *[]BloodhoundEnterpriseData
+    if cap(s) >= 1 {
+        ptr = &s[:cap(s)][0]
+    }
+    fmt.Printf("ptr=%p len=%d cap=%d \n", ptr, len(s), cap(s))
+}
+
+// Create batches of marshaled json records and gaurantee that they will fix the maxUploadSize
+// We take approximate batches generated by CreateBatches and then individually test size and rebatch with
+// maxUploadSize reduced by half
+func CreateBatchesGauranteedToFit(records []BloodhoundEnterpriseData, maxUploadSize int64) ([][]byte, error) {
+	
+	var batchesToMarshal, err = CreateBatches(records, maxUploadSize)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("Original batch size %d", len(batchesToMarshal))
+	var jsonBatches = make([][]byte, 0)
+	for len(batchesToMarshal) > 0 {		
+		// POP of a batch, marshal it and then check if it fits
+		batch  := batchesToMarshal[len(batchesToMarshal)-1]
+		batchesToMarshal = batchesToMarshal[:len(batchesToMarshal)-1]
+		batchJSON, err := json.Marshal(batch)
+		if err != nil {
+			return nil, err
+		}
+
+		// if a single marshaled JSON is still too big, 
+		// reduce the maxUploadSize rebatch, adding them back to batchesToMarshal so they will be tested again
+		if int64(len(batchJSON)) > maxUploadSize {
+			log.Printf("Warning needing redo a large batch %d", len(batchJSON))
+			maxUploadSize := maxUploadSize - (int64(len(batchJSON)) - maxUploadSize)
+			smallBatches, err := CreateBatches(batch, maxUploadSize)
+			if err != nil {
+				return nil, err
+			}
+			batchesToMarshal = append(batchesToMarshal, smallBatches...)
+		} else {
+			jsonBatches = append(jsonBatches, batchJSON)
+		}
+	}
+	return jsonBatches, nil
+}
+
 // UploadLogsCallback returns a curried function that can be used as a callback
 func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, azLogsClient *azlogs.Client, ruleId string, maxUploadSize int64) ([]string, error) {
 	// TODO is there a generic sdk client type
@@ -459,29 +542,27 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, azLogsClient 
 
 	bloodhoundRecordData := make(map[string][]BloodhoundEnterpriseData)
 
-	if false {
-		// Get Audit lgos
-		auditLogData, err := bloodhound.GetAuditLog(bloodhoundClient)
-		if err != nil {
-			return logs, err
-		}
-		log.Printf("Received %d audit log rows.", len(auditLogData))
-
-		// Transform audit logs to BHE sentinel records
-		auditLogBHERecords, err := transformAudiLogs(auditLogData)
-		if err != nil {
-			return logs, err
-		}
-		log.Printf("Transformed %d audit log records.", len(auditLogBHERecords))
-
-		bloodhoundRecordData["auditLogs"] = auditLogBHERecords
+	// Get Audit lgos
+	auditLogData, err := bloodhound.GetAuditLog(bloodhoundClient)
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("failed to get audit logs, skipping %v", err))
 	}
+	log.Printf("Received %d audit log rows.", len(auditLogData))
+
+	// Transform audit logs to BHE sentinel records
+	auditLogBHERecords, err := transformAudiLogs(auditLogData)
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("failed to get audit logs, skipping %v", err))
+	}
+	log.Printf("Transformed %d audit log records.", len(auditLogBHERecords))
+
+	bloodhoundRecordData["auditLogs"] = auditLogBHERecords	
 
 	// Posture Data
 	// Get postureData from Bloodhound using bloodhoundClient
 	postureData, err := bloodhound.GetPostureData(bloodhoundClient)
 	if err != nil {
-		logs = append(logs, fmt.Sprint("failed to getposture postureData %v", err))
+		logs = append(logs, fmt.Sprintf("failed to getposture postureData %v", err))
 		return logs, err
 	}
 	logs = append(logs, fmt.Sprintf("got %d posture records", len(*postureData)))
@@ -556,26 +637,24 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, azLogsClient 
 	for kind, recordList := range bloodhoundRecordData {
 		log.Printf("About to upload %s data %d records ", kind, len(recordList))
 
-		recordsJSON, err := json.Marshal(recordList)
+		recordsJSON, err := CreateBatchesGauranteedToFit(recordList, maxUploadSize)
 		if err != nil {
-			logs = append(logs, fmt.Sprintf("failed to marshal %s data Error: %v", kind, err))
-			return logs, err
-		}
-
-		if int64(len(recordsJSON)) > maxUploadSize {
-			logs = append(logs, fmt.Sprintf("Marshaled data of %s data size(bytes): %d is over the upload limit %d", kind, len(recordsJSON), maxUploadSize))
-			return logs, err
-		}
-
-		_, err = azLogsClient.Upload(context.TODO(), ruleId, "Custom-BloodHoundLogs_CL", recordsJSON, nil)
-		if err != nil {
-			logs = append(logs, fmt.Sprintf("failed to upload %s data Error: %v", kind, err))
+			logs = append(logs, fmt.Sprintf("failed to generate batched json for %s data Error: %v", kind, err))
 			lastError = err
 			continue
 		}
-		logs = append(logs, fmt.Sprintf("Uploaded %s data size(bytes): %d", kind, len(recordsJSON)))
+		for _, jsonBatch := range recordsJSON {
 
+			_, err = azLogsClient.Upload(context.TODO(), ruleId, "Custom-BloodHoundLogs_CL", jsonBatch, nil)
+			if err != nil {
+				logs = append(logs, fmt.Sprintf("failed to upload %s data Error: %v", kind, err))
+				lastError = err
+				continue
+			}
+			logs = append(logs, fmt.Sprintf("Uploaded %s data size(bytes): %d", kind, len(recordsJSON)))				
+		}
 	}
 
 	return logs, lastError
 }
+

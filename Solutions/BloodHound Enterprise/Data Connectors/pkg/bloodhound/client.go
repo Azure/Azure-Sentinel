@@ -17,7 +17,7 @@ func InitializeBloodhoundClient(apiKey string, apikeyId string, bloodhoundServer
 	hmacTokenProvider, err := sdk.NewSecurityProviderHMACCredentials(apiKey, apikeyId)
 
 	if err != nil {
-		return nil, fmt.Errorf("Error creating bearer token middleware", err)
+		return nil, fmt.Errorf("Error creating bearer token middleware %v", err)
 	}
 
 	client, err := sdk.NewClientWithResponses(
@@ -75,7 +75,7 @@ func GetPostureData(client *sdk.ClientWithResponses) (*[]sdk.ModelRiskPostureSta
 		return nil, err
 	}
 	if response.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("GetPostureData returned error code %i", response.StatusCode())
+		return nil, fmt.Errorf("GetPostureData returned error code %d", response.StatusCode())
 	}
 
 	return response.JSON200.Data, nil
@@ -112,7 +112,7 @@ func GetAttackPathData(client *sdk.ClientWithResponses, domain_ids []string, fin
 			dm := make(map[string][]json.RawMessage)
 
 			// TODO support pagination using limit and skip, along with returned count
-			l := sdk.ApiParamsQueryLimit(1000)
+			l := sdk.ApiParamsQueryLimit(600000)
 			a := sdk.ApiParamsPredicateFilterString("ModeRelationshipFindingResponse")
 			p := sdk.ListDomainAttackPathsDetailsParams{
 				Limit:             &l,
@@ -174,19 +174,20 @@ func GetAttackPathAggregatorData(client *sdk.ClientWithResponses, domain_ids []s
 
 func GetAuditLog(client *sdk.ClientWithResponses) ([]sdk.ModelAuditLog, error) {
 
-	l := 1000
+	l := 500000
 	params := sdk.ListAuditLogsParams{
 		Limit: &l,
 	}
 	response, err := client.ListAuditLogsWithResponse(context.TODO(), &params)
+	scrubedLogs := make([]sdk.ModelAuditLog, 0)
 	if err != nil {
 		log.Printf("Error trying to get audit logs %v", err)
-		return nil, err
+		return scrubedLogs, err
 	}
 	if response.StatusCode() != http.StatusOK {
-		return nil, fmt.Errorf("error trying to get audit logs %s", response.StatusCode())
+		return scrubedLogs, fmt.Errorf("error trying to get audit logs %d", response.StatusCode())
 	}
-	scrubedLogs := make([]sdk.ModelAuditLog, 0)
+
 	for _, logEntry := range *response.JSON200.Data.Logs {
 		log.Printf("%v", logEntry)
 		// TODO SCRUB LOG
