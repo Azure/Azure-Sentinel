@@ -1,0 +1,40 @@
+id: ec07fcd3-724f-426d-9f53-041801ca5f6c
+name: Illumio VEN Offline Detection Rule
+description: |
+  'Create Microsoft Sentinel Incident When Ven Goes Into Offline state'
+severity: High
+status: Available
+requiredDataConnectors: 
+  - connectorId: IllumioSaaSDataConnector
+    dataTypes:
+      - Illumio_Auditable_Events_CL
+queryFrequency: 60m
+queryPeriod: 60m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+relevantTechniques:
+- T1562
+query: |
+    Illumio_Auditable_Events_CL
+    | where event_type has 'agent_offline_check'
+    | mv-expand resource_changes
+    | extend hostname = resource_changes['resource']['workload']['hostname'],
+        workload_href = resource_changes['resource']['workload']['href'],
+        workload_labels = resource_changes['resource']['workload']['labels']
+    | project-away resource_changes, version, notifications, action, severity, status // action field will have filtered ip addr, so no point of using IP entity
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: hostname     
+alertDetailsOverride:
+  alertDisplayNameFormat: | 
+    Illumio VEN Offline Incident for {{hostname}}
+  alertDescriptionFormat: | 
+    Illumio VEN Offline Incident for {{hostname}} generated at {{TimeGenerated}}
+version: 1.0.6
+kind: Scheduled

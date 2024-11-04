@@ -115,7 +115,8 @@ function testParser([Parser] $parser) {
     
     Write-Host "***************************************************"
     Write-Host "${yellow}Running 'Data' tests for '$($parser.Name)' parser${reset}"
-    $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
+    # Test with only last 30 minutes of data.
+    $dataTest = "$parserAsletStatement`r`n$letStatementName | where TimeGenerated >= ago(30min) | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
 }
@@ -155,7 +156,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
                 elseif ($Errorcount -gt 0) {
                     $FinalMessage = "'$name' '$kind' - test failed with $Errorcount error(s):"
                     Write-Host "::error:: $FinalMessage"
-                    # throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
+                    throw "Test failed with errors. Please fix the errors and try again." # Commented out to allow the script to continue running
                 } else {
                     $FinalMessage = "'$name' '$kind' - test completed successfully with no error."
                     Write-Host "${green}$FinalMessage${reset}"
@@ -167,7 +168,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
     } catch {
         Write-Host "::error::  -- $_"
         Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
-        #throw $_ # Commented out to allow the script to continue running
+        throw $_ # Commented out to allow the script to continue running
     }
 }
 

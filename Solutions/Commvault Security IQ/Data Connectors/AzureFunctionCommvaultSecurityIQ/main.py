@@ -21,23 +21,16 @@ blob_name = "timestamp"
 
 cs = os.environ.get('ConnectionString')
  
-customer_id = os.environ.get('WorkspaceID')
-shared_key = os.environ.get('WorkspaceKey')
+customer_id = os.environ.get('AzureSentinelWorkspaceId','')
+shared_key = os.environ.get('AzureSentinelSharedKey')
 verify = False
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
-pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
-match = re.match(pattern, str(logAnalyticsUri))
-if (not match):
-    logging.info(f"Invalid url : {logAnalyticsUri}")
-    raise Exception("Lookout: Invalid Log Analytics Uri.")
-
-key_vault_name = os.environ.get("KeyVaultName")
+key_vault_name = os.environ.get("KeyVaultName","Commvault-Integration-KV")
 uri = None
 url = None
 qsdk_token = None
 headers = {
-    "authtoken": "QSDK " + qsdk_token,
     "Content-Type": "application/json",
     "Accept": "application/json",
 }
@@ -99,8 +92,8 @@ job_details_body = {
         "paths": [{"path": "/**/*"}],
     }
 
-
-@app.schedule(schedule="0 */5 * * * *", arg_name="myTimer", run_on_startup=False,
+@app.function_name(name="AzureFunctionCommvaultSecurityIQ")
+@app.schedule(schedule="0 */5 * * * *", arg_name="myTimer", run_on_startup=True,
               use_monitor=False)
 def myTimer(myTimer: func.TimerRequest) -> None:
     global qsdk_token,url
@@ -110,7 +103,11 @@ def myTimer(myTimer: func.TimerRequest) -> None:
 
     logging.info('Executing Python timer trigger function.')
     
-
+    pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
+    match = re.match(pattern, str(logAnalyticsUri))
+    if (not match):
+        logging.info(f"Invalid url : {logAnalyticsUri}")
+        raise Exception("Lookout: Invalid Log Analytics Uri.")
     try:
         credential = DefaultAzureCredential()
         client = SecretClient(vault_url=f"https://{key_vault_name}.vault.azure.net", credential=credential)
@@ -119,7 +116,7 @@ def myTimer(myTimer: func.TimerRequest) -> None:
         url = "https://" + uri + "/commandcenter/api"
         secret_name = "access-token"
         qsdk_token = client.get_secret(secret_name).value
-        
+        headers["authtoken"] = "QSDK "+qsdk_token
         ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=false&showAnomalous=true"
         f_url = url + ustring
         current_date = datetime.utcnow()
