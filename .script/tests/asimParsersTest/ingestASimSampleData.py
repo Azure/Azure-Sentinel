@@ -160,6 +160,8 @@ def get_schema_for_builtin(query_table):
     for each in json.loads(query_response.text).get('tables')[0].get('rows'):
         if each[0] in reserved_columns:
             continue
+        elif each[0] in guid_columns:
+            continue
         elif each[3] == "bool":
             schema.append({        
             'name': each[0],
@@ -256,16 +258,38 @@ def extract_event_vendor_product(parser_query,parser_file):
 
     match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_vendor = match.group(1).replace(" ", "")
+        event_vendor = match.group(1)
     else:
         print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
 
     match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_product = match.group(1).replace(" ", "")
+        event_product = match.group(1)
     else:
         print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
     return event_vendor, event_product ,schema_name   
+
+def convert_data_type(schema_result, data_result):
+    for data in data_result:
+        for schema in schema_result:
+            field_name = schema["name"]
+            field_type = schema["type"]
+            
+            if field_name in data:
+                value = data[field_name]
+                
+                # Handle conversion based on schema type
+                
+                if field_type == "string":
+                    # Convert to string
+                    data[field_name] = str(value)
+                elif field_type == "boolean":
+                    # Convert to boolean
+                    if isinstance(value, str) and value.lower() in ["true", "false"]:
+                        data[field_name] = value.lower() == "true"
+
+    return data_result
+
 
 #main starting point of script
 
@@ -303,6 +327,7 @@ for file in parser_yaml_files:
         continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
+    print(f"Reading Asim Parser file from : {asim_parser_url}")
     asim_parser = read_github_yaml(asim_parser_url)
     parser_query = asim_parser.get('ParserQuery', '')
     normalization = asim_parser.get('Normalization', {})
@@ -312,6 +337,7 @@ for file in parser_yaml_files:
     SampleDataFile = f'{event_vendor}_{event_product}_{schema}_IngestedLogs.csv'
     sample_data_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{SAMPLE_DATA_PATH}'
     SampleDataUrl = sample_data_url+SampleDataFile
+    print(f"Sample data log file reading from url: {SampleDataUrl}")
     response = requests.get(SampleDataUrl)
     if response.status_code == 200:
         with open('tempfile.csv', 'wb') as file:
@@ -334,7 +360,11 @@ for file in parser_yaml_files:
         else:
             print(f"::error::An error occurred while trying to get content of Schema file located at {schemaUrl}: {response.text}")
             continue        
-        schema_result = convert_schema_csv_to_json('tempfile.csv') 
+        schema_result = convert_schema_csv_to_json('tempfile.csv')
+        data_result = convert_data_type(schema_result, data_result)
+        # conversion of datatype is needed for boolean and string values because during testing it has been observed that 
+        # boolean values are consider as string and numerical value of type string are consider 
+        # as integer which leds to non ingestion of those value in sentinel    
         # create table 
         request_body, url_to_call , method_to_use = create_table(json.dumps(schema_result, indent=4),table_name)
         response_body=hit_api(url_to_call,request_body,method_to_use)
@@ -367,10 +397,32 @@ for file in parser_yaml_files:
     elif log_ingestion_supported == True and table_type == "builtin":
         flag=0 #flag value is used to check if DCR is created for the table or not
         #create dcr for ingestion
+        guid_columns = []
         schema = get_schema_for_builtin(table_name)
+        data_result = convert_data_type(schema, data_result)
         request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
         response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of DCR creation: {response_body.text}") 
+        print(f"Response of DCR creation: {response_body.text}")
+        if response_body.status_code == 400 and "InvalidTransformOutput" in response_body.text:
+            guid_flag=0
+            print("*********Checking if failure reason is GUID Type columns and present in schema***********")
+            str_match = json.loads(response_body.text).get('error').get('details')[0].get('message')
+            match = re.findall(r'(\w+\s*\[produced:\s*\'String\',\s*output:\s*\'Guid\'\])', str_match)
+            print(f"Mismatched Column and there types : {match}")
+            for item in match:
+                if "Guid" not in item:
+                    guid_flag=1
+                    print(f"Provided column Type other than GUID TYPE is not matching with Output Stream : {item}")
+            if guid_flag == 1:
+                print("Please provide Same Type of columns in stream declaration that matches with output stream of DCR")
+                exit(1)
+            cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
+            guid_columns = cleaned_guid_columns
+            print("Re trying DCR creation after removing GUID columns")
+            schema = get_schema_for_builtin(table_name)
+            request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
+            response_body=hit_api(url_to_call,request_body,method_to_use)
+            print(f"Response of DCR creation: {response_body.text}")       
         dcr_directory.append({
         'DCRname':table_name+'_DCR'+str(prnumber),
         'imutableid':json.loads(response_body.text).get('properties').get('immutableId'),
