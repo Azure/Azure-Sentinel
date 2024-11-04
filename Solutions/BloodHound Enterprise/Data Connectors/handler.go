@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"function/pkg/bloodhound"
+	. "function/pkg/bloodhound"
 	"function/pkg/connector"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -80,7 +80,8 @@ func GetTimeStamp(azureWebJobsStorage, storageAccountContainer string) (string, 
 	get, err := serviceClient.DownloadStream(context.TODO(), storageAccountContainer, blobName, nil)
 
 	if err != nil {
-		return SetTimeStamp("", azureWebJobsStorage, storageAccountContainer)
+		SetTimeStamp("", azureWebJobsStorage, storageAccountContainer)
+		return "", nil
 	}
 
 	downloadedData := bytes.Buffer{}
@@ -92,7 +93,6 @@ func GetTimeStamp(azureWebJobsStorage, storageAccountContainer string) (string, 
 	}
 
 	err = retryReader.Close()
-
 	if err != nil {
 		return "", fmt.Errorf("failed to close the reader")
 	}
@@ -120,7 +120,7 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Initialize the Bloodhound Client connection
-	bhClient, err := bloodhound.InitializeBloodhoundClient(config.BloodhoundAPIKey,
+	bhClient, err := InitializeBloodhoundClient(config.BloodhoundAPIKey,
 		config.BloodhoundAPIKeyId,
 		config.BloodhoundDomain)
 	if err != nil {
@@ -147,7 +147,7 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 		sendError(w, "AzureWebJobsStorage env var could not be found")
 		return
 	}
-
+	
 	// check if we are running locally, if so, use the alternate ENV VAR
 	// for the remote blob connection
 	if strings.Contains(azureWebJobsStorage, "UseDevelopmentStorage") {
@@ -164,14 +164,21 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		sendError(w, fmt.Sprintf("Error getting timestamp: %s", err.Error()))
 		return
-	} else {
-		log.Printf("Last run timestamp: %s", lastRun)
+	}
+
+	var lastRunTime *time.Time
+	if lastRun != "" {
+		t, err := time.Parse(time.RFC3339Nano, lastRun)
+		if err != nil {
+			sendError(w, fmt.Sprintf("Error parsing timestamp: %s error: %v", lastRun, err.Error()))
+		}
+		lastRunTime = &t
 	}
 
 	//
 	// do stuff here
 	//
-	logs, err := connector.UploadLogsCallback(bhClient, azureClient, config.RuleId, config.MAX_UPLOAD_SIZE)
+	logs, err := connector.UploadLogsCallback(bhClient, lastRunTime, azureClient, config.RuleId, config.MAX_UPLOAD_SIZE)
 	if err != nil {
 		sendError(w, fmt.Sprintf("Error in connector: %s logs: %v key: %s keyId: %s", err.Error(), logs, config.BloodhoundAPIKey, config.BloodhoundAPIKeyId))
 		return
@@ -207,6 +214,7 @@ func sendResponse(w http.ResponseWriter, statusCode string, message string) {
 }
 
 func main() {
+	os.Setenv("TZ", "UTC")
 	listenAddr := ":8080"
 	if val, ok := os.LookupEnv("FUNCTIONS_CUSTOMHANDLER_PORT"); ok {
 		listenAddr = ":" + val
