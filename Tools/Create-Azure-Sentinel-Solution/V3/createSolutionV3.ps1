@@ -1,5 +1,11 @@
+param (
+    [string]$path
+)
+
 Write-Host '=======Starting Package Creation using V3 tool========='
-$path = Read-Host "Enter solution data file path "
+if (-not $path) {
+    $path = Read-Host "Enter solution data file path"
+}
 $defaultPackageVersion = "3.0.0" # for templateSpec this will be 2.0.0
 Write-Host "Path $path, DefaultPackageVersion is $defaultPackageVersion"
 
@@ -63,7 +69,7 @@ else {
 
 $solutionBasePath = $path.Substring(0, $indexOfSolutions + 10)
 $repositoryBasePath = $path.Substring(0, $indexOfSolutions)
-Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName" 
+Write-Host "SolutionBasePath is $solutionBasePath, Solution Name $solutionName"
 
 $isPipelineRun = $false
 
@@ -78,7 +84,7 @@ $getccpDetailsFilePath = $repositoryBasePath + "Tools/Create-Azure-Sentinel-Solu
 try {
     $ccpDict = @();
     $ccpTablesFilePaths = @();
-    $ccpTablesCounter = 1; 
+    $ccpTablesCounter = 1;
     $isCCPConnector = $false;
     foreach ($inputFile in $(Get-ChildItem -Path "$solutionFolderBasePath\$dataFolderName\$dataFileName")) {
         #$inputJsonPath = Join-Path -Path $path -ChildPath "$($inputFile.Name)"
@@ -119,7 +125,7 @@ try {
         $packageVersion = GetPackageVersion $defaultPackageVersion $offerId $offerDetails $true $userInputPackageVersion
         if ($packageVersion -ne $contentToImport.version) {
             $contentToImport.PSObject.Properties.Remove('version')
-            $contentToImport | Add-Member -MemberType NoteProperty -Name 'version' -Value $packageVersion 
+            $contentToImport | Add-Member -MemberType NoteProperty -Name 'version' -Value $packageVersion
             Write-Host "Package version updated to $packageVersion"
         }
 
@@ -147,7 +153,7 @@ try {
         $global:solutionId = $baseMetadata.publisherId + "." + $baseMetadata.offerId
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "solutionId" -NotePropertyValue "$global:solutionId"
         $global:baseMainTemplate.variables | Add-Member -NotePropertyName "_solutionId" -NotePropertyValue "[variables('solutionId')]"
-        
+
         # VERIFY IF IT IS A CONTENTSPEC OR CONTENTPACKAGE RESOURCE TYPE BY VERIFYING VERSION FROM  DATA FILE
         $contentResourceDetails = returnContentResources($contentToImport.Version)
         if ($null -eq $contentResourceDetails) {
@@ -164,7 +170,7 @@ try {
 
         if ($isCCPConnector -eq $false) {
             $DCFolderName = "Data Connectors"
-            
+
             $ccpDict = Get-CCP-Dict -dataFileMetadata $contentToImport -baseFolderPath $solutionBasePath -solutionName $solutionName -DCFolderName $DCFolderName
 
             if ($null -ne $ccpDict -and $ccpDict.count -gt 0) {
@@ -177,7 +183,7 @@ try {
         foreach ($objectProperties in $contentToImport.PsObject.Properties) {
             if ($objectProperties.Value -is [System.Array] -and $objectProperties.Name.ToLower() -ne 'dependentdomainsolutionids' -and $objectProperties.Name.ToLower() -ne 'staticdataconnectorids') {
                 foreach ($file in $objectProperties.Value) {
-                    $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "") 
+                    $file = $file.Replace("$basePath/", "").Replace("Solutions/", "").Replace("$solutionName/", "")
                     $finalPath = ($basePath + $solutionName + "/" + $file).Replace("//", "/")
                     $rawData = $null
                     try {
@@ -196,7 +202,7 @@ try {
                     catch {
                         $validJson = $false;
                     }
-                    
+
                     if ($validJson) {
                         # If valid JSON, must be Workbook or Playbook
                         $objectKeyLowercase = $objectProperties.Name.ToLower()
@@ -221,7 +227,7 @@ try {
                                     GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $ccpDict -solutionBasePath $basePath -solutionName $solutionName -ccpTables $ccpTablesFilePaths -ccpTablesCounter $ccpTablesCounter
 
                                     $ccpConnectorCodeExecutionCounter += 1
-                                } 
+                                }
                                 elseif ($isCCPConnectorFile -and $ccpConnectorCodeExecutionCounter -gt 1) {
                                     continue;
                                 }
@@ -232,7 +238,7 @@ try {
                             }
                             else {
                                 # current file is a normal connector
-                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter 
+                                GetDataConnectorMetadata -file $file -contentResourceDetails $contentResourceDetails -dataFileMetadata $contentToImport -solutionFileMetadata $baseMetadata -dcFolderName $DCFolderName -ccpDict $null -solutionBasePath $basePath -solutionName $solutionName -ccpTables $null -ccpTablesCounter $ccpTablesCounter
                             }
                         }
                         elseif ($objectKeyLowercase -eq "savedsearches") {
@@ -272,7 +278,7 @@ try {
                         Write-Host "Failed to download $finalPath -- Please ensure that it exists in $([System.Uri]::EscapeUriString($basePath))" -ForegroundColor Red
                         break;
                     }
-                        
+
                     try {
                         $json = ConvertFrom-Json $rawData -ErrorAction Stop; # Determine whether content is JSON or YAML
                         $validJson = $true;
@@ -280,7 +286,7 @@ try {
                     catch {
                         $validJson = $false;
                     }
-                    
+
                     if ($validJson -and $json) {
                         PrepareSolutionMetadata -solutionMetadataRawContent $json -contentResourceDetails $contentResourceDetails -defaultPackageVersion $defaultPackageVersion
                     }
