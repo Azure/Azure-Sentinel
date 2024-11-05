@@ -4,8 +4,8 @@ Author: Accelerynt
 
 For any technical questions, please contact info@accelerynt.com  
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Microsoft-DCR-Log-Ingestion%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Microsoft-DCR-Log-Ingestion%2Fmain%2Fazuredeploy.json)       
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Microsoft-DCR-Log-Ingestion%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Microsoft-DCR-Log-Ingestion%2Fazuredeploy.json)       
 
 This playbook is intended for multitenant organizations and is designed to run on a timed trigger and pull Microsoft Graph and Microsoft Office logs to Microsoft Sentinel using Data Collection Endpoints and Data Collection Rules. While Microsoft does have built in connectors for this, they do not support multitenant functionality. This playbook is configured to grab the following logs for a tenant of your choosing and send them to another tenant:
 * [Microsoft Graph Sign-In Logs](https://learn.microsoft.com/en-us/graph/api/signin-get?view=graph-rest-1.0&tabs=http)
@@ -28,13 +28,13 @@ This playbook is intended for multitenant organizations and is designed to run o
 The following items are required under the template settings during deployment: 
 
 * Note your [subscription ID](https://portal.azure.com/#view/Microsoft_Azure_Billing/SubscriptionsBladeV2) for the tenant that will be sending the data
-* A Microsoft Entra [app registration](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration) to send data to the DCR with admin consent granted for "**AuditLog.Read.All**" and "**Activity.Feed.Read**"
-* A Microsoft Entra [app registration](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration) in the receiving tenant where the DCR is located. This app registration must have the "**Monitoring Metrics Publisher**" role assigned from each DCR you create.
-* [App Registration Azure key vault secrets](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration-azure-key-vault-secret) containing your app registration client secrets
+* A Microsoft Entra [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration) to send data to the DCR with admin consent granted for "**AuditLog.Read.All**" and "**Activity.Feed.Read**"
+* A Microsoft Entra [app registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration) in the receiving tenant where the DCR is located. This app registration must have the "**Monitoring Metrics Publisher**" role assigned from each DCR you create.
+* [App Registration Azure key vault secrets](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration-azure-key-vault-secret) containing your app registration client secrets
 * Note your [workspace location](https://portal.azure.com/#browse/Microsoft.OperationalInsights%2Fworkspaces) for the tenant that will be receiving data, as this will need to be the same for Data Collection Rules and Endpoints created in the steps below
-* A [Microsoft Data Collection Endpoint](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-endpoints) for each of the log sources
-* A [Microsoft Data Collection Rule](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules) for each of the log sources
-* An [Azure key vault secret](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-azure-key-vault-secret) containing your client secret for each of your Data Collection Endpoints
+* A [Microsoft Data Collection Endpoint](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-endpoints) for each of the log sources
+* A [Microsoft Data Collection Rule](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules) for each of the log sources
+* An [Azure key vault secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-azure-key-vault-secret) containing your client secret for each of your Data Collection Endpoints
 
 #
 ### Role Requirements
@@ -102,7 +102,7 @@ Enter a description and select the desired expiration date, then click "**Add**"
 
 ![DCRLogIngestion_App_Registration_11](Images/DCRLogIngestion_App_Registration_11.png)
 
-Copy the value of the secret that is generated, as this will be needed for [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-azure-key-vault-secret).
+Copy the value of the secret that is generated, as this will be needed for [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-azure-key-vault-secret).
 
 ![DCRLogIngestion_App_Registration_12](Images/DCRLogIngestion_App_Registration_12.png)
 
@@ -114,7 +114,7 @@ Navigate to an existing key vault or create a new one. From the key vault overvi
 
 ![DCRLogIngestion_Key_Vault_1](Images/DCRLogIngestion_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**DCRLogIngestion-SendingAppRegClientSecret**", taking note of the value used, as it will be needed for deployment. Next enter the client secret copied in the [previous section](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**DCRLogIngestion-SendingAppRegClientSecret**", taking note of the value used, as it will be needed for deployment. Next enter the client secret copied in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
 
 ![DCRLogIngestion_Key_Vault_2](Images/DCRLogIngestion_Key_Vault_2.png)
 
@@ -170,7 +170,7 @@ The next step will prompt you for a data sample.
 
 ![DCRLogIngestion_Data_Collection_Rule_5](Images/DCRLogIngestion_Data_Collection_Rule_5.png)
 
-Upload the file content located at [Samples/SignInLogsSample.json](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion/blob/main/Samples/SignInLogsSample.json), then click "**Next**".
+Upload the file content located at [Samples/SignInLogsSample.json](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion/blob/main/Samples/SignInLogsSample.json), then click "**Next**".
 
 ![DCRLogIngestion_Data_Collection_Rule_6](Images/DCRLogIngestion_Data_Collection_Rule_6.png)
 
@@ -182,7 +182,7 @@ This process will need to be repeated for "**EntraAuditLogsDCR**". After creatin
 
 ![DCRLogIngestion_Data_Collection_Rule_8](Images/DCRLogIngestion_Data_Collection_Rule_8.png)
 
-Upload the file content located at [Samples/AuditLogsSample.json](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion/blob/main/Samples/AuditLogsSample.json), then click "**Next**".
+Upload the file content located at [Samples/AuditLogsSample.json](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion/blob/main/Samples/AuditLogsSample.json), then click "**Next**".
 
 ![DCRLogIngestion_Data_Collection_Rule_9](Images/DCRLogIngestion_Data_Collection_Rule_9.png)
 
@@ -194,7 +194,7 @@ This process will need to be repeated for "**OfficeActivityLogsDCR**". After cre
 
 ![DCRLogIngestion_Data_Collection_Rule_11](Images/DCRLogIngestion_Data_Collection_Rule_11.png)
 
-Upload the file content located at [Samples/OfficeActivityLogsSample.json](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion/blob/main/Samples/O365GeneralAuditLogsSample.json), then click "**Next**".
+Upload the file content located at [Samples/OfficeActivityLogsSample.json](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion/blob/main/Samples/O365GeneralAuditLogsSample.json), then click "**Next**".
 
 ![DCRLogIngestion_Data_Collection_Rule_12](Images/DCRLogIngestion_Data_Collection_Rule_12.png)
 
@@ -230,7 +230,7 @@ A client secret will need to be generated for the app registration. From the lef
 
 ![DCRLogIngestion_App_Registration_DCR_4](Images/DCRLogIngestion_App_Registration_DCR_4.png)
 
-Copy the value of the secret that is generated, as this will be needed for [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-azure-key-vault-secret).
+Copy the value of the secret that is generated, as this will be needed for [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-azure-key-vault-secret).
 
 ![DCRLogIngestion_App_Registration_DCR_5](Images/DCRLogIngestion_App_Registration_DCR_5.png)
 
@@ -268,7 +268,7 @@ Navigate to an existing key vault or create a new one. From the key vault overvi
 
 ![DCRLogIngestion_Key_Vault_1](Images/DCRLogIngestion_Receiving_Key_Vault_1.png)
 
-Choose a name for the secret, such as "**DCRLogIngestion-ReceivingAppRegClientSecret**", taking note of the value used, as it will be needed for deployment. Next enter the client secret copied in the [previous section](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
+Choose a name for the secret, such as "**DCRLogIngestion-ReceivingAppRegClientSecret**", taking note of the value used, as it will be needed for deployment. Next enter the client secret copied in the [previous section](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration). All other settings can be left as is. Click "**Create**". 
 
 ![DCRLogIngestion_Key_Vault_2](Images/DCRLogIngestion_Receiving_Key_Vault_2.png)
 
@@ -281,8 +281,8 @@ Open your browser and ensure you are logged into your Microsoft Sentinel workspa
 
 https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Microsoft-DCR-Log-Ingestion%2Fmain%2Fazuredeploy.json)
-[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAccelerynt-Security%2FAS-Microsoft-DCR-Log-Ingestion%2Fmain%2Fazuredeploy.json)                                             
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Microsoft-DCR-Log-Ingestion%2Fazuredeploy.json)
+[![Deploy to Azure Gov](https://aka.ms/deploytoazuregovbutton)](https://portal.azure.us/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Fmaster%2FPlaybooks%2FAS-Microsoft-DCR-Log-Ingestion%2Fazuredeploy.json)                                             
 
 Click the "**Deploy to Azure**" button at the bottom and it will bring you to the custom deployment template.
 
@@ -294,37 +294,37 @@ In the **Instance Details** section:
 
 * **Playbook Name**: This can be left as "**AS-Microsoft-DCR-Log-Ingestion**" or you may change it.
 
-* **Sending App Registration Tenant Id**: Enter the Directory (tenant) Id of the App Registration that will be used to send data, referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration).
+* **Sending App Registration Tenant Id**: Enter the Directory (tenant) Id of the App Registration that will be used to send data, referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration).
 
-* **Sending App Registration Client Id**: Enter the Application (client) ID of the App Registration that will be used to send data, referenced in [Create an App Registration](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration).
+* **Sending App Registration Client Id**: Enter the Application (client) ID of the App Registration that will be used to send data, referenced in [Create an App Registration](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration).
 
 * **Sending Tenant Subscription ID**: Enter the [subscription ID](https://portal.azure.com/#view/Microsoft_Azure_Billing/SubscriptionsBladeV2) of the tenant that will be sending the data.
 
-* **Receiving App Registration Client Id**: Enter the Application (client) ID of the App Registration that will be used to receive data, referenced in [Create an App Registration for the DCRs](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration-for-the-dcrs).
+* **Receiving App Registration Client Id**: Enter the Application (client) ID of the App Registration that will be used to receive data, referenced in [Create an App Registration for the DCRs](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration-for-the-dcrs).
 
-* **Key Vault Name**: Enter the name of the key vault referenced in [Create an Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-azure-key-vault-secret).
+* **Key Vault Name**: Enter the name of the key vault referenced in [Create an Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-azure-key-vault-secret).
 
-* **Sending App Registration Key Vault Secret Name**: Name of Key Vault Secret that contains the sending App Registration client secret, created in [Create an App Registration Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration-azure-key-vault-secret).
+* **Sending App Registration Key Vault Secret Name**: Name of Key Vault Secret that contains the sending App Registration client secret, created in [Create an App Registration Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-an-app-registration-azure-key-vault-secret).
 
-* **Receiving App Registration Key Vault Secret Name**: Name of Key Vault Secret that contains the receiving App Registration client secret, created in [Create a Receiving App Registration Azure Key Vault Secret](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-a-receiving-app-registration-azure-key-vault-secret).
+* **Receiving App Registration Key Vault Secret Name**: Name of Key Vault Secret that contains the receiving App Registration client secret, created in [Create a Receiving App Registration Azure Key Vault Secret](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-a-receiving-app-registration-azure-key-vault-secret).
 
-* **Entra Sign In Logs Ingestion URL**: Enter the Logs Ingestion URL from the EntraSignInLogs DCE, referenced in [Create the Data Collection Endpoints](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-endpoints).
+* **Entra Sign In Logs Ingestion URL**: Enter the Logs Ingestion URL from the EntraSignInLogs DCE, referenced in [Create the Data Collection Endpoints](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-endpoints).
 
-* **Entra Sign In Logs Immutable Id**: Enter the Logs Ingestion Immutable Id from the EntraSignInLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
+* **Entra Sign In Logs Immutable Id**: Enter the Logs Ingestion Immutable Id from the EntraSignInLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
 
-* **Entra Sign In Logs Data Source**: Enter the Logs Ingestion Data Source from the EntraSignInLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
+* **Entra Sign In Logs Data Source**: Enter the Logs Ingestion Data Source from the EntraSignInLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
 
-* **Entra Audit Logs Ingestion URL**: Enter the Logs Ingestion URL from the EntraAuditLogs DCE, referenced in [Create the Data Collection Endpoints](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-endpoints).
+* **Entra Audit Logs Ingestion URL**: Enter the Logs Ingestion URL from the EntraAuditLogs DCE, referenced in [Create the Data Collection Endpoints](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-endpoints).
 
-* **Entra Audit Logs Immutable Id**: Enter the Logs Ingestion Immutable Id from the EntraAuditLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
+* **Entra Audit Logs Immutable Id**: Enter the Logs Ingestion Immutable Id from the EntraAuditLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
 
-* **Entra Audit Logs Data Source**: Enter the Logs Ingestion Data Source from the EntraAuditLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
+* **Entra Audit Logs Data Source**: Enter the Logs Ingestion Data Source from the EntraAuditLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
 
-* **Office Activity Ingestion URL**: Enter the Logs Ingestion URL from the OfficeActivityLogs DCE, referenced in [Create the Data Collection Endpoints](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-endpoints).
+* **Office Activity Ingestion URL**: Enter the Logs Ingestion URL from the OfficeActivityLogs DCE, referenced in [Create the Data Collection Endpoints](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-endpoints).
 
-* **Office Activity Immutable Id**: Enter the Logs Ingestion Immutable Id from the OfficeActivityLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
+* **Office Activity Immutable Id**: Enter the Logs Ingestion Immutable Id from the OfficeActivityLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
 
-* **Office Activity Data Source**: Enter the Logs Ingestion Data Source from the OfficeActivityLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
+* **Office Activity Data Source**: Enter the Logs Ingestion Data Source from the OfficeActivityLogs DCR, referenced in [Create the Data Collection Rules](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion#create-the-data-collection-rules).
 
 Towards the bottom, click on "**Review + create**". 
 
@@ -355,10 +355,9 @@ Click "**Add role assignment**" then select "**Key Vault**" as the scope, select
 #
 ### Ensuring your Subscription is Enabled
 
-To ensure the subscription is enabled for the app registration used to access the"**O365 Audit General Logs**", the [OfficeAuditSubscribtionEnable](https://github.com/Accelerynt-Security/AS-Microsoft-DCR-Log-Ingestion/blob/main/Scripts/OfficeAuditSubscribtionEnable.ps1) should be run from an [Azure Cloud Shell Window](https://learn.microsoft.com/en-us/azure/cloud-shell/new-ui-shell-window) from the tenant you wish to **send the Microsoft Graph and Office data from**.
+To ensure the subscription is enabled for the app registration used to access the"**O365 Audit General Logs**", the [OfficeAuditSubscribtionEnable](https://github.com/Azure/Azure-Sentinel/tree/master/Playbooks/AS-Microsoft-DCR-Log-Ingestion/blob/main/Scripts/OfficeAuditSubscribtionEnable.ps1) should be run from an [Azure Cloud Shell Window](https://learn.microsoft.com/en-us/azure/cloud-shell/new-ui-shell-window) from the tenant you wish to **send the Microsoft Graph and Office data from**.
 
 ![DCRLogIngestion_Azure_Cloud_Shell_1](Images/DCRLogIngestion_Azure_Cloud_Shell_1.png)
-
 Click the "**PowerShell**" option, then select the appropriate subscription for the sending tenant.
 
 ![DCRLogIngestion_Azure_Cloud_Shell_2](Images/DCRLogIngestion_Azure_Cloud_Shell_2.png)
