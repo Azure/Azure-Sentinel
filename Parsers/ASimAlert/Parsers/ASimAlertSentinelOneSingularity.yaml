@@ -21,23 +21,17 @@ ParserParams:
     Type: bool
     Default: false
 ParserQuery: |
-  
   let AlertVerdictLookup = datatable (analystVerdict_s: string, AlertVerdict: string)
     [
-      "Undefined", "Unknown",
-      "true_positive", "True Positive",
-      "suspicious", "True Positive",
-      "false_positive", "False Positive"
-  ];
-  let EventSubTypeLookup = datatable (ruleInfo_treatAsThreat_s: string, EventSubType: string)
-      [
-      "Malicious", "Threat",
-      "Suspicious", "Suspicious Activity"
+    "Undefined", "Unknown",
+    "true_positive", "True Positive",
+    "suspicious", "True Positive",
+    "false_positive", "False Positive"
   ];
   let ThreatCategoryArray = dynamic(["Malware", "Ransomware", "Trojan", "Virus", "Worm", "Adware", "Spyware", "Rootkit", "Cryptominor", "Phishing", "Spam", "MaliciousUrl", "Spoofing", "Security Policy Violation", "Unknown", "SuspiciousActivity"]);
-  let AlertSourceAnalyticDetailsLookup = datatable (
+  let DetectionMethodLookup = datatable (
       threatInfo_engines_s: string,
-      AlertSourceAnalyticDetails: string
+      DetectionMethod: string
   )
       [
       "Intrusion Detection", "Intrusion Detection",
@@ -48,101 +42,70 @@ ParserQuery: |
       disabled: bool=false) {
       SentinelOne_CL
       | where not(disabled)
-      | where event_name_s in ("Alerts.", "Threats.")
-      // Mapping Alert Fields
-      | extend 
-          AlertId = iif(event_name_s == "Alerts.", alertInfo_alertId_s, threatInfo_threatId_s),
-          AlertName = iif(event_name_s == "Threats.", threatInfo_threatName_s, ""),
-          AlertStatus = iif(event_name_s == "Alerts.", iif(alertInfo_incidentStatus_s == "Unresolved", "Active", ""), iif(threatInfo_incidentStatus_s == "resolved", "Closed", "Active")),
-          AlertOriginalStatus = iif(event_name_s == "Alerts.", alertInfo_incidentStatus_s, threatInfo_incidentStatus_s),
-          AlertDescription = alertInfo_indicatorDescription_s,
-          Names = extract_all('"name":"([^"]+)"', dynamic([1]), indicators_s)
-      | extend
-          AttackTechniques = tostring(extract_all('"(T[0-9]+\\.[0-9]+|T[0-9]+)"', dynamic([1]), tostring(Names))),
-          AttackTactics = tostring(extract_all('"([^T][^0-9]+)"', dynamic([1]), tostring(Names)))
-      | project-away Names
-      | lookup AlertSourceAnalyticDetailsLookup on threatInfo_engines_s
-      | extend analystVerdict_s = iif(event_name_s == "Alerts.", alertInfo_analystVerdict_s, threatInfo_analystVerdict_s)
-      | lookup AlertVerdictLookup on analystVerdict_s
+      | where event_name_s in ("Threats.")
       // Mapping Inspection Fields
-      | extend
-          ThreatId = threatInfo_threatId_s,
-          ThreatName = threatInfo_threatName_s,
-          ThreatIsActive = agentRealtimeInfo_infected_b,
-          ThreatFirstReportedTime = iif(event_name_s == "Alerts.", alertInfo_reportedAt_t, threatInfo_identifiedAt_t),
-          ThreatLastUpdatedTime = iif(event_name_s == "Alerts.", alertInfo_updatedAt_t, threatInfo_updatedAt_t),
-          ThreatCategory = iif(threatInfo_classification_s in (ThreatCategoryArray), threatInfo_classification_s, ""),
-          ThreatOriginalCategory = threatInfo_classification_s,
-          RuleNumber = toint(ruleInfo_id_s),
-          RuleName = ruleInfo_name_s,
-          RuleDescription = ruleInfo_description_s
+      | extend 
+        AlertId = threatInfo_threatId_s,
+        AlertName = threatInfo_threatName_s,
+        AlertStatus = iif(threatInfo_incidentStatus_s == "resolved", "Closed", "Active"),
+        AlertOriginalStatus = threatInfo_incidentStatus_s,
+        Names = extract_all('"name":"([^"]+)"', dynamic([1]), indicators_s),
+        ThreatId = threatInfo_threatId_s,
+        ThreatName = threatInfo_threatName_s,
+        ThreatFirstReportedTime = threatInfo_identifiedAt_t,
+        ThreatLastReportedTime = threatInfo_updatedAt_t,
+        ThreatCategory = iif(threatInfo_classification_s in (ThreatCategoryArray), threatInfo_classification_s, ""),
+        ThreatOriginalCategory = threatInfo_classification_s
+    | extend
+        AttackTechniques = tostring(extract_all('"(T[0-9]+\\.[0-9]+|T[0-9]+)"', dynamic([1]), tostring(Names))),
+        AttackTactics = tostring(extract_all('"([^T][^0-9]+)"', dynamic([1]), tostring(Names)))
+    | project-away Names
+    | lookup DetectionMethodLookup on threatInfo_engines_s
+    | extend analystVerdict_s = threatInfo_analystVerdict_s
+    | lookup AlertVerdictLookup on analystVerdict_s
       // Mapping Dvc Fields
       | extend 
-          DvcHostname = coalesce(agentDetectionInfo_name_s, agentRealtimeInfo_agentComputerName_s),
-          DvcOs = coalesce(agentDetectionInfo_osName_s, agentRealtimeInfo_agentOsName_s),
-          DvcOsVersion = coalesce(agentDetectionInfo_osRevision_s, agentRealtimeInfo_agentOsRevision_s),
-          DvcId = coalesce(agentRealtimeInfo_id_s, agentRealtimeInfo_agentId_s),
+          DvcHostname = agentRealtimeInfo_agentComputerName_s,
+          DvcOs =  agentRealtimeInfo_agentOsName_s,
+          DvcOsVersion =  agentRealtimeInfo_agentOsRevision_s,
+          DvcId =  agentRealtimeInfo_agentId_s,
+          DvcIdType = "Other",
           DvcDomain = agentRealtimeInfo_agentDomain_s,
-          DvcIpAddr = coalesce(agentDetectionInfo_agentIpV4_s, alertInfo_srcIp_s)
-      // Mapping IP Entity
-      | extend 
-          IpAddr = DvcIpAddr,
-          PortNumber = alertInfo_srcPort_s
+          DvcDomainType = "Windows",
+          DvcIpAddr = agentDetectionInfo_agentIpV4_s
       // Mapping Process Entity
       | extend
-          ProcessCommandLine = sourceProcessInfo_commandline_s,
-          ProcessName = iif(event_name_s == "Alerts.", sourceProcessInfo_filePath_s, threatInfo_originatorProcess_s),
-          ProcessFileCompany = sourceProcessInfo_fileSignerIdentity_s,
-          ProcessId = sourceProcessInfo_pid_s
+          ProcessCommandLine = threatInfo_maliciousProcessArguments_s,
+          ProcessName = threatInfo_originatorProcess_s
       // Mapping File Fields
       | extend 
-          FileMD5 = coalesce(threatInfo_md5_g, sourceProcessInfo_fileHashMd5_g),
-          FileSHA1 = coalesce(threatInfo_sha1_s, sourceProcessInfo_fileHashSha1_s),
-          FileSHA256 = coalesce(threatInfo_sha256_s, sourceProcessInfo_fileHashSha256_s),
+          FileMD5 = threatInfo_md5_g,
+          FileSHA1 = threatInfo_sha1_s,
+          FileSHA256 = threatInfo_sha256_s,
           FilePath=threatInfo_filePath_s,
           FileSize = threatInfo_fileSize_d
       // Mapping User Fields
-       | extend 
-           Username = agentDetectionInfo_agentLastLoggedInUpn_s
+      | extend 
+          Username = coalesce(agentDetectionInfo_agentLastLoggedInUpn_s, threatInfo_processUser_s)
+      | extend UsernameType = _ASIM_GetUsernameType(Username)
       // Event Fields
       | extend
+          EventType = 'Alert',
           EventOriginalType = event_name_s,
-          EventOriginalUid = alertInfo_dvEventId_s,
-          EventOriginalSubType = alertInfo_eventType_s,
-          EventSeverity = iif(ruleInfo_severity_s == "Critical", "High", ruleInfo_severity_s),
+          EventUid = threatInfo_threatId_s,
           EventCount = int(1),
           EventEndTime = TimeGenerated,
           EventStartTime = TimeGenerated,
           EventProduct = 'Singularity',
           EventVendor = 'SentinelOne',
           EventSchemaVersion = '0.1',
-          EventType = 'Alert',
-          AdditionalFields = bag_pack(
-                        "ParentProcessCommandLine",
-                        sourceParentProcessInfo_commandline_s,
-                        "ParentProcessMD5",
-                        sourceParentProcessInfo_fileHashMd5_g,
-                        "ParentProcessSHA1",
-                        sourceParentProcessInfo_fileHashSha1_s,
-                        "ParentProcessSHA256",
-                        sourceParentProcessInfo_fileHashSha256_s,
-                        "ParentProcessName",
-                        sourceParentProcessInfo_filePath_s,
-                        "ParentProcessFileCompany",
-                        sourceParentProcessInfo_fileSignerIdentity_s,
-                        "ParentProcessIntegrityLevel",
-                        sourceParentProcessInfo_integrityLevel_s,
-                        "ParentProcessId",
-                        sourceParentProcessInfo_pid_s,
-                        "ParentProcessCreationTime",
-                        sourceParentProcessInfo_pidStarttime_t,
-                        "ProcessIntegrityLevel",
-                        sourceProcessInfo_integrityLevel_s,
-                        "ProcessCreationTime",
-                        sourceProcessInfo_pidStarttime_t
-                    )
-      | lookup EventSubTypeLookup on ruleInfo_treatAsThreat_s
-      | extend EventSubType = iif(event_name_s == "Threats.", "Threat", EventSubType)
+          EventSchema = "Alert"
+      | extend EventSubType = "Threat"
+      // Aliases
+      | extend
+          IpAddr = DvcIpAddr,
+          User = Username,
+          Hostname = DvcHostname
       | project-away *_s, *_g, SourceSystem, ManagementGroupName, Computer, RawData, *_t, *_b, *_d
   };
   parser (
