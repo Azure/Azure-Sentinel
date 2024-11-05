@@ -627,9 +627,6 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 			continue
 		}
 		for _, jsonBatch := range recordsJSON {
-			if true {
-				responseLogs = append(responseLogs, fmt.Sprintf("Dry run uploaded %s data size(bytes): %d", kind, len(jsonBatch)))
-			}
 			_, err = azLogsClient.Upload(context.TODO(), ruleId, "Custom-BloodHoundLogs_CL", jsonBatch, nil)
 			if err != nil {
 				responseLogs = append(responseLogs, fmt.Sprintf("failed to upload %s data Error: %v", kind, err))
