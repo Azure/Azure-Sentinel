@@ -1,4 +1,3 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                               |
 |-------------|--------------------------------|------------------------------------------------------------------|
-| 3.0.0       | 27-12-2023                     | Initial version |
-|             | 05-11-2024                     | Update query timespan formatting |
+| 3.0.0       | 05-11-2024                     | Update timespan formatting                                       |
