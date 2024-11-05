@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/SpecterOps/bloodhound-go-sdk/sdk"
 )
 
 func InitializeBloodhoundClient(apiKey string, apikeyId string, bloodhoundServer string) (*sdk.ClientWithResponses, error) {
-
 	// HMAC Security Provider
 	hmacTokenProvider, err := sdk.NewSecurityProviderHMACCredentials(apiKey, apikeyId)
 
@@ -38,6 +38,9 @@ func GetTierZeroPrincipal(client *sdk.ClientWithResponses) (*sdk.ModelUnifiedGra
 		IncludeProperties: &x,
 		Query:             &query,
 	}
+	const TIER_ZERO_ASSET_GROUP int64 = 1
+
+//	assetgrouprspones, err := client.GetAssetGroupWithResponse((context.TODO(), TIERint32(TIER_ZERO_ASSET_GROUP), nil))
 	response, err := client.RunCypherQueryWithResponse(context.TODO(), nil, queryBody)
 	if err != nil {
 		return nil, err
@@ -46,6 +49,18 @@ func GetTierZeroPrincipal(client *sdk.ClientWithResponses) (*sdk.ModelUnifiedGra
 		return nil, errors.New(response.Status())
 	}
 	return response.JSON200.Data, nil
+}
+
+func GetLastAnalysisTime(client *sdk.ClientWithResponses) (*time.Time, error) {
+	response, err := client.GetDatapipeStatusWithResponse(context.TODO(),nil )
+	if err != nil {
+		return nil, fmt.Errorf("Error getting last analysis run time %v", err)
+	}
+	if response.StatusCode() != http.StatusOK {
+		return nil, fmt.Errorf("Error getting last analysis run time %s", response.HTTPResponse.Status)
+	}
+	// TODO does LastCompleteAnalysisAt mean successful completion, do I also need to look at Data.Status
+	return response.JSON200.Data.LastCompleteAnalysisAt, nil
 }
 
 func GetDomainMapping(client *sdk.ClientWithResponses) (*map[string]sdk.ModelDomainSelector, error) {
@@ -66,9 +81,15 @@ func GetDomainMapping(client *sdk.ClientWithResponses) (*map[string]sdk.ModelDom
 	return &mapIdToInfo, nil
 }
 
-func GetPostureData(client *sdk.ClientWithResponses) (*[]sdk.ModelRiskPostureStat, error) {
+func GetPostureData(client *sdk.ClientWithResponses, currentState *time.Time) (*[]sdk.ModelRiskPostureStat, error) {
 	params := sdk.GetPostureStatsParams{}
 
+	if currentState != nil {
+		params.FromDeprecated = currentState
+		log.Printf("GetPostureData From param set to %s", currentState.Format(time.RFC3339))
+	} else {
+		log.Printf("GetPostureData No currentState we are not setting From parameter")
+	}
 	response, err := client.GetPostureStatsWithResponse(context.TODO(), &params)
 
 	if err != nil {
@@ -81,6 +102,8 @@ func GetPostureData(client *sdk.ClientWithResponses) (*[]sdk.ModelRiskPostureSta
 	return response.JSON200.Data, nil
 }
 
+
+// Note: there is no last time
 func GetAttackPathTypesForDomain(client *sdk.ClientWithResponses, domain_ids []string) (map[string][]string, error) {
 	m := make(map[string][]string)
 	for _, domainId := range domain_ids {
@@ -141,7 +164,7 @@ func GetAttackPathData(client *sdk.ClientWithResponses, domain_ids []string, fin
 	return m, nil
 }
 
-func GetAttackPathAggregatorData(client *sdk.ClientWithResponses, domain_ids []string, findings_per_domain map[string][]string) (map[string]map[string][]sdk.ModelRiskCounts, error) {
+func GetAttackPathAggregatorData(client *sdk.ClientWithResponses, lastRun *time.Time, domain_ids []string, findings_per_domain map[string][]string) (map[string]map[string][]sdk.ModelRiskCounts, error) {
 
 	m := make(map[string]map[string][]sdk.ModelRiskCounts)
 	for _, domainId := range domain_ids {
@@ -149,8 +172,11 @@ func GetAttackPathAggregatorData(client *sdk.ClientWithResponses, domain_ids []s
 			dm := make(map[string][]sdk.ModelRiskCounts)
 
 			f := sdk.ApiParamsPredicateFilterString(finding)
-			p := sdk.ListAttackPathSparklineValuesParams{
+			var p = sdk.ListAttackPathSparklineValuesParams{
 				Finding: f,
+			}
+			if lastRun != nil {
+				p.From = lastRun
 			}
 			response, err := client.ListAttackPathSparklineValuesWithResponse(context.TODO(), domainId, &p)
 			if err != nil {
@@ -172,10 +198,11 @@ func GetAttackPathAggregatorData(client *sdk.ClientWithResponses, domain_ids []s
 	return m, nil
 }
 
-func GetAuditLog(client *sdk.ClientWithResponses) ([]sdk.ModelAuditLog, error) {
+func GetAuditLog(client *sdk.ClientWithResponses, lastRunTime *time.Time) ([]sdk.ModelAuditLog, error) {
 
 	l := 500000
 	params := sdk.ListAuditLogsParams{
+		After: lastRunTime,
 		Limit: &l,
 	}
 	response, err := client.ListAuditLogsWithResponse(context.TODO(), &params)

@@ -3,8 +3,23 @@ package connector
 import (
 	"encoding/json"
 	"testing"
+	"time"
+
+	. "function/pkg/model"
 
 )
+
+// Testing some time formatting here
+func TestTimeFormatting(testing *testing.T) {
+	t := time.Now()
+	var s = t.Format("2006-01-02T15:04:05.000Z")
+	testing.Logf("Explicit format %s\n", s)
+	s = t.Format(time.RFC3339Nano)
+	testing.Logf("RFC3339Nano format %s\n", s)
+	s = t.UTC().Format(time.RFC3339Nano)
+	testing.Logf("UTC RFC3339Nano format %s\n", s)
+	testing.Fatalf("")
+}
 
 func TestCreateBatches(t *testing.T) {
 	testRecord := BloodhoundEnterpriseData{

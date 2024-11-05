@@ -44,17 +44,14 @@ type Timestamp struct {
 }
 
 // this stores the current run timestamp in an Azure storage blob
-func SetTimeStamp(lastRun, azureWebJobsStorage, storageAccountContainer string) (string, error) {
-	if lastRun == "" {
-		lastRun = time.Now().UTC().Format(time.RFC3339Nano)
-	}
-
+func SetTimeStamp(lastRun string, azureWebJobsStorage, storageAccountContainer string) (string, error) {
 	timestamp := Timestamp{LastRun: lastRun}
 	data, err := json.Marshal(timestamp)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal timestamp: %v", err)
 	}
 
+	log.Printf("azureWEbJobsStorage connection string %s", azureWebJobsStorage)
 	serviceClient, err := azblob.NewClientFromConnectionString(azureWebJobsStorage, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create service client: %v", err)
@@ -80,7 +77,7 @@ func GetTimeStamp(azureWebJobsStorage, storageAccountContainer string) (string, 
 	get, err := serviceClient.DownloadStream(context.TODO(), storageAccountContainer, blobName, nil)
 
 	if err != nil {
-		SetTimeStamp("", azureWebJobsStorage, storageAccountContainer)
+		log.Printf("GetTimeStamp about to return empty lastRunTime")
 		return "", nil
 	}
 
@@ -89,20 +86,25 @@ func GetTimeStamp(azureWebJobsStorage, storageAccountContainer string) (string, 
 	_, err = downloadedData.ReadFrom(retryReader)
 
 	if err != nil {
+		log.Printf("gettimestamp readfrom err %v", err)
 		return "", fmt.Errorf("failed to read the blob data")
 	}
 
 	err = retryReader.Close()
 	if err != nil {
+		log.Printf("gettimestamp close err %v", err)
 		return "", fmt.Errorf("failed to close the reader")
 	}
 
 	var timestamp Timestamp
-	err = json.Unmarshal(downloadedData.Bytes(), &timestamp)
+	bytes := downloadedData.Bytes()
+	err = json.Unmarshal(bytes, &timestamp)
 	if err != nil {
+		log.Printf("gettimestamp unmarshal err %v", err)
 		return "", fmt.Errorf("failed to unmarshal timestamp: %v", err)
 	}
 
+	log.Printf("gettimestamp returning %v", timestamp.LastRun)
 	return timestamp.LastRun, nil
 }
 
@@ -160,13 +162,14 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 
 	// get the last run timestamp
 	lastRun, err := GetTimeStamp(azureWebJobsStorage, blobContainerName)
-
+	log.Printf("We are getting lastRun '%s'", lastRun)
 	if err != nil {
+		log.Printf("error gettimestamp %v", err)
 		sendError(w, fmt.Sprintf("Error getting timestamp: %s", err.Error()))
 		return
 	}
 
-	var lastRunTime *time.Time
+	var lastRunTime *time.Time = nil
 	if lastRun != "" {
 		t, err := time.Parse(time.RFC3339Nano, lastRun)
 		if err != nil {
@@ -185,8 +188,8 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update the last run timestamp
-	lastRun, err = SetTimeStamp("", azureWebJobsStorage, blobContainerName)
-
+	formattedTime := time.Now().UTC().Format(time.RFC3339Nano)
+	lastRun, err = SetTimeStamp(formattedTime, azureWebJobsStorage, blobContainerName)
 	if err != nil {
 		sendError(w, fmt.Sprintf("Error setting timestamp: %s", err.Error()))
 		return
