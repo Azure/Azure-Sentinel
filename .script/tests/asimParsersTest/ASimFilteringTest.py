@@ -843,15 +843,28 @@ all_schemas_parameters = {
         "targetappname_has_any" : "TargetAppName",
         "username_has_any" : "User"
     },
+    "AlertEvent" :
+    {
+        "disabled" : "",
+        "endtime" : "EventEndTime",
+        "eventresult" : "EventResult",
+        "eventtype_in" : "EventType",
+        "srcipaddr_has_any_prefix" : "SrcIpAddr",
+        "starttime" : "EventStartTime"
+    },
     "DhcpEvent" :
     {
         "disabled" : "",
-        "eventresult" : "EventResult",
         "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
-        "srcipaddr_has_any_prefix" : "SrcIpAddr",
-        "srchostname_has_any" : "SrcHostname",
-        "srcusername_has_any" : "SrcUsername"
+        "ipaddr_has_any_prefix" : "DvcIpAddr",
+        "hostname_has_any" : "DvcHostname",
+        "username_has_any" : "Username",
+        "attacktactics_has_any" : "AttackTactics",
+        "attacktechniques_has_any" : "AttackTechniques",
+        "threatcategory_has_any" : "ThreatCategory",
+        "alertverdict_has_any" : "AlertVerdict",
+        "eventseverity_has_any" : "EventSeverity",
     },
     "Dns" : 
     {
