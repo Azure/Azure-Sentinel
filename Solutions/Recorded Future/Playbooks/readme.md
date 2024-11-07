@@ -155,7 +155,7 @@ These steps will be needed for each logic app that uses the **azuresentinel** / 
 <br>
 
 1. Follow the steps outlined in the **azuresentinel** authorization guide
-2. Add the role _**Log Analytics Workspace Contributor**_ instead of _**Microsoft Sentinel Contributor**_
+2. Add the role _**Log Analytics Contributor**_ instead of _**Microsoft Sentinel Contributor**_
 
 </details>
 
