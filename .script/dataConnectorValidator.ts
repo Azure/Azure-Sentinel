@@ -26,7 +26,11 @@ export async function IsValidDataConnectorSchema(filePath: string): Promise<Exit
 
         /* Disabling temporarily till we get confirmation from PM*/
         // isValidFileName(filePath
-        isValidPermissions(jsonFile.permissions, connectorCategory);
+        /* Skip validation for Solution Microsoft Exchange Security - Exchange On-Premises Solution */
+        if (!filePath.includes('Microsoft Exchange Security - Exchange On-Premises')) 
+        {
+          isValidPermissions(jsonFile.permissions, connectorCategory);
+        }
       }
       else{
         console.warn(`Skipping File as it is of type Events : ${filePath}`)
