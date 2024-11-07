@@ -28,7 +28,6 @@ Class Parser {
 }
 
 function run {
-    Write-Host "This is the script from PR."
     # Check if upstream remote already exists
     $remoteExists = Invoke-Expression "git remote" | Select-String -Pattern "upstream"
 
@@ -39,10 +38,10 @@ function run {
 
     # Fetch the latest changes from upstream repositories
     Write-Host "Fetching latest changes from upstream..."
-    Invoke-Expression "git fetch upstream" *> $null
+    #Invoke-Expression "git fetch upstream" *> $null
 
     # Get modified ASIM Parser files along with their status
-    $modifiedFilesStatus = Invoke-Expression "git diff --name-status upstream/master -- $($PSScriptRoot)/../../../Parsers/"
+    $modifiedFilesStatus = Invoke-Expression "git diff --name-status origin/master -- $($PSScriptRoot)/../../../Parsers/"
     # Split the output into lines
     $modifiedFilesStatusLines = $modifiedFilesStatus -split "`n"
     # Initialize an empty array to store the file names and their status
@@ -92,9 +91,9 @@ function testSchema([string] $ParserFile) {
         }
     }
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
-    if ($parsersAsObject.Parsers) {
+    if ($parsersAsObject.Parsers -or ($parsersAsObject.ParserName -like "*Empty")) {
         Write-Host "***************************************************"
-        Write-Host "${yellow}The parser '$functionName' is a union parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
+        Write-Host "${yellow}The parser '$functionName' is a union or empty parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
@@ -167,7 +166,7 @@ function invokeAsimTester([string] $test, [string] $name, [string] $kind) {
         }
     } catch {
         Write-Host "::error::  -- $_"
-        Write-Host "::error::     $(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
+        #Write-Host "::error::$(((Get-Error -Newest 1)?.Exception)?.Response?.Content)"
         throw $_ # Commented out to allow the script to continue running
     }
 }
