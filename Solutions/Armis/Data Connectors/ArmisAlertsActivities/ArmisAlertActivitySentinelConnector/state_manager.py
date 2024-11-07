@@ -36,3 +36,13 @@ class StateManager:
             return self.file_cli.download_file().readall().decode()
         except ResourceNotFoundError:
             return None
+        
+    def delete(self):
+        """Delete method for deleting the data from Azure Storage.
+
+        This method will delete the file from Azure Storage.
+        """
+        try:
+            self.file_cli.delete_file()
+        except ResourceNotFoundError:
+            raise ResourceNotFoundError("File not found to be deleted.")
