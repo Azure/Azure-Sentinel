@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.0.8		  | 06-11-2024					   | Removed (Preview) from name for **Data Connectors** Microsoft Defender Threat Intelligence and Premium Microsoft Defender Threat Intelligence |
 | 3.0.6		  | 24-09-2024					   | Updated Entity Mappings of **Analytical Rules** 				 			  |
 | 3.0.5       | 19-08-2024                     | Updated isConnectedQuery for **Data Connector** of "Threat Intelligence Upload Indicators API". |
 | 3.0.4       | 22-05-2024                     | Updated connectivity criteria for **Data Connector** and added New **Data Connector** for Premium Microsoft Defender Threat Intelligence (Preview)   					  |
