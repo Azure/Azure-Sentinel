@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.8       | 07-11-2024                     |   Removed Deprecated **Data Connector**                            |
 | 3.0.7 	  | 08-01-2024 					   |   Updated **Analytic Rule** for entity mappings					|
 | 3.0.6 	  | 12-07-2024 					   |   Deprecated **Data Connector** 									|
 | 3.0.5       | 30-04-2024                     |   Updated the **Data Connector** to fix conectivity criteria query |
