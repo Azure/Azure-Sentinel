@@ -52,8 +52,8 @@ failure_messages = {
 
 def attempt_to_connect():
     try:
-            credential = DefaultAzureCredential()
-            #credential = InteractiveBrowserCredential() # Uncomment this line if you want to use the interactive browser credential for testing purposes
+            #credential = DefaultAzureCredential()
+            credential = InteractiveBrowserCredential() # Uncomment this line if you want to use the interactive browser credential for testing purposes
             client = LogsQueryClient(credential)
             empty_query = ""
             response = client.query_workspace(
@@ -263,9 +263,9 @@ def main():
         subprocess.run(git_add_upstream_command, shell=True, text=True, capture_output=True, check=True)
     # Fetch from upstream
     git_fetch_upstream_command = "git fetch upstream"
-    subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
+    #subprocess.run(git_fetch_upstream_command, shell=True, text=True, capture_output=True, check=True)
 
-    GetModifiedFiles = f"git diff --name-only upstream/master {current_directory}/../../../Parsers/"
+    GetModifiedFiles = f"git diff --name-only origin/master {current_directory}/../../../Parsers/"
     try:
         modified_files = subprocess.run(GetModifiedFiles, shell=True, text=True, capture_output=True, check=True)
     except subprocess.CalledProcessError as e:
@@ -288,7 +288,7 @@ def main():
         else:
             SchemaName = None
         # Check if changed file is a union or empty parser. If Yes, skip the file
-        if PARSER_FILE_NAME.endswith(f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml'):
+        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
