@@ -92,9 +92,9 @@ function testSchema([string] $ParserFile) {
         }
     }
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
-    if ($parsersAsObject.Parsers) {
+    if ($parsersAsObject.Parsers -or ($parsersAsObject.ParserName -like "*Empty")){
         Write-Host "***************************************************"
-        Write-Host "${yellow}The parser '$functionName' is a union parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
+        Write-Host "${yellow}The parser '$functionName' is a union or empty parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))

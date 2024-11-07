@@ -288,7 +288,7 @@ def main():
         else:
             SchemaName = None
         # Check if changed file is a union parser. If Yes, skip the file
-        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')):
+        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
