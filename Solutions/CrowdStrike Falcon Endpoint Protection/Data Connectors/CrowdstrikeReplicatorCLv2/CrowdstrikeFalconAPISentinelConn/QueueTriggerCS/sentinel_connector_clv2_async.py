@@ -6,7 +6,7 @@ from collections import deque
 import zlib
 
 class AzureSentinelConnectorCLv2Async:
-    def __init__(self, session: aiohttp.ClientSession, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=1200, queue_size_bytes=2 * (2**20)):
+    def __init__(self, session: aiohttp.ClientSession, monitor_resource, dce_endpoint, dcr_id, stream_name, azure_client_id, azure_client_secret, azure_tenant, queue_size=1200, queue_size_bytes=2 * (2**20)):
         self.dce_endpoint = dce_endpoint
         self.dcr_id = dcr_id
         self.stream_name = stream_name
@@ -20,7 +20,7 @@ class AzureSentinelConnectorCLv2Async:
         self.AZURE_CLIENT_ID = azure_client_id
         self.AZURE_CLIENT_SECRET = azure_client_secret
         self.AZURE_TENANT_ID = azure_tenant
-        self.MONITOR_RESOURCE = "https://monitor.azure.com"
+        self.MONITOR_RESOURCE = monitor_resource
         self.access_token_uri = "https://login.microsoftonline.com/{}/oauth2/token".format(self.AZURE_TENANT_ID)
         self.DCR_DATA_INGESTION_URL = "{}/dataCollectionRules/{}/streams/{}?api-version=2021-11-01-preview"
 
