@@ -847,15 +847,6 @@ all_schemas_parameters = {
     {
         "disabled" : "",
         "endtime" : "EventEndTime",
-        "eventresult" : "EventResult",
-        "eventtype_in" : "EventType",
-        "srcipaddr_has_any_prefix" : "SrcIpAddr",
-        "starttime" : "EventStartTime"
-    },
-    "DhcpEvent" :
-    {
-        "disabled" : "",
-        "endtime" : "EventEndTime",
         "starttime" : "EventStartTime",
         "ipaddr_has_any_prefix" : "DvcIpAddr",
         "hostname_has_any" : "DvcHostname",
@@ -865,6 +856,16 @@ all_schemas_parameters = {
         "threatcategory_has_any" : "ThreatCategory",
         "alertverdict_has_any" : "AlertVerdict",
         "eventseverity_has_any" : "EventSeverity",
+    },
+    "DhcpEvent" :
+    {
+        "disabled" : "",
+        "eventresult" : "EventResult",
+        "endtime" : "EventEndTime",
+        "starttime" : "EventStartTime",
+        "srcipaddr_has_any_prefix" : "SrcIpAddr",
+        "srchostname_has_any" : "SrcHostname",
+        "srcusername_has_any" : "SrcUsername"
     },
     "Dns" : 
     {
