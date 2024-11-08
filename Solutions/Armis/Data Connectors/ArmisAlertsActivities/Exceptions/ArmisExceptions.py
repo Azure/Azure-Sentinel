@@ -12,8 +12,3 @@ class ArmisDataNotFoundException(Exception):
 
     pass
 
-
-class ArmisTimeOutException(Exception):
-    """ArmisTimeOutException class will inherit Exception class."""
-
-    pass

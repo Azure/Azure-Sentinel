@@ -7,7 +7,7 @@ import azure.functions as func
 import json
 from .sentinel import AzureSentinel
 from .exports_store import ExportsTableStore
-from Exceptions.ArmisExceptions import ArmisException, ArmisDataNotFoundException, ArmisTimeOutException
+from Exceptions.ArmisExceptions import ArmisException, ArmisDataNotFoundException
 from .utils import Utils
 from . import consts
 import inspect
@@ -16,14 +16,13 @@ import inspect
 class ArmisAlertsActivities(Utils):
     """This class will process the Alert Activity data and post it into the Microsoft sentinel."""
 
-    def __init__(self, start_time):
+    def __init__(self):
         """__init__ method will initialize object of class."""
         super().__init__()
         self.data_alert_from = 0
         self.azuresentinel = AzureSentinel()
         self.total_alerts_posted = 0
         self.total_activities_posted = 0
-        self.start = start_time
 
     def get_alert_data(self, parameter):
         """get_alert_data is used to get data using api.
@@ -248,9 +247,6 @@ class ArmisAlertsActivities(Utils):
             alert_parameter["aql"] = aql_data
             alert_parameter["length"] = 1000
             while self.data_alert_from is not None:
-                if int(time.time()) >= self.start + consts.FUNCTION_APP_TIMEOUT_SECONDS:
-                    raise ArmisTimeOutException()
-
                 alert_parameter.update({"from": self.data_alert_from})
                 offset_to_post = self.data_alert_from
                 logging.info(consts.LOG_FORMAT.format(__method_name, "Fetching alerts data with parameters = {}.".format(alert_parameter)))
@@ -360,15 +356,6 @@ class ArmisAlertsActivities(Utils):
         except ArmisException:
             raise ArmisException()
 
-        except ArmisTimeOutException:
-            logging.info(
-                consts.LOG_FORMAT.format(
-                    __method_name,
-                    "9:30 mins executed hence stopping the execution.",
-                )
-            )
-            return
-
         except ArmisDataNotFoundException:
             raise ArmisDataNotFoundException()
 
@@ -389,14 +376,13 @@ def main(mytimer: func.TimerRequest) -> None:
         mytimer (func.TimerRequest): This variable will be used to trigger the function.
 
     """
-    start_time = time.time()
     __method_name = inspect.currentframe().f_code.co_name
     utc_timestamp = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat()
     logging.info(
         consts.LOG_FORMAT.format(__method_name, "Python timer trigger function ran at {}".format(utc_timestamp))
     )
 
-    armis_obj = ArmisAlertsActivities(start_time)
+    armis_obj = ArmisAlertsActivities()
     try:
         armis_obj.check_data_exists_or_not_alert()
     except ArmisDataNotFoundException:

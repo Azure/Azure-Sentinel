@@ -34,4 +34,3 @@ CHECKPOINT_FILE_OFFSET = "armisalertoffset"
 LOG_FORMAT = "Armis Alerts Activities Connector: (method = {}) : {}"
 REQUEST_TIMEOUT = 300
 CHECKPOINT_TABLE_NAME = "ArmisAlertActivityCheckpoint"
-FUNCTION_APP_TIMEOUT_SECONDS = 570
