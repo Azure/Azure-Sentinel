@@ -1,0 +1,944 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "minLength": 1,
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Not used, but needed to pass the arm-ttk test, 'Location-Should-Not-Be-Hardcoded'. Instead the `workspace-location` derived from the log analytics workspace is used."
+      }
+    },
+    "workspace-location": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+      }
+    },
+    "subscription": {
+      "defaultValue": "[last(split(subscription().id, '/'))]",
+      "type": "string",
+      "metadata": {
+        "description": "subscription id where Microsoft Sentinel is configured"
+      }
+    },
+    "resourceGroupName": {
+      "defaultValue": "[resourceGroup().name]",
+      "type": "string",
+      "metadata": {
+        "description": "resource group name where Microsoft Sentinel is configured"
+      }
+    },
+    "workspace": {
+      "defaultValue": "",
+      "type": "string",
+      "metadata": {
+        "description": "the log analytics workspace enabled for Microsoft Sentinel"
+      }
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+    "_solutionName": "CloudGuard Security Events Solution",
+    "_solutionVersion": "3.0.0",
+    "_solutionAuthor": "CheckPoint",
+    "_packageIcon": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/CloudGuardLogo.svg\" width=\"75px\" height=\"75px\">",
+    "_solutionId": "azuresentinel.azure-sentinel-solution-azuresentinel.azure-sentinel-cloud-guard",
+    "dataConnectorVersionConnectorDefinition": "1.0.0",
+    "dataConnectorVersionConnections": "1.0.0",
+    "_solutionTier": "Community",
+    "_dataConnectorContentIdConnectorDefinition": "CloudGuardTemplateConnectorDefinition",
+    "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+    "_dataConnectorContentIdConnections": "CloudGuardTemplateConnections",
+    "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+    "_logAnalyticsTableId1": "CloudGuard_SecurityEvents_CL"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+        "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+        "contentKind": "DataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('_solutionAuthor')]",
+                  "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                  "criteria": [
+                    {
+                      "version": "[variables('dataConnectorVersionConnections')]",
+                      "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                      "kind": "ResourcesDataConnector"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CloudGuardDCRV1",
+              "apiVersion": "2021-09-01-preview",
+              "type": "Microsoft.Insights/dataCollectionRules",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "streamDeclarations": {
+                  "Custom-CloudGuard_SecurityEvents_CL": {
+                    "columns": [
+                      {
+                        "name": "id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "findingKey",
+                        "type": "string"
+                      },
+                      {
+                        "name": "createdTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "updatedTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "cloudAccountType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "comments",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "cloudAccountId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "cloudAccountExternalId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "organizationalUnitId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "organizationalUnitPath",
+                        "type": "string"
+                      },
+                      {
+                        "name": "bundleId",
+                        "type": "int"
+                      },
+                      {
+                        "name": "alertType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ruleId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ruleName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "ruleLogic",
+                        "type": "string"
+                      },
+                      {
+                        "name": "entityDome9Id",
+                        "type": "string"
+                      },
+                      {
+                        "name": "entityExternalId",
+                        "type": "string"
+                      },
+                      {
+                        "name": "entityType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "entityTypeByEnvironmentType",
+                        "type": "string"
+                      },
+                      {
+                        "name": "entityName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "entityNetwork",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "entityTags",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "severity",
+                        "type": "string"
+                      },
+                      {
+                        "name": "description",
+                        "type": "string"
+                      },
+                      {
+                        "name": "remediation",
+                        "type": "string"
+                      },
+                      {
+                        "name": "tag",
+                        "type": "string"
+                      },
+                      {
+                        "name": "region",
+                        "type": "string"
+                      },
+                      {
+                        "name": "bundleName",
+                        "type": "string"
+                      },
+                      {
+                        "name": "acknowledged",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "origin",
+                        "type": "string"
+                      },
+                      {
+                        "name": "lastSeenTime",
+                        "type": "datetime"
+                      },
+                      {
+                        "name": "ownerUserName",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "magellan",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "isExcluded",
+                        "type": "boolean"
+                      },
+                      {
+                        "name": "webhookResponses",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "remediationActions",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "additionalFields",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "occurrences",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "scanId",
+                        "type": "dynamic"
+                      },
+                      {
+                        "name": "status",
+                        "type": "string"
+                      },
+                      {
+                        "name": "statusReason",
+                        "type": "string"
+                      },
+                      {
+                        "name": "category",
+                        "type": "string"
+                      },
+                      {
+                        "name": "action",
+                        "type": "string"
+                      },
+                      {
+                        "name": "labels",
+                        "type": "dynamic"
+                      }
+                    ]
+                  }
+                },
+                "dataSources": {},
+                "destinations": {
+                  "logAnalytics": [
+                    {
+                      "workspaceResourceId": "[variables('workspaceResourceId')]",
+                      "name": "clv2ws1"
+                    }
+                  ]
+                },
+                "dataFlows": [
+                  {
+                    "streams": [
+                      "Custom-CloudGuard_SecurityEvents_CL"
+                    ],
+                    "destinations": [
+                      "clv2ws1"
+                    ],
+                    "transformKql": "source\n| extend TimeGenerated = todatetime(createdTime)\n| project-rename EventId = id\n| project-away createdTime\n\n",
+                    "outputStream": "Custom-CloudGuard_SecurityEvents_CL"
+                  }
+                ],
+                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspace'))]"
+              }
+            },
+            {
+              "name": "[variables('_logAnalyticsTableId1')]",
+              "apiVersion": "2022-10-01",
+              "type": "Microsoft.OperationalInsights/workspaces/tables",
+              "location": "[parameters('workspace-location')]",
+              "kind": null,
+              "properties": {
+                "schema": {
+                  "name": "[variables('_logAnalyticsTableId1')]",
+                  "columns": [
+                    {
+                      "name": "acknowledged",
+                      "type": "boolean",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "action",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "additionalFields",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "alertType",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "bundleId",
+                      "type": "int",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "bundleName",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "category",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "cloudAccountExternalId",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "cloudAccountId",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "cloudAccountType",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "comments",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "description",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "entityDome9Id",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "entityExternalId",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "entityName",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "entityNetwork",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "entityTags",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "entityType",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "entityTypeByEnvironmentType",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "findingKey",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "EventId",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "isExcluded",
+                      "type": "boolean",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "labels",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "lastSeenTime",
+                      "type": "datetime",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "magellan",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "occurrences",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "organizationalUnitId",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "organizationalUnitPath",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "origin",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ownerUserName",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "region",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "remediation",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "remediationActions",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ruleId",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ruleLogic",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "ruleName",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "scanId",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "severity",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "status",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "statusReason",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "tag",
+                      "type": "string",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "updatedTime",
+                      "type": "datetime",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "webhookResponses",
+                      "type": "dynamic",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    },
+                    {
+                      "name": "TimeGenerated",
+                      "type": "datetime",
+                      "isDefaultDisplay": false,
+                      "isHidden": false
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('_solutionVersion')]"
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+      "apiVersion": "2022-09-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+      "location": "[parameters('workspace-location')]",
+      "kind": "Customizable",
+      "properties": {
+        "connectorUiConfig": {
+          "title": "CloudGuard Security Events",
+          "publisher": "CheckPoint",
+          "descriptionMarkdown": "The [CloudGuard](https://sc1.checkpoint.com/documents/CloudGuard_Dome9/Documentation/Overview/CloudGuard-CSPM-Introduction.htm?cshid=help_center_documentation) data connector enables the ingestion of security events from the CloudGuard API into Microsoft Sentinel™, using Microsoft Sentinel’s Codeless Connector Platform. The connector supports DCR-based [ingestion time transformations](https://docs.microsoft.com/azure/azure-monitor/logs/custom-logs-overview) which parses incoming security event data into custom columns. This pre-parsing process eliminates the need for query-time parsing, resulting in improved performance for data queries.",
+          "graphQueriesTableName": "CloudGuard_SecurityEvents_CL",
+          "graphQueries": [
+            {
+              "metricName": "Total data received",
+              "legend": "CloudGuard Events",
+              "baseQuery": "{{graphQueriesTableName}}"
+            }
+          ],
+          "sampleQueries": [
+            {
+              "description": "Get Sample of CloudGuard Events",
+              "query": "{{graphQueriesTableName}}\n | take 10"
+            },
+            {
+              "description": "Total Events by uuid",
+              "query": "{{graphQueriesTableName}}\n | summarize count() by OriginalEventUid"
+            }
+          ],
+          "dataTypes": [
+            {
+              "name": "{{graphQueriesTableName}}",
+              "lastDataReceivedQuery": "{{graphQueriesTableName}}|summarize Time = max  (TimeGenerated)\n|where isnotempty(Time)"
+            }
+          ],
+          "connectivityCriteria": [
+            {
+              "type": "HasDataConnectors"
+            }
+          ],
+          "availability": {
+            "isPreview": false
+          },
+          "permissions": {
+            "resourceProvider": [
+              {
+                "provider": "Microsoft.OperationalInsights/workspaces",
+                "permissionsDisplayText": "Read and Write permissions are required.",
+                "providerDisplayName": "Workspace",
+                "scope": "Workspace",
+                "requiredPermissions": {
+                  "write": true,
+                  "read": true,
+                  "delete": true
+                }
+              }
+            ],
+            "customs": [
+              {
+                "name": "CloudGuard API Key",
+                "description": "Refer to the instructions provided [here](https://sc1.checkpoint.com/documents/CloudGuard_Dome9/Documentation/Settings/Users-Roles.htm#add_service) to generate an API key."
+              }
+            ]
+          },
+          "instructionSteps": [
+            {
+              "description": "To enable the CloudGuard connector for Microsoft Sentinel, enter the required information below and select Connect.\n>",
+              "instructions": [
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Key ID",
+                    "placeholder": "api_key",
+                    "type": "text",
+                    "name": "api_key"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "API Key Secret",
+                    "placeholder": "api_secret",
+                    "type": "password",
+                    "name": "api_secret"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "endpoint URL",
+                    "placeholder": "https://api.dome9.com",
+                    "type": "text",
+                    "name": "endpoint_url"
+                  }
+                },
+                {
+                  "type": "Textbox",
+                  "parameters": {
+                    "label": "Filter",
+                    "placeholder": "Paste filter from CloudGuard or leave empty for no filter (to get all security events types)",
+                    "type": "text",
+                    "name": "query_filter"
+                  }
+                },
+                {
+                  "parameters": {
+                    "label": "toggle",
+                    "name": "toggle"
+                  },
+                  "type": "ConnectionToggleButton"
+                }
+              ],
+              "title": "Connect CloudGuard Events to Microsoft Sentinel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+      "apiVersion": "2022-01-01-preview",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+      "properties": {
+        "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+        "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+        "kind": "DataConnector",
+        "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+        "source": {
+          "sourceId": "[variables('_solutionId')]",
+          "name": "[variables('_solutionName')]",
+          "kind": "Solution"
+        },
+        "author": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('_solutionAuthor')]",
+          "tier": "[variables('_solutionTier')]"
+        },
+        "dependencies": {
+          "criteria": [
+            {
+              "version": "[variables('dataConnectorVersionConnections')]",
+              "contentId": "[variables('_dataConnectorContentIdConnections')]",
+              "kind": "ResourcesDataConnector"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+      "apiVersion": "2023-04-01-preview",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+      "location": "[parameters('workspace-location')]",
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+      ],
+      "properties": {
+        "contentId": "[variables('_dataConnectorContentIdConnections')]",
+        "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+        "contentKind": "ResourcesDataConnector",
+        "mainTemplate": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "[variables('dataConnectorVersionConnections')]",
+          "parameters": {
+            "connectorDefinitionName": {
+              "defaultValue": "connectorDefinitionName",
+              "type": "string",
+              "minLength": 1
+            },
+            "workspace": {
+              "defaultValue": "[parameters('workspace')]",
+              "type": "string"
+            },
+            "dcrConfig": {
+              "defaultValue": {
+                "dataCollectionEndpoint": "data collection Endpoint",
+                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+              },
+              "type": "object"
+            },
+            "api_key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "api_secret": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint_url": {
+              "defaultValue": "https://api.dome9.com",
+              "type": "string",
+              "minLength": 1
+            },
+            "query_filter": {
+              "defaultValue": "",
+              "type": "string"
+            }
+          },
+          "variables": {
+            "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]"
+          },
+          "resources": [
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+              "apiVersion": "2022-01-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+              "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "kind": "ResourcesDataConnector",
+                "version": "[variables('dataConnectorVersionConnections')]",
+                "source": {
+                  "sourceId": "[variables('_solutionId')]",
+                  "name": "[variables('_solutionName')]",
+                  "kind": "Solution"
+                },
+                "author": {
+                  "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                  "name": "[variables('_solutionAuthor')]",
+                  "tier": "[variables('_solutionTier')]"
+                }
+              }
+            },
+            {
+              "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'CloudGuardDCV1')]",
+              "apiVersion": "2022-12-01-preview",
+              "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+              "location": "[parameters('workspace-location')]",
+              "kind": "RestApiPoller",
+              "properties": {
+                "dataType": "CloudGuard Events API",
+                "response": {
+                  "eventsJsonPaths": [
+                    "$.findings"
+                  ],
+                  "format": "json"
+                },
+                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                "auth": {
+                  "type": "Basic",
+                  "userName": "[[parameters('api_key')]",
+                  "password": "[[parameters('api_secret')]"
+                },
+                "request": {
+                  "queryParametersTemplate": "[[concat('{\"skipAggregations\": true, \"filter\": {\"updatedTime\": {\"from\": \"{_QueryWindowStartTime}\", \"to\": \"{_QueryWindowEndTime}\"}, \"fields\": [ {\"name\": \"origin\", \"value\": 1}, {\"name\": \"origin\", \"value\": 2}, {\"name\": \"origin\", \"value\": 105}, {\"name\": \"alertType\", \"value\": 0}', if(not(empty(parameters('query_filter'))), concat(',', parameters('query_filter')), ''), ']}}')]",
+                  "queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                  "apiEndpoint": "[[concat(parameters('endpoint_url'), '/v2/Compliance/Finding/searchFromSentinel')]",
+                  "rateLimitQPS": 10,
+                  "queryWindowInMin": 5,
+                  "isPostPayloadJson": true,
+                  "httpMethod": "Post",
+                  "retryCount": 3,
+                  "timeoutInSeconds": 60,
+                  "headers": {
+                    "Accept": "application/json",
+                    "Content-type": "application/json",
+                    "User-Agent": "Sentinel-CloudGuard",
+                    "Version": "1.0.0"
+                  }
+                },
+                "paging": {
+                  "pagingType": "NextPageToken",
+                  "nextPageTokenJsonPath": "$.searchAfter",
+                  "nextPageParaName": "searchAfter"
+                },
+                "dcrConfig": {
+                  "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                  "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                  "streamName": "Custom-CloudGuard_SecurityEvents_CL"
+                },
+                "isActive": true
+              }
+            }
+          ]
+        },
+        "packageKind": "Solution",
+        "packageVersion": "[variables('_solutionVersion')]",
+        "packageName": "[variables('_solutionName')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+        "packageId": "[variables('_solutionId')]",
+        "contentSchemaVersion": "3.0.0",
+        "version": "[variables('_solutionVersion')]"
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+      "location": "[parameters('workspace-location')]",
+      "apiVersion": "2023-04-01-preview",
+      "properties": {
+        "version": "[variables('_solutionVersion')]",
+        "kind": "Solution",
+        "contentSchemaVersion": "3.0.0",
+        "contentId": "[variables('_solutionId')]",
+        "source": {
+          "kind": "Solution",
+          "name": "[variables('_solutionName')]",
+          "sourceId": "[variables('_solutionId')]"
+        },
+        "author": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "support": {
+          "name": "[variables('_solutionAuthor')]"
+        },
+        "dependencies": {
+          "operator": "AND",
+          "criteria": [
+            {
+              "kind": "DataConnector",
+              "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+              "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+            }
+          ]
+        },
+        "firstPublishDate": "2023-12-05",
+        "providers": [
+          "[variables('_solutionAuthor')]"
+        ],
+        "contentKind": "Solution",
+        "packageId": "[variables('_solutionId')]",
+        "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+        "displayName": "[variables('_solutionName')]",
+        "publisherDisplayName": "[variables('_solutionId')]",
+        "descriptionHtml": "test",
+        "icon": "[variables('_packageIcon')]"
+      }
+    }
+  ]
+}
