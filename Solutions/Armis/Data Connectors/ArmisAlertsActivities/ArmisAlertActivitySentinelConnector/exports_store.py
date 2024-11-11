@@ -36,8 +36,7 @@ class ExportsTableStore:
     def get(self, pk: str, rk: str):
         with TableClient.from_connection_string(self.connection_string, self.table_name) as table_client:
             try:
-                logging.info(
-                    "looking for {} - {} on table {}".format(pk, rk, self.table_name))
+                logging.info("looking for {} - {} on table {}".format(pk, rk, self.table_name))
                 return table_client.get_entity(pk, rk)
             except ResourceNotFoundError:
                 return None
@@ -73,8 +72,7 @@ class ExportsTableStore:
             return table_client.submit_transaction(operations=operations)
 
     def list_all(self):
-        table_client = TableClient.from_connection_string(
-            self.connection_string, self.table_name)
+        table_client = TableClient.from_connection_string(self.connection_string, self.table_name)
         return table_client.list_entities()
 
     def merge(self, pk: str, rk: str, data: dict = None):
@@ -87,5 +85,3 @@ class ExportsTableStore:
             if data is not None:
                 entity_template.update(data)
             return table_client.upsert_entity(mode=UpdateMode.MERGE, entity=entity_template)
-
-

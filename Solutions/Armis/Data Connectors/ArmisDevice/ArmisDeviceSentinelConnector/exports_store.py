@@ -1,6 +1,4 @@
 import logging
-
-from enum import Enum
 from azure.data.tables import TableClient, UpdateMode
 from azure.core.exceptions import ResourceNotFoundError, ResourceExistsError, HttpResponseError
 
@@ -88,5 +86,3 @@ class ExportsTableStore:
             if data is not None:
                 entity_template.update(data)
             return table_client.upsert_entity(mode=UpdateMode.MERGE, entity=entity_template)
-
-

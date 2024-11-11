@@ -2,7 +2,6 @@
 
 import datetime
 import logging
-import time
 import azure.functions as func
 import json
 from .sentinel import AzureSentinel
@@ -124,7 +123,9 @@ class ArmisAlertsActivities(Utils):
             logging.error(consts.LOG_FORMAT.format(__method_name, "Error while fetching Activity : {}.".format(err)))
             raise ArmisException()
 
-    def post_alert_activity_data(self, alerts_data_to_post, activity_uuid_list, offset_to_post, checkpoint_table_object: ExportsTableStore):
+    def post_alert_activity_data(
+        self, alerts_data_to_post, activity_uuid_list, offset_to_post, checkpoint_table_object: ExportsTableStore
+    ):
         """Post alert and activity data to respective table in sentinel.
 
         Args:
@@ -156,8 +157,12 @@ class ArmisAlertsActivities(Utils):
                     )
                 )
                 offset_to_post += len(alerts_data_to_post)
-                logging.info(consts.LOG_FORMAT.format(__method_name, "Saving offset '{}' in checkpoint".format(offset_to_post)))
-                checkpoint_table_object.merge("armisalertactivity", "alertactivitycheckpoint", {"offset": offset_to_post})
+                logging.info(
+                    consts.LOG_FORMAT.format(__method_name, "Saving offset '{}' in checkpoint".format(offset_to_post))
+                )
+                checkpoint_table_object.merge(
+                    "armisalertactivity", "alertactivitycheckpoint", {"offset": offset_to_post}
+                )
             return offset_to_post
         except ArmisException:
             raise ArmisException()
@@ -185,7 +190,9 @@ class ArmisAlertsActivities(Utils):
                     activity_uuid_list.extend(activity_uuids)
                     alerts_data_to_post.append(alert)
                 else:
-                    offset_to_post = self.post_alert_activity_data(alerts_data_to_post, activity_uuid_list, offset_to_post, checkpoint_table_object)
+                    offset_to_post = self.post_alert_activity_data(
+                        alerts_data_to_post, activity_uuid_list, offset_to_post, checkpoint_table_object
+                    )
                     alerts_data_to_post = []
                     activity_uuid_list = []
                     if len(activity_uuids) < consts.CHUNK_SIZE:
@@ -216,9 +223,17 @@ class ArmisAlertsActivities(Utils):
                         logging.info(consts.LOG_FORMAT.format(__method_name, "Posted Alerts count : 1."))
                         self.total_alerts_posted += 1
                         offset_to_post += 1
-                        logging.info(consts.LOG_FORMAT.format(__method_name, "Saving offset '{}' in checkpoint".format(offset_to_post)))
-                        checkpoint_table_object.merge("armisalertactivity", "alertactivitycheckpoint", {"offset": offset_to_post})
-            self.post_alert_activity_data(alerts_data_to_post, activity_uuid_list, offset_to_post, checkpoint_table_object)
+                        logging.info(
+                            consts.LOG_FORMAT.format(
+                                __method_name, "Saving offset '{}' in checkpoint".format(offset_to_post)
+                            )
+                        )
+                        checkpoint_table_object.merge(
+                            "armisalertactivity", "alertactivitycheckpoint", {"offset": offset_to_post}
+                        )
+            self.post_alert_activity_data(
+                alerts_data_to_post, activity_uuid_list, offset_to_post, checkpoint_table_object
+            )
         except ArmisException:
             raise ArmisException()
 
@@ -230,7 +245,9 @@ class ArmisAlertsActivities(Utils):
             )
             raise ArmisException()
 
-    def fetch_alert_data(self, alert_parameter, is_checkpoint_not_exist, checkpoint_table_object: ExportsTableStore, last_time=None):
+    def fetch_alert_data(
+        self, alert_parameter, is_checkpoint_not_exist, checkpoint_table_object: ExportsTableStore, last_time=None
+    ):
         """Fetch_alert_data is used to push all the data into table.
 
         Args:
@@ -265,17 +282,13 @@ class ArmisAlertsActivities(Utils):
             alert_time = datetime.datetime.strptime(alert_time, "%Y-%m-%dT%H:%M:%S")
             alert_time += datetime.timedelta(seconds=1)
             alert_time = alert_time.strftime("%Y-%m-%dT%H:%M:%S")
+            logging.info(consts.LOG_FORMAT.format(__method_name, "Saving offset '0' in checkpoint"))
             logging.info(
-                consts.LOG_FORMAT.format(
-                    __method_name, "Saving offset '0' in checkpoint"
-                )
+                consts.LOG_FORMAT.format(__method_name, "Adding last timestamp in checkpoint: {}".format(alert_time))
             )
-            logging.info(
-                consts.LOG_FORMAT.format(
-                    __method_name, "Adding last timestamp in checkpoint: {}".format(alert_time)
-                )
+            checkpoint_table_object.merge(
+                "armisalertactivity", "alertactivitycheckpoint", {"time": alert_time, "offset": 0}
             )
-            checkpoint_table_object.merge("armisalertactivity", "alertactivitycheckpoint", {"time": alert_time, "offset": 0})
         except ArmisException:
             raise ArmisException()
 
@@ -295,7 +308,9 @@ class ArmisAlertsActivities(Utils):
                 "fields": ",".join(consts.ALERT_FIELDS),
             }
             last_time_alerts = self.state_manager_obj.get()
-            checkpoint_table = ExportsTableStore(connection_string=consts.CONNECTION_STRING, table_name=consts.CHECKPOINT_TABLE_NAME)
+            checkpoint_table = ExportsTableStore(
+                connection_string=consts.CONNECTION_STRING, table_name=consts.CHECKPOINT_TABLE_NAME
+            )
 
             if last_time_alerts is not None:
                 logging.info(
@@ -304,13 +319,11 @@ class ArmisAlertsActivities(Utils):
                     )
                 )
                 checkpoint_table.create()
-                checkpoint_table.merge("armisalertactivity", "alertactivitycheckpoint", {"time": last_time_alerts, "offset": 0})
-                self.state_manager_obj.delete()
-                logging.info(
-                    consts.LOG_FORMAT.format(
-                        __method_name, "checkpoint file deleted from fileshare."
-                    )
+                checkpoint_table.merge(
+                    "armisalertactivity", "alertactivitycheckpoint", {"time": last_time_alerts, "offset": 0}
                 )
+                self.state_manager_obj.delete()
+                logging.info(consts.LOG_FORMAT.format(__method_name, "checkpoint file deleted from fileshare."))
                 self.fetch_alert_data(
                     parameter_alert,
                     False,
@@ -328,15 +341,20 @@ class ArmisAlertsActivities(Utils):
                 logging.info(consts.LOG_FORMAT.format(__method_name, "Fetching Entity from checkpoint table"))
                 last_time_alerts = record.get("time")
                 self.data_alert_from = record.get("offset") if record.get("offset") else 0
-                logging.info(consts.LOG_FORMAT.format(
-                    __method_name, "Checkpoint table: Last timestamp: {}, Offset: {}".format(
-                        last_time_alerts, self.data_alert_from
+                logging.info(
+                    consts.LOG_FORMAT.format(
+                        __method_name,
+                        "Checkpoint table: Last timestamp: {}, Offset: {}".format(
+                            last_time_alerts, self.data_alert_from
+                        ),
                     )
-                ))
+                )
                 if last_time_alerts is None:
-                    logging.info(consts.LOG_FORMAT.format(
-                        __method_name, "time value not available in checkpoint table. Setting time as None."
-                    ))
+                    logging.info(
+                        consts.LOG_FORMAT.format(
+                            __method_name, "time value not available in checkpoint table. Setting time as None."
+                        )
+                    )
                     fetch_data_from_scratch = True
             self.fetch_alert_data(
                 parameter_alert,

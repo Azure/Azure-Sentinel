@@ -45,4 +45,3 @@ class StateManager:
             self.file_cli.delete_file()
         except ResourceNotFoundError:
             raise ResourceNotFoundError("File not found to be deleted.")
-

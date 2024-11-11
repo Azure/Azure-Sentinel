@@ -100,7 +100,7 @@ class ArmisDevice:
                     )
                 else:
                     raise ArmisException(
-                        "Armis Device Connector: Error while generating the access token. error code: {}. error message: {}.".format(
+                        "Armis Device Connector: Error while generating the access token. Code: {} Message: {}.".format(
                             response.status_code, response.text
                         )
                     )
