@@ -92,9 +92,9 @@ function testSchema([string] $ParserFile) {
         }
     }
     $Schema = (Split-Path -Path $ParserFile -Parent | Split-Path -Parent)
-    if ($parsersAsObject.Parsers) {
+    if ($parsersAsObject.Parsers -or ($parsersAsObject.ParserName -like "*Empty")){
         Write-Host "***************************************************"
-        Write-Host "${yellow}The parser '$functionName' is a union parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
+        Write-Host "${yellow}The parser '$functionName' is a union or empty parser, ignoring it from 'Schema' and 'Data' testing.${reset}"
         Write-Host "***************************************************"
     } else {
         testParser ([Parser]::new($functionName, $parsersAsObject.ParserQuery, $Schema.Replace("Parsers/ASim", ""), $parsersAsObject.ParserParams))
@@ -115,7 +115,8 @@ function testParser([Parser] $parser) {
     
     Write-Host "***************************************************"
     Write-Host "${yellow}Running 'Data' tests for '$($parser.Name)' parser${reset}"
-    $dataTest = "$parserAsletStatement`r`n$letStatementName | invoke ASimDataTester('$($parser.Schema)')"
+    # Test with only last 30 minutes of data.
+    $dataTest = "$parserAsletStatement`r`n$letStatementName | where TimeGenerated >= ago(30min) | invoke ASimDataTester('$($parser.Schema)')"
     invokeAsimTester $dataTest $parser.Name "data"
     Write-Host "***************************************************"
 }
