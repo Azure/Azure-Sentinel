@@ -43,6 +43,13 @@ RESET = '\033[0m'  # Reset to default color
 end_time = datetime.now(timezone.utc)
 start_time = end_time - timedelta(days = TIME_SPAN_IN_DAYS)
 
+# Define the dictionary mapping schemas to their respective messages
+failure_messages = {
+    'AuditEvent': "This single failure is because only one value exist in 'EventResult' field in 'AuditEvent' schema. Audit Event is a special case where 'EventResult' validations could be partial as only 'Success' events exists. Ignoring this error.",
+    'Authentication': "This single failure is because only two values exist in 'EventType' field in 'Authentication' schema. 'Authentication' is a special case where 'EventType' validations could be partial as only 'Logon' or 'Logoff' events may exists. Ignoring this error.",
+    'Dns': "This single failure is because only one value exist in 'EventType' field in 'Dns' schema. 'Dns' is a special case where 'EventType' validations could be 'Query' only. Ignoring this error."
+}
+
 def attempt_to_connect():
     try:
             credential = DefaultAzureCredential()
@@ -230,6 +237,20 @@ def read_exclusion_list_from_csv():
             exclusion_list.append(row[0])
     return exclusion_list
 
+# Function to handle printing and flushing
+def print_and_flush(message):
+    print(f"{YELLOW} {message} {RESET}")
+    sys.stdout.flush()
+
+# Function to handle error printing, flushing, and exiting
+def handle_test_failure(parser_file_path, error_message=None):
+    if error_message:
+        print(f"::error::{error_message}")
+    else:
+        print(f"::error::Tests failed for {parser_file_path}")
+    sys.stdout.flush()
+    sys.exit(1)  # Uncomment this line to fail workflow when tests are not successful.
+
 def main():
     # Get modified ASIM Parser files along with their status
     current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -267,7 +288,7 @@ def main():
         else:
             SchemaName = None
         # Check if changed file is a union parser. If Yes, skip the file
-        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')):
+        if PARSER_FILE_NAME.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
             continue
         parser_file_path = PARSER_FILE_NAME
         sys.stdout.flush()  # Explicitly flush stdout
@@ -288,29 +309,27 @@ def main():
                 if parser_file['EquivalentBuiltInParser'] in read_exclusion_list_from_csv():
                     print(f"{YELLOW}The parser {parser_file_path} is listed in the exclusions file. Therefore, this workflow run will not fail because of it. To allow this parser to cause the workflow to fail, please remove its name from the exclusions list file located at: {exclusion_file_path}{RESET}")
                     sys.stdout.flush()
-                # If Failure count is due to EventResult and EventSchema is AuditEvent, then ignore the failure. 
-                # Audit Event is a special case where 'EventResult' validations could be partial like only 'Success' events.
-                elif len(result.failures) == 1:
+                # Check for exception cases where the failure can be ignored
+                # Check if the failure message and schema match the exception cases
+                if len(result.failures) == 1:
                     failure_message = result.failures[0][1]
-                    if "eventresult - validations for this parameter are partial" in failure_message:
-                        if parser_file['Normalization']['Schema'] == 'AuditEvent':
-                            print(f"{YELLOW} This single failure is due to partial result in 'EventResult' field in 'AuditEvent' schema. Audit Event is a special case where 'EventResult' validations could be partial like only 'Success' events. Ignoring this error. {RESET}")
-                            sys.stdout.flush()
-                    elif "eventtype_in - Expected to have less results after filtering." in failure_message:
-                        if parser_file['Normalization']['Schema'] == 'Authentication':
-                            print(f"{YELLOW} This single failure is due to only two values in 'EventType' field in 'Authentication' schema. 'Authentication' is a special case where 'EventType' validations could be 'Logon' or 'Logoff' only. Ignoring this error. {RESET}")
-                            sys.stdout.flush()
-		    else:
-                        print(f"::error::Tests failed for {parser_file_path}")
-                        sys.stdout.flush()
-                        sys.exit(1) # uncomment this line to fail workflow when tests are not successful.
+                    schema = parser_file['Normalization']['Schema']
+                    match schema:
+                        case 'AuditEvent' if "eventresult - validations for this parameter are partial" in failure_message:
+                            print_and_flush(failure_messages['AuditEvent'])
+                        case 'Authentication' if "eventtype_in - Expected to have less results after filtering." in failure_message:
+                            print_and_flush(failure_messages['Authentication'])
+                        case 'Dns' if "eventtype - validations for this parameter are partial" in failure_message:
+                            print_and_flush(failure_messages['Dns'])
+                        case _:
+                            # Default case when single error and if no specific condition matches
+                            handle_test_failure(parser_file_path)
                 else:
-                    print(f"::error::Tests failed for {parser_file_path}")
-                    sys.stdout.flush()  # Explicitly flush stdout
-                    sys.exit(1) # uncomment this line to fail workflow when tests are not successful.
+                    # When more than one failures or no specific exception case
+                    handle_test_failure(parser_file_path)
             except subprocess.CalledProcessError as e:
-                print(f"::error::An error occurred while reading parser file: {e}")
-                sys.stdout.flush()  # Explicitly flush stdout
+                # Handle exceptions raised during the parser execution e.g. error in KQL query
+                handle_test_failure(parser_file_path, f"An error occurred while running parser: {e}")
 
 
 class FilteringTest(unittest.TestCase):
@@ -404,7 +423,7 @@ class FilteringTest(unittest.TestCase):
     def datetime_test(self, param, query_definition, column_name_in_table):
         param_name = param['Name']
         # Get count of rows without filtering
-        no_filter_query = query_definition + f"query()\n"
+        no_filter_query = query_definition + f"query() | project TimeGenerated \n"
         no_filter_response = self.send_query(no_filter_query)
         num_of_rows_when_no_filters_in_query = len(no_filter_response.tables[0].rows)
         self.assertNotEqual(len(no_filter_response.tables[0].rows) , 0 , f"No data for parameter:{param_name}")
@@ -823,6 +842,20 @@ all_schemas_parameters = {
         "starttime" : "EventStartTime",
         "targetappname_has_any" : "TargetAppName",
         "username_has_any" : "User"
+    },
+    "AlertEvent" :
+    {
+        "disabled" : "",
+        "endtime" : "EventEndTime",
+        "starttime" : "EventStartTime",
+        "ipaddr_has_any_prefix" : "DvcIpAddr",
+        "hostname_has_any" : "DvcHostname",
+        "username_has_any" : "Username",
+        "attacktactics_has_any" : "AttackTactics",
+        "attacktechniques_has_any" : "AttackTechniques",
+        "threatcategory_has_any" : "ThreatCategory",
+        "alertverdict_has_any" : "AlertVerdict",
+        "eventseverity_has_any" : "EventSeverity",
     },
     "DhcpEvent" :
     {
