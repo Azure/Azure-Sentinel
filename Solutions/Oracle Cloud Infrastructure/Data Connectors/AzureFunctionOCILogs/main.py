@@ -102,7 +102,7 @@ def get_cursor_by_group(sc, sid, group_name, instance_name):
     return response.data.value
 
 def get_cursor_by_partition(client, stream_id, partition):
-    print("Creating a cursor for partition {}".format(partition))
+    logging.info("Creating a cursor for partition {}".format(partition))
     cursor_details = oci.streaming.models.CreateCursorDetails(
         partition=partition,
         type=oci.streaming.models.CreateCursorDetails.TYPE_TRIM_HORIZON)
