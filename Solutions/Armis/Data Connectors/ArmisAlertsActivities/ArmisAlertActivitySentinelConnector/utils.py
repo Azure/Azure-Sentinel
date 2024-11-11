@@ -79,7 +79,7 @@ class Utils:
         __method_name = inspect.currentframe().f_code.co_name
         try:
             response = requests.request(
-                method, url, headers=headers, params=params, data=data, timeout=consts.REQUEST_TIMEOUT
+                method, url, headers=self.header, params=params, data=data, timeout=consts.REQUEST_TIMEOUT
             )
             for _ in range(retry_401 + 1):
                 if response.status_code == 200:
