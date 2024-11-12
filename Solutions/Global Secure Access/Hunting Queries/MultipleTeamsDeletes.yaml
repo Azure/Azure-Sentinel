@@ -1,5 +1,5 @@
 id: 64990414-b015-4edf-bef0-343b741e68c5
-name: Multiple Teams deleted by a single user
+name: GSA Enriched Office 365 - Multiple Teams deleted by a single user
 description: |
   'This hunting query identifies where multiple Teams have been deleted by a single user in a short timeframe.'
 requiredDataConnectors:
@@ -12,23 +12,49 @@ relevantTechniques:
   - T1485
   - T1489
 query: |
-  // Adjust this value to change how many Teams should be deleted before including
-  let max_delete = 3;
-  let deleting_users = (
-    EnrichedMicrosoft365AuditLogs
-    | where Workload == "MicrosoftTeams"
-    | where Operation == "TeamDeleted"
-    | summarize count_ = count() by UserId
-    | where count_ > max_delete
-    | project UserId
-  );
-  EnrichedMicrosoft365AuditLogs
-  | where Workload == "MicrosoftTeams"
-  | where Operation == "TeamDeleted"
-  | where UserId in (deleting_users)
-  | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
-  | extend Account_0_Name = AccountName
-  | extend Account_0_UPNSuffix = AccountUPNSuffix
+    let max_delete = 3;  // Adjust this value to change how many Teams should be deleted before being included
+    // EnrichedMicrosoft365AuditLogs - Users who deleted more than 'max_delete' Teams
+    let deleting_users_enriched = (
+        EnrichedMicrosoft365AuditLogs
+        | where Workload == "MicrosoftTeams"
+        | where Operation == "TeamDeleted"
+        | summarize count_ = count() by UserId
+        | where count_ > max_delete
+        | project UserId
+    );
+    // EnrichedMicrosoft365AuditLogs Query
+    let EnrichedEvents = EnrichedMicrosoft365AuditLogs
+        | where Workload == "MicrosoftTeams"
+        | where Operation == "TeamDeleted"
+        | where UserId in (deleting_users_enriched)
+        | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+        | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix
+        | project TimeGenerated, UserId, Account_0_Name, Account_0_UPNSuffix;
+    // OfficeActivity - Users who deleted more than 'max_delete' Teams
+    let deleting_users_office = (
+        OfficeActivity
+        | where OfficeWorkload =~ "MicrosoftTeams"
+        | where Operation =~ "TeamDeleted"
+        | summarize count_ = count() by UserId
+        | where count_ > max_delete
+        | project UserId
+    );
+    // OfficeActivity Query
+    let OfficeEvents = OfficeActivity
+        | where OfficeWorkload =~ "MicrosoftTeams"
+        | where Operation =~ "TeamDeleted"
+        | where UserId in (deleting_users_office)
+        | extend AccountName = tostring(split(UserId, "@")[0]), AccountUPNSuffix = tostring(split(UserId, "@")[1])
+        | extend Account_0_Name = AccountName, Account_0_UPNSuffix = AccountUPNSuffix
+        | project TimeGenerated, UserId, Account_0_Name, Account_0_UPNSuffix;
+    // Combine Office and Enriched Logs
+    let CombinedEvents = OfficeEvents
+        | union EnrichedEvents
+        | summarize arg_min(TimeGenerated, *) by UserId;
+    // Final Output
+    CombinedEvents
+    | project TimeGenerated, UserId, Account_0_Name, Account_0_UPNSuffix
+    | order by TimeGenerated desc
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -36,4 +62,4 @@ entityMappings:
         columnName: AccountName
       - identifier: UPNSuffix
         columnName: AccountUPNSuffix
-version: 2.0.1
+version: 2.0.2

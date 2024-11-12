@@ -99,5 +99,3 @@ output "GCP_project_number" {
 output "GCP_subscription_name" {
   value       = google_pubsub_subscription.sentinel-subscription.name
 }
-
-#danielle ask her about this
