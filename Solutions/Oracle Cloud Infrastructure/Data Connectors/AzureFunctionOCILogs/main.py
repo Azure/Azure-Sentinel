@@ -247,7 +247,6 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                                             count+=1
                                         event["data"]["stateChange"].pop("current")
                                 else:
-                                    
                                     event["data"]["stateChange"]["current"] = json.dumps(event["data"]["stateChange"]["current"])
                     sentinel.send(event)
 
