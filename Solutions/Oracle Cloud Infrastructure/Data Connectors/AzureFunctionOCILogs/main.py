@@ -125,7 +125,7 @@ def split_big_request(queue):
             queues_list = [queue[:middle], queue[middle:]]
             return split_big_request(queues_list[0]) + split_big_request(queues_list[1])
 
-def process_large_field(event_section, field_name, field_size_limit):
+def process_large_field(event_section, field_name, field_size_limit,max_part=10):
     """Process and split large fields in the event data if they exceed the size limit."""
     if field_name in event_section:
         field_data = event_section[field_name]
@@ -135,6 +135,8 @@ def process_large_field(event_section, field_name, field_size_limit):
             if isinstance(field_data, list):
                 queue_list = split_big_request(field_data)
                 for count, item in enumerate(queue_list, 1):
+                    if count > max_part:
+                        break
                     event_section[f"{field_name}Part{count}"] = item
                 event_section.pop(field_name)
 
@@ -142,6 +144,8 @@ def process_large_field(event_section, field_name, field_size_limit):
             elif isinstance(field_data, dict):
                 queue_list = list(field_data.keys())
                 for count, key in enumerate(queue_list, 1):
+                    if count > max_part:
+                        break
                     event_section[f"{field_name}Part{count}"] = field_data[key]
                 event_section.pop(field_name)
             else:
