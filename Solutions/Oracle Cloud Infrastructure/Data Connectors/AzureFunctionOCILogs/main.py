@@ -144,6 +144,8 @@ def process_large_field(event_section, field_name, field_size_limit):
                 for count, key in enumerate(queue_list, 1):
                     event_section[f"{field_name}Part{count}"] = field_data[key]
                 event_section.pop(field_name)
+            else:
+                pass
 
         else:
             # If within size limit, just serialize it
