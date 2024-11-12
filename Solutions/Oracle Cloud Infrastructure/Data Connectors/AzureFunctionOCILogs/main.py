@@ -127,7 +127,7 @@ def split_big_request(queue):
 
 def process_large_field(event_section, field_name, field_size_limit):
     """Process and split large fields in the event data if they exceed the size limit."""
-    if event_section[field_name] is not None:
+    if field_name in event_section:
         field_data = event_section[field_name]
         
         if len(json.dumps(field_data).encode()) > field_size_limit:
