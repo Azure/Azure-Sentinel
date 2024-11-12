@@ -24,6 +24,8 @@ PARTITIONS = os.getenv('Partition',"0")
 Message_Limit = os.getenv('Message_Limit',250)
 limit = int(Message_Limit)
 
+FIELD_SIZE_LIMIT_BYTES = 1000 * 32
+
 LOG_ANALYTICS_URI = os.environ.get('logAnalyticsUri')
 
 if not LOG_ANALYTICS_URI or str(LOG_ANALYTICS_URI).isspace():
@@ -110,6 +112,19 @@ def get_cursor_by_partition(client, stream_id, partition):
     cursor = response.data.value
     return cursor
 
+def check_size(queue):
+        data_bytes_len = len(json.dumps(queue).encode())
+        return data_bytes_len < FIELD_SIZE_LIMIT_BYTES
+
+
+def split_big_request(queue):
+        if check_size(queue):
+            return [queue]
+        else:
+            middle = int(len(queue) / 2)
+            queues_list = [queue[:middle], queue[middle:]]
+            return split_big_request(queues_list[0]) + split_big_request(queues_list[1])
+
 
 def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor, limit, sentinel: AzureSentinelConnector, start_ts):
     cursor = initial_cursor
@@ -131,18 +146,109 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                             if event["data"]["request"] is not None and "headers" in event["data"]["request"]:
                                 event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
                             if event["data"]["request"] is not None and "parameters" in event["data"]["request"]:
-                                event["data"]["request"]["parameters"] = json.dumps(
-                                    event["data"]["request"]["parameters"])
+                                event_parameters = event["data"]["request"]["parameters"]
+
+                                if len(json.dumps(event["data"]["request"]["parameters"]).encode()) > FIELD_SIZE_LIMIT_BYTES:
+                                    if type(event_parameters) == list:
+                                        queue_list = split_big_request(event_parameters)
+                                        count = 1
+                                        for q in queue_list:
+                                            columnname = 'parametersPart' + str(count)
+                                            event["data"]["request"][columnname] = q
+                                            count+=1
+                                        event["data"]["request"].pop('parameters')
+
+                                    if type(event_parameters) == dict:
+                                        queue_list = list(event_parameters.keys())
+                                        count = 1
+                                        for q in queue_list:
+                                            columnname = 'parametersPart' + str(count)
+                                            event["data"]["request"][columnname] = event["data"]["request"]["parameters"][q]
+                                            count+=1
+                                        event["data"]["request"].pop('parameters')
+                                    
+                                else:
+                                    event["data"]["request"]["parameters"] = json.dumps(event_parameters)
+
                         if "response" in event["data"]:
                             if event["data"]["response"] is not None and "headers" in event["data"]["response"]:
-                                event["data"]["response"]["headers"] = json.dumps(event["data"]["response"]["headers"])
+                                event_headers = event["data"]["response"]["headers"]
+
+                                if len(json.dumps(event["data"]["response"]["headers"]).encode()) > FIELD_SIZE_LIMIT_BYTES:
+                                    if type(event_headers) == list:
+                                        queue_list = split_big_request(event_headers)
+                                        count = 1
+                                        for q in queue_list:
+                                            columnname = 'headersPart' + str(count)
+                                            event["data"]["request"][columnname] = q
+                                            count+=1
+                                        event["data"]["request"].pop("headers")
+                                    
+                                    if type(event_headers) == dict:
+                                        queue_list = list(event_headers.keys())
+                                        count = 1
+                                        for q in queue_list:
+                                            columnname = 'headersPart' + str(count)
+                                            event["data"]["request"][columnname] = event["data"]["response"]["headers"][q]
+                                            count+=1
+                                        event["data"]["request"].pop("headers")
+
+                                else:
+                                    event["data"]["response"]["headers"] = json.dumps(event["data"]["response"]["headers"])
+
+
                         if "additionalDetails" in event["data"]:
-                            event["data"]["additionalDetails"] = json.dumps(event["data"]["additionalDetails"])
+                            event_additionalDetails = event["data"]["additionalDetails"]
+                            if len(json.dumps(event["data"]["additionalDetails"]).encode()) > FIELD_SIZE_LIMIT_BYTES:
+                                if type(event_additionalDetails) == list:
+                                    queue_list = split_big_request(event_additionalDetails)
+                                    count = 1
+                                    for q in queue_list:
+                                        columnname = 'additionalDetailsPart' + str(count)
+                                        event["data"][columnname] = q
+                                        count+=1
+                                    event["data"].pop("additionalDetails")
+                                    
+                                
+                                if type(event_additionalDetails) == dict:
+                                    queue_list = list(event_additionalDetails.keys())
+                                    count = 1
+                                    for q in queue_list:
+                                        columnname = 'additionalDetailsPart' + str(count)
+                                        event["data"][columnname] = event["data"]["additionalDetails"][q]
+                                        count+=1
+                                    event["data"].pop("additionalDetails")
+                            else:
+                                event["data"]["additionalDetails"] = json.dumps(event["data"]["additionalDetails"])
+
+
+
                         if "stateChange" in event["data"]:
                             logging.info("In data.stateChange : {}".format(event["data"]["stateChange"]))
                             if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
-                                event["data"]["stateChange"]["current"] = json.dumps(
-                                    event["data"]["stateChange"]["current"])
+                                event_current = event["data"]["stateChange"]["current"]
+                                if len(json.dumps(event["data"]["stateChange"]["current"]).encode()) > FIELD_SIZE_LIMIT_BYTES:
+                                    if type(event_current) == list:
+                                        queue_list = split_big_request(event_current)
+                                        count = 1
+                                        for q in queue_list:
+                                            columnname = 'currentPart' + str(count)
+                                            event["data"]["stateChange"][columnname] = q
+                                            count+=1
+                                        event["data"]["stateChange"].pop("current")
+                                        
+                                    
+                                    if type(event_current) == dict:
+                                        queue_list = list(event_current.keys())
+                                        count = 1
+                                        for q in queue_list:
+                                            columnname = 'currentPart' + str(count)
+                                            event["data"]["stateChange"][columnname] = event["data"]["stateChange"]["current"][q]
+                                            count+=1
+                                        event["data"]["stateChange"].pop("current")
+                                else:
+                                    
+                                    event["data"]["stateChange"]["current"] = json.dumps(event["data"]["stateChange"]["current"])
                     sentinel.send(event)
 
         sentinel.flush()
