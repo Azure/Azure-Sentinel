@@ -297,7 +297,7 @@ namespace Kqlvalidations.Tests
             var queryParamsAsLetStatements = GenerateFunctionParametersAsLetStatements(yaml, "FunctionParams");
 
             //Ignore known issues
-            yaml.TryGetValue("Id", out object id);
+            yaml.TryGetValue("id", out object id);
             if (id != null && ShouldSkipTemplateValidation((string)id))
             {
                 return;
@@ -314,7 +314,7 @@ namespace Kqlvalidations.Tests
         [ClassData(typeof(SolutionParsersYamlFilesTestData))]
         public void Validate_SolutionParsersFunctions_HaveValidKql(string fileName, string encodedFilePath)
         {
-            if (fileName == "NoFile.yaml" || fileName == "ASIM_FillNull.yaml")
+            if (fileName == "NoFile.yaml")
             {
                 Assert.True(true);
                 return;
