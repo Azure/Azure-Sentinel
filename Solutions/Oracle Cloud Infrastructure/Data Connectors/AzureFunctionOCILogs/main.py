@@ -138,7 +138,7 @@ def process_large_field(event_section, field_name, field_size_limit,max_part=10)
                     if count > max_part:
                         break
                     event_section[f"{field_name}Part{count}"] = item
-                event_section.pop(field_name)
+                del event_section[field_name]
 
             # Split if field_data is a dictionary
             elif isinstance(field_data, dict):
@@ -146,8 +146,8 @@ def process_large_field(event_section, field_name, field_size_limit,max_part=10)
                 for count, key in enumerate(queue_list, 1):
                     if count > max_part:
                         break
-                    event_section[f"{field_name}Part{count}"] = field_data[key]
-                event_section.pop(field_name)
+                    event_section[f"{field_name}Part{key}"] = field_data[key]
+                del event_section[field_name]
             else:
                 pass
 

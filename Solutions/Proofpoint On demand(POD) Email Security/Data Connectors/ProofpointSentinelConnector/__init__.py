@@ -131,15 +131,18 @@ class Proofpoint_api:
                                 columnname = 'msgParts' + str(count)
                                 y[columnname] = q
                                 count+=1
+                            del y['msgParts']
+                            
                         elif isinstance(y['msgParts'],dict):
                             queue_list = list(y['msgParts'].keys())
                             for count, key in enumerate(queue_list, 1):
                                 if count > 10:
                                     break
-                                y[f"msgParts{count}"] = y['msgParts'][key]
+                                y[f"msgParts{key}"] = y['msgParts'][key]
 
-                        del y['msgParts']
-
+                            del y['msgParts']
+                        else:
+                            pass
                     y.update({'event_type': event_type})
                     obj_array.append(y)
 

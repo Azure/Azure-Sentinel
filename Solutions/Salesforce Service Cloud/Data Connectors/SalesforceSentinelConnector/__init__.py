@@ -159,14 +159,20 @@ def gen_chunks(file_in_tmp_path):
                                 columnname = 'messagePart' + str(count)
                                 row['action'][columnname] = q
                                 count+=1
+                            del row['action']['message']
+                            
                     elif isinstance(row['action']['message'],dict):
                             queue_list = list(row['action']['message'].keys())
                             for count, key in enumerate(queue_list, 1):
                                 if count > 10:
                                     break
-                                row['action'][f"messagePart{count}"] = row['action']['message'][key]
+                                row['action'][f"messagePart{key}"] = row['action']['message'][key]
+                            del row['action']['message']
 
-                    del row['action']['message']
+                    else:
+                        pass
+
+                    
 
             obj_array.append(row)
         body = json.dumps(obj_array)
