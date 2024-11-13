@@ -22,7 +22,7 @@
                 "description": "FQDN of PCE"
             }
         },
-        "PORT": {            
+        "PORT": {
             "type": "String",
             "metadata": {
                 "description": "Port that PCE connects to, like 443"
@@ -45,16 +45,14 @@
             "metadata": {
                 "description": "API secret"
             }
-        }                                       
+        }
     },
     "variables": {
         "functionWorkerRuntime": "dotnet",
         "location": "[resourceGroup().location]",
         "hostingPlanName": "[parameters('FunctionAppName')]",
-        "appInsightsLocation": "[resourceGroup().location]",
         "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
         "functionAppName": "[parameters('FunctionAppName')]",
-        "StorageAccount": "Standard_LRS",
         "applicationInsightsName": "[parameters('FunctionAppName')]",
         "pceFQDN": "[parameters('PCE_FQDN')]",
         "port": "[parameters('PORT')]",
@@ -93,64 +91,71 @@
             "properties": {
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
                 "siteConfig": {
-                "appSettings": [
-                    {
-                        "name": "AzureWebJobsStorage",
-                        "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
-                    },
-                    {
-                        "name": "FUNCTIONS_EXTENSION_VERSION",
-                        "value": "~4"
-                    },
-                    {
-                        "name": "FUNCTIONS_WORKER_RUNTIME",
-                        "value": "node"
-                    },
-                    {
-                        "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
-                        "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
-                    },
-                    {
-                        "name": "FUNCTIONS_WORKER_RUNTIME",
-                        "value": "[variables('functionWorkerRuntime')]"
-                    },
-                    {
-                        "name": "PCE_FQDN",
-                        "value": "[variables('pceFQDN')]"
-                    },
-                    {
-                        "name": "PORT",
-                        "value": "[variables('port')]"
-                    },
-                    {
-                        "name": "ORG_ID",
-                        "value": "[variables('orgId')]"
-                    },
-                    {
-                        "name": "API_KEY",
-                        "value": "[variables('apiKey')]"
-                    },
-                    {
-                        "name": "API_SECRET",
-                        "value": "[variables('apiSecret')]"
-                    }
-                ]
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';EndpointSuffix=', environment().suffixes.storage, ';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2019-06-01').keys[0].value)]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~4"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "node"
+                        },
+                        {
+                            "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                            "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "[variables('functionWorkerRuntime')]"
+                        },
+                        {
+                            "name": "WEBSITE_RUN_FROM_PACKAGE",
+                            "value": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/illumio-containment-switch.zip"
+                        },
+                        {
+                            "name": "PCE_FQDN",
+                            "value": "[variables('pceFQDN')]"
+                        },
+                        {
+                            "name": "PORT",
+                            "value": "[variables('port')]"
+                        },
+                        {
+                            "name": "ORG_ID",
+                            "value": "[variables('orgId')]"
+                        },
+                        {
+                            "name": "API_KEY",
+                            "value": "[variables('apiKey')]"
+                        },
+                        {
+                            "name": "API_SECRET",
+                            "value": "[variables('apiSecret')]"
+                        }
+                    ]
                 },
                 "cors": {
-                "allowedOrigins": [
-                    "https://functions.azure.com",
-                    "https://functions-staging.azure.com",
-                    "https://functions-next.azure.com"
-                ],
-                "supportCredentials": false
+                    "allowedOrigins": [
+                        "https://functions.azure.com",
+                        "https://functions-staging.azure.com",
+                        "https://functions-next.azure.com"
+                    ],
+                    "supportCredentials": false
                 }
             }
-        },        
+        },
         {
             "type": "Microsoft.Logic/workflows",
             "apiVersion": "2017-07-01",
             "name": "[parameters('PlaybookName')]",
-            "location": "<<update>>",
+            "location": "westus",
+            "tags": {
+                "owner": "ashwin.venkatesha@illumio.com"
+            },
             "properties": {
                 "state": "Enabled",
                 "definition": {
@@ -207,7 +212,7 @@
                                 }
                             }
                         },
-                        "PortBlockingFunction-createAndProvisionDenyRule": {
+                        "PortBlockingFunction-createVirtualService": {
                             "runAfter": {
                                 "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
                                     "Succeeded"
@@ -217,7 +222,34 @@
                             "inputs": {
                                 "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
                                 "function": {
-                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createAndProvisionDenyRule')]"
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createVirtualService')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-bindWorkloadsToVirtualService": {
+                            "runAfter": {
+                                "PortBlockingFunction-createVirtualService": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-createVirtualService')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/bindWorkloadsToVirtualService')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-createAllowRuleForVirtualService": {
+                            "runAfter": {
+                                "PortBlockingFunction-bindWorkloadsToVirtualService": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createAllowRuleForVirtualService')]"
                                 }
                             }
                         },
@@ -232,6 +264,20 @@
                                 "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
                                 "function": {
                                     "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/changeWorkloadEnforcementState')]"
+                                }
+                            }
+                        },
+                        "PortBlockingFunction-createDenyRule": {
+                            "runAfter": {
+                                "PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "Function",
+                            "inputs": {
+                                "body": "@body('PortBlockingFunction-fetchVisibilityOnlyWorkloadsFromTrafficResults')",
+                                "function": {
+                                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().name, '/providers/Microsoft.Web/sites/',parameters('Functionappname'), '/functions/createDenyRule')]"
                                 }
                             }
                         }
