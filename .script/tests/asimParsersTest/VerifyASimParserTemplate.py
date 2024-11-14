@@ -53,8 +53,8 @@ def run():
     for parser in parser_yaml_files:
         
         schema_name = extract_schema_name(parser)
-        if not schema_name or parser.endswith(f'ASim{schema_name}.yaml') or parser.endswith(f'im{schema_name}.yaml'):
-            print(f"{YELLOW}Skipping '{parser}' as this is a union parser file. Union parser files are not tested.{RESET}")
+        if parser.endswith((f'ASim{schema_name}.yaml', f'im{schema_name}.yaml', f'vim{schema_name}Empty.yaml')):
+            print(f"{YELLOW}Skipping '{parser}' as this is a union or empty parser file. This file won't be tested.{RESET}")
             continue
         # Skip vim parser file if the corresponding ASim parser file is not present
         elif parser.split('/')[-1].startswith('vim'):
@@ -305,18 +305,20 @@ def print_results_table(results):
     print(tabulate(table, headers=['S.No', 'Test Value', 'Test Name', 'Result'], tablefmt="grid"))
 
 def check_test_failures(results, parser):
-    if any(result[-1] is not True for result in results):
+    if any(result[-1] == f'{RED}Fail{RESET}' for result in results):
         print("::error::Some tests failed for Parser. Please check the results above.")
-    exclusion_list = read_exclusion_list_from_csv()
-    if parser.get('EquivalentBuiltInParser') in exclusion_list:
-        print(f"::warning::The parser {parser.get('EquivalentBuiltInParser')} is listed in the exclusions file. Therefore, this workflow run will not fail because of it. To allow this parser to cause the workflow to fail, please remove its name from the exclusions list file located at: {parser_exclusion_file_path}")
-    #else:
-        # exit(1)
+        exclusion_list = read_exclusion_list_from_csv()
+        if parser.get('EquivalentBuiltInParser') in exclusion_list:
+            print(f"::warning::The parser {parser.get('EquivalentBuiltInParser')} is listed in the exclusions file, so this workflow run will not fail because of it. To allow this parser to trigger a workflow failure, please remove its name from the exclusions list file located at: {parser_exclusion_file_path}")
+        else:
+            exit(1)
+    else:
+        print(f"{GREEN}All tests successfully passed for this parser.{RESET}")
 
 def check_parser_found(asim_parser,parser_url):
     if asim_parser is None:
         print(f"::error::Parser file not found. Please check the URL and try again: {parser_url}")
-        # exit(1) # Uncomment this line to fail the workflow if parser file not found.
+        exit(1) # Uncomment this line to fail the workflow if parser file not found.
     else:
         return True
 
