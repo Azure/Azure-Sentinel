@@ -53,10 +53,10 @@ def lambda_handler(event, context):
 
         # Prepare file and upload
         sanitized_stream_name = log_data['logStream'].replace('/', '_')
-        file_path = f'/tmp/{OUTPUT_FILE_NAME}_{sanitized_stream_name}.gz'
+        first_timestamp = df['timestamp'].iloc[0]
+        file_path = f'/tmp/{OUTPUT_FILE_NAME}_{sanitized_stream_name}_{first_timestamp}.gz'
         fileToS3.to_csv(file_path, index=False, header=False, compression='gzip', sep=' ', escapechar=' ', doublequote=False, quoting=csv.QUOTE_NONE)
 
-        first_timestamp = df['timestamp'].iloc[0]
         s3.Bucket(BUCKET_NAME).upload_file(file_path, f'{BUCKET_PREFIX}{OUTPUT_FILE_NAME}/{sanitized_stream_name}/{first_timestamp}.gz')
         print(f'Uploaded logs to S3: {BUCKET_PREFIX}{OUTPUT_FILE_NAME}/{sanitized_stream_name}/{first_timestamp}.gz')
 
