@@ -160,6 +160,8 @@ def get_schema_for_builtin(query_table):
     for each in json.loads(query_response.text).get('tables')[0].get('rows'):
         if each[0] in reserved_columns:
             continue
+        elif each[0] in guid_columns:
+            continue
         elif each[3] == "bool":
             schema.append({        
             'name': each[0],
@@ -256,13 +258,13 @@ def extract_event_vendor_product(parser_query,parser_file):
 
     match = re.search(r'EventVendor\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_vendor = match.group(1).replace(" ", "")
+        event_vendor = match.group(1)
     else:
         print(f'EventVendor field not mapped in parser. Please map it in parser query.{parser_file}')
 
     match = re.search(r'EventProduct\s*=\s*[\'"]([^\'"]+)[\'"]', parser_query)
     if match:
-        event_product = match.group(1).replace(" ", "")
+        event_product = match.group(1)
     else:
         print(f'Event Product field not mapped in parser. Please map it in parser query.{parser_file}')
     return event_vendor, event_product ,schema_name   
@@ -319,9 +321,9 @@ for file in parser_yaml_files:
         SchemaName = SchemaNameMatch.group(1)
     else:
         SchemaName = None
-    # Check if changed file is a union parser. If Yes, skip the file
-    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml')):
-        print(f"Ignoring this {file} because it is a union parser file")
+    # Check if changed file is a union or empty parser. If Yes, skip the file
+    if file.endswith((f'ASim{SchemaName}.yaml', f'im{SchemaName}.yaml', f'vim{SchemaName}Empty.yaml')):
+        print(f"Ignoring this {file} because it is a union or empty parser file")
         continue        
     print(f"Starting ingestion for sample data present in {file}")
     asim_parser_url = f'{SENTINEL_REPO_RAW_URL}/{commit_number}/{file}'
@@ -395,10 +397,32 @@ for file in parser_yaml_files:
     elif log_ingestion_supported == True and table_type == "builtin":
         flag=0 #flag value is used to check if DCR is created for the table or not
         #create dcr for ingestion
+        guid_columns = []
         schema = get_schema_for_builtin(table_name)
+        data_result = convert_data_type(schema, data_result)
         request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
         response_body=hit_api(url_to_call,request_body,method_to_use)
-        print(f"Response of DCR creation: {response_body.text}") 
+        print(f"Response of DCR creation: {response_body.text}")
+        if response_body.status_code == 400 and "InvalidTransformOutput" in response_body.text:
+            guid_flag=0
+            print("*********Checking if failure reason is GUID Type columns and present in schema***********")
+            str_match = json.loads(response_body.text).get('error').get('details')[0].get('message')
+            match = re.findall(r'(\w+\s*\[produced:\s*\'String\',\s*output:\s*\'Guid\'\])', str_match)
+            print(f"Mismatched Column and there types : {match}")
+            for item in match:
+                if "Guid" not in item:
+                    guid_flag=1
+                    print(f"Provided column Type other than GUID TYPE is not matching with Output Stream : {item}")
+            if guid_flag == 1:
+                print("Please provide Same Type of columns in stream declaration that matches with output stream of DCR")
+                exit(1)
+            cleaned_guid_columns = [item.replace(" [produced:'String', output:'Guid']", "") for item in match]
+            guid_columns = cleaned_guid_columns
+            print("Re trying DCR creation after removing GUID columns")
+            schema = get_schema_for_builtin(table_name)
+            request_body, url_to_call , method_to_use ,stream_name = create_dcr(json.dumps(schema, indent=4),table_name,"Microsoft")
+            response_body=hit_api(url_to_call,request_body,method_to_use)
+            print(f"Response of DCR creation: {response_body.text}")       
         dcr_directory.append({
         'DCRname':table_name+'_DCR'+str(prnumber),
         'imutableid':json.loads(response_body.text).get('properties').get('immutableId'),
@@ -416,4 +440,4 @@ for file in parser_yaml_files:
         senddtosentinel(immutable_id,data_result,stream_name,flag)
     else:
         print(f"Table {table_name} is not supported for log ingestion")
-        continue 
+        continue

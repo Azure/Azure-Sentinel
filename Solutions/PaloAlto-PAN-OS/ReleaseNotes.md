@@ -1,6 +1,7 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
-| 3.0.7 	  | 08-01-2024 					   |   Updated **Analytic Rule** for entity mappings					|
+| 3.0.7 	  | 11-11-2024 					   |   Removed Deprecated **Data Connector**                            |
+|             |                                |   Updated **Analytic Rule** for entity mappings                    |
 | 3.0.6 	  | 12-07-2024 					   |   Deprecated **Data Connector** 									|
 | 3.0.5       | 30-04-2024                     |   Updated the **Data Connector** to fix conectivity criteria query |
 | 3.0.4       | 16-04-2024                     |   Fixed existing rule for sites with private IP addresses other than 10/8 |
