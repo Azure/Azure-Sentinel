@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
-| 3.0.2       | 03-05-2024                     | Repackaged for parser issue fix on reinstall                       |
+| 3.0.2       | 03-05-2024                     | Repackaged for parser issue fix on reinstall and Cleanup and rename analytic keys of **Analytic Rules** |
 | 3.0.1       | 18-01-2024                     | Changes for rebranding from Microsoft 365 Defender to Microsoft Defender XDR,         |
 |             |                                | Updated user-agent strings used when calling Dynatrace REST API's,                    |
 |             |                                | Added new Entity Mappings to **Analytic Rules**                                       |
