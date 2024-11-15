@@ -30,7 +30,7 @@ AWSRoleSessionName = Name of the session variable. //Leave default
 6. Under Settings, go to Configuration and paste the ApplicationId (ClientId) into the ClientID parameter.
 
 > [!IMPORTANT]
-> If managed identity is not able to obtain the token using `ClientId` scope - `invalid_resource` error. Register a new app in Entra and [grant managed identity permissions](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/how-to-assign-app-role-managed-identity-powershell) to use it, following [Option 2 from this external blog](https://blog.identitydigest.com/azuread-access-aws/).
+> If managed identity is not able to obtain the token using `ClientId` scope - `invalid_resource` error. Register a new app in Entra and [grant managed identity permissions](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/how-to-assign-app-role-managed-identity-powershell) to use it, following [Option 2 from this external blog](https://blog.identitydigest.com/azuread-access-aws/).
 > When app registration is used `ClientId` value should match the exposed API name e.g. `api://00000000-0000-0000-0000-000000000000`.
 
 ### AWS
