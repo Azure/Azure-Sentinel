@@ -3,14 +3,14 @@
     "contentVersion": "1.0.0.0",
     "parameters": {
         "PlaybookName": {
-            "defaultValue": "Illumio Port Blocking Switch",
+            "defaultValue": "Illumio-Port-Blocking-Switch",
             "type": "String",
             "metadata": {
                 "description": "PlayBook Name"
             }
         },
         "FunctionAppName": {
-            "defaultValue": "Illumio Port Blocking Function App",
+            "defaultValue": "IllumioPortBlockingApp",
             "type": "String",
             "metadata": {
                 "description": "Function app Name"
@@ -48,14 +48,12 @@
         }
     },
     "variables": {
-        "functionWorkerRuntime": "dotnet",
         "location": "[resourceGroup().location]",
         "hostingPlanName": "[parameters('FunctionAppName')]",
-        "storageAccountName": "[concat(uniquestring(resourceGroup().id), 'azfunctions')]",
+        "storageAccountName": "illumioplaybookstorage",
         "functionAppName": "[parameters('FunctionAppName')]",
         "applicationInsightsName": "[parameters('FunctionAppName')]",
         "pceFQDN": "[parameters('PCE_FQDN')]",
-        "StorageAccount": "Standard_LRS",
         "port": "[parameters('PORT')]",
         "orgId": "[parameters('ORG_ID')]",
         "apiKey": "[parameters('API_KEY')]",
@@ -82,22 +80,49 @@
             "name": "[variables('storageAccountName')]",
             "location": "[variables('location')]",
             "sku": {
-                "name": "[variables('StorageAccount')]"
+                "name": "Standard_LRS",
+                "tier": "Standard"
             },
-            "kind": "Storage"
+            "kind": "StorageV2",
+            "properties": {
+                "accessTier": "Hot",
+                "minimumTlsVersion": "TLS1_2",
+                "supportsHttpsTrafficOnly": "true",
+                "allowBlobPublicAccess": "false",
+                "allowSharedKeyAccess": "true",
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "defaultAction": "Allow",
+                    "ipRules": []
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02",
+            "name": "[variables('applicationInsightsName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites', variables('applicationInsightsName')))]": "Resource"
+            },
+            "properties": {
+                "Application_Type": "web"
+            },
+            "kind": "web"
         },
         {
             "type": "Microsoft.Web/sites",
             "apiVersion": "2020-06-01",
             "name": "[variables('functionAppName')]",
             "location": "[variables('location')]",
-            "kind": "functionapp",
+            "kind": "functionapp,linux",
             "identity": {
                 "type": "SystemAssigned"
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
-                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]"
             ],
             "properties": {
                 "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
@@ -116,16 +141,16 @@
                             "value": "node"
                         },
                         {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "~20"
+                        },
+                        {
                             "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
                             "value": "[reference(resourceId('microsoft.insights/components', variables('applicationInsightsName')), '2020-02-02-preview').InstrumentationKey]"
                         },
                         {
-                            "name": "FUNCTIONS_WORKER_RUNTIME",
-                            "value": "[variables('functionWorkerRuntime')]"
-                        },
-                        {
                             "name": "WEBSITE_RUN_FROM_PACKAGE",
-                            "value": "https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Solutions/IllumioSaaS/Playbooks/illumio-containment-switch.zip"
+                            "value": "https://raw.githubusercontent.com/illumio-shield/Azure-Sentinel/illumio-sentinel-playbook/Solutions/IllumioSaaS/Playbooks/Illumio-Port-Blocking-Switch/illumio-containment-switch.zip"
                         },
                         {
                             "name": "PCE_FQDN",
@@ -167,6 +192,12 @@
             "tags": {
                 "owner": "ashwin.venkatesha@illumio.com"
             },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
+                "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
+            ],
             "properties": {
                 "state": "Enabled",
                 "definition": {
