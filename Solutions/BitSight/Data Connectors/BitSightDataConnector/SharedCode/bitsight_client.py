@@ -72,8 +72,8 @@ class BitSight:
             user_and_pass = base64.b64encode(api.encode()).decode("ascii")
             headers = {
                 "Accept": "application/json",
-                "X-BITSIGHT-CONNECTOR-NAME-VERSION": "BitSight Security Performance Management for Microsoft Sentinel Data Connector 1.0.0",
                 "X-BITSIGHT-CALLING-PLATFORM-VERSION": "Microsoft-Sentinel",
+                "X-BITSIGHT-CONNECTOR-NAME-VERSION": "3.0.2"
             }
             headers["Authorization"] = "Basic %s" % user_and_pass
             self.headers = headers
