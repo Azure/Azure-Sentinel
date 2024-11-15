@@ -1,0 +1,83 @@
+id: 716cf6d4-97ad-407b-923e-6790083acb58
+kind: Scheduled
+name: Dataverse - Mass deletion of records
+description: Identifies large scale record delete operations based on a predefined
+  threshold and also detects scheduled bulk deletion jobs.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1485
+query: |
+  let mass_delete_threshold = 10000;
+  let query_frequency = 1d;
+  let delete_activities = DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "Delete";
+  union
+      (
+      delete_activities
+      | summarize FirstEvent = min(TimeGenerated), TotalEvents = count() by UserId, InstanceUrl
+      | where TotalEvents > mass_delete_threshold
+      | join kind=inner (
+          delete_activities
+          | summarize DeleteCount = count() by UserId, InstanceUrl, ClientIp, EntityName)
+          on UserId, InstanceUrl
+      | extend Entities = bag_pack("Entity", EntityName, "Count", DeleteCount)
+      | summarize Details = make_set(Entities, 100), FirstEvent = min(FirstEvent) by UserId, InstanceUrl, ClientIp, TotalEvents
+      ),
+      (
+      DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "BulkDelete"
+      | summarize FirstEvent = min(TimeGenerated), TotalEvents = count() by UserId, InstanceUrl, ClientIp
+      | extend Details = todynamic("Bulk delete scheduled")
+      )
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      FirstEvent,
+      UserId,
+      ClientIp,
+      TotalEvents,
+      Details,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - mass deletion or bulk deletion job detected
+    in {{InstanceUrl}} '
+  alertDescriptionFormat: '{{UserId}} triggered the mass deletion detection with the
+    following information: {{Details}}'
+version: 3.2.0
