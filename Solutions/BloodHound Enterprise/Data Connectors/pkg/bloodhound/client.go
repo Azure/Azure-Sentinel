@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/SpecterOps/bloodhound-go-sdk/sdk"
@@ -16,6 +17,9 @@ func InitializeBloodhoundClient(apiKey string, apikeyId string, bloodhoundServer
 	// HMAC Security Provider
 	hmacTokenProvider, err := sdk.NewSecurityProviderHMACCredentials(apiKey, apikeyId)
 
+	if !strings.HasPrefix(bloodhoundServer, "https") {
+		bloodhoundServer = "https://" + bloodhoundServer
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error creating bearer token middleware %v", err)
 	}
