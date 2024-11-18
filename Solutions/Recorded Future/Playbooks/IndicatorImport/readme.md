@@ -14,6 +14,8 @@ The size and number of indicators imported is limited by logic apps file size an
 Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
 Requires authorization of **/azuresentinel** connector - <a href="https://learn.microsoft.com/en-us/connectors/azuresentinel/" target="_blank">Documentation on Microsoft power platform connectors</a>
+ \
+Connectors used: ***azuresentinel*** see [Connector authorization](../readme.md#connectors-authorization) for guidance.
 
 The parameter WorkspaceID can be found in Azure portal in the overview page of the Log Analytics Workspace. 
 
@@ -26,7 +28,8 @@ Retrieves Indicators Of Compromise (IoCs) from one of the indicator import logic
 ## RecordedFuture-Domain-IndicatorImport
 Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. \
+Connectors used: ***recordedfuturev2*** see [Connector authorization](../readme.md#connectors-authorization) for guidance. 
 
 Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115003793388-Domain-Risk-Rules" target="_blank">Microsoft Sentinel Domain Default Risk List </a> (requires Recorded Future login), Domain IOC with risk greater than 65 and adds the IOCs to the ThreatIntelligenceIndicator table.
 
@@ -37,7 +40,8 @@ Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/1150
 ## RecordedFuture-Hash-IndicatorImport
 Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section.  \
+Connectors used: ***recordedfuturev2*** see [Connector authorization](../readme.md#connectors-authorization) for guidance.
 
 Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000846167-Hash-Risk-Rules" target="_blank">Microsoft Sentinel Hash Observed in Underground Testing Risk List </a> (requires Recorded Future login), Hashes based on the observedMalwareTesting Risk Rule and adds the IOCs to the ThreatIntelligenceIndicator table.
 
@@ -47,7 +51,8 @@ Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/1150
 ## RecordedFuture-IP-IndicatorImport
 Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section.  \
+Connectors used: ***recordedfuturev2*** see [Connector authorization](../readme.md#connectors-authorization) for guidance.
 
 Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules" target="_blank">Actively Communicating Validated C&C Server Risk List </a> (requires Recorded Future login), Observing C2 communications with infected machines or adversary control by Recorded Future Network Traffic Analysis.
 
@@ -57,7 +62,8 @@ Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/1150
 ## RecordedFuture-URL-IndicatorImport
 Type: **Detection**\
 Included in Recorded Future Intelligence Solution: **Yes**\
-Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section. 
+Requires **/recordedfuturev2** API keys as described in the [Connector authorization](../readme.md##connectors-authorization) section.  \
+Connectors used: ***recordedfuturev2***, see [Connector authorization](../readme.md#connectors-authorization) for guidance.
 
 Retrieves the <a href="https://support.recordedfuture.com/hc/en-us/articles/115000894448-IP-Address-Risk-Rules" traget="_blank">Microsoft Sentinel URL Recently Reported by Insikt Group Risk List </a> (requires Recorded Future login), URLs based on the Recently Reported by Insikt Group rule and adds the IOCs to the ThreatIntelligenceIndicator table.
 
