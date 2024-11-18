@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                          |
 |-------------|--------------------------------|---------------------------------------------|
+| 3.2.11       |  31-10-2024                    | Fix API connection bug in RecordedFuture-ThreatMap-Importer, documentation improvements |
 | 3.2.10       |  01-10-2024                    | Updated install README for multiple playbooks, added protocol check for URL enrichments in RecordedFuture-IOC_Enrichment **Playbook**, moved parameters from important to advanced and internal in RecordedFuture-CustomConnector|
 | 3.2.9       |  23-09-2024                    | Updated RecordedFuture-Alert-Importer **Playbook** improved text encoding and added utm links  |
 | 3.2.8       |  23-08-2024                    | Updated RecordedFuture-Alert-Importer **Playbook** added text encoding and latest_event_date bugfix  |
