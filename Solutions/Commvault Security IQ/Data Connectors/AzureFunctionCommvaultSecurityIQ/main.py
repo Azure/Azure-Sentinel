@@ -20,89 +20,86 @@ container_name = "sentinelcontainer"
 blob_name = "timestamp"
 
 cs = os.environ.get('ConnectionString')
- 
-customer_id = os.environ.get('AzureSentinelWorkspaceId','')
+
+customer_id = os.environ.get('AzureSentinelWorkspaceId', '')
 shared_key = os.environ.get('AzureSentinelSharedKey')
 verify = False
 logAnalyticsUri = 'https://' + customer_id + '.ods.opinsights.azure.com'
 
-key_vault_name = os.environ.get("KeyVaultName","Commvault-Integration-KV")
+key_vault_name = os.environ.get("KeyVaultName", "Commvault-Integration-KV")
 uri = None
 url = None
 qsdk_token = None
 headers = {
     "Content-Type": "application/json",
-    "Accept": "application/json",
+    "Accept": "application/json"
 }
 
 job_details_body = {
-        "opType": 1,
-        "entity": {"_type_": 0},
-        "options": {"restoreIndex": True},
-        "queries": [
-            {
-                "type": 0,
-                "queryId": "MimeFileList",
-                "whereClause": [
-                    {
-                        "criteria": {
-                            "field": 38,
-                            "dataOperator": 9,
-                            "values": ["file"],
-                        }
-                    },
-                    {
-                        "criteria": {
-                            "field": 147,
-                            "dataOperator": 0,
-                            "values": ["2"],
-                        }
-                    },
-                ],
-                "dataParam": {
-                    "sortParam": {"ascending": True, "sortBy": [0]},
-                    "paging": {"firstNode": 0, "pageSize": -1, "skipNode": 0},
+    "opType": 1,
+    "entity": {"_type_": 0},
+    "options": {"restoreIndex": True},
+    "queries": [
+        {
+            "type": 0,
+            "queryId": "MimeFileList",
+            "whereClause": [
+                {
+                    "criteria": {
+                        "field": 38,
+                        "dataOperator": 9,
+                        "values": ["file"],
+                    }
                 },
-            },
-            {
-                "type": 1,
-                "queryId": "MimeFileCount",
-                "whereClause": [
-                    {
-                        "criteria": {
-                            "field": 38,
-                            "dataOperator": 9,
-                            "values": ["file"],
-                        }
-                    },
-                    {
-                        "criteria": {
-                            "field": 147,
-                            "dataOperator": 0,
-                            "values": ["2"],
-                        }
-                    },
-                ],
-                "dataParam": {
-                    "sortParam": {"ascending": True, "sortBy": [0]},
-                    "paging": {"firstNode": 0, "pageSize": -1, "skipNode": 0},
+                {
+                    "criteria": {
+                        "field": 147,
+                        "dataOperator": 0,
+                        "values": ["2"],
+                    }
                 },
+            ],
+            "dataParam": {
+                "sortParam": {"ascending": True, "sortBy": [0]},
+                "paging": {"firstNode": 0, "pageSize": -1, "skipNode": 0},
             },
-        ],
-        "paths": [{"path": "/**/*"}],
-    }
+        },
+        {
+            "type": 1,
+            "queryId": "MimeFileCount",
+            "whereClause": [
+                {
+                    "criteria": {
+                        "field": 38,
+                        "dataOperator": 9,
+                        "values": ["file"],
+                    }
+                },
+                {
+                    "criteria": {
+                        "field": 147,
+                        "dataOperator": 0,
+                        "values": ["2"],
+                    }
+                },
+            ],
+            "dataParam": {
+                "sortParam": {"ascending": True, "sortBy": [0]},
+                "paging": {"firstNode": 0, "pageSize": -1, "skipNode": 0},
+            },
+        },
+    ],
+    "paths": [{"path": "/**/*"}],
+}
 
-@app.function_name(name="AzureFunctionCommvaultSecurityIQ")
-@app.schedule(schedule="0 */5 * * * *", arg_name="myTimer", run_on_startup=True,
-              use_monitor=False)
-def myTimer(myTimer: func.TimerRequest) -> None:
-    global qsdk_token,url
-    if myTimer.past_due:
+
+def main(mytimer: func.TimerRequest) -> None:
+    global qsdk_token, url
+    if mytimer.past_due:
         logging.info('The timer is past due!')
 
-
     logging.info('Executing Python timer trigger function.')
-    
+
     pattern = r'https:\/\/([\w\-]+)\.ods\.opinsights\.azure.([a-zA-Z\.]+)$'
     match = re.match(pattern, str(logAnalyticsUri))
     if (not match):
@@ -116,25 +113,37 @@ def myTimer(myTimer: func.TimerRequest) -> None:
         url = "https://" + uri + "/commandcenter/api"
         secret_name = "access-token"
         qsdk_token = client.get_secret(secret_name).value
-        headers["authtoken"] = "QSDK "+qsdk_token
-        ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=false&showAnomalous=true"
+        headers["authtoken"] = "QSDK " + qsdk_token
+        ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=true&showAnomalous=true"
         f_url = url + ustring
-        current_date = datetime.utcnow()
+        current_date = datetime.now(datetime.timezone.utc)
         to_time = int(current_date.timestamp())
         fromtime = read_blob(cs, container_name, blob_name)
         if fromtime is None:
             fromtime = int((current_date - timedelta(days=2)).timestamp())
-
-        logging.info("Starts at: [{}]".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))        
+            logging.info("From Time : [{}] , since the time read from blob is None".format(fromtime))
+        else:
+            time_diff = current_date - fromtime
+            if time_diff > datetime.timedelta(days=2):
+                fromtime = int((current_date - timedelta(days=2)).timestamp())
+                logging.info("From Time : [{}] , since the time read from blob : [{}] is older than 2 days".format(fromtime))
+            if time_diff < datetime.timedelta(minutes = 5):
+                fromtime = int((current_date - timedelta(minutes=5)).timestamp())
+                logging.info("From Time : [{}] , since the time read from blob : [{}] is less than 5 minutes".format(fromtime))
+        max_fetch = 1000
+        headers["pagingInfo"] = f"0,{max_fetch}"
+        logging.info("Starts at: [{}]".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
+        logging.info("Event endpoint : [{}]".format(event_endpoint))
         response = requests.get(event_endpoint, headers=headers, verify=verify)
- 
+        logging.info("Response Status Code : " + str(response.status_code))
         if response.status_code == 200:
             events = response.json()
             logging.info("Events Data")
             logging.info(events)
             data = events.get("commservEvents")
-            data = [event for event in data if event.get("eventCodeString") in "7:211|7:212|7:293|7:269|14:337|14:338|69:59|7:333|69:60|35:5575"]
+            data = [event for event in data if
+                    event.get("eventCodeString") in "7:211|7:212|7:293|7:269|14:337|14:338|69:59|7:333|69:60|35:5575"]
             post_data = []
             if data:
                 for event in data:
@@ -144,13 +153,13 @@ def myTimer(myTimer: func.TimerRequest) -> None:
                 gen_chunks(post_data)
                 logging.info("Job Succeeded")
                 print("***Job Succeeded*****")
-                upload_timestamp_blob(cs, container_name, blob_name, to_time+1)
+                upload_timestamp_blob(cs, container_name, blob_name, to_time + 1)
                 logging.info("Function App Executed")
             else:
-                 print("No new events found.")
+                print("No new events found.")
 
         else:
-            logging.error("Failed to get events with status code : "+str(response.status_code))
+            logging.error("Failed to get events with status code : " + str(response.status_code))
     except Exception as e:
         logging.info("HTTP request error: %s", str(e))
 
@@ -195,22 +204,22 @@ def get_backup_anomaly(anomaly_id: int) -> str:
 
 
 def define_severity(anomaly_sub_type: str) -> str | None:
-        """
-    Function to get severity from anomaly sub type
-    
-    Args:
-        anomaly_sub_type (str): The sub type of anomaly
-        
-    Returns:
-        str | None: The severity of the anomaly or None if not found
     """
-        
-        severity = None
-        if anomaly_sub_type in ("File Type", "Threat Analysis"):
-            severity = Constants.severity_high
-        elif anomaly_sub_type == "File Activity":
-            severity = Constants.severity_info
-        return severity
+Function to get severity from anomaly sub type
+
+Args:
+    anomaly_sub_type (str): The sub type of anomaly
+
+Returns:
+    str | None: The severity of the anomaly or None if not found
+"""
+
+    severity = None
+    if anomaly_sub_type in ("File Type", "Threat Analysis"):
+        severity = Constants.severity_high
+    elif anomaly_sub_type == "File Activity":
+        severity = Constants.severity_info
+    return severity
 
 
 def if_zero_set_none(value: str | None | int) -> str | None | int:
@@ -223,7 +232,7 @@ def if_zero_set_none(value: str | None | int) -> str | None | int:
 
 
 def extract_from_regex(
-    message: str, default_value: str | None, *regex_string_args: str
+        message: str, default_value: str | None, *regex_string_args: str
 ) -> str | None:
     """
     From the message, extract the strings matching the given patterns
@@ -279,7 +288,7 @@ def get_files_list(job_id) -> list:
     job_details_body["advOptions"] = {
         "advConfig": {"browseAdvancedConfigBrowseByJob": {"jobId": int(job_id)}}
     }
-    f_url = url+"/DoBrowse"
+    f_url = url + "/DoBrowse"
     response = requests.post(f_url, headers=headers, json=job_details_body, verify=verify)
     resp = response.json()
     browse_responses = resp.get("browseResponses", [])
@@ -365,6 +374,7 @@ def get_job_details(job_id, url, headers):
         logging.info(data)
         return None
 
+
 def get_user_details(client_name):
     """
     Retrieves the user ID and user name associated with a given client name.
@@ -378,8 +388,12 @@ def get_user_details(client_name):
 
     f_url = f"{url}/Client/byName(clientName='{client_name}')"
     response = requests.get(f_url, headers=headers, verify=False).json()
-    user_id = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userId']
-    user_name = response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0]['userName']
+    user_id = \
+        response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0][
+            'userId']
+    user_name = \
+        response['clientProperties'][0]['clientProps']['securityAssociations']['associations'][0]['userOrGroup'][0][
+            'userName']
     return user_id, user_name
 
 
@@ -409,7 +423,7 @@ def get_incident_details(message: str) -> dict | None:
 
     description = format_alert_description(message)
 
-    job_details = get_job_details(job_id,url,headers)
+    job_details = get_job_details(job_id, url, headers)
     if job_details is None:
         print(f"Invalid job [{job_id}]")
         return None
@@ -421,9 +435,9 @@ def get_incident_details(message: str) -> dict | None:
     )
     subclient_id = (
         job_details.get("jobs", [{}])[0]
-        .get("jobSummary", {})
-        .get("subclient", {})
-        .get("subclientId")
+            .get("jobSummary", {})
+            .get("subclient", {})
+            .get("subclientId")
     )
     files_list, scanned_folder_list = fetch_file_details(job_id, subclient_id)
     originating_client = extract_from_regex(message, "", r"{}:\[(.*?)\]".format(Constants.originating_client))
@@ -442,7 +456,7 @@ def get_incident_details(message: str) -> dict | None:
                 message,
                 None,
                 r"{}:\[(.*?)\]".format(
-                        Constants.affected_files_count
+                    Constants.affected_files_count
                 ),
             )
         ),
@@ -451,7 +465,7 @@ def get_incident_details(message: str) -> dict | None:
                 message,
                 None,
                 r"{}:\[(.*?)\]".format(
-                        Constants.modified_files_count
+                    Constants.modified_files_count
                 ),
             )
         ),
@@ -460,7 +474,7 @@ def get_incident_details(message: str) -> dict | None:
                 message,
                 None,
                 r"{}:\[(.*?)\]".format(
-                        Constants.deleted_files_count
+                    Constants.deleted_files_count
                 ),
             )
         ),
@@ -469,7 +483,7 @@ def get_incident_details(message: str) -> dict | None:
                 message,
                 None,
                 r"{}:\[(.*?)\]".format(
-                        Constants.renamed_files_count
+                    Constants.renamed_files_count
                 ),
             )
         ),
@@ -478,7 +492,7 @@ def get_incident_details(message: str) -> dict | None:
                 message,
                 None,
                 r"{}:\[(.*?)\]".format(
-                        Constants.created_files_count
+                    Constants.created_files_count
                 ),
             )
         ),
@@ -511,7 +525,7 @@ def build_signature(date, content_length, method, content_type, resource):
     Returns:
         str: The authorization signature
     """
-    
+
     x_headers = 'x-ms-date:' + date
     string_to_hash = method + "\n" + str(content_length) + "\n" + content_type + "\n" + x_headers + "\n" + resource
     bytes_to_hash = bytes(string_to_hash, encoding="utf-8")
@@ -542,7 +556,7 @@ def post_data(body, chunk_count):
     logging.info(f"Date :- {rfc1123date}")
     content_length = len(body)
     signature = build_signature(rfc1123date, content_length, method, content_type,
-                                        resource)
+                                resource)
     uri = logAnalyticsUri + resource + '?api-version=2016-04-01'
     logging.info(f"URL - {uri}")
     headers = {
@@ -557,7 +571,8 @@ def post_data(body, chunk_count):
     if (response.status_code >= 200 and response.status_code <= 299):
         logging.info("Chunk was processed{} events".format(chunk_count))
     else:
-        logging.error("Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
+        logging.error(
+            "Error during sending events to Microsoft Sentinel. Response code:{}".format(response.status_code))
 
 
 def gen_chunks(data):
@@ -565,7 +580,7 @@ def gen_chunks(data):
 
     Args:
         data (_type_): _description_
-    """        
+    """
     for chunk in gen_chunks_to_object(data, chunksize=10000):
         obj_array = []
         for row in chunk:
@@ -584,7 +599,7 @@ def gen_chunks_to_object(data, chunksize=100):
 
     Yields:
         _type_: the chunk
-    """        
+    """
     chunk = []
     for index, line in enumerate(data):
         if (index % chunksize == 0 and index > 0):
@@ -636,7 +651,7 @@ def read_blob(connection_string, container_name, blob_name):
     Returns:
         int | None: Timestamp or None if not found
     """
-    
+
     try:
         blob_service_client = BlobServiceClient.from_connection_string(connection_string)
         blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
@@ -647,11 +662,11 @@ def read_blob(connection_string, container_name, blob_name):
             timestamp = int(content)
         logging.info(f"Timestamp read from blob {blob_name}: {timestamp}")
         return timestamp
-    
+
     except ResourceNotFoundError:
         logging.info(f"Blob '{blob_name}' does not exist.")
         return None
-    
+
     except Exception as e:
         logging.error(f"An error occurred: {str(e)}")
         raise e
