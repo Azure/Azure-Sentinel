@@ -107,8 +107,10 @@ class Proofpoint_api:
             for row in chunk:
                 if row != None and row != '':
                     y = json.loads(row)
+                    logging.info(f'json row : {y}')
                     y.update({'event_type': event_type})
                     obj_array.append(y)
+                logging.info(f'Response Object array : {obj_array}')
 
             sentinel = AzureSentinelConnector(
                 log_analytics_uri=logAnalyticsUri,
@@ -118,6 +120,7 @@ class Proofpoint_api:
                 queue_size=5000
             )
             for event in obj_array:
+                logging.info(f'Response event : {event}')
                 sentinel.send(event)
             sentinel.flush()
 
