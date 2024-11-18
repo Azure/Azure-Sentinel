@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                            |
 |-------------|--------------------------------|---------------------------------------------------------------|
+| 3.0.10      | 08-11-2024                     | Updated **Parser** to fix the schema                          |
 | 3.0.9       | 17-10-2024                     | Updated package to fix connectivity of CCP connector |
 | 3.0.8       | 14-08-2024                     | Data Connector Globally Available         |
 | 3.0.7       | 25-04-2024                     | Repackaged for parser issue with old names       |
