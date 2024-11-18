@@ -1,5 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                                 |
 |-------------|--------------------------------|--------------------------------------------------------------------|
+| 3.0.8       | 15-11-2024                     |   Corrected **Data Connector** count in CreateUiDefinition         |
 | 3.0.7 	  | 11-11-2024 					   |   Removed Deprecated **Data Connector**                            |
 |             |                                |   Updated **Analytic Rule** for entity mappings                    |
 | 3.0.6 	  | 12-07-2024 					   |   Deprecated **Data Connector** 									|
