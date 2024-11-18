@@ -29,7 +29,10 @@ query: |
   let interval = 1h;
   PowerPlatformAdminActivity
   | where EventOriginalType == "PowerAppPermissionEdited"
-  | invoke GetPowerAppsEventDetails()
+  | extend Properties = tostring(PropertyCollection)
+  | extend AppId = GetPPAdminValue("powerplatform.analytics.resource.power_app.id", Properties)
+  | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+  | extend TargetPrincipalId = GetPPAdminValue("targetuser.id", Properties)
   | extend
       PowerAppsAppId = AppId
   | join kind=leftouter (AuditLogs
@@ -47,7 +50,7 @@ query: |
       | summarize by InvitedById, InvitedByUPN, InvitedEmail, InvitedId, InvitedOrgDomain)
       on $left.TargetPrincipalId == $right.InvitedId
   | where isnotempty(InvitedId)
-  | make-series counter=dcount(TargetPrincipalId) default=0 on TimeGenerated in range(start, end, interval) by PowerAppsAppId, EnvironmentId, InvitedById, InvitedByUPN
+  | make-series counter=dcount(TargetPrincipalId) default=0 on TimeGenerated in range(start, end, interval) by PowerAppsAppId, InvitedById, InvitedByUPN
   | extend(Anomalies, AnomalyScore, ExpectedUsage) = series_decompose_anomalies(counter)
   | mv-expand
       counter to typeof(double),
