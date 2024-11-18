@@ -61,7 +61,14 @@ query: |
       PowerPlatformAdminActivity
       | where TimeGenerated >= ago (query_lookback)
       | where EventOriginalType == "CreatePowerApp"
-      | invoke GetPowerAppsEventDetails()
+      | extend Properties = tostring(PropertyCollection)
+      | extend SrcIpAddr = GetPPAdminValue("enduser.ip_address", Properties)
+      | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string(SrcIpAddr, '::ffff:', ''), SrcIpAddr)
+      | extend AppId = GetPPAdminValue("powerplatform.analytics.resource.power_app.id", Properties)
+      | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+      | extend
+          AppName = GetPPAdminValue("powerplatform.analytics.resource.power_app.display_name", Properties),
+          EnvironmentId = GetPPAdminValue("powerplatform.analytics.resource.environment.id", Properties)
       | project-rename
           AppCreatedTime = TimeGenerated,
           AppCreator = ActorName,
@@ -76,7 +83,8 @@ query: |
           | where TimeGenerated >= ago (query_lookback)
           | where EventOriginalType == "LaunchPowerApp"
           | where PropertyCollection has_any (distinct_apps)
-          | invoke GetPowerAppsEventDetails()
+          | extend Properties = tostring(PropertyCollection)
+          | extend AppName = GetPPAdminValue("powerplatform.analytics.resource.power_app.display_name", Properties)
           | summarize FirstAppLaunchTime = min(TimeGenerated) by ActorName, AppName)
           on AppName
       | where FirstAppLaunchTime > AppCreatedTime
@@ -105,10 +113,10 @@ query: |
           ),
           (
           ThreatIntelligenceIndicator
-          | where TimeGenerated >= ago (query_lookback)
-          | where ExpirationDateTime > now()
+          | where TimeGenerated >= ago(query_lookback)
           | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId
-          | where Active == true and isnotempty(Url)
+          | where Active == true and ExpirationDateTime > now()
+          | where isnotempty(isnotempty(Url))
           | project Url, Source = "ThreatIntelligence"
           )
       | summarize by Url, Source;

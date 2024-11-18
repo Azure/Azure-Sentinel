@@ -42,7 +42,10 @@ query: |
   PowerPlatformAdminActivity
   | where TimeGenerated >= ago(query_frequency)
   | where EventOriginalType == "PowerAppPermissionEdited"
-  | invoke GetPowerAppsEventDetails()
+  | extend Properties = tostring(PropertyCollection)
+  | extend AppId = GetPPAdminValue("powerplatform.analytics.resource.power_app.id", Properties)
+  | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+  | extend TargetPrincipalId = GetPPAdminValue("targetuser.id", Properties)
   | join kind=leftouter (
       AuditLogs
       | where ActivityDateTime >= ago(query_lookback)
@@ -66,7 +69,7 @@ query: |
       TargetedObjectIds = make_set(TargetPrincipalId, 1000),
       InvitedDomains = make_set(InvitedOrgDomain, 1000),
       InvitedEmailAddresses = make_set(InvitedEmail, 1000)
-      by AppName, InvitedById, InvitedByUPN, EnvironmentName, EnvironmentId
+      by AppId, InvitedById, InvitedByUPN
   | extend
       PowerAppsEntityId = 27593,
       AccountName = tostring(split(InvitedByUPN, '@')[0]),
@@ -80,9 +83,7 @@ query: |
       InvitedEmailAddresses,
       TargetedUsersCount,
       TargetedObjectIds,
-      AppName,
-      EnvironmentName,
-      EnvironmentId,
+      AppId,
       PowerAppsEntityId,
       AccountName,
       UPNSuffix
@@ -100,7 +101,7 @@ entityMappings:
       - identifier: AppId
         columnName: PowerAppsEntityId
       - identifier: InstanceName
-        columnName: AppName
+        columnName: AppId
 alertDetailsOverride:
   alertDisplayNameFormat: Power Apps - app shared with recently created external guest
     accounts
@@ -108,7 +109,5 @@ alertDetailsOverride:
     recently added guest user accounts that are not on the list of allowed partner
     domains. List of domain s {{InvitedDomains}}'
 customDetails:
-  EnvironmentName: EnvironmentName
-  Environment: EnvironmentId
-  PowerAppsAppName: AppName
+  PowerAppsApp: AppId
 version: 3.2.0

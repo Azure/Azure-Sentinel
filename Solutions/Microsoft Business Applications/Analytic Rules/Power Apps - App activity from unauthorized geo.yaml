@@ -31,8 +31,16 @@ query: |
   PowerPlatformAdminActivity
   | where TimeGenerated >= ago(query_frequency)
   | where EventOriginalType in (powerapps_events)
-  | invoke GetPowerAppsEventDetails()
-  | summarize FirstEvent = min(TimeGenerated) by ActorName, SrcIpAddr, AppName, AppId, EnvironmentId
+  | extend Properties = tostring(PropertyCollection)
+  | extend SrcIpAddr = GetPPAdminValue("enduser.ip_address", Properties)
+  | extend SrcIpAddr = iif(SrcIpAddr startswith '::ffff:', replace_string(SrcIpAddr, '::ffff:', ''), SrcIpAddr)
+  | extend AppId = GetPPAdminValue("powerplatform.analytics.resource.power_app.id", Properties)
+  | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+  | extend
+      AppName = GetPPAdminValue("powerplatform.analytics.resource.power_app.display_name", Properties),
+      EnvironmentId = GetPPAdminValue("powerplatform.analytics.resource.environment.id", Properties),
+      EnvironmentName = GetPPAdminValue("powerplatform.analytics.resource.environment.name", Properties)
+  | summarize FirstEvent = min(TimeGenerated) by ActorName, SrcIpAddr, AppName, AppId, EnvironmentId, EnvironmentName
   | join kind=inner (
       SigninLogs
       | where TimeGenerated >= ago(query_lookback)
@@ -52,6 +60,7 @@ query: |
       AppName,
       AppId,
       EnvironmentId,
+      EnvironmentName,
       PowerAppsEntityId,
       AccountName,
       UPNSuffix
@@ -81,4 +90,5 @@ alertDetailsOverride:
 customDetails:
   Environment: EnvironmentId
   App: AppId
+  EnvironmentName: EnvironmentName
 version: 3.2.0

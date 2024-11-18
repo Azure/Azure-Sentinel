@@ -27,14 +27,17 @@ query: |
       PowerPlatformAdminActivity
       | where TimeGenerated >= ago (query_frequency)
       | where EventOriginalType == "DeletePowerApp"
-      | invoke GetPowerAppsEventDetails()
+      | extend Properties = tostring(PropertyCollection)
+      | extend AppId = GetPPAdminValue("powerplatform.analytics.resource.power_app.id", Properties)
+      | extend AppId = tolower(replace_string(AppId, '/providers/Microsoft.PowerApps/apps/', ''))
+      | extend EnvironmentId = GetPPAdminValue("powerplatform.analytics.resource.environment.id", Properties)
       );
   app_delete_events
   | summarize AppCount = count(), EnvCount = dcount(EnvironmentId) by ActorName
   | where AppCount >= total_app_mass_delete_threshold or EnvCount >= cross_environment_delete_threshold
   | join kind=inner app_delete_events on ActorName
   | summarize
-      Apps = make_set(AppName, 1000),
+      Apps = make_set(AppId, 1000),
       Environments = make_set(EnvironmentId, 1000),
       StartTime = min(TimeGenerated)
       by AppCount, EnvCount, ActorName
@@ -61,10 +64,6 @@ entityMappings:
     fieldMappings:
       - identifier: AppId
         columnName: PowerAppsEntityId
-  - entityType: CloudApplication
-    fieldMappings:
-      - identifier: AppId
-        columnName: DataverseId
   - entityType: Account
     fieldMappings:
       - identifier: Name
@@ -80,4 +79,4 @@ customDetails:
   AppsDeleted: Apps
   AppDeleteCount: AppCount
   EnvironmentsCount: EnvCount
-version: 3.1.3
+version: 3.2.0
