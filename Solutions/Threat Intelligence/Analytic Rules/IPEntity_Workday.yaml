@@ -23,16 +23,16 @@ triggerThreshold: 0
 tactics:
 relevantTechniques:
 query: |
-  let dtLookBack = 1h; // Define the lookback period for audit events
-  let iocLookBack = 14d; // Define the lookback period for threat intelligence indicators
-  ThreatIntelligenceIndicator 
-  | where isnotempty(NetworkIP)
+let dtLookBack = 1h; // Define the lookback period for audit events
+let ioc_lookBack = 14d; // Define the lookback period for threat intelligence indicators
+ThreatIntelligenceIndicator 
+| where TimeGenerated >= ago(ioc_lookBack) // Filter threat intelligence indicators within the lookback period
+| where isnotempty(NetworkIP)
       or isnotempty(EmailSourceIpAddress)
       or isnotempty(NetworkDestinationIP)
       or isnotempty(NetworkSourceIP) // Filter for indicators with relevant IP fields
-  | where TimeGenerated >= ago(iocLookBack) // Filter indicators within the lookback period
+| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId // Get the latest indicator time for each IndicatorId
   | extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress) // Combine IP fields into a single entity
-  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId, TI_ipEntity // Get the latest indicator time for each entity
   | where Active == true and ExpirationDateTime > now() // Filter for active indicators that have not expired
   | join kind=inner (
       ASimAuditEventLogs
