@@ -73,7 +73,6 @@ class RequestSender:
             data=urllib.parse.quote(f"grant_type={grant_type}", safe="=&/"),
             timeout=self.config.requests_timeout,
         ) as response:
-            response.raise_for_status()
             return await response.json()
 
     async def send_request_get(
@@ -92,7 +91,6 @@ class RequestSender:
             headers=headers,
             params=self._prepare_get_request_params(last_detection_time, next_page_token, page_size),
         ) as response:
-            response.raise_for_status()
             return await response.json()
 
     def _prepare_get_request_params(
@@ -133,38 +131,37 @@ class TokenProvider:
                     value = ""
             setattr(self.token, token_param, value)
 
-    async def get_token(self, session: ClientSession, lock: asyncio.Lock) -> None:
-        async with lock:
+    async def get_token(self, session: ClientSession) -> None:
 
-            if not self.token.access_token or datetime.now(timezone.utc) > self.token.expiration_time:  # type: ignore
-                logging.info(f"Getting token")
+        if not self.token.access_token or datetime.now(timezone.utc) > self.token.expiration_time:  # type: ignore
+            logging.info("Getting token")
 
-                if not self.token.access_token and (not self.env_vars.username or not self.env_vars.password):
-                    raise MissingCredentialsException()
+            if not self.token.access_token and (not self.env_vars.username or not self.env_vars.password):
+                raise MissingCredentialsException()
 
-                grant_type = (
-                    f"refresh_token&refresh_token={self.token.refresh_token}"
-                    if self.token.access_token
-                    else f"password&username={self.env_vars.username}&password={self.env_vars.password}"
+            grant_type = (
+                f"refresh_token&refresh_token={self.token.refresh_token}"
+                if self.token.access_token
+                else f"password&username={self.env_vars.username}&password={self.env_vars.password}"
+            )
+
+            try:
+                response = await self.requests_sender.send_request(
+                    self.requests_sender.send_request_post,
+                    session,
+                    {"Content-type": "application/x-www-form-urlencoded", "3rd-integration": "MS-Sentinel"},
+                    grant_type,
                 )
+            except AuthenticationException as e:
+                if not self.token.access_token:
+                    raise InvalidCredentialsException(e)
+                else:
+                    self.storage_table_handler.input_entity({k: "" for k in self.token.to_dict()})  # type: ignore[call-arg]
+                    raise TokenRefreshException(e)
 
-                try:
-                    response = await self.requests_sender.send_request(
-                        self.requests_sender.send_request_post,
-                        session,
-                        {"Content-type": "application/x-www-form-urlencoded", "3rd-integration": "MS-Sentinel"},
-                        grant_type,
-                    )
-                except AuthenticationException as e:
-                    if not self.token.access_token:
-                        raise InvalidCredentialsException(e)
-                    else:
-                        self.storage_table_handler.input_entity({k: "" for k in self.token.to_dict()})  # type: ignore[call-arg]
-                        raise TokenRefreshException(e)
-
-                if response:
-                    self.set_token_params_locally_and_in_storage(response)
-                    logging.info("Token obtained successfully")
+            if response:
+                self.set_token_params_locally_and_in_storage(response)
+                logging.info("Token obtained successfully")
 
     def set_token_params_locally_and_in_storage(self, response: t.Dict[str, str | int]) -> None:
         self.token.access_token = t.cast(str, response["access_token"])
