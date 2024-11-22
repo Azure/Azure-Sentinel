@@ -192,16 +192,20 @@ def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int):
     logging.info('Making authentication logs request: mintime={}, maxtime={}'.format(mintime, maxtime))
     try:
         res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
+        logging.info('Full response received: {}'.format(res))
     except Exception as err:
         logging.info('Error while getting authentication logs- {}'.format(err))
         if err.status == 429:
             logging.info('429 exception occurred, trying retry after 60 seconds')
             time.sleep(60)
             res = admin_api.get_authentication_log(api_version=2, mintime=mintime, maxtime=maxtime, limit=str(limit), sort='ts:asc')
+            logging.info('Full response received: {}'.format(res))
     
     if(res is not None):
         events = res['authlogs']
-        next_offset = res['metadata']['next_offset']
+        logging.info('Events received: {}'.format(events))
+        next_offset = res.get('metadata', {}).get('next_offset', None)
+        logging.info('Next offset: {}'.format(next_offset))
         logging.info('Obtained {} auth events'.format(len(events)))
     else:
         logging.info('Error while getting authentication logs')   
@@ -469,4 +473,3 @@ def check_if_script_runs_too_long(start_ts):
     duration = now - start_ts
     max_duration = int(MAX_SCRIPT_EXEC_TIME_MINUTES * 60 * 0.85)
     return duration > max_duration
-
