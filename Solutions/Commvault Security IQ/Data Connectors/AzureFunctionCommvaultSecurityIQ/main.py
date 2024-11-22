@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import base64
 import hashlib
 import hmac
@@ -116,23 +116,26 @@ def main(mytimer: func.TimerRequest) -> None:
         headers["authtoken"] = "QSDK " + qsdk_token
         ustring = "/events?level=10&showInfo=false&showMinor=false&showMajor=true&showCritical=true&showAnomalous=true"
         f_url = url + ustring
-        current_date = datetime.now(datetime.timezone.utc)
+        current_date = datetime.now(timezone.utc)
         to_time = int(current_date.timestamp())
         fromtime = read_blob(cs, container_name, blob_name)
         if fromtime is None:
             fromtime = int((current_date - timedelta(days=2)).timestamp())
             logging.info("From Time : [{}] , since the time read from blob is None".format(fromtime))
         else:
-            time_diff = current_date - fromtime
-            if time_diff > datetime.timedelta(days=2):
-                fromtime = int((current_date - timedelta(days=2)).timestamp())
-                logging.info("From Time : [{}] , since the time read from blob : [{}] is older than 2 days".format(fromtime))
-            if time_diff < datetime.timedelta(minutes = 5):
-                fromtime = int((current_date - timedelta(minutes=5)).timestamp())
-                logging.info("From Time : [{}] , since the time read from blob : [{}] is less than 5 minutes".format(fromtime))
+            fromtime_dt = datetime.fromtimestamp(fromtime, tz=timezone.utc)
+            time_diff = current_date - fromtime_dt
+            if time_diff > timedelta(days=2):
+                updatedfromtime = int((current_date - timedelta(days=2)).timestamp())
+                logging.info("From Time : [{}] , since the time read from blob : [{}] is older than 2 days".format(updatedfromtime,fromtime))
+                fromtime = updatedfromtime
+            elif time_diff < timedelta(minutes = 5):
+                updatedfromtime = int((current_date - timedelta(minutes=5)).timestamp())
+                logging.info("From Time : [{}] , since the time read from blob : [{}] is less than 5 minutes".format(updatedfromtime,fromtime))
+                fromtime = updatedfromtime
         max_fetch = 1000
         headers["pagingInfo"] = f"0,{max_fetch}"
-        logging.info("Starts at: [{}]".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info("Starts at: [{}]".format(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")))
         event_endpoint = f"{f_url}&fromTime={fromtime}&toTime={to_time}"
         logging.info("Event endpoint : [{}]".format(event_endpoint))
         response = requests.get(event_endpoint, headers=headers, verify=verify)
