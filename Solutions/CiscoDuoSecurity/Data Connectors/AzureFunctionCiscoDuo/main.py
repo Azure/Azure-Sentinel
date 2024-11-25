@@ -204,13 +204,16 @@ def get_auth_logs(admin_api: duo_client.Admin, mintime: int, maxtime: int):
     if(res is not None):
         events = res['authlogs']
         logging.info('Events received: {}'.format(events))
-        next_offset = res.get('metadata', {}).get('next_offset', None)
+        if(res['metadata'] is not None):
+            next_offset = res['metadata']['next_offset']
+        else:
+            next_offset = None
         logging.info('Next offset: {}'.format(next_offset))
         logging.info('Obtained {} auth events'.format(len(events)))
     else:
-        logging.info('Error while getting authentication logs')   
+        logging.info('Error while getting authentication logs')
         events = None
-        next_offset = None 
+        next_offset = None
     return events, next_offset
 
 
