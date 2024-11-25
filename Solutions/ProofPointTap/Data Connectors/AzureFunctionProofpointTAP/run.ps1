@@ -162,21 +162,46 @@ Write-Host($responseObject)
 
 # Iterate through the ProofPoint API response and if there are log events present, POST the events to the Log Analytics API into the respective tables.
 ForEach ($PPLogType in $ProofpointLogTypes) {
-    if ($responseObject.$PPLogType.Length -eq 0 ){ 
-        Write-Host ("ProofPointTAP$($PPLogType) reported no new logs for the time interval configured.")
-    }
-    else {
-        if($responseObject.$PPLogType -eq $null) {                            # if the log entry is a null, this occurs on the last line of each LogType. Should only be one per log type
-            Write-Host ("ProofPointTAP$($PPLogType) null line excluded")    # exclude it from being posted
-        } 
-        else {            
-            # Write-Host ("ProofPointTAP logs before json conversion:$($($response.$PPLogType))")
-            $json = $responseObject.$PPLogType | ConvertTo-Json -Depth 3                # convert each log entry and post each entry to the Log Analytics API
-            Write-Host ("ProofPointTAP logs after json conversion$($json)")
-            Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
-            Write-Host("Logs ingested to LA is : " + $json.Length)
-            }
-        }
+   if ($responseObject.$PPLogType.Length -eq 0){
+       Write-Host ("ProofPointTAP$($PPLogType) reported no new logs for the time interval configured.")
+   } else{
+       ForEach ($log in $responseObject.$PPLogType){
+           if ($log -eq $null){
+               Write-Host ("ProofPointTAP$($PPLogType) null line excluded")
+           } else {
+               # Handle large `threatsInfoMap` fields
+               if ($log.threatsInfoMap.Length -gt 0) {
+                   $extractedThreatUrls = @() # Array to store moved threatUrls
+                   $threats = $log.threatsInfoMap | ConvertTo-Json -Depth 3
+                   $chunkSize = 32000  # 32 KB limit
+                   $abc = [System.Text.Encoding]::UTF8.GetByteCount($threats)
+                   if ($abc -gt $chunkSize) {
+                    ForEach ($threat in $log.threatsInfoMap) {
+                       if ($threat.PSObject.Properties['threatUrl']) {
+                           # Move `threatUrl` outside threatsInfoMap and retain in the log
+                           $extractedThreatUrls += "threatUrl $($threat.threatUrl) and threatID $($threat.threatID)"
+                           $threat.PSObject.Properties.Remove('threatUrl')
+                       }
+                   }
+                       Write-Host "ThreatsInfoMap still exceeds 32 KB after moving threatUrls."
+                       # Further handling logic can be implemented here if required.
+                   }
+                   # Check and process each threat in threatsInfoMap
+
+                   # Add the extracted `threatUrls` to a new property outside threatsInfoMap
+                   if ($extractedThreatUrls.Count -gt 0) {
+                       $log | Add-Member -MemberType NoteProperty -Name "extractedThreatUrls" -Value $extractedThreatUrls
+                   }
+                   # Recheck the size of threatsInfoMap if needed
+               }
+               # Post processed log to Log Analytics
+               $json = $log | ConvertTo-Json -Depth 3
+               Write-Host ("ProofPointTAP logs after moving threatUrl and JSON conversion: $($json)")
+               Post-LogAnalyticsData -customerId $customerId -sharedKey $sharedKey -body ([System.Text.Encoding]::UTF8.GetBytes($json)) -logType "ProofPointTAP$($PPLogType)"
+               Write-Host("Logs ingested to LA is : " + $json.Length)
+           }
+       }
+   }
 }
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
