@@ -2,7 +2,7 @@
 Author: Anki Narravula - Reachout to anknar@microsoft.com incase of any issues or clarifications required
 
 ## Description
-This repository contains a console application (Python) that helps to replicate data in Syslog or CEF over syslog format by using sample events. Users need to input a file with sample data in it (minimum 1 event) to start generating the syslog traffic. User can use this tool to mimic as any Syslog datasource (device). Data will be sent to a specified destination address (where we have AMA / LA agent installed here to receive the data) over TCP or UDP 514 port. Further AMA/LA agent can send to Sentinel as per configurations defined on the agent node. To deploy a log forwarder to ingest Syslog and CEF logs to Microsoft Sentinel refer - https://docs.microsoft.com/en-us/azure/sentinel/connect-log-forwarder?tabs=rsyslog
+This repository contains a console application (Python) that helps to replicate data in Syslog or CEF over syslog format by using sample events. Users need to input a file with sample data in it (minimum 1 event) to start generating the syslog traffic. User can use this tool to mimic as any Syslog datasource (device). Data will be sent to a specified destination address (where we have AMA / LA agent installed here to receive the data) over TCP or UDP 514 port. Further AMA/LA agent can send to Sentinel as per configurations defined on the agent node. To deploy a log forwarder to ingest Syslog and CEF logs to Microsoft Sentinel refer - https://docs.microsoft.com/azure/sentinel/connect-log-forwarder?tabs=rsyslog
 
    If you are trying to see specific values for the fields (in case of CEF data), for example deviceVendor need to be always from the array of values ["Fortinet","CISCO","Microsoft"] or any timestamp field should set to current etc then we need to input a file where we have such customizations defined. Otherwise we dont require to input this file.
 
@@ -87,16 +87,16 @@ We have 2 flavors
 - Step 6: (Optional) Use azure batch account and data factory for achieving higher EPS
 
 	Setting up batch account and VMs pool
-	- You can find the details here https://docs.microsoft.com/en-us/azure/batch/accounts and https://docs.microsoft.com/en-us/azure/batch/nodes-and-pools
+	- You can find the details here https://docs.microsoft.com/azure/batch/accounts and https://docs.microsoft.com/azure/batch/nodes-and-pools
 	
 	Upload scripts and sample data (and customization file) to storage account
-	- Find more details here - https://docs.microsoft.com/en-us/azure/storage/blobs/storage-quickstart-blobs-portal
+	- Find more details here - https://docs.microsoft.com/azure/storage/blobs/storage-quickstart-blobs-portal
 	 
 	Create data factory pipeline with azure batch task 
 	- You can find more details here - https://techcommunity.microsoft.com/t5/azure-paas-blog/configure-a-simple-azure-batch-job-with-azure-data-factory/ba-p/2260759
 	
 	Schedule data factory job to run for every 10 minutes
-	- More details are here  - https://docs.microsoft.com/en-us/azure/data-factory/how-to-create-schedule-trigger?tabs=data-factory
+	- More details are here  - https://docs.microsoft.com/azure/data-factory/how-to-create-schedule-trigger?tabs=data-factory
 	
 	Important tips:
 	
