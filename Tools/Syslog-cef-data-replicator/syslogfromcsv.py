@@ -126,6 +126,7 @@ def get_kv_pairs_csv(headers, record):
 
 
 def syslog_message_format(args,schemaSampledata,extenstion_data):
+    return_message = ""
     try:
         if str(args.eventtype).lower() == 'cef':
             cef_header = {}
@@ -243,9 +244,7 @@ if __name__ == '__main__':
     
     #print(schemaSampledata)
 
-    if args.eventtype == 'syslog':
-        KVDelimiter = KVDelimiter
-    else:
+    if args.eventtype != 'syslog':
         KVDelimiter = "="
     
     now = datetime.datetime.now()
