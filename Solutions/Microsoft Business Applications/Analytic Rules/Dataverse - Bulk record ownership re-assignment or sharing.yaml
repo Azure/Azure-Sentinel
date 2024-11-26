@@ -1,0 +1,72 @@
+id: 6e480329-84bc-409a-b97b-22e8102af3ca
+kind: Scheduled
+name: Dataverse - Bulk record ownership re-assignment or sharing
+description: Identifies individual record ownership changes including sharing of records
+  with other users/teams or re-assignment of ownership exceeding a pre-defined threshold.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1548
+query: |
+  // Set threshold for number of shared/assigned records
+  let detection_threshold = 100;
+  let query_frequency = 1h;
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message in ("ModifyAccess", "Assign", "GrantAccess")
+  | summarize
+      FirstEvent = min(TimeGenerated),
+      LastEvent = max(TimeGenerated),
+      Events = count()
+      by UserId, Message, InstanceUrl, ClientIp
+  | where Events > detection_threshold
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      FirstEvent,
+      LastEvent,
+      Message,
+      Events,
+      UserId,
+      ClientIp,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: Dataverse - High number of record access modification events
+    detected
+  alertDescriptionFormat: '{{Events}} events of type {{Message}} detected in {{InstanceUrl}}
+    could indicate suspicious or malicious activity.'
+version: 3.2.0

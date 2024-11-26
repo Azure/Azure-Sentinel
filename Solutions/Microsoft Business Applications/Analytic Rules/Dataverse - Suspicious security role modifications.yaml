@@ -1,0 +1,100 @@
+id: e44a58b2-b63a-4eb9-92da-85660d73495c
+kind: Scheduled
+name: Dataverse - Suspicious security role modifications
+description: Identifies an unusual pattern of events whereby a new role is created
+  followed by the creator adding members to the role and subsequently removing the
+  member or deleting the role after a short time period.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1404
+  - T1626
+  - T1548
+query: |
+  let role_create_watch_period = 2d;
+  let query_frequency = 1h;
+  let role_create_add_events= DataverseActivity
+      | where Message == "Create" and EntityName == "role"
+      | mv-expand Role = Fields
+      | extend RoleName = Role.Value
+      | where Role.Name == "name"
+      | mv-expand Role = Fields
+      | extend RoleCreateTime = TimeGenerated, RoleId = tostring(Role.Value)
+      | where Role.Name == "roleid"
+      | join kind=inner (
+          DataverseActivity
+          | where Message == "Associate" and EntityName == "systemuser"
+          | mv-expand Role = Fields
+          | where Role.Name == "role"
+          | extend RoleMemberAddedTime = TimeGenerated, MemberAddedRoleId = tostring(Role.Value))
+          on $left.RoleId == $right.MemberAddedRoleId, InstanceUrl, UserId
+      | where RoleMemberAddedTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period));
+  let remove_role_member_events = DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "Disassociate" and EntityName == "systemuser"
+      | mv-expand Role = Fields
+      | where Role.Name == "role"
+      | extend ActionTime = TimeGenerated, MemberRemovedRoleId = tostring(Role.Value);
+  let role_delete_events = DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where Message == "Delete" and EntityName == "role"
+      | extend DeletedRoleID = EntityId, Action = "Role deleted within defined time window"
+      | project Action, ActionTime = TimeGenerated, UserId, ClientIp, DeletedRoleID, InstanceUrl;
+  let role_member_removals = role_create_add_events
+      | join kind=inner (remove_role_member_events) on $left.RoleId == $right.MemberRemovedRoleId
+      | where ActionTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period))
+      | extend Action = "Role membership removed within defined time window";
+  let role_deletions = role_create_add_events
+      | join kind=inner (role_delete_events) on $left.RoleId == $right.DeletedRoleID
+      | where ActionTime between (RoleCreateTime .. (RoleCreateTime + role_create_watch_period));
+  union isfuzzy=true role_member_removals, role_deletions
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      UserId,
+      InstanceUrl,
+      ClientIp,
+      Action,
+      RoleCreateTime,
+      RoleName,
+      ActionTime,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: Dataverse - suspicious role modifications in {{InstanceUrl}}
+  alertDescriptionFormat: 'The following action ocurred following role modifications
+    changes in {{InstanceUrl}}: {{Action}}.'
+  alertSeverityColumnName: Severity
+version: 3.2.0
