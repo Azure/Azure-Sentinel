@@ -3,20 +3,14 @@
 #from genericpath import exists
 import json
 import random
-import csv
 #from syslog import Syslog, Level, Facility
 import argparse
-import re
 import datetime
 import time
 import socket
 from multiprocessing import Process
 from threading import Thread as worker
-from logging.handlers import SysLogHandler
-import logging
-import pycef
-import pysyslog
-import shlex
+
 
 
 class Facility:
@@ -97,8 +91,6 @@ def build_custom_extension(schemaSampledata,complete_header, extensions):
         return extensions
     except  (KeyError, TypeError):
         return {'version': 'version=0', 'deviceVendor': 'deviceVendor=Fortinet', 'deviceProduct': 'deviceProduct=Fortigate', 'deviceVersion': 'deviceVersion=19', 'signatureId': 'signatureId=3.5.4.3', 'name': 'name=Phishing', 'severity': 'severity=4', 'externalId': 'externalId=1499', 'lastActivityTime': 'lastActivityTime=2016-05-03 23:42:54+00', 'src': 'src=32.3.4.22.11', 'dst': 'dst=119.67.82.9', 'src_hostname': 'src_hostname=fortinet3242N', 'dst_hostname': 'dst_hostname=google.com', 'src_username': 'src_username=hjrkd', 'dst_username': 'dst_username=dkedd', 'dst_email_id': 'dst_email_id=jkss@hfjfk.com', 'startTime': 'startTime=2019-05-03 23:42:54+00', 'url': 'url=http://greatfilesarey.asia/QA/files_to_pcaps/74280968a4917da52b5555351eeda969.bin http://greatfilesarey.asia/QA/files_to_pcaps/1813791bcecf3a3af699337723a30882.bin', 'fileHash': 'fileHash=bce00351cfc559afec5beb90ea387b03788e4af5', 'fileType': 'fileType=PE32', 'malwareCategory': 'malwareCategory=Trojan_Generic', 'malwareSeverity': 'malwareSeverity=0.87', 'dst_country': 'dst_country=SLNK'}
-{'version': 'version=0', 'deviceVendor': 'deviceVendor=JUNIPER', 'deviceProduct': 'deviceProduct=Cortex', 'deviceVersion': 'deviceVersion=19', 'signatureId': 'signatureId=1.89.12.3', 'name': 'name=TROJAN_GIPPERS.DC', 'severity': 'severity=6', 'externalId': 'externalId=1499', 'lastActivityTime': 'lastActivityTime=2016-05-03 23:42:54+00', 'src': 'src=101.21.21.1', 'dst': 'dst=201.32.13.56', 'src_hostname': 'src_hostname=fortinet3242N', 'dst_hostname': 'dst_hostname=google.com', 'src_username': 'src_username=hjrkd', 'dst_username': 'dst_username=dkedd', 'dst_email_id': 'dst_email_id=jkss@hfjfk.com', 'startTime': 'startTime=2019-05-03 23:42:54+00', 'url': 'url=http://greatfilesarey.asia/QA/files_to_pcaps/74280968a4917da52b5555351eeda969.bin http://greatfilesarey.asia/QA/files_to_pcaps/1813791bcecf3a3af699337723a30882.bin', 'fileHash': 'fileHash=bce00351cfc559afec5beb90ea387b03788e4af5', 'fileType': 'fileType=PE32', 'malwareCategory': 'malwareCategory=Trojan_Generic', 'malwareSeverity': 'malwareSeverity=0.87', 'dst_country': 'dst_country=Bhutan'}  
-
 
 def post_syslog(msg, hostname):
     #print(msg)
@@ -125,7 +117,6 @@ def read_csv_header_sampledata(filename):
 def get_kv_pairs_csv(headers, record):
     extensions1 = {}   
     values = [i.strip() for i in record.split(',')]
-    cef_header_fields = ['name', 'deviceVendor', 'deviceProduct', 'signatureId', 'version', 'deviceVersion', 'severity']
     #headers_ext = [i for i in headers if i not in cef_header_fields]
     for i,field in enumerate(headers):
         #if not(field in cef_header_fields): 
@@ -154,7 +145,6 @@ def syslog_message_format(args,schemaSampledata,extenstion_data):
             #print(cef_header)
             prefixes = cef_header
             return_message = template.format(extenstion_data=' '.join(cef_ext.values()), **prefixes)
-            #print (return_message)
         elif str(args.eventtype).lower() == 'syslog':
             #print("HEEEEEEEEEEEEEEEEEEEEREEEEEEEEEEEEEEEE")
             syslog_header = {}
@@ -162,7 +152,6 @@ def syslog_message_format(args,schemaSampledata,extenstion_data):
             #template = '<{priority}>{version} {ISOTimeStamp} {hostName} {application} {pid} {messageId} {structured_data} {message}'
             template = schemaSampledata["SyslogMessage"]["syslog_message_template"]["values"]
             syslog_header_fields =  schemaSampledata["SyslogMessage"]["syslog_header_fields"]["values"]
-            syslog_header_fields_dummy = json.loads(schemaSampledata["SyslogMessage"]["syslog_header_fields_dummy"]["values"])
             KVDelimiter = schemaSampledata["SyslogMessage"]["KVDelimiter"]["values"]
             fieldDelimiter = schemaSampledata["SyslogMessage"]["fieldDelimiter"]["values"]
             syslog_header_fields_dummy = {'priority': '139', 'version': '1','ISOTimeStamp': '2022-03-31 11:59:59','hostName': 'SYSLOG_Host','application': 'SYSLOG_App', 'pid': 'process','messageId': '1234'} 
@@ -179,8 +168,6 @@ def syslog_message_format(args,schemaSampledata,extenstion_data):
             #print(syslog_ext)
             prefixes = syslog_header
             return_message = template.format(structured_data=fieldDelimiter.join(syslog_ext.values()),message='', **prefixes)
-            #print(return_message)
-            #return_message = "Hellp"
         post_syslog(return_message, hostname=args.host) 
     except  Exception as e:
         print(" syslog_message_format Exception {}",str(e))    
@@ -236,17 +223,8 @@ if __name__ == '__main__':
     fileformat = "kvpair"
     eventcount = 100
     """
-    #'C:\\Repositories\\Anki-Playground\\cefevent\\SampleData.csv'
-    #print (args.input_file)
     schemaSampledata = "NULL"
-
     headers = read_csv_header_sampledata(args.input_file)
-    
-    #print (headers)
-
-    #if args.fileformat == "kvpair":
-    #    headers = read_keys_sampledata(args.input_file)    
-
 
     try:
         if args.cust_file != "None":
@@ -259,7 +237,7 @@ if __name__ == '__main__':
 
     try:
         KVDelimiter = schemaSampledata["SyslogMessage"]["KVDelimiter"]["values"]
-    except:
+    except KeyError:
         KVDelimiter = "="
         print("Customization vaules not available takig default")  
     

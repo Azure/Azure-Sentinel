@@ -46,13 +46,13 @@ def parse(str_input):
 
     # Mar 20 2022 10:00:00
     if contains_datetime_format1:
-        header_re = r'^(\w{1,3}\s\d{1,2}\s\d{1,4}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2}[\.\d{0,10}]+)\s(.*)'
+        header_re = r'^(\w{1,3}\s\d{1,2}\s\d{1,4}[\sT]\d{1,2}:\d{1,2}:\d{1,2}(?:\.\d{1,10})?)\s(.*)'
         res = re.search(header_re, str_input)
         values["ISOTimeStamp"] = res.group(1)
         str_input = res.group(2)
     # 2022-03-20T10:00:00
     elif contains_datetime_format2:
-        header_re = r'^(\d{2}(?:\d{2})?-\d{1,2}-\d{1,2}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2}[\.\d{0,10}Z]+)\s(.*)'
+        header_re = r'^(\d{2}(?:\d{2})?-\d{1,2}-\d{1,2}[\sT]\d{1,2}:\d{1,2}:\d{1,2}(?:\.\d{1,10})?Z?)\s(.*)'
         res = re.search(header_re, str_input)
         values["ISOTimeStamp"] = res.group(1)
         str_input = res.group(2)
@@ -62,7 +62,7 @@ def parse(str_input):
         values["ISOTimeStamp"] = res.group(1)
         str_input = res.group(2)
     elif contains_datetime_format4:
-        header_re = r'^(\w{1,3}\s\d{1,2}[\sT]\d{1,2}\:\d{1,2}\:\d{1,2}[\.\d{0,10}]+)\s(.*)'
+        header_re = r'^(\w{1,3}\s\d{1,2}[\sT]\d{1,2}:\d{1,2}:\d{1,2}(?:\.\d{1,10})?)\s(.*)'
         res = re.search(header_re, str_input)
         values["ISOTimeStamp"] = res.group(1)
         str_input = res.group(2)
@@ -107,3 +107,4 @@ if __name__ == "__main__":
                 print(json.dumps(values))
             if not values:
                 print('No output returned, maybe your regex did not match?')
+    file.close()

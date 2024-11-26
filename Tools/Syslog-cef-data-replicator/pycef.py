@@ -118,3 +118,5 @@ if __name__ == "__main__":
                 print(json.dumps(values))
             if not values:
                 print('No output returned, maybe your regex did not match?')
+        # close the file
+    file.close()
