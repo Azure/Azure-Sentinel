@@ -103,20 +103,18 @@ if __name__ == "__main__":
         sys.exit(-1)
 
     file = sys.argv[1]
+    with open(file, "r") as f:
+        for line in f.readlines():
+            line = line.rstrip('\n')
 
-    for line in open(file, "r").readlines():
-        line = line.rstrip('\n')
-
-        # Read the file, and parse each line of CEF into a separate JSON
-        # document to stdout
-        try:
-            values = parse(line)
-        except (TypeError, ValueError) as e:
-            sys.stderr.write('{0} parsing line:\n{1}\n'.format(e.message, line))
-        else:
-            if values:
-                print(json.dumps(values))
-            if not values:
-                print('No output returned, maybe your regex did not match?')
-        # close the file
-    file.close()
+            # Read the file, and parse each line of CEF into a separate JSON
+            # document to stdout
+            try:
+                values = parse(line)
+            except (TypeError, ValueError) as e:
+                sys.stderr.write('{0} parsing line:\n{1}\n'.format(e.message, line))
+            else:
+                if values:
+                    print(json.dumps(values))
+                if not values:
+                    print('No output returned, maybe your regex did not match?')
