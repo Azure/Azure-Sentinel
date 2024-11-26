@@ -6,22 +6,16 @@
 #from importlib.metadata import files
 import json
 import random
-import csv
 #from syslog import Syslog, Level, Facility
 import argparse
 import re
 import datetime
 from threading import Thread as worker
-from logging.handlers import SysLogHandler
-import logging
 import pycef
 import pysyslog
 import shlex
 import time
 import socket
-#from joblib import Parallel, delayed
-#from tkinter import E
-#from wsgiref.headers import Headers
 
 # Building CEF
 """
@@ -71,7 +65,6 @@ def build_custom_extension_for_raw(schemaSampledata,complete_header, extensions)
         return extensions
     except  (KeyError, TypeError):
         return {'version': 'version=0', 'deviceVendor': 'deviceVendor=Fortinet', 'deviceProduct': 'deviceProduct=Fortigate', 'deviceVersion': 'deviceVersion=19', 'signatureId': 'signatureId=3.5.4.3', 'name': 'name=Phishing', 'severity': 'severity=4', 'externalId': 'externalId=1499', 'lastActivityTime': 'lastActivityTime=2016-05-03 23:42:54+00', 'src': 'src=32.3.4.22.11', 'dst': 'dst=119.67.82.9', 'src_hostname': 'src_hostname=fortinet3242N', 'dst_hostname': 'dst_hostname=google.com', 'src_username': 'src_username=hjrkd', 'dst_username': 'dst_username=dkedd', 'dst_email_id': 'dst_email_id=jkss@hfjfk.com', 'startTime': 'startTime=2019-05-03 23:42:54+00', 'url': 'url=http://greatfilesarey.asia/QA/files_to_pcaps/74280968a4917da52b5555351eeda969.bin http://greatfilesarey.asia/QA/files_to_pcaps/1813791bcecf3a3af699337723a30882.bin', 'fileHash': 'fileHash=bce00351cfc559afec5beb90ea387b03788e4af5', 'fileType': 'fileType=PE32', 'malwareCategory': 'malwareCategory=Trojan_Generic', 'malwareSeverity': 'malwareSeverity=0.87', 'dst_country': 'dst_country=SLNK'}
-{'version': 'version=0', 'deviceVendor': 'deviceVendor=JUNIPER', 'deviceProduct': 'deviceProduct=Cortex', 'deviceVersion': 'deviceVersion=19', 'signatureId': 'signatureId=1.89.12.3', 'name': 'name=TROJAN_GIPPERS.DC', 'severity': 'severity=6', 'externalId': 'externalId=1499', 'lastActivityTime': 'lastActivityTime=2016-05-03 23:42:54+00', 'src': 'src=101.21.21.1', 'dst': 'dst=201.32.13.56', 'src_hostname': 'src_hostname=fortinet3242N', 'dst_hostname': 'dst_hostname=google.com', 'src_username': 'src_username=hjrkd', 'dst_username': 'dst_username=dkedd', 'dst_email_id': 'dst_email_id=jkss@hfjfk.com', 'startTime': 'startTime=2019-05-03 23:42:54+00', 'url': 'url=http://greatfilesarey.asia/QA/files_to_pcaps/74280968a4917da52b5555351eeda969.bin http://greatfilesarey.asia/QA/files_to_pcaps/1813791bcecf3a3af699337723a30882.bin', 'fileHash': 'fileHash=bce00351cfc559afec5beb90ea387b03788e4af5', 'fileType': 'fileType=PE32', 'malwareCategory': 'malwareCategory=Trojan_Generic', 'malwareSeverity': 'malwareSeverity=0.87', 'dst_country': 'dst_country=Bhutan'}  
 
 # Post to Syslog
 
@@ -82,6 +75,7 @@ def post_syslog(msg, hostname, facility):
 
 
 def syslog_message_format_raw(args,schemaSampledata,extenstion_data):
+    return_message = ""
     try:
         if str(args.eventtype).lower() == 'cef':
             cef_header = {}
@@ -130,19 +124,17 @@ def syslog_message_format_raw(args,schemaSampledata,extenstion_data):
             #print(syslog_ext)
             prefixes = syslog_header
             return_message = template.format(priority=syslog_header['priority'], version=syslog_header['version'],ISOTimeStamp=syslog_header['ISOTimeStamp'],hostName=syslog_header['hostName'],restofmessage=syslog_header['restofmessage'] )
-            #print(return_message)
-            #return_message = "Hellp"
         post_syslog(return_message, hostname=args.host, facility=args.facility) 
     except  Exception as e:
         print("syslog_message_format_raw  Exception {}",str(e))    
 
 def get_dict_for_syslog_message(messge):
-    header = messge.split(":",1)
     exten = {x: y for x, y in map(lambda x: x.split('='), shlex.split(messge))}
 
 
 def build_message_from_raw(args,num):
     #print ("I am here")
+    headers = []
     try:
         with open(args.input_file, 'r', encoding="utf8") as log_file:
             lines = log_file.readlines()
@@ -272,27 +264,7 @@ if __name__ == '__main__':
     parser.add_argument('--eps', type=int, default=100, help='Max events')
 
     args = parser.parse_args()
-    #print (args)
-    
-    """
-    #args = []
-    input_file = "C:\\Repositories\\Anki-Playground\\CEFReplicator\\syslog_meraki_raw.log"
-    cust_file = "fortigate_customizations.json"
-    host = "138.91.95.213"
-    port = 514
-    eventtype = "CEF"
-    fileformat = "kvpair"
-    eps = 100
-    """
-    #'C:\\Repositories\\Anki-Playground\\cefevent\\SampleData.csv'
-    #print (args.input_file)
     schemaSampledata = "NULL"
-
-    #print (headers)
-
-    #if args.fileformat == "kvpair":
-    #    headers = read_keys_sampledata(args.input_file)    
-
     with open(args.input_file, 'r', encoding="utf8") as log_file:
             lines = log_file.readlines()
             record_count = len(lines)
@@ -309,15 +281,13 @@ if __name__ == '__main__':
 
     try:
         KVDelimiter = schemaSampledata["SyslogMessage"]["KVDelimiter"]["values"]
-    except:
+    except KeyError:
         KVDelimiter = "="
         print("Customization vaules not available takig default")  
     
     #print(schemaSampledata)
 
-    if args.eventtype == 'syslog':
-        KVDelimiter = KVDelimiter
-    else:
+    if args.eventtype != 'syslog':
         KVDelimiter = "="
 
     now = datetime.datetime.now()
