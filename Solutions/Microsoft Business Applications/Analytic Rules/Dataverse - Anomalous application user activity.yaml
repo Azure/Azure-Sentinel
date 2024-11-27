@@ -1,0 +1,96 @@
+id: 0820da12-e895-417f-9175-7c256fcfb33e
+kind: Scheduled
+name: Dataverse - Anomalous application user activity
+description: Identifies anomalies in activity patterns of Dataverse application (non-interactive)
+  users, based on activity falling outside the normal pattern of use.
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 5h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - Execution
+  - Persistence
+relevantTechniques:
+  - T1528
+  - T1569
+  - T0871
+  - T0834
+  - T0859
+query: |
+  let query_lookback = 14d;
+  let query_frequency = 5h;
+  let anomaly_threshold = 2.5;
+  let seasonality = -1;
+  let trend = 'linefit';
+  let step_duration = 5h;
+  let app_user_regex = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\\.com$";
+  let guid_regex = "([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})";
+  let application_users = DataverseActivity
+      | where TimeGenerated >= ago(query_frequency)
+      | where UserId !endswith "@onmicrosoft.com" and UserId != "Unknown"
+      | summarize by UserId
+      | where split(UserId, "@")[1] matches regex app_user_regex;
+  DataverseActivity
+  | where TimeGenerated >= startofday(ago(query_lookback))
+  | where UserId in (application_users)
+  | where isnotempty(OriginalObjectId)
+  | make-series TotalEvents = count() default=0 on TimeGenerated from startofday(ago(query_lookback)) to now() step step_duration by UserId, InstanceUrl, OriginalObjectId
+  | extend (Anomalies, Score, Baseline) = series_decompose_anomalies(TotalEvents, anomaly_threshold, seasonality, trend)
+  | mv-expand
+      TotalEvents to typeof(double),
+      AnomalyTimeGenerated = TimeGenerated to typeof(datetime),
+      Anomalies to typeof(double),
+      Score to typeof(double),
+      Baseline to typeof(long)
+  | where Anomalies > 0
+  | extend Details = bag_pack(
+                         "TotalEvents",
+                         TotalEvents,
+                         "Anomalies",
+                         Anomalies,
+                         "Baseline",
+                         Baseline,
+                         "Score",
+                         Score,
+                         "OriginalObjectId",
+                         OriginalObjectId
+                     )
+  | summarize Details = make_set(Details, 100) by UserId, InstanceUrl, AnomalyTimeGenerated
+  | extend
+      CloudAppId = int(32780),
+      AadUserId = extract(guid_regex, 1, tostring(split(UserId, "@")[0]))
+  | project
+      AnomalyTimeGenerated,
+      UserId,
+      AadUserId,
+      InstanceUrl,
+      Details,
+      CloudAppId
+eventGroupingSettings:
+  aggregationKind: AlertPerResult
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: AadUserId
+        columnName: AadUserId
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Non-interactive account anomaly detected in
+    {{InstanceUrl}} '
+  alertDescriptionFormat: 'Anomaly detected on {{UserId}} in {{InstanceUrl}}.  Details:
+    {{Details}}'
+customDetails:
+  InstranceUrl: InstanceUrl
+version: 3.2.0
