@@ -1,0 +1,66 @@
+id: ea07523b-e6b8-469b-9e25-cdef1ae6fb45
+kind: Scheduled
+name: Dataverse - Audit logging disabled
+description: Identifies a change in system audit configuration whereby audit logging
+  is turned off.
+severity: Low
+status: Available
+requiredDataConnectors:
+  - connectorId: Dataverse
+    dataTypes:
+      - DataverseActivity
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1562
+query: |
+  let query_frequency = 1h;
+  DataverseActivity
+  | where TimeGenerated >= ago(query_frequency)
+  | where Message =~ 'UpdateAuditSettings'
+  | mv-expand Fields
+  | extend AuditValue = Fields.Name, AuditEnabled = tobool(Fields.Value)
+  | where not (AuditEnabled)
+  | extend
+      CloudAppId = int(32780),
+      AccountName = tostring(split(UserId, '@')[0]),
+      UPNSuffix = tostring(split(UserId, '@')[1])
+  | project
+      TimeGenerated,
+      UserId,
+      ClientIp,
+      OriginalObjectId,
+      AuditValue,
+      AuditEnabled,
+      InstanceUrl,
+      CloudAppId,
+      AccountName,
+      UPNSuffix
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountName
+      - identifier: UPNSuffix
+        columnName: UPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIp
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: AppId
+        columnName: CloudAppId
+      - identifier: InstanceName
+        columnName: InstanceUrl
+alertDetailsOverride:
+  alertDisplayNameFormat: 'Dataverse - Audit logging was disabled in {{InstanceUrl}} '
+  alertDescriptionFormat: 'Audit settings changes were detected in {{InstanceUrl}}.
+    {{AuditValue}} enabled: was set to {{AuditEnabled}}.'
+version: 3.2.0
