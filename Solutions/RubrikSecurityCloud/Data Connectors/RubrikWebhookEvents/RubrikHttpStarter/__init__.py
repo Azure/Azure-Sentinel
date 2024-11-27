@@ -23,9 +23,7 @@ def get_data_from_request_body(request):
         json_data = json.dumps(data)
         return json_data
     except ValueError as value_error:
-        applogger.error(
-            "{}(method={}) {}".format(LOGS_STARTS_WITH, __method_name, value_error)
-        )
+        applogger.error("{}(method={}) {}".format(LOGS_STARTS_WITH, __method_name, value_error))
         raise RubrikException(value_error)
     except Exception as err:
         applogger.error("{}(method={}) {}".format(LOGS_STARTS_WITH, __method_name, err))
@@ -63,11 +61,7 @@ async def main(req: func.HttpRequest, starter: str) -> func.HttpResponse:
                 headers={"Content-Length": str(len(body))},
             )
         else:
-            applogger.info(
-                "{}(method={})No required data found.".format(
-                    LOGS_STARTS_WITH, __method_name
-                )
-            )
+            applogger.info("{}(method={})No required data found.".format(LOGS_STARTS_WITH, __method_name))
             body = "No required data found."
             return func.HttpResponse(
                 body=body,
