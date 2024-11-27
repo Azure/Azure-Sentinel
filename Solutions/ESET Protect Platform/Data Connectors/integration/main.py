@@ -23,14 +23,14 @@ class ServiceClient:
         self.token_provider = TokenProvider(TokenStorage(), self.request_sender, self.env_vars, self.config.buffer)
         self.transformer_detections = TransformerDetections(self.env_vars)
         self._session: ClientSession | None = None
-        self.lock = asyncio.Lock()
+        self._lock = asyncio.Lock()
 
     async def close(self) -> None:
         if self._session and not self._session.closed:
             await self._session.close()
 
     async def run(self) -> None:
-        self._session = ClientSession()
+        self._session = ClientSession(raise_for_status=True)
         start_time = time.time()
         try:
             await asyncio.gather(
@@ -108,7 +108,8 @@ class ServiceClient:
 
         if not self.token_provider.token.access_token or datetime.now(timezone.utc) > self.token_provider.token.expiration_time:  # type: ignore
             assert self._session
-            await self.token_provider.get_token(self._session, self.lock)
+            async with self._lock:
+                await self.token_provider.get_token(self._session)
 
         try:
             if (
@@ -117,7 +118,7 @@ class ServiceClient:
             ):
                 data = await self.request_sender.send_request(
                     self.request_sender.send_request_get,
-                    self._session, # type: ignore
+                    self._session,  # type: ignore
                     {
                         "Authorization": f"Bearer {self.token_provider.token.access_token}",
                         "Content-Type": "application/json",
