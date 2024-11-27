@@ -53,6 +53,22 @@ def main(mytimer: func.TimerRequest):
     process_events(stream_client, StreamOcid, cursor, limit, sentinel_connector, start_ts)
     logging.info(f'Function finished. Sent events {sentinel_connector.successfull_sent_events_number}.')
 
+
+def determine_log_type(event):
+    event_type = event.get("type", "default")
+    if event_type == "com.oraclecloud.loadbalancer.access" or event_type == "com.oraclecloud.loadbalancer.error" or event_type == "com.oraclecloud.loadbalancer.waf":
+        return "OCI_LoadBalancerLogs"
+    # elif event_type == "com.oraclecloud.loadbalancer.error":
+    #     return "OCI_LoadBalancerLogs"
+    elif event_type == "com.oraclecloud.audit":
+        return "OCI_AuditLogs"
+    elif event_type == "com.oraclecloud.virtualNetwork.ListRouteTables" or event_type == "com.oraclecloud.virtualNetwork.ListNetworkSecurityGroupSecurityRules" or event_type == "com.oraclecloud.virtualNetwork.GetSubnet" or event_type == "com.oraclecloud.virtualNetwork.ListSubnets" or event_type == "com.oraclecloud.virtualNetwork.ListSecurityLists":
+        return "OCI_VirtualNetworkLogs"
+    elif event_type == "com.oraclecloud.compute.instance":
+        return "OCI_ComputeInstanceLogs"
+    else:
+        return "OCI_Logs"  # Default log type
+
 def parse_key(key_input):
     try:
         begin_line = re.search(r'-----BEGIN [A-Z ]+-----', key_input).group()
@@ -127,6 +143,8 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                 #if event != 'ok' and event != 'Test': 
                     event = json.loads(event)
                     if "data" in event:
+                        # Determine table based on event type
+                        log_type = determine_log_type(event)
                         if "request" in event["data"] and event["type"] != "com.oraclecloud.loadbalancer.access":
                             if event["data"]["request"] is not None and "headers" in event["data"]["request"]:
                                 event["data"]["request"]["headers"] = json.dumps(event["data"]["request"]["headers"])
@@ -143,6 +161,7 @@ def process_events(client: oci.streaming.StreamClient, stream_id, initial_cursor
                             if event["data"]["stateChange"] is not None and "current" in event["data"]["stateChange"] :
                                 event["data"]["stateChange"]["current"] = json.dumps(
                                     event["data"]["stateChange"]["current"])
+                    sentinel.log_type = log_type
                     sentinel.send(event)
 
         sentinel.flush()
