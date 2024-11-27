@@ -15,14 +15,8 @@ def parse(str_input):
     Parse a string in CEF format and return a dict with the header values
     and the extension data.
     """
-
-    # Create the empty dict we'll return later
     values = dict()
 
-    # This regex separates the string into the CEF header and the extension
-    # data.  Once we do this, it's easier to use other regexes to parse each
-    # part.
-    #header_re = r'(([^:^=\\]+\ ){,7})[: ]+(.*)'
 
     is_starts_with_PRI = re.search("^\<[0-9]+\>", str_input[:10])
     if is_starts_with_PRI:
@@ -81,7 +75,7 @@ def parse(str_input):
     logger.debug('Returning values: ' + str(values))
     return values
 
-###### Main ######
+
 if __name__ == "__main__":
 
     import sys
