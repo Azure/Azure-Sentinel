@@ -55,16 +55,19 @@ def main(mytimer: func.TimerRequest):
 
 
 def determine_log_type(event):
+    """
+    Determine the Azure Sentinel log type based on the event type.
+    """
     event_type = event.get("type", "default")
-    if event_type == "com.oraclecloud.loadbalancer.access" or event_type == "com.oraclecloud.loadbalancer.error" or event_type == "com.oraclecloud.loadbalancer.waf":
+    if "com.oraclecloud.loadbalancer" in event_type:
         return "OCI_LoadBalancerLogs"
     # elif event_type == "com.oraclecloud.loadbalancer.error":
     #     return "OCI_LoadBalancerLogs"
-    elif event_type == "com.oraclecloud.audit":
+    elif "com.oraclecloud.audit" in event_type:
         return "OCI_AuditLogs"
-    elif event_type == "com.oraclecloud.virtualNetwork.ListRouteTables" or event_type == "com.oraclecloud.virtualNetwork.ListNetworkSecurityGroupSecurityRules" or event_type == "com.oraclecloud.virtualNetwork.GetSubnet" or event_type == "com.oraclecloud.virtualNetwork.ListSubnets" or event_type == "com.oraclecloud.virtualNetwork.ListSecurityLists":
+    elif "com.oraclecloud.virtualNetwork" in event_type:
         return "OCI_VirtualNetworkLogs"
-    elif event_type == "com.oraclecloud.compute.instance":
+    elif "com.oraclecloud.compute" in event_type:
         return "OCI_ComputeInstanceLogs"
     else:
         return "OCI_Logs"  # Default log type
