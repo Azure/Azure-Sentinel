@@ -1,0 +1,54 @@
+id: 599fdc92-eb6d-4b54-8d79-2a3f740a846a
+name: Illumio Enforcement Change Analytic Rule
+description: |
+  'Create Microsoft Sentinel Incident When Ven Changes Enforcement State from Full/Selective To Idle/Visibility state'
+severity: Medium
+status: Available
+requiredDataConnectors: 
+  - connectorId: IllumioSaaSDataConnector
+    dataTypes:
+      - Illumio_Auditable_Events_CL
+queryFrequency: 60m
+queryPeriod: 60m
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- DefenseEvasion
+relevantTechniques:
+- T1562
+query: |
+  let enf_state = dynamic(["full", "selective"]);
+  let visibility_state = dynamic(["visibility_only", "idle"]);
+  Illumio_Auditable_Events_CL
+  | extend temp_resource_changes = parse_json(resource_changes)[0]
+  | where event_type == 'workloads.update' 
+  | extend old_mode = temp_resource_changes.changes.enforcement_mode.before,
+          new_mode = temp_resource_changes.changes.enforcement_mode.after,
+          workload_href = temp_resource_changes.resource.workload.href,
+          workload_name = temp_resource_changes.resource.workload.hostname,
+          ipaddress = action.src_ip
+  | where new_mode in (visibility_state) and old_mode in (enf_state)
+  | project-away temp_*
+  | project old_mode, new_mode, workload_href, workload_name, TimeGenerated, created_by, ipaddress
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: workload_name  
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: created_by
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipaddress                  
+alertDetailsOverride:
+  alertDisplayNameFormat: | 
+    Illumio Enforcement Change Incident for {{workload_name}}
+  alertDescriptionFormat: | 
+    Illumio Enforcement Change Incident for {{workload_name}} generated at {{TimeGenerated}}
+version: 1.0.6
+kind: Scheduled

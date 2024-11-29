@@ -11,7 +11,7 @@ from ..SharedCode.consts import (
     COMPANIES_RATING_DETAILS_TABLE_NAME,
     COMPANY_DETAIL_TABLE_NAME,
     ENDPOINTS,
-    COMPANY_DETAILS_FUNC_NAME,
+    COMPANY_DETAILS_FUNC_NAME
 )
 from ..SharedCode.get_logs_data import get_logs_data
 from ..SharedCode.logger import applogger
@@ -61,10 +61,10 @@ class BitSightCompanies(BitSight):
             post_data_ratings = []
             checkpoint_key = "{}".format(company_guid)
             checkpoint_data_company = self.checkpoint_obj.get_last_data(
-                self.company_detail_state
+                self.company_detail_state, table_name=COMPANY_DETAIL_TABLE_NAME
             )
             checkpoint_data_company_ratings = self.checkpoint_obj.get_last_data(
-                self.company_rating_state
+                self.company_rating_state, table_name=COMPANIES_RATING_DETAILS_TABLE_NAME
             )
             last_data_company_details = self.checkpoint_obj.get_endpoint_last_data(
                 checkpoint_data_company, "companies_details", checkpoint_key
@@ -114,6 +114,7 @@ class BitSightCompanies(BitSight):
                     self.company_rating_state,
                     checkpoint_data_company_ratings,
                     "companies_ratings_details",
+                    "{}_{}".format(COMPANIES_RATING_DETAILS_TABLE_NAME, "Checkpoint"),
                     checkpoint_key,
                     data_to_post,
                 )
@@ -137,6 +138,7 @@ class BitSightCompanies(BitSight):
                 self.company_detail_state,
                 checkpoint_data_company,
                 "companies_details",
+                "{}_{}".format(COMPANY_DETAIL_TABLE_NAME, "Checkpoint"),
                 checkpoint_key,
                 data_to_post,
             )
@@ -166,7 +168,7 @@ class BitSightCompanies(BitSight):
         """
         count_companies = 0
         fetching_index = self.get_last_data_index(
-            company_names, self.checkpoint_obj, self.company_state
+            company_names, self.checkpoint_obj, self.company_state, table_name=COMPANY_DETAIL_TABLE_NAME
         )
         for company_index in range(fetching_index + 1, len(logs_data)):
             company_name = logs_data[company_index].get("name_s")
@@ -186,6 +188,7 @@ class BitSightCompanies(BitSight):
                 self.company_state,
                 company_name,
                 "portfolio_company",
+                "{}_{}".format(COMPANY_DETAIL_TABLE_NAME, "Company_Checkpoint"),
                 company_name_flag=True,
             )
         applogger.info(
