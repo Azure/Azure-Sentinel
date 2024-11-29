@@ -6,14 +6,16 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/http"
 	"strings"
 	"time"
 
 	//	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"function/pkg/bloodhound"
+	. "function/pkg/model"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/monitor/ingestion/azlogs"
 	"github.com/SpecterOps/bloodhound-go-sdk/sdk"
-	. "function/pkg/model"
-	"function/pkg/bloodhound"
 )
 
 // TODO: hax
@@ -136,7 +138,7 @@ func transformPostureDataArray(domainMap *map[string]sdk.ModelDomainSelector, da
 	return logs, nil
 }
 
-func transformConfigurationFinding(domainMap *map[string]sdk.ModelDomainSelector, _ string, pathType string, finding MyModelListFinding, findingProps *Props) (*BloodhoundEnterpriseData, error) {
+func transformConfigurationFinding(domainMap *map[string]sdk.ModelDomainSelector, _ string, pathType string, pathTitle string, finding MyModelListFinding, findingProps *Props) (*BloodhoundEnterpriseData, error) {
 	selector := (*domainMap)[*finding.DomainSID]
 
 	bhe_sentinel_data := &BloodhoundEnterpriseData{
@@ -153,12 +155,14 @@ func transformConfigurationFinding(domainMap *map[string]sdk.ModelDomainSelector
 		Principal:         *findingProps.Name,
 		TierZeroPrincipal: *findingProps.Name,
 		PathType:          pathType,
+		PathTitle:		   pathTitle,
+		EventDetails: 	   pathTitle, 
 		ID:                int64(*finding.Id),
 	}
 	return bhe_sentinel_data, nil
 }
 
-func transformRelationshipFinding(domainMap *map[string]sdk.ModelDomainSelector, _ string, pathType string, finding MyModelRelationshipFinding, fromProps *FromPrincipalProps, toProps *ToPrincipalProps) (*BloodhoundEnterpriseData, error) {
+func transformRelationshipFinding(domainMap *map[string]sdk.ModelDomainSelector, _ string, pathType string, pathTitle string, finding MyModelRelationshipFinding, fromProps *FromPrincipalProps, toProps *ToPrincipalProps) (*BloodhoundEnterpriseData, error) {
 	selector := (*domainMap)[*finding.DomainSID]
 	bhe_sentinel_data := BloodhoundEnterpriseData{
 		DataType:             "posture_path",
@@ -173,6 +177,8 @@ func transformRelationshipFinding(domainMap *map[string]sdk.ModelDomainSelector,
 		TierZeroPrincipal:    toProps.Name,
 		NonTierZeroPrincipal: fromProps.Name,
 		PathType:             pathType,
+		PathTitle: 			  pathTitle,
+		EventDetails:		  pathTitle,
 		// DeletedAt: finding.DeletedAt,
 		DeletedAtV: *finding.DeletedAt.Valid,
 		// DeletedAtV: finding.DeletedAt != nil,
@@ -181,10 +187,17 @@ func transformRelationshipFinding(domainMap *map[string]sdk.ModelDomainSelector,
 	return &bhe_sentinel_data, nil
 }
 
-func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data map[string]map[string][]json.RawMessage) ([]BloodhoundEnterpriseData, error) {
+func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data map[string]map[string][]json.RawMessage, pathTypeMap map[string]string) ([]BloodhoundEnterpriseData, error) {
 	bhd := make([]BloodhoundEnterpriseData, 0)
 	for domainId, pathMap := range data {
 		for pathType, attackPathDataArray := range pathMap {
+			var pathTitle, ok = pathTypeMap[pathType]
+			if !ok {
+				pathTitle = "Unknown"
+				log.Printf("Error path title not found for %s", pathType)
+			} else {
+				log.Printf("Found path title for %s", pathTitle)
+			}
 			for _, attackPathJson := range attackPathDataArray {
 				x := AttackFindingProperties{}
 				json.Unmarshal(attackPathJson, &x)
@@ -209,7 +222,7 @@ func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data
 					}
 					toPrincipalProps := x.ToPrincipalProps
 					fromPrincipalProps := x.FromPrincipalProps
-					d, err := transformRelationshipFinding(domainMap, domainId, pathType, relationshipFinding, fromPrincipalProps, toPrincipalProps)
+					d, err := transformRelationshipFinding(domainMap, domainId, pathType, pathTitle, relationshipFinding, fromPrincipalProps, toPrincipalProps)
 					if err != nil || d == nil {
 						log.Printf("Error transforming relationship finding, skipping %s, %s", domainId, pathType)
 						continue
@@ -223,7 +236,7 @@ func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data
 						return nil, err
 					}
 					props := x.Props
-					d, err := transformConfigurationFinding(domainMap, domainId, pathType, modelListFinding, props)
+					d, err := transformConfigurationFinding(domainMap, domainId, pathType, pathTitle, modelListFinding, props)
 					if err != nil || d == nil {
 						log.Printf("Error transforming configuration finding, skipping %s %s", domainId, pathType)
 						continue
@@ -484,6 +497,20 @@ func CreateBatchesGauranteedToFit(records []BloodhoundEnterpriseData, maxUploadS
 	return jsonBatches, nil
 }
 
+func ApplyEditors(ctx context.Context, c *sdk.Client, req *http.Request, additionalEditors []sdk.RequestEditorFn) error {
+	for _, r := range c.RequestEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	for _, r := range additionalEditors {
+		if err := r(ctx, req); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // UploadLogsCallback returns a curried function that can be used as a callback
 func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time.Time, azLogsClient *azlogs.Client, ruleId string, maxUploadSize int64) ([]string, error) {
 	// TODO is there a generic sdk client type
@@ -497,12 +524,48 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 
 	bloodhoundRecordData := make(map[string][]BloodhoundEnterpriseData)
 
+	// Get attack path type to attack path title mapping
+	// TODO: lift this and it really should be defined in the API
+	// TODO: Retry?  Handle 429?
+	var client = bloodhoundClient.ClientInterface.(*sdk.Client)	
+	pathTypes, err := bloodhoundClient.ListAttackPathTypesWithResponse(context.TODO(), nil)
+	if err != nil {
+		responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path types %v", err))
+		return responseLogs, err
+	}
+	var pathMap = make(map[string]string)
+
+	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path types", len(*pathTypes.JSON200.Data)))
+	for _, pathType := range *pathTypes.JSON200.Data {
+		// I'm going to get these one at a time TOOD: check if there is a better way
+		req, err := http.NewRequest("GET",fmt.Sprintf("https://demo.bloodhoundenterprise.io/api/v2/assets/findings/%s/title.md", pathType), nil)
+		if (err != nil) {
+			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", err))
+			return responseLogs, err
+		}
+
+		ApplyEditors(context.TODO(), client, req, client.RequestEditors)
+		response, err := client.Client.Do(req)
+		if (err != nil) {
+			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", err))
+			return responseLogs, err
+		}
+		if (response.StatusCode != http.StatusOK) {
+			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", response.Status))
+			return responseLogs, err
+		}
+		var responseBytes = make([]byte, 1024)
+		count, err := response.Body.Read(responseBytes) 
+		pathMap[pathType] = string(responseBytes[:count])
+	}
+
 	lastAnalysisTime, err := bloodhound.GetLastAnalysisTime(bloodhoundClient)
 	if err != nil {
 		responseLogs = append(responseLogs, fmt.Sprintf("failed to get last analysis time %v", err))
 		return responseLogs, err
 	}
 
+	if false {
 	if lastRun != nil {
 		if lastRun.Compare(*lastAnalysisTime) == +1 {
 			responseLogs = append(responseLogs, fmt.Sprintf("last ingest time %v after last analysis time %v.  We will skip ingest", lastRun, lastAnalysisTime))
@@ -513,6 +576,7 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	} else {
 		log.Printf("UploadLogsCallback lastRun is nil, not doing compare")
 	}
+}
 
 	mapping, err := bloodhound.GetDomainMapping(bloodhoundClient)
 	if err != nil {
@@ -578,7 +642,7 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	}
 	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path data", len(attackPathData)))
 	// Transform attack path data
-	attackPathBHERecords, err := transformAttackPathData(mapping, attackPathData)
+	attackPathBHERecords, err := transformAttackPathData(mapping, attackPathData, pathMap)
 	if err != nil {
 		responseLogs = append(responseLogs, fmt.Sprintf("error transforming attack path data %v", err))
 	} else {
@@ -615,7 +679,7 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	responseLogs = append(responseLogs, fmt.Sprintf("Got %d tier zero principals", len(tier0BHERecords)))
 
 	bloodhoundRecordData["tier0"] = tier0BHERecords
-	
+
 	var lastError error
 	for kind, recordList := range bloodhoundRecordData {
 		log.Printf("About to upload %s data %d records ", kind, len(recordList))
