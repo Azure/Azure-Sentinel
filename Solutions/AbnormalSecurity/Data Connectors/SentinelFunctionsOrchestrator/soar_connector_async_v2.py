@@ -180,6 +180,9 @@ async def call_single_threat_endpoint(
                 ):
                     filtered_messages.append(json.dumps(message, sort_keys=True))
                     logging.info(f"Successfully processed v2 threat message: {message_id}")
+                elif remediation_time < ctx.CLIENT_FILTER_TIME_RANGE.start:
+                    logging.info(f"Skipping further messages as remediationTime {remediation_time} of {message_id} < {ctx.CLIENT_FILTER_TIME_RANGE.start}")
+                    return list(set(filtered_messages))
                 else:
                     logging.warning(f"Skipped processing v2 threat message: {message_id}")
 
