@@ -97,9 +97,9 @@ async def call_threat_campaigns_endpoint(
 
         threat_campaigns = set()
 
-        nextPageNumber = 1
-        while nextPageNumber:
-            params["pageNumber"] = nextPageNumber
+        pageNumber = 1
+        while pageNumber:
+            params["pageNumber"] = pageNumber
             endpoint = compute_url(ctx.BASE_URL, "/v1/threats", params)
             headers = get_headers(ctx)
 
@@ -111,10 +111,10 @@ async def call_threat_campaigns_endpoint(
                 [threat["threatId"] for threat in response.get("threats", [])]
             )
 
-            nextPageNumber = response.get("nextPageNumber")
-            assert nextPageNumber is None or nextPageNumber > 0
+            pageNumber = response.get("nextPageNumber")
+            assert pageNumber is None or pageNumber > 0
 
-            if nextPageNumber is None or nextPageNumber > ctx.MAX_PAGE_NUMBER:
+            if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
                 break
 
         return list(threat_campaigns)
@@ -130,9 +130,9 @@ async def call_cases_endpoint(
 
         case_ids = set()
 
-        nextPageNumber = 1
-        while nextPageNumber:
-            params["pageNumber"] = nextPageNumber
+        pageNumber = 1
+        while pageNumber:
+            params["pageNumber"] = pageNumber
             endpoint = compute_url(ctx.BASE_URL, "/v1/cases", params)
             headers = get_headers(ctx)
 
@@ -142,10 +142,10 @@ async def call_cases_endpoint(
 
             case_ids.update([case["caseId"] for case in response.get("cases", [])])
 
-            nextPageNumber = response.get("nextPageNumber")
-            assert nextPageNumber is None or nextPageNumber > 0
+            pageNumber = response.get("nextPageNumber")
+            assert pageNumber is None or pageNumber > 0
 
-            if nextPageNumber is None or nextPageNumber > ctx.MAX_PAGE_NUMBER:
+            if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
                 break
 
         return list(case_ids)
@@ -157,10 +157,10 @@ async def call_single_threat_endpoint(
     async with semaphore:
         filtered_messages = []
 
-        nextPageNumber = 1
+        pageNumber = 1
         params = {"pageSize": ctx.SINGLE_THREAT_PAGE_SIZE}
-        while nextPageNumber:
-            params["pageNumber"] = nextPageNumber
+        while pageNumber:
+            params["pageNumber"] = pageNumber
             print("Single Threat Params:", params)
             endpoint = compute_url(ctx.BASE_URL, f"/v1/threats/{threat_id}", params=params)
             headers = get_headers(ctx)
@@ -181,10 +181,10 @@ async def call_single_threat_endpoint(
                 else:
                     logging.warning(f"Skipped processing v2 threat message: {message_id}")
 
-            nextPageNumber = response.get("nextPageNumber")
-            assert nextPageNumber is None or nextPageNumber > 0
+            pageNumber = response.get("nextPageNumber")
+            assert pageNumber is None or pageNumber > 0
 
-            if nextPageNumber is None or nextPageNumber > ctx.MAX_PAGE_NUMBER:
+            if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
                 break
         
         return list(set(filtered_messages))
