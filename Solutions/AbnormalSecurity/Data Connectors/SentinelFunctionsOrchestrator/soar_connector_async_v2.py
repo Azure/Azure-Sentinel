@@ -111,8 +111,9 @@ async def call_threat_campaigns_endpoint(
                 [threat["threatId"] for threat in response.get("threats", [])]
             )
 
-            pageNumber = response.get("nextPageNumber")
-            assert pageNumber is None or pageNumber > 0
+            nextPageNumber = response.get("nextPageNumber")
+            assert nextPageNumber is None or nextPageNumber == pageNumber + 1
+            pageNumber = nextPageNumber
 
             if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
                 break
@@ -142,8 +143,9 @@ async def call_cases_endpoint(
 
             case_ids.update([case["caseId"] for case in response.get("cases", [])])
 
-            pageNumber = response.get("nextPageNumber")
-            assert pageNumber is None or pageNumber > 0
+            nextPageNumber = response.get("nextPageNumber")
+            assert nextPageNumber is None or nextPageNumber == pageNumber + 1
+            pageNumber = nextPageNumber
 
             if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
                 break
@@ -181,8 +183,9 @@ async def call_single_threat_endpoint(
                 else:
                     logging.warning(f"Skipped processing v2 threat message: {message_id}")
 
-            pageNumber = response.get("nextPageNumber")
-            assert pageNumber is None or pageNumber > 0
+            nextPageNumber = response.get("nextPageNumber")
+            assert nextPageNumber is None or nextPageNumber == pageNumber + 1
+            pageNumber = nextPageNumber
 
             if pageNumber is None or pageNumber > ctx.MAX_PAGE_NUMBER:
                 break
