@@ -565,7 +565,6 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 		return responseLogs, err
 	}
 
-	if false {
 	if lastRun != nil {
 		if lastRun.Compare(*lastAnalysisTime) == +1 {
 			responseLogs = append(responseLogs, fmt.Sprintf("last ingest time %v after last analysis time %v.  We will skip ingest", lastRun, lastAnalysisTime))
@@ -576,7 +575,6 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	} else {
 		log.Printf("UploadLogsCallback lastRun is nil, not doing compare")
 	}
-}
 
 	mapping, err := bloodhound.GetDomainMapping(bloodhoundClient)
 	if err != nil {
