@@ -128,15 +128,9 @@ async def main(mytimer: func.TimerRequest):
             if len(last_dropped_messages_obj) > 0:
                 logging.info(
                     "Processing files which added to re-processing. Files: {}".format(last_dropped_messages_obj))
-                logging.info(
-                    "reprocessing files: {}".format(retrycount))
                 last_dropped_messages_obj_sorted = sort_files_by_bucket(
                     last_dropped_messages_obj)
-                logging.info(
-                    "retrycount after last_dropped_messages_obj_sorted: {}".format(retrycount))
                 for reprocessing_file_msg in last_dropped_messages_obj_sorted:
-                    logging.info(
-                        "retrycount brfore reprocessing: {}".format(retrycount))
                     await download_message_files(reprocessing_file_msg, session, retrycount=1)
             logging.info('Trying to check messages off the queue...')
             try:
