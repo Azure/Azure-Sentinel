@@ -669,6 +669,13 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 		responseLogs = append(responseLogs, fmt.Sprintf("Error transforming attack path aggregator data %v", err))
 		return responseLogs, err
 	}
+
+	if len(attackPathAggregateBHERecords) > 0 {
+		responseLogs = append(responseLogs, fmt.Sprintf("Got %d attack path aggregator records PathTitle of first is %s", len(attackPathAggregateBHERecords), attackPathAggregateBHERecords[0].PathTitle))
+	} else {
+		responseLogs = append(responseLogs, fmt.Sprintf("Got 0 attack path aggregator records"))
+	}
+
 	bloodhoundRecordData["attackPathAggregateData"] = attackPathAggregateBHERecords
 
 	tierZeroData, err := bloodhound.GetTierZeroPrincipal(bloodhoundClient)
