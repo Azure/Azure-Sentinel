@@ -51,9 +51,8 @@ If false, it skips object creation/modification steps and only provides a summar
 
 
 # To deploy, follow the below link 
-<br>
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FAzure%2FAzure-Sentinel%2Frefs%2Fheads%2Fmaster%2FSolutions%2FIllumioSaaS%2FPlaybooks%2FIllumio-Port-Blocking-Switch%2Fazuredeploy.json)
-<br>
+
 
 User can modify the playbook name, function app name as per requirements.
 
