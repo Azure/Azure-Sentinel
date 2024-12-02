@@ -521,7 +521,8 @@ func ApplyEditors(ctx context.Context, c *sdk.Client, req *http.Request, additio
 }
 
 // UploadLogsCallback returns a curried function that can be used as a callback
-func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time.Time, azLogsClient *azlogs.Client, ruleId string, maxUploadSize int64) ([]string, error) {
+// hack passing the bh domain / config.  Wont be needed when bloodhoundClient handles assset retrieval.  Need to modify the sdk.
+func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, bloodhoundServer string, lastRun *time.Time, azLogsClient *azlogs.Client, ruleId string, maxUploadSize int64) ([]string, error) {
 	// TODO is there a generic sdk client type
 
 	if lastRun == nil {
@@ -536,6 +537,9 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	// Get attack path type to attack path title mapping
 	// TODO: lift this and it really should be defined in the API
 	// TODO: Retry?  Handle 429?
+	if !strings.HasPrefix(bloodhoundServer, "https") {
+		bloodhoundServer = "https://" + bloodhoundServer
+	}
 	var client = bloodhoundClient.ClientInterface.(*sdk.Client)	
 	pathTypes, err := bloodhoundClient.ListAttackPathTypesWithResponse(context.TODO(), nil)
 	if err != nil {
@@ -547,7 +551,8 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path types", len(*pathTypes.JSON200.Data)))
 	for _, pathType := range *pathTypes.JSON200.Data {
 		// I'm going to get these one at a time TOOD: check if there is a better way
-		req, err := http.NewRequest("GET",fmt.Sprintf("https://demo.bloodhoundenterprise.io/api/v2/assets/findings/%s/title.md", pathType), nil)
+	
+		req, err := http.NewRequest("GET",fmt.Sprintf("%s/api/v2/assets/findings/%s/title.md", bloodhoundServer, pathType), nil)
 		if (err != nil) {
 			responseLogs = append(responseLogs, fmt.Sprintf("failed to get attack path title %v", err))
 			return responseLogs, err
