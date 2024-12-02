@@ -255,7 +255,14 @@ func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, da
 	for domainId, pathMap := range data {
 		for pathType, riskArray := range pathMap {
 			for _, risk := range riskArray {
-				data, err := transformModelRiskCountr(domainMap, domainId, pathType, risk, pathTypeMap)
+				pathTitle, ok := (*pathTypeMap)[pathType]
+				if !ok || pathTitle == "" {
+					pathTitle = "Unknown"
+					log.Printf("Error path title not found for %s", pathType)
+				} else {
+					log.Printf("Found path title for %s", pathTitle)
+				}
+				data, err := transformModelRiskCountr(domainMap, domainId, pathType, pathTitle, risk)
 				if err != nil {
 					log.Printf("Error transforming risk counter, skipping record: %v", err)
 					continue
@@ -267,15 +274,7 @@ func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, da
 	return bhd, nil
 }
 
-func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ string, path_type string, data sdk.ModelRiskCounts, pathTypeMap *map[string]string) (BloodhoundEnterpriseData, error) {
-
-	pathTitle, ok := (*pathTypeMap)[path_type]
-	if !ok || pathTitle == "" {
-		pathTitle = "Unknown"
-		log.Printf("Error path title not found for %s", path_type)
-	} else {
-		log.Printf("Found path title for %s", pathTitle)
-	}
+func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ string, path_type string, path_title string, data sdk.ModelRiskCounts) (BloodhoundEnterpriseData, error) {
 
 	selector := (*domainMap)[*data.DomainSID]
 	bhe_sentinel_data := BloodhoundEnterpriseData{
@@ -295,7 +294,8 @@ func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ s
 		DeletedAtV:        *data.DeletedAt.Valid,
 		ID:                *data.Id,
 		PathType:          path_type,
-		PathTitle: 	       pathTitle,
+		PathTitle: 	       path_title,
+		EventDetails:	   path_title,
 	}
 	return bhe_sentinel_data, nil
 
