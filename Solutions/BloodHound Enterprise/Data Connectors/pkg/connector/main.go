@@ -250,12 +250,12 @@ func transformAttackPathData(domainMap *map[string]sdk.ModelDomainSelector, data
 	return bhd, nil
 }
 
-func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, data map[string]map[string][]sdk.ModelRiskCounts, pathTypeMap *map[string][string]) ([]BloodhoundEnterpriseData, error) {
+func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, data map[string]map[string][]sdk.ModelRiskCounts, pathTypeMap *map[string]string) ([]BloodhoundEnterpriseData, error) {
 	bhd := make([]BloodhoundEnterpriseData, 0)
 	for domainId, pathMap := range data {
 		for pathType, riskArray := range pathMap {
 			for _, risk := range riskArray {
-				data, err := transformModelRiskCountr(domainMap, domainId, pathType, risk)
+				data, err := transformModelRiskCountr(domainMap, domainId, pathType, risk, pathTypeMap)
 				if err != nil {
 					log.Printf("Error transforming risk counter, skipping record: %v", err)
 					continue
@@ -267,14 +267,14 @@ func transformAttackAggregator(domainMap *map[string]sdk.ModelDomainSelector, da
 	return bhd, nil
 }
 
-func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ string, path_type string, data sdk.ModelRiskCounts, pathTypeMap *map[string[string]]) (BloodhoundEnterpriseData, error) {
+func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ string, path_type string, data sdk.ModelRiskCounts, pathTypeMap *map[string]string) (BloodhoundEnterpriseData, error) {
 
-	pathTile, ok := (*pathTypeMap)[path_type]
-	if !ok {
-		pathTile = "Unknown"
+	pathTitle, ok := (*pathTypeMap)[path_type]
+	if !ok || pathTitle == "" {
+		pathTitle = "Unknown"
 		log.Printf("Error path title not found for %s", path_type)
 	} else {
-		log.Printf("Found path title for %s", pathTile)
+		log.Printf("Found path title for %s", pathTitle)
 	}
 
 	selector := (*domainMap)[*data.DomainSID]
@@ -295,7 +295,7 @@ func transformModelRiskCountr(domainMap *map[string]sdk.ModelDomainSelector, _ s
 		DeletedAtV:        *data.DeletedAt.Valid,
 		ID:                *data.Id,
 		PathType:          path_type,
-		PathTitle: 	       pathTile,
+		PathTitle: 	       pathTitle,
 	}
 	return bhe_sentinel_data, nil
 
@@ -664,7 +664,7 @@ func UploadLogsCallback(bloodhoundClient *sdk.ClientWithResponses, lastRun *time
 	}
 	responseLogs = append(responseLogs, fmt.Sprintf("got %d attack path aggregator records", len(aggregatorData)))
 
-	attackPathAggregateBHERecords, err := transformAttackAggregator(mapping, aggregatorData, pathMap)
+	attackPathAggregateBHERecords, err := transformAttackAggregator(mapping, aggregatorData, &pathMap)
 	if err != nil {
 		responseLogs = append(responseLogs, fmt.Sprintf("Error transforming attack path aggregator data %v", err))
 		return responseLogs, err
