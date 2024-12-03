@@ -17,7 +17,7 @@ MessageEndpoint = os.environ['MessageEndpoint']
 StreamOcid = os.environ['StreamOcid'] 
 WORKSPACE_ID = os.environ['AzureSentinelWorkspaceId']
 SHARED_KEY = os.environ['AzureSentinelSharedKey']
-LOG_TYPE = 'OCI_Logs'
+LOG_TYPE = 'OCI_LogsV2'
 CURSOR_TYPE = os.getenv('CursorType', 'group')
 MAX_SCRIPT_EXEC_TIME_MINUTES = 5
 PARTITIONS = os.getenv('Partition',"0")
@@ -70,7 +70,7 @@ def determine_log_type(event):
     elif "com.oraclecloud.compute" in event_type:
         return "OCI_ComputeInstanceLogs"
     else:
-        return "OCI_Logs"  # Default log type
+        return "OCI_LogsV2"  # Default log type
 
 def parse_key(key_input):
     try:
